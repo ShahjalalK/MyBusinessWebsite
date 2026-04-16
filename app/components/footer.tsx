@@ -1,0 +1,176 @@
+"use client"
+import { Mail, MapPin, Send, Loader2 } from 'lucide-react'
+import React, { useState } from 'react'
+import { motion } from 'framer-motion'
+import { BsTwitter, BsLinkedin, BsFacebook } from 'react-icons/bs'
+
+export default function Footer() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // --- GA4 Tracking Function for Subscribe ---
+  const trackSubscription = async (email: string) => {
+    try {
+      const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
+      const sessionId = document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1];
+
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: "Newsletter Subscriber",
+          email: email,
+          service: "Newsletter",
+          clientId: gaCookie,
+          sessionId: sessionId,
+          pageTitle: "Footer Newsletter"
+        }),
+      });
+    } catch (err) {
+      console.error("GA4 Footer Track Error:", err);
+    }
+  };
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // ১. Brevo-তে ডাটা পাঠানো
+      const response = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (response.ok) {
+        // ২. সাকসেস হলে GA4-এ ট্র্যাক করা
+        await trackSubscription(email);
+        
+        alert("Thanks for subscribing, Shahjalal! Check your inbox.");
+        setEmail("");
+      } else {
+        alert("Subscription failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("Subscription Error:", error);
+      alert("Something went wrong!");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <footer className="bg-slate-950 text-slate-400 pt-24 pb-12">
+      <div className="container mx-auto px-6">
+        
+        {/* Top Section: Brand & Newsletter */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-20">
+          
+          {/* Brand Column */}
+          <div className="lg:col-span-4 space-y-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <span className="text-white font-black text-xl">T</span>
+              </div>
+              <span className="text-2xl font-black text-white tracking-tighter">
+                TrackFlow<span className="text-blue-600">Pro</span>
+              </span>
+            </div>
+            <p className="text-base leading-relaxed max-w-xs">
+              Precision-engineered tracking solutions for modern agencies. We bridge the gap between privacy and performance.
+            </p>
+            {/* Social Icons */}
+            <div className="flex gap-4">
+              {[
+                { icon: <BsFacebook />, link: "#" },
+                { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-it/" }, // আপনার প্রোফাইল অনুযায়ী
+                { icon: <BsTwitter />, link: "#" }
+              ].map((social, i) => (
+                <motion.a 
+                  key={i}
+                  whileHover={{ y: -5, color: '#2563eb' }}
+                  href={social.link} 
+                  className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 transition-all hover:border-blue-500/50"
+                >
+                  {social.icon}
+                </motion.a>
+              ))}
+            </div>
+          </div>
+
+          {/* Newsletter Section (Brevo & GA4 Integrated) */}
+          <div className="lg:col-span-4 lg:px-6">
+            <h4 className="text-white font-black text-xs uppercase tracking-[0.3em] mb-6">Weekly Insights</h4>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+              Join 500+ marketers. Get server-side tracking tips and Google Ads updates directly in your inbox.
+            </p>
+            <form onSubmit={handleSubscribe} className="relative group">
+              <input 
+                type="email" 
+                required
+                disabled={loading}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email" 
+                className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:border-blue-600 transition-all placeholder:text-slate-600 disabled:opacity-50"
+              />
+              <button 
+                type="submit"
+                disabled={loading}
+                className="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center justify-center group-hover:shadow-lg group-hover:shadow-blue-500/20 disabled:bg-slate-700"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              </button>
+            </form>
+            <p className="text-[10px] text-slate-600 mt-4 italic font-medium">
+              * Zero spam. Unsubscribe at any time.
+            </p>
+          </div>
+
+          {/* Contact Info Column */}
+          <div className="lg:col-span-4 space-y-8">
+            <h4 className="text-white font-black text-xs uppercase tracking-[0.3em] mb-6">Contact</h4>
+            <ul className="space-y-5">
+              <li className="flex items-center gap-4 group">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <Mail size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Email Us</p>
+                  <a href="mailto:shahjalal@trackflowpro.com" className="text-sm font-bold text-white hover:text-blue-500 transition-colors">
+                    shahjalal@trackflowpro.com
+                  </a>
+                </div>
+              </li>
+              <li className="flex items-center gap-4 group">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <MapPin size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Headquarters</p>
+                  <p className="text-sm font-bold text-white">Kushtia, Bangladesh</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+        </div>
+
+        {/* Bottom Bar */}
+        <div className="pt-10 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-6">
+          <p className="text-xs font-bold text-slate-600 tracking-widest uppercase">
+            Built for precision. Managed with integrity.
+          </p>
+          <div className="flex flex-col items-center md:items-end gap-2 text-[10px] text-slate-500 uppercase tracking-widest font-black">
+            <p>© {new Date().getFullYear()} TrackFlow Pro Lab</p>
+            <div className="flex gap-6 opacity-60">
+              <a href="#" className="hover:text-blue-500">Privacy Policy</a>
+              <a href="#" className="hover:text-blue-500">Terms of Service</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  )
+}
