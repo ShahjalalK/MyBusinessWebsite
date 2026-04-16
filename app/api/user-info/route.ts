@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 
 export async function GET() {
-  const headerList = headers();
+  // ১. headers() এখন await করতে হয় Next.js-এর নতুন ভার্সনে
+  const headerList = await headers(); 
+  
   const userAgent = headerList.get('user-agent') || '';
   
-  // Vercel-এ অরিজিনাল আইপি ধরার সঠিক উপায়
+  // Vercel-এ অরিজিনাল আইপি ধরার সঠিক উপায়
   let ip = headerList.get('x-forwarded-for')?.split(',')[0] || 
            headerList.get('x-real-ip') || 
            '';
