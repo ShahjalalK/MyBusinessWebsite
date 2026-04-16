@@ -2,48 +2,51 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 
 export async function GET() {
-  // ১. headers() এখন await করতে হয় Next.js-এর নতুন ভার্সনে
   const headerList = await headers(); 
-  
   const userAgent = headerList.get('user-agent') || '';
   
-  // Vercel-এ অরিজিনাল আইপি ধরার সঠিক উপায়
+  // ১. আইপি বের করার সবচেয়ে নির্ভরযোগ্য উপায় (Vercel-এর জন্য)
   let ip = headerList.get('x-forwarded-for')?.split(',')[0] || 
            headerList.get('x-real-ip') || 
            '';
 
-  // লোকালহোস্ট টেস্ট লজিক
-  if (!ip || ip === '127.0.0.1' || ip === '::1') {
-    ip = '103.178.1.1'; 
+  // ২. যদি কোনো আইপি না পায় বা লোকালহোস্ট হয়, তবেই কেবল ডিফল্ট আইপি বসবে
+  const isLocal = !ip || ip === '127.0.0.1' || ip === '::1';
+  if (isLocal) {
+    ip = '103.178.1.1'; // টেস্ট আইপি
   }
 
   try {
-    const res = await fetch(`https://ipapi.co/${ip}/json/`, { 
-      cache: 'no-store',
-      headers: { 'User-Agent': 'Mozilla/5.0' } 
+    // ৩. এপিআই কল (আমরা ipapi.co এর বদলে ip-api.com ব্যবহার করতে পারি যা অনেক সময় বেশি স্টেবল)
+    // এখানে আমরা ইউজার আইপি দিয়ে কল করছি
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,regionName,city,zip,isp,org,as,query`, { 
+      cache: 'no-store'
     });
 
     const geo = await res.json();
 
+    if (geo.status === 'fail') {
+        throw new Error('IP lookup failed');
+    }
+
     return NextResponse.json({
-      ip: geo.ip || ip,
-      location: geo.city ? `${geo.city}, ${geo.country_name}` : "Dhaka, Bangladesh",
+      ip: geo.query || ip,
+      location: `${geo.city}, ${geo.country}`,
       device: /mobile/i.test(userAgent) ? "Mobile Device" : "Desktop Workstation",
       browser: userAgent.includes("Chrome") ? "Google Chrome" : "Browser Detected",
       os: userAgent.includes("Windows") ? "Windows OS" : "macOS/Linux",
-      isp: geo.org || "Verified Network",
-      currency: geo.currency || "USD",
-      timezone: geo.timezone || "UTC"
+      isp: geo.isp || "Verified Network",
     });
 
   } catch (error) {
+    // ৪. যদি এপিআই ফেইল করে, তবে আমরা অন্তত আইপি-টা দেখাবো
     return NextResponse.json({
       ip: ip,
-      location: "Dhaka, Bangladesh",
+      location: isLocal ? "Dhaka, Bangladesh" : "Location Detected (API Limit)",
       device: "Desktop",
       browser: "Chrome",
       os: "Windows",
-      isp: "Enterprise Route"
+      isp: "Server Connection"
     });
   }
 }
