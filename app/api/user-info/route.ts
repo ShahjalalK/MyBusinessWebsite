@@ -31,7 +31,8 @@ export async function GET() {
 
     return NextResponse.json({
       ip: geo.query || ip,
-      location: `${geo.city}, ${geo.country}`,
+       // এই লাইনটি খুঁজে পরিবর্তন করুন
+      location: geo.city && geo.country ? `${geo.city}, ${geo.country}` : "Location Verified",
       device: /mobile/i.test(userAgent) ? "Mobile Device" : "Desktop Workstation",
       browser: userAgent.includes("Chrome") ? "Google Chrome" : "Browser Detected",
       os: userAgent.includes("Windows") ? "Windows OS" : "macOS/Linux",
