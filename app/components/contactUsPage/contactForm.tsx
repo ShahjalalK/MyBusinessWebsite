@@ -62,21 +62,39 @@ export default function ContactForm() {
     e.preventDefault();
     setLoading(true);
 
+    // ১. ক্লায়েন্ট আইডি এবং সেশন আইডি সংগ্রহ
+    const gaCookie = typeof document !== 'undefined' 
+      ? document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1] 
+      : null;
+    
+    const sessionId = typeof document !== 'undefined'
+      ? document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1]
+      : null;
+
+    let clientId = gaCookie || localStorage.getItem('ga_client_id');
+    if (!clientId) {
+      clientId = `${Math.floor(Math.random() * 1000000000)}.${Math.floor(Date.now() / 1000)}`;
+      localStorage.setItem('ga_client_id', clientId);
+    }
+
     try {
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        // এখানে ফর্ম ডাটার সাথে ট্র্যাকিং আইডিগুলোও পাঠিয়ে দিচ্ছি
+        body: JSON.stringify({
+          ...formData,
+          clientId,
+          sessionId,
+          pageTitle: document.title
+        }),
       });
 
       if (response.ok) {
-        // ইমেইল সফলভাবে গেলে GA4-এ ডাটা পাঠানো হবে
-        await trackLeadInGA4(formData);
-        
         toast.success('Thank you! Message sent successfully.');
         setFormData({ name: '', email: '', service: 'Google Ads Management', message: '' });
       } else {
-        toast.error('Failed to send message. Please try again.');
+        toast.error('Failed to send message.');
       }
     } catch (error) {
       toast.error('Network error. Check your connection.');

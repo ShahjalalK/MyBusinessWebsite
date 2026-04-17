@@ -4,7 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "./components/HeroSection/ThemeProvider";
 import ScrollToTop from "./components/scrollToTop";
 import LiveNotificationMap from "./components/HeroSection/liveTracking";
-import Script from "next/script"; // এটি ইমপোর্ট করুন
+import Script from "next/script";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -18,25 +18,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
-        {/* Google Tag (gtag.js) */}
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${process.env.GA4_MEASUREMENT_ID}`}
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-  {`
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    // ডাইনামিক পেজ ভিউ ট্র্যাকিংয়ের জন্য config আপডেট
-    gtag('config', '${process.env.GA4_MEASUREMENT_ID}', {
-      page_path: window.location.pathname,
-      send_page_view: true, // এটি নিশ্চিত করে যে পেজ লোড হলে ভিউ কাউন্ট হবে
-      debug_mode: true
-    });
-  `}
-</Script>
+        {/* অ্যাড-ব্লকার বাইপাস করার জন্য আমরা ক্লায়েন্ট থেকে গুগল কল কমিয়ে দিচ্ছি */}
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+          `}
+        </Script>
       </head>
       <body className="min-h-screen bg-white">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
