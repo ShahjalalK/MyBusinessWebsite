@@ -30,19 +30,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* ১০০% অ্যাড-ব্লকার প্রুফ মাইক্রোসফট ক্ল্যারিটি সেটআপ */}
         <Script id="clarity-setup" strategy="afterInteractive">
-          {`
-            (function(c,l,a,r,i,t,y){
-                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                t=l.createElement(r);t.async=1;
-                // আপনার ডোমেইন থেকে স্ক্রিপ্ট লোড করা
-                t.src="/clarity-script/tag/"+i;
-                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-                
-                // ক্ল্যারিটিকে আপনার নিজের ডোমেইনে ডাটা পাঠাতে বাধ্য করা
-                c[a]("set", "api", window.location.origin + "/clarity-data/collect"); 
-            })(window, document, "clarity", "script", "wd3r4mftjy");
-          `}
-        </Script>
+  {`
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;
+        t.src="/clarity-script/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        
+        // ক্ল্যারিটিকে আপনার ডোমেইন ব্যবহার করতে বাধ্য করা (Hardcoded)
+        c[a]("set", "api", "https://www.trackflowpro.com/clarity-data/collect"); 
+    })(window, document, "clarity", "script", "wd3r4mftjy");
+  `}
+</Script>
       </head>
       <body className="min-h-screen bg-white">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
