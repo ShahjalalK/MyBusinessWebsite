@@ -142,8 +142,7 @@ export default function DashboardPage() {
                     </div>
                   </td>
 
-                 avaScript
-                    // আপনার ড্যাশবোর্ডের টেবিল সেলে এই লজিকটি ব্যবহার করুন:
+                 
                     <td className="px-6 py-4">
                       {lead.device_info && lead.device_info.length > 0 ? (
                         <div className="flex flex-col">
