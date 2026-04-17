@@ -20,25 +20,26 @@ export async function POST(request: Request) {
     // ২. গুগল এনালাইটিক্স কালেকশন URL (লাইভ মোড)
     const GA4_URL = `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`;
 
-    // ৩. পেলোড তৈরি
-    const payload = {
-      client_id: clientId || '555.666', // ক্লায়েন্ট আইডি না থাকলে ডিফল্ট
-      events: [
-        {
-          name: 'generate_lead',
-          params: {
-            session_id: sessionId || Date.now().toString(),
-            ip_override: userIp,
-            user_agent: userAgent,
-            name: name,
-            service_type: service,
-            page_title: pageTitle || 'Contact Page',
-            // অ্যাড-ব্লকার বাইপাস কনফার্ম করার জন্য কাস্টম প্যারামিটার
-            method: 'server_side_proxy'
-          },
-        },
-      ],
-    };
+    // route.ts এর আপডেট করা অংশ
+const payload = {
+  client_id: clientId || '123456789.123456789', // ফরম্যাটটি সবসময় numeric রাখার চেষ্টা করুন
+  non_personalized_ads: false,
+  events: [
+    {
+      name: 'generate_lead',
+      params: {
+        session_id: sessionId || Date.now().toString(),
+        engagement_time_msec: "100", // এটি যোগ করলে গুগল ডাটাকে সিরিয়াসলি নেয়
+        page_location: "https://www.trackflowpro.com/contact", // সরাসরি ইউআরএল দিন
+        page_title: pageTitle || 'Contact Page',
+        ip_override: userIp,
+        user_agent: userAgent,
+        service_type: service,
+        method: 'server_side_proxy'
+      },
+    },
+  ],
+};
 
     // ৪. আপনার সার্ভার থেকে গুগলের সার্ভারে ডাটা পাঠানো (এটি অ্যাড-ব্লকার দেখবে না)
     const response = await fetch(GA4_URL, {
