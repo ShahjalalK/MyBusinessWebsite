@@ -37,8 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         t.src="/clarity-script/tag/"+i;
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
         
-        // ক্ল্যারিটিকে আপনার ডোমেইন ব্যবহার করতে বাধ্য করা (Hardcoded)
-        c[a]("set", "api", "https://www.trackflowpro.com/clarity-data/collect"); 
+        // সব ধরণের সাব-ডোমেইন (n, l, q) ইগনোর করে সরাসরি আপনার প্রক্সি ব্যবহার করা
+        window.clarity("set", "api", "https://www.trackflowpro.com/clarity-data");
     })(window, document, "clarity", "script", "wd3r4mftjy");
   `}
 </Script>
