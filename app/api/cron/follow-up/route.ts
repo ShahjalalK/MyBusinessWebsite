@@ -13,6 +13,14 @@ interface OutreachLead {
 }
 
 export async function GET(req: Request) {
+
+  const { searchParams } = new URL(req.url);
+  const key = searchParams.get('key');
+
+  if (key !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
   try {
     const q = query(
       collection(db, "outreach_leads"),
@@ -37,7 +45,7 @@ export async function GET(req: Request) {
       const diff = now - sentTime;
 
       // আপনি চাইলে টেস্ট করার জন্য ২ দিন (172800000) কমিয়ে ১ মিনিট (60000) দিয়ে দেখতে পারেন
-      if (diff > 0) { 
+      if (diff > 172800000) { 
         
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
