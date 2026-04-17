@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
-        {/* অ্যাড-ব্লকার বাইপাস করার জন্য আমরা ক্লায়েন্ট থেকে গুগল কল কমিয়ে দিচ্ছি */}
+        {/* অ্যাড-ব্লকার বাইপাস করার জন্য গুগল ট্যাগ ইনিশিয়ালাইজেশন */}
         <Script id="gtag-init" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
@@ -27,6 +27,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             gtag('js', new Date());
           `}
         </Script>
+
+        {/* অ্যাড-ব্লকার প্রুফ মাইক্রোসফট ক্ল্যারিটি সেটআপ */}
+        <Script id="clarity-setup" strategy="afterInteractive">
+  {`
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;
+        t.src="/clarity-script/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "${process.env.NEXT_PUBLIC_CLARITY_ID}");
+  `}
+</Script>
       </head>
       <body className="min-h-screen bg-white">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
