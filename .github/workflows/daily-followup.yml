@@ -1,0 +1,14 @@
+name: Daily Follow-up Job
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # প্রতিদিন রাত ১২টায় চলবে
+  workflow_dispatch: # চাইলে ম্যানুয়ালিও চালানো যাবে
+
+jobs:
+  run-followup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Follow-up API
+        run: |
+          curl -X GET "https://www.trackflowpro.com/api/cron/follow-up"
