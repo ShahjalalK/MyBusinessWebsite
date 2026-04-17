@@ -4,10 +4,9 @@ import nodemailer from 'nodemailer';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    // এখানে ট্র্যাকিং আইডিগুলোও রিসিভ করছি
-    const { name, email, service, message, clientId, sessionId } = body;
+    const { name, email, service, message, clientId, sessionId, pageTitle, pageLocation } = body;
 
-    // --- ইমেল পাঠানোর লজিক (আপনার কোড) ---
+    // ১. ইমেল পাঠানোর কনফিগারেশন
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -18,54 +17,45 @@ export async function POST(request: Request) {
       },
     });
 
-    const mailOptions = {
+    await transporter.sendMail({
       from: `"TrackFlow Inquiry" <${process.env.EMAIL_USER}>`,
       to: "shahjalal@trackflowpro.com",
       replyTo: email,
       subject: `New Project: ${service} - from ${name}`,
       html: `
-        <div style="font-family: sans-serif; padding: 30px; border: 1px solid #e2e8f0; border-radius: 20px; max-width: 600px;">
-          <h2 style="color: #041f60; font-size: 24px; margin-bottom: 20px;">New Contact Message</h2>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-          <p><strong>Client Name:</strong> ${name}</p>
-          <p><strong>Client Email:</strong> ${email}</p>
-          <p><strong>Selected Service:</strong> <span style="background: #eff6ff; color: #2563eb; padding: 4px 8px; border-radius: 4px;">${service}</span></p>
-          <p><strong>Project Details:</strong></p>
-          <div style="background: #f8fafc; padding: 15px; border-radius: 12px; border-left: 4px solid #041f60;">
-            ${message}
-          </div>
-          <p style="font-size: 12px; color: #64748b; margin-top: 30px;">This message was sent from TrackFlowPro Contact Form.</p>
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #041f60;">New Lead Received</h2>
+          <p><strong>Name:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Service:</strong> ${service}</p>
+          <p><strong>Message:</strong> ${message}</p>
         </div>
       `,
-    };
+    });
 
-    // ইমেল সেন্ড করা
-    await transporter.sendMail(mailOptions);
-
-    // --- সার্ভার-সাইড ট্র্যাকিং (ম্যাজিক এখানে) ---
-    // ইমেল চলে যাওয়ার পর আমরা সাথে সাথে গুগলে ডাটা পাঠিয়ে দিচ্ছি
+    // ২. GA4 সার্ভার-সাইড ট্র্যাকিং (Lead Event)
     const measurementId = process.env.GA4_MEASUREMENT_ID;
     const apiSecret = process.env.GA4_API_SECRET;
 
     if (measurementId && apiSecret) {
-      const GA4_URL = `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`;
-      
       const userIp = request.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1';
       const userAgent = request.headers.get('user-agent') || '';
 
-      await fetch(GA4_URL, {
+      await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`, {
         method: 'POST',
         body: JSON.stringify({
-          client_id: clientId || 'anonymous',
+          client_id: clientId || 'anonymous_lead',
           events: [{
             name: 'generate_lead',
             params: {
               session_id: sessionId || Date.now().toString(),
+              page_title: pageTitle || 'Contact Form',
+              page_location: pageLocation || '',
               ip_override: userIp,
               user_agent: userAgent,
-              name: name,
+              name: name, // কাস্টম প্যারামিটার
               service_type: service,
-              method: 'server_side_email_form'
+              engagement_time_msec: "100"
             },
           }],
         }),
@@ -75,7 +65,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (error) {
-    console.error("API Error:", error);
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
+    console.error("Contact API Error:", error);
+    return NextResponse.json({ error: "Failed to send" }, { status: 500 });
   }
 }
