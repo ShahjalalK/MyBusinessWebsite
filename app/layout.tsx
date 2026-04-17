@@ -5,6 +5,7 @@ import { ThemeProvider } from "./components/HeroSection/ThemeProvider";
 import ScrollToTop from "./components/scrollToTop";
 import LiveNotificationMap from "./components/HeroSection/liveTracking";
 import Script from "next/script";
+import ServerTrack from "./components/ServerTrack";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-white">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ServerTrack />
           <ScrollToTop />
           {children}
           <LiveNotificationMap />

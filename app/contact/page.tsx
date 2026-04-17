@@ -7,8 +7,6 @@ import ContactDirectContactInfo from '../components/contactUsPage/contactDirect'
 import ContactQuickResponsePromise from '../components/contactUsPage/contactResponse'
 import WhatHappensNext from '../components/contactUsPage/contactWhatHappen'
 import ContactFAQShort from '../components/contactUsPage/contactFaq'
-import ContactFinalCTA from '../components/contactUsPage/contactCta'
-import ContactBookCallSection from '../components/contactUsPage/contactCalendly'
 import ContactFinalContactStep from '../components/contactUsPage/contactCta'
 
 type Props = {}
@@ -23,7 +21,6 @@ export default function Contact({}: Props) {
         <ContactQuickResponsePromise />
         <WhatHappensNext />
         <ContactFAQShort />
-        {/* <ContactBookCallSection /> */}
 
         <ContactFinalContactStep />
     <Footer />
