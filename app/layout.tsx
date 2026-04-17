@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
-        {/* অ্যাড-ব্লকার বাইপাস করার জন্য গুগল ট্যাগ ইনিশিয়ালাইজেশন */}
+        {/* Google Tag Initializer */}
         <Script id="gtag-init" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
@@ -28,20 +28,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `}
         </Script>
 
-        {/* ১০০% অ্যাড-ব্লকার প্রুফ মাইক্রোসফট ক্ল্যারিটি সেটআপ */}
+        {/* Standard Microsoft Clarity Setup */}
         <Script id="clarity-setup" strategy="afterInteractive">
-  {`
-    (function(c,l,a,r,i,t,y){
-        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        t=l.createElement(r);t.async=1;
-        t.src="/clarity-script/tag/"+i;
-        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        
-        // সব ধরণের সাব-ডোমেইন (n, l, q) ইগনোর করে সরাসরি আপনার প্রক্সি ব্যবহার করা
-        window.clarity("set", "api", "https://www.trackflowpro.com/clarity-data");
-    })(window, document, "clarity", "script", "wd3r4mftjy");
-  `}
-</Script>
+          {`
+            (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "wd3r4mftjy");
+          `}
+        </Script>
       </head>
       <body className="min-h-screen bg-white">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
