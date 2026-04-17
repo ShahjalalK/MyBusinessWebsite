@@ -95,19 +95,21 @@ export default function OutreachPage() {
       const data = await res.json();
 
       if (data.success) {
-        await addDoc(collection(db, "outreach_leads"), {
-          name: clientName,
-          business_type: businessType,
-          email: email,
-          sender_email: activeSender.email,
-          originalMessageId: data.messageId,
-          subject: subject,
-          open_count: 0,
-          follow_up_count: 0,
-          status: 'sent',
-          createdAt: serverTimestamp(),
-          lastFollowUp: null
-        });
+  await addDoc(collection(db, "outreach_leads"), {
+    name: clientName,
+    business_type: businessType,
+    email: email,
+    sender_email: activeSender.email,
+    originalMessageId: data.messageId, // এটি ব্রেভোর আইডি
+    trackingId: data.trackingId,       // <--- এই লাইনটি অবশ্যই যোগ করতে হবে!
+    subject: subject,
+    open_count: 0,
+    device_info: [],                  // শুরুতেই খালি অ্যারে দিয়ে রাখা ভালো
+    follow_up_count: 0,
+    status: 'sent',
+    createdAt: serverTimestamp(),
+    lastFollowUp: null
+  });
         setStatus('Success! Message Sent.');
         setEmail(''); setClientName(''); setBusinessType(''); setSubject(''); setMessage('');
       } else {
