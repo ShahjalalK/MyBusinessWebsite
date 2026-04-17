@@ -6,62 +6,48 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const trackingId = searchParams.get('id');
 
-  // ১. পিক্সেল রিটার্ন করার ফাংশন (এটি সবার আগে রাখা ভালো যাতে এরর আসলেও পিক্সেল লোড হয়)
   const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
-  const pixelResponseHeaders = {
+  const headers = {
     'Content-Type': 'image/gif',
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
   };
 
-  if (!trackingId) {
-    return new NextResponse(pixel, { headers: pixelResponseHeaders });
-  }
+  if (!trackingId) return new NextResponse(pixel, { headers });
 
-  // ২. ডিভাইস এবং লোকেশন ডাটা কালেক্ট করা
+  // ডাটা এক্সট্র্যাক্ট করা
   const userAgent = req.headers.get('user-agent') || 'Unknown Device';
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'Unknown IP';
-  
-  // Vercel এর স্পেসিফিক হেডার
-  const country = req.headers.get('x-vercel-ip-country') || 'Unknown Country';
+  const country = req.headers.get('x-vercel-ip-country') || 'Unknown';
   const city = req.headers.get('x-vercel-ip-city') || '';
   const locationText = city ? `${city}, ${country}` : country;
 
   try {
-    // ৩. ফায়ারবেসে ওই trackingId দিয়ে লিডটি খুঁজে বের করা
-    const outreachRef = collection(db, "outreach_leads");
-    const q = query(outreachRef, where("trackingId", "==", trackingId));
+    // এখানে 'outreach_leads' কালেকশনে trackingId দিয়ে সার্চ করছি
+    const leadsRef = collection(db, "outreach_leads");
+    const q = query(leadsRef, where("trackingId", "==", trackingId.trim())); // trim() যোগ করা হয়েছে স্পেস দূর করতে
     const querySnapshot = await getDocs(q);
 
     if (!querySnapshot.empty) {
-      // যদি একাধিক ডকুমেন্ট পাওয়া যায় (সাধারণত ১টিই পাওয়ার কথা), তবে প্রথমটি আপডেট হবে
       const leadDoc = querySnapshot.docs[0];
       const leadRef = doc(db, "outreach_leads", leadDoc.id);
 
+      // গুরুত্বপূর্ণ: এখানে সরাসরি object আপডেট করা হচ্ছে
       await updateDoc(leadRef, {
         open_count: increment(1),
         last_opened: Timestamp.now(),
-        // device_info অ্যারেতে নতুন অবজেক্ট পুশ করা
+        status: 'opened',
         device_info: arrayUnion({
-          device: userAgent,
+          device: userAgent.slice(0, 150), // খুব বড় ডাটা যেন না হয়
           ip: ip,
           location: locationText,
           time: new Date().toISOString()
-        }),
-        status: 'opened'
+        })
       });
-      console.log(`Successfully tracked: ${trackingId}`);
-    } else {
-      console.log(`No lead found in Firebase for trackingId: ${trackingId}`);
+      console.log("Successfully updated lead:", trackingId);
     }
-
-    // পিক্সেল রিটার্ন
-    return new NextResponse(pixel, { headers: pixelResponseHeaders });
-
   } catch (error) {
-    console.error("Firebase Tracking Error:", error);
-    // এরর হলেও পিক্সেল রিটার্ন করুন যাতে ইউজার বুঝতে না পারে
-    return new NextResponse(pixel, { headers: pixelResponseHeaders });
+    console.error("Tracking Update Failed:", error);
   }
+
+  return new NextResponse(pixel, { headers });
 }
