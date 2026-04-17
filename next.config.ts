@@ -8,9 +8,9 @@ const nextConfig: NextConfig = {
         destination: 'https://www.clarity.ms/:path*',
       },
       {
-        // এই লাইনটি খুবই গুরুত্বপূর্ণ
+        // মাইক্রোসফটের কালেকশন সার্ভারকে আপনার ডোমেইনের সাথে ম্যাপ করা
         source: '/clarity-data/:path*',
-        destination: 'https://l.clarity.ms/:path*', 
+        destination: 'https://l.clarity.ms/:path*',
       },
     ];
   },
