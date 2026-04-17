@@ -8,8 +8,9 @@ const nextConfig: NextConfig = {
         destination: 'https://www.clarity.ms/:path*',
       },
       {
+        // এই লাইনটি খুবই গুরুত্বপূর্ণ
         source: '/clarity-data/:path*',
-        destination: 'https://*.b.clarity.ms/:path*',
+        destination: 'https://l.clarity.ms/:path*', 
       },
     ];
   },

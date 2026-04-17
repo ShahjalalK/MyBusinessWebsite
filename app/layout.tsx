@@ -36,7 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         t=l.createElement(r);t.async=1;
         t.src="/clarity-script/tag/"+i;
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window, document, "clarity", "script", "${process.env.NEXT_PUBLIC_CLARITY_ID}");
+        
+        // এটি যোগ করুন যাতে ডাটা পাঠানোর সময় প্রক্সি ব্যবহার করে
+        c[a]("set", "api", "/clarity-data/collect"); 
+    })(window, document, "clarity", "script", "wd3r4mftjy");
   `}
 </Script>
       </head>
