@@ -142,31 +142,24 @@ export default function DashboardPage() {
                     </div>
                   </td>
 
-                  {/* Tracking Info (Device, Location, IP) */}
-                  <td className="p-5">
-                    {lead.device_info && lead.device_info.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <Globe size={12} className="text-blue-500" />
-                          <span className="text-[10px] font-black text-gray-700 bg-blue-50 px-1.5 py-0.5 rounded uppercase leading-none">
-                            {lead.device_info[0].location}
+                 avaScript
+                    // আপনার ড্যাশবোর্ডের টেবিল সেলে এই লজিকটি ব্যবহার করুন:
+                    <td className="px-6 py-4">
+                      {lead.device_info && lead.device_info.length > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-800">
+                            {lead.device_info[lead.device_info.length - 1].location}
                           </span>
-                          <span className="text-[10px] font-bold text-gray-400 tracking-tighter">{lead.device_info[0].ip}</span>
+                          <span className="text-[10px] text-gray-400 font-medium">
+                            {lead.device_info[lead.device_info.length - 1].device.includes('Mobi') ? 'Mobile' : 'Desktop'}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <Smartphone size={12} className="text-gray-400" />
-                          <p className="text-[9px] text-gray-400 truncate max-w-[140px] font-medium leading-none">
-                            {lead.device_info[0].device.split(')')[0].split('(')[1] || 'Desktop/Mobile'}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-gray-300 italic text-xs">
-                        <ShieldCheck size={14} />
-                        <span>Waiting...</span>
-                      </div>
-                    )}
-                  </td>
+                      ) : (
+                        <span className="text-gray-300 italic flex items-center gap-1">
+                          <ShieldCheck size={14} className="opacity-30" /> Waiting...
+                        </span>
+                      )}
+                    </td>
 
                   {/* Sender Source */}
                   <td className="p-5">
