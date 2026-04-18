@@ -38,23 +38,18 @@ export async function GET(req: Request) {
         open_count: admin.firestore.FieldValue.increment(1),
         last_opened: admin.firestore.FieldValue.serverTimestamp(),
         status: 'opened',
-        // device_info: admin.firestore.FieldValue.arrayUnion({
-        //   device: userAgent.slice(0, 150),
-        //   ip: ip,
-        //   location: locationText,
-        //   time: new Date().toISOString()
-        // })
-
         device_info: admin.firestore.FieldValue.arrayUnion({
-          device: "Mobile",
-          ip: "12347euejs",
-          location: "bangladesh",
-          time: "1234seslle"
+          device: userAgent.slice(0, 150),
+          ip: ip,
+          location: locationText,
+          time: new Date().toISOString()
         })
+
+        
       });
-      console.log(`Successfully tracked: ${trackingId}`);
+      console.log("✅ Device Info Updated for:", trackingId);
     } else {
-      console.log(`No lead found for ID: ${trackingId}`);
+      console.log("❌ No document found for trackingId:", trackingId);
     }
   } catch (error) {
     
