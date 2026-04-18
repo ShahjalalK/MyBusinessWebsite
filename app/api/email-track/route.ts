@@ -38,11 +38,18 @@ export async function GET(req: Request) {
         open_count: admin.firestore.FieldValue.increment(1),
         last_opened: admin.firestore.FieldValue.serverTimestamp(),
         status: 'opened',
+        // device_info: admin.firestore.FieldValue.arrayUnion({
+        //   device: userAgent.slice(0, 150),
+        //   ip: ip,
+        //   location: locationText,
+        //   time: new Date().toISOString()
+        // })
+
         device_info: admin.firestore.FieldValue.arrayUnion({
-          device: userAgent.slice(0, 150),
-          ip: ip,
-          location: locationText,
-          time: new Date().toISOString()
+          device: "Mobile",
+          ip: "12347euejs",
+          location: "bangladesh",
+          time: "1234seslle"
         })
       });
       console.log(`Successfully tracked: ${trackingId}`);
@@ -50,7 +57,7 @@ export async function GET(req: Request) {
       console.log(`No lead found for ID: ${trackingId}`);
     }
   } catch (error) {
-    // ক্যাশ কন্ট্রোল হেডার
+    
     console.error("Firebase Admin Error:", error);
   }
 
