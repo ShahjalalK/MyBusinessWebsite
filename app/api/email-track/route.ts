@@ -50,6 +50,7 @@ export async function GET(req: Request) {
       console.log(`No lead found for ID: ${trackingId}`);
     }
   } catch (error) {
+    // ক্যাশ কন্ট্রোল হেডার
     console.error("Firebase Admin Error:", error);
   }
 
