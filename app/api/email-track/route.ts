@@ -44,9 +44,11 @@ export async function GET(req: Request) {
         last_opened: Timestamp.now(),
         status: 'opened',
         device_info: arrayUnion({
-          device: userAgent.slice(0, 150),
-          ip: ip,
-          location: locationText,
+          // device: userAgent.slice(0, 150),
+          // ip: ip,
+          // location: locationText,
+          // time: new Date().toISOString()
+          test: "working",
           time: new Date().toISOString()
         })
       });
