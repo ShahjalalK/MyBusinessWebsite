@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '../../lib/firebase-admin'; // Admin SDK ইমপোর্ট করুন
+import { adminDb } from '../../lib/firebase-admin'; 
 import admin from "firebase-admin";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const trackingId = searchParams.get('id')?.trim();
+  
+  // ১. আইডি থেকে কোটেশন বা স্পেস পরিষ্কার করা (খুবই জরুরি)
+  const rawId = searchParams.get('id');
+  const trackingId = rawId ? rawId.replace(/['"]+/g, '').trim() : null;
 
   const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   
-  // ক্যাশ কন্ট্রোল হেডার
   const headers = new Headers({
     'Content-Type': 'image/gif',
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
@@ -16,9 +18,12 @@ export async function GET(req: Request) {
     'Expires': '0',
   });
 
-  if (!trackingId) return new NextResponse(pixel, { headers });
+  if (!trackingId) {
+    console.log("❌ No Tracking ID provided in URL");
+    return new NextResponse(pixel, { headers });
+  }
 
-  // লোকেশন এবং ডিভাইস ডাটা
+  // ২. ইউজার ডাটা সংগ্রহ
   const userAgent = req.headers.get('user-agent') || 'Unknown Device';
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'Unknown IP';
   const country = req.headers.get('x-vercel-ip-country') || 'Unknown';
@@ -26,14 +31,16 @@ export async function GET(req: Request) {
   const locationText = city ? `${city}, ${country}` : country;
 
   try {
-    // Admin SDK ব্যবহার করে কোয়েরি করা
     const outreachRef = adminDb.collection("outreach_leads");
+    
+    // ৩. ফায়ারবেসে সার্চ করা
+    console.log(`🔍 Searching Firestore for ID: [${trackingId}]`);
     const snapshot = await outreachRef.where("trackingId", "==", trackingId).get();
 
     if (!snapshot.empty) {
       const leadDoc = snapshot.docs[0];
       
-      // সরাসরি ডকুমেন্ট আপডেট
+      // ৪. ডাটা আপডেট করা
       await outreachRef.doc(leadDoc.id).update({
         open_count: admin.firestore.FieldValue.increment(1),
         last_opened: admin.firestore.FieldValue.serverTimestamp(),
@@ -44,16 +51,14 @@ export async function GET(req: Request) {
           location: locationText,
           time: new Date().toISOString()
         })
-
-        
       });
-      console.log("✅ Device Info Updated for:", trackingId);
+      console.log(`✅ Successfully tracked: ${trackingId}`);
     } else {
-      console.log("❌ No document found for trackingId:", trackingId);
+      // যদি ম্যাচ না পাওয়া যায় তবে লগে পরিষ্কার দেখা যাবে
+      console.log(`⚠️ Match NOT found in Firestore for ID: [${trackingId}]`);
     }
-  } catch (error) {
-    
-    console.error("Firebase Admin Error:", error);
+  } catch (error: any) {
+    console.error("🔥 Firebase Admin Error:", error.message);
   }
 
   return new NextResponse(pixel, { headers });
