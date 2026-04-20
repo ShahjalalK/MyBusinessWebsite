@@ -22,15 +22,15 @@ export async function GET(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'Unknown IP';
 
   // ১. উন্নত বট এবং সার্ভার ফিল্টারিং (শক্তিশালী করা হয়েছে)
-  // এটি Brevo, Google Image Proxy, Outlook Preview এবং অন্যান্য সাধারণ বটগুলো ফিল্টার করবে
-  const isBot = /bot|google|proxy|scanner|preview|cloud|brevo|mailers|paris|headless|crawler|facebook|whatsapp|bing|yahoo/i.test(userAgent);
-  
-  // Gmail বা Google Proxy চেক (সবচেয়ে কমন ভুল ডেটা এখান থেকেই আসে)
-  const isGoogleProxy = userAgent.includes('GoogleImageProxy') || ip.startsWith('66.249') || ip.startsWith('64.233');
+  // google বাদ দিন, শুধু google-proxy বা bot-এর নির্দিষ্ট নাম রাখুন
+const isBot = /bot|scanner|preview|cloud|brevo|mailers|paris|headless|crawler|facebook|whatsapp|bing|yahoo/i.test(userAgent);
 
-  if (isBot || isGoogleProxy) {
+// Gmail-এর জন্য স্পেসিফিক GoogleImageProxy ব্লক রাখুন
+const isGoogleProxy = userAgent.includes('GoogleImageProxy');
+
+if (isBot || isGoogleProxy) {
     return new NextResponse(pixel, { headers });
-  }
+}
 
   const country = req.headers.get('x-vercel-ip-country') || 'Unknown';
   const city = req.headers.get('x-vercel-ip-city') || '';
