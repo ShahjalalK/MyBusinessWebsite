@@ -7,7 +7,7 @@ export async function GET(req: Request) {
   const rawId = searchParams.get('id');
   const trackingId = rawId ? rawId.replace(/['"]+/g, '').trim() : null;
 
-  // স্বচ্ছ ১x১ পিক্সেল গিফ (GIF)
+  // ১x১ স্বচ্ছ ট্র্যাকিং পিক্সেল
   const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   const headers = new Headers({
     'Content-Type': 'image/gif',
@@ -18,25 +18,26 @@ export async function GET(req: Request) {
 
   if (!trackingId) return new NextResponse(pixel, { headers });
 
+  // রিকোয়েস্ট থেকে ডেটা সংগ্রহ
   const userAgent = req.headers.get('user-agent') || 'Unknown Device';
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'Unknown IP';
-
-  // ১. উন্নত বট এবং সার্ভার ফিল্টারিং (শক্তিশালী করা হয়েছে)
-  // google বাদ দিন, শুধু google-proxy বা bot-এর নির্দিষ্ট নাম রাখুন
-const isBot = /bot|scanner|preview|cloud|brevo|mailers|paris|headless|crawler|facebook|whatsapp|bing|yahoo/i.test(userAgent);
-
-// Gmail-এর জন্য স্পেসিফিক GoogleImageProxy ব্লক রাখুন
-const isGoogleProxy = userAgent.includes('GoogleImageProxy');
-
-if (isBot || isGoogleProxy) {
-    return new NextResponse(pixel, { headers });
-}
-
-  const country = req.headers.get('x-vercel-ip-country') || 'Unknown';
+  
+  // Vercel Geolocation হেডারস
+  const country = req.headers.get('x-vercel-ip-country') || 'Unknown Country';
   const city = req.headers.get('x-vercel-ip-city') || '';
   const locationText = city ? `${city}, ${country}` : country;
-  
-  // ইউজারের কারেন্ট আওয়ার (UTC) সংগ্রহ
+
+  // ১. উন্নত ফিল্টারিং লজিক (বট এবং প্রক্সি)
+  // 'google' শব্দটি সাধারণ ইউজার এজেন্ট থেকে বাদ দেওয়া হয়েছে যাতে জিমেইল অ্যাপে কাজ করে
+  const isBot = /bot|scanner|preview|cloud|brevo|mailers|headless|crawler|facebook|whatsapp|bing|yahoo/i.test(userAgent.toLowerCase());
+  const isGoogleProxy = userAgent.includes('GoogleImageProxy');
+
+  // যদি নিশ্চিত বট হয়, তবে ডেটা সেভ না করে পিক্সেল রিটার্ন করবে
+  if (isBot || isGoogleProxy) {
+    return new NextResponse(pixel, { headers });
+  }
+
+  // সময় এবং তারিখ
   const now = new Date();
   const currentHourUTC = now.getUTCHours();
 
@@ -48,35 +49,36 @@ if (isBot || isGoogleProxy) {
       const leadDoc = snapshot.docs[0];
       const leadData = leadDoc.data();
 
-      // ডিভাইস ডিটেকশন
+      // ২. ডিভাইস ডিটেকশন (Case-insensitive)
       let deviceType = "Desktop/Web";
-      if (/android|iphone|kindle|ipad/i.test(userAgent)) {
+      if (/android|iphone|kindle|ipad/i.test(userAgent.toLowerCase())) {
         deviceType = "Mobile Device";
       }
 
-      // ২. ডাবল হিট প্রোটেকশন (Bulletproof Logic)
-      // যদি শেষ ওপেন টাইম ৫ সেকেন্ডের মধ্যে হয়, তবে সেটিকে ইগনোর করুন (একই ওপেন দুবার কাউন্ট হবে না)
+      // ৩. ডাবল হিট প্রোটেকশন (৫ সেকেন্ড গ্যাপ)
       const lastOpened = leadData.last_opened?.toMillis() || 0;
       const timeDiff = now.getTime() - lastOpened;
 
-      if (timeDiff > 5000) { // ৫ সেকেন্ডের গ্যাপ
+      if (timeDiff > 5000) {
+        // ফায়ারবেস আপডেট
         await outreachRef.doc(leadDoc.id).update({
           open_count: admin.firestore.FieldValue.increment(1),
           last_opened: admin.firestore.FieldValue.serverTimestamp(),
-          preferred_hour: currentHourUTC, // পরবর্তী ফলো-আপের জন্য এই সময়টিই মেইন
-          status: (leadData.status === 'sent' || !leadData.status) ? 'opened' : leadData.status,
+          preferred_hour: currentHourUTC,
+          status: 'opened', // স্ট্যাটাস সরাসরি আপডেট
           device_info: admin.firestore.FieldValue.arrayUnion({
             device: deviceType,
             ip: ip,
             location: locationText,
             time: now.toISOString(),
-            ua: userAgent.substring(0, 100) // ট্রাবলশুটিংয়ের জন্য ছোট করে UA সেভ করা
+            ua: userAgent.substring(0, 150) // ডিবাগিং এর জন্য ইউজার এজেন্ট রাখা হলো
           })
         });
       }
     }
   } catch (error) {
-    console.error("Tracking Error:", error);
+    // এরর হলেও পিক্সেল লোড হতে বাধা দেবে না
+    console.error("Tracking Storage Error:", error);
   }
 
   return new NextResponse(pixel, { headers });
