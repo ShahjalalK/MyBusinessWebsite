@@ -20,14 +20,15 @@ export async function POST(req: Request) {
         subject: subject,
         ...(scheduledAt && { scheduledAt: scheduledAt }),
         htmlContent: `
-          <!DOCTYPE html>
           <html>
-            <body style="font-family: Arial, sans-serif; font-size: 16px; color: #333; line-height: 1.6;">
-              <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                ${message}
-                <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-                  <img src="https://www.trackflowpro.com/api/email-track?id=${trackingId}" width="1" height="1" style="display:none !important;" alt="" />
-                </div>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+              ${message}
+              <br/>
+              <div style="height: 1px; width: 1px; overflow: hidden; opacity: 0;">
+                <img src="https://www.trackflowpro.com/api/email-track?id=${trackingId}" 
+                    width="1" height="1" 
+                    style="border:none; display: inline-block;" 
+                    alt="" />
               </div>
             </body>
           </html>
