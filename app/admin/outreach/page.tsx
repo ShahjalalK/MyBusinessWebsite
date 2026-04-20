@@ -2,7 +2,20 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../lib/firebase'
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
-import { Send, Loader2, AlertTriangle, CheckCircle2, User, Building2, Mail, ChevronDown } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase } from 'lucide-react'
+import { 
+  Editor, 
+  EditorProvider, 
+  Toolbar, 
+  BtnBold, 
+  BtnItalic, 
+  BtnUnderline, 
+  BtnStrikeThrough, 
+  BtnLink, 
+  BtnNumberedList, 
+  BtnBulletList, 
+  BtnClearFormatting 
+} from 'react-simple-wysiwyg';
 
 const SENDERS = [
   { name: "Shahjalal Khan", email: "shahjalal@trackflowpro.com", limit: 50 },
@@ -11,56 +24,83 @@ const SENDERS = [
   { name: "Shahjalal Khan", email: "admin@trackflowpro.com", limit: 50 },
 ];
 
+const SERVICES = [
+  "Email Signature",
+  "Google Ads",
+  "Server Side Tracking"
+];
+
 export default function OutreachPage() {
   const [email, setEmail] = useState('')
   const [clientName, setClientName] = useState('')
   const [businessType, setBusinessType] = useState('')
   const [subject, setSubject] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState('') 
+  const [scheduledTime, setScheduledTime] = useState('') 
+  const [selectedService, setSelectedService] = useState('')
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
   const [senderCounts, setSenderCounts] = useState<{ [key: string]: number }>({})
   const [selectedSender, setSelectedSender] = useState<string>('') 
+  const [minDateTime, setMinDateTime] = useState('')
+  const [emailError, setEmailError] = useState('')
 
-  // ১. মাউন্ট হওয়ার সময় localStorage থেকে সেভ করা ইমেইল লোড করা
   useEffect(() => {
-    const savedSender = localStorage.getItem('outreach_selected_sender');
-    if (savedSender) {
-      setSelectedSender(savedSender);
-    }
+    const updateMinTime = () => {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 1); 
+      setMinDateTime(now.toISOString().slice(0, 16));
+    };
+    updateMinTime();
+    const timer = setInterval(updateMinTime, 60000);
+    return () => clearInterval(timer);
   }, []);
 
-  // ২. যখনই সেন্ডার চেঞ্জ হবে, তা localStorage-এ সেভ করে রাখা
+  useEffect(() => {
+    const savedSender = localStorage.getItem('outreach_selected_sender');
+    const savedService = localStorage.getItem('outreach_selected_service');
+    if (savedSender) setSelectedSender(savedSender);
+    if (savedService) setSelectedService(savedService);
+  }, []);
+
   const handleSenderChange = (email: string) => {
     setSelectedSender(email);
     localStorage.setItem('outreach_selected_sender', email);
   };
 
-  // ৩. আজকের পাঠানো ইমেইল কাউন্ট ফেচ করা
+  const handleServiceChange = (service: string) => {
+    setSelectedService(service);
+    localStorage.setItem('outreach_selected_service', service);
+  };
+
+  const isEmailPatternValid = (inputEmail: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(inputEmail);
+  };
+
+  const addImage = () => {
+    const url = prompt('Enter Image URL:');
+    if (url) {
+      const width = prompt('Enter width in % (e.g., 50 or 100):', '100');
+      const imgHtml = `<br/><img src="${url}" style="width:${width}%; max-width:100%; height:auto; border-radius:12px; margin:10px 0; display:inline-block;" /><br/>`;
+      setMessage((prev) => prev + imgHtml);
+    }
+  };
+
   useEffect(() => {
     async function fetchCounts() {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
       const counts: { [key: string]: number } = {};
-      
       for (const sender of SENDERS) {
-        const q = query(
-          collection(db, "outreach_leads"),
-          where("sender_email", "==", sender.email),
-          where("createdAt", ">=", today)
-        );
+        const q = query(collection(db, "outreach_leads"), where("sender_email", "==", sender.email), where("createdAt", ">=", startOfToday));
         const snapshot = await getDocs(q);
         counts[sender.email] = snapshot.size;
       }
       setSenderCounts(counts);
-
-      // যদি localStorage-এ কিছু না থাকে, তবেই অটোমেটিক প্রথমটি সিলেক্ট করবে
-      const savedSender = localStorage.getItem('outreach_selected_sender');
-      if (!savedSender) {
+      if (!localStorage.getItem('outreach_selected_sender')) {
         const firstAvailable = SENDERS.find(s => (counts[s.email] || 0) < s.limit);
-        if (firstAvailable) {
-          handleSenderChange(firstAvailable.email);
-        }
+        if (firstAvailable) handleSenderChange(firstAvailable.email);
       }
     }
     fetchCounts();
@@ -70,50 +110,45 @@ export default function OutreachPage() {
 
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isEmailPatternValid(email)) { setEmailError('Please enter a valid email address!'); return; }
+    if (!selectedService) return alert("Please select a service first!");
     if (!activeSender) return alert("Please select an active sender!");
-    if ((senderCounts[activeSender.email] || 0) >= activeSender.limit) {
-      return alert("This sender has reached today's limit!");
-    }
+    const currentCount = senderCounts[activeSender.email] || 0;
+    if (currentCount >= activeSender.limit) return alert("Daily limit reached!");
 
     setLoading(true);
-    setStatus('Launching...');
+    setStatus('Processing...');
 
     try {
+      const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            email, 
-            subject, 
-            message, 
-            sender: activeSender,
-            clientName,
-            businessType 
-        }),
+        body: JSON.stringify({ email, subject, message, sender: activeSender, clientName, businessType, scheduledAt: scheduledAtISO }),
       });
-
       const data = await res.json();
-
+      
       if (data.success) {
-  await addDoc(collection(db, "outreach_leads"), {
-    name: clientName,
-    business_type: businessType,
-    email: email,
-    sender_email: activeSender.email,
-    originalMessageId: data.messageId, // এটি ব্রেভোর আইডি
-    trackingId: data.trackingId,       // <--- এই লাইনটি অবশ্যই যোগ করতে হবে!
-    subject: subject,
-    open_count: 0,
-    device_info: [],                  // শুরুতেই খালি অ্যারে দিয়ে রাখা ভালো
-    follow_up_count: 0,
-    status: 'sent',
-    createdAt: serverTimestamp(),
-    lastFollowUp: null
-  });
-        setStatus('Success! Message Sent.');
-        setEmail(''); setClientName(''); setBusinessType(''); setSubject(''); setMessage('');
+        // ফায়ারবেসে ডাটা সেভ করার সময় trackingId এবং originalMessageId যোগ করা হয়েছে
+        await addDoc(collection(db, "outreach_leads"), {
+          name: clientName, 
+          business_type: businessType, 
+          service: selectedService, 
+          email, 
+          sender_email: activeSender.email, 
+          subject, 
+          message, 
+          trackingId: data.trackingId, 
+          originalMessageId: data.messageId,
+          status: scheduledAtISO ? 'scheduled' : 'sent', 
+          open_count: 0,
+          scheduledAt: scheduledAtISO, 
+          createdAt: serverTimestamp(),
+        });
+        setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Message Sent.');
+        setEmail(''); setClientName(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
       } else {
-        setStatus('Failed: ' + (data.error || 'Unknown Error'));
+        setStatus('Failed: ' + (data.error?.message || 'Unknown Error'));
       }
     } catch (error) {
       setStatus('Network Error.');
@@ -123,122 +158,114 @@ export default function OutreachPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-3 gap-8 mt-10">
-      
-      {/* বাম পাশ: হেলথ ট্র্যাকার */}
+    <div className="max-w-6xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-3 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
       <div className="lg:col-span-1 space-y-6">
         <h2 className="text-xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-            Sender Health
+            Today's Usage
         </h2>
         {SENDERS.map((s) => {
           const count = senderCounts[s.email] || 0;
-          const isDanger = count >= s.limit - 5;
           const isActive = selectedSender === s.email;
-          
+          const isLimitReached = count >= s.limit;
           return (
-            <div 
-                key={s.email} 
-                onClick={() => handleSenderChange(s.email)}
-                className={`p-5 rounded-3xl border-2 cursor-pointer transition-all duration-300 transform ${isActive ? 'border-blue-500 ring-4 ring-blue-50 bg-white scale-105' : 'border-gray-100 bg-gray-50/50 hover:border-blue-200'} ${isDanger && !isActive ? 'bg-red-50/30' : ''}`}
-            >
+            <div key={s.email} onClick={() => handleSenderChange(s.email)}
+                className={`p-5 rounded-3xl border-2 cursor-pointer transition-all duration-300 ${isActive ? 'border-blue-500 bg-white shadow-lg scale-105' : 'border-gray-100 bg-gray-50/50 hover:border-blue-200'} ${isLimitReached ? 'opacity-60 grayscale' : ''}`}>
               <div className="flex justify-between items-start mb-2">
-                <div className={`p-2 rounded-xl ${isActive ? 'bg-blue-600 text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
-                    <Mail size={16} />
-                </div>
-                {isDanger && <AlertTriangle className="text-red-500" size={18} />}
+                <p className={`font-bold text-xs truncate w-2/3 ${isActive ? 'text-blue-600' : 'text-gray-900'}`}>{s.email}</p>
+                <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isLimitReached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{count}/{s.limit}</span>
               </div>
-              <p className={`font-bold text-sm truncate ${isActive ? 'text-blue-600' : 'text-gray-900'}`}>{s.email}</p>
-              <div className="mt-4 w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-500 ${isDanger ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${(count / s.limit) * 100}%` }}></div>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{count} / {s.limit}</p>
-                {isActive && <div className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md font-black uppercase">Active</div>}
+              <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                <div className={`h-full transition-all duration-500 ${isLimitReached ? 'bg-red-50' : 'bg-blue-500'}`} style={{ width: `${Math.min((count / s.limit) * 100, 100)}%` }}></div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* ডান পাশ: ফর্ম */}
-      <div className="lg:col-span-2 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl shadow-blue-100/30 border border-gray-50">
-        <div className="flex flex-col mb-10">
-            <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-2">Launch.</h1>
-            <p className="text-gray-400 font-medium">Send high-converting personalized outreach.</p>
-        </div>
-
+      <div className="lg:col-span-2 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
+        <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch.</h1>
         <form onSubmit={handleSendEmail} className="space-y-6">
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-400 uppercase ml-1 tracking-wider">Prospect Name</label>
-                <div className="relative">
-                    <User className="absolute left-4 top-4 text-gray-300" size={18} />
-                    <input 
-                        type="text" placeholder="e.g. Robert Fox" required
-                        className="w-full pl-12 p-4 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 focus:bg-white text-black transition-all font-medium"
-                        value={clientName} onChange={(e) => setClientName(e.target.value)}
-                    />
+            <input type="text" placeholder="Prospect Name" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+            <div className="relative">
+              <input 
+                type="email" 
+                placeholder="Target Email" 
+                required 
+                className={`w-full p-4 bg-gray-50 rounded-2xl outline-none border transition-all font-medium ${emailError ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-blue-500'}`} 
+                value={email} 
+                onChange={(e) => { setEmail(e.target.value); setEmailError(''); }}
+              />
+              {emailError && (
+                <div className="flex items-center gap-1 text-red-500 text-[10px] font-black mt-2 ml-2 uppercase tracking-tight">
+                  <AlertCircle size={12}/> {emailError}
                 </div>
-            </div>
-            <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-400 uppercase ml-1 tracking-wider">Business Niche</label>
-                <div className="relative">
-                    <Building2 className="absolute left-4 top-4 text-gray-300" size={18} />
-                    <input 
-                        type="text" placeholder="e.g. Real Estate" required
-                        className="w-full pl-12 p-4 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 focus:bg-white text-black transition-all font-medium"
-                        value={businessType} onChange={(e) => setBusinessType(e.target.value)}
-                    />
-                </div>
+              )}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase ml-1 tracking-wider">Target Email</label>
-            <input 
-                type="email" placeholder="client@company.com" required
-                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 focus:bg-white text-black transition-all font-medium"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase ml-1 tracking-wider">Subject Line</label>
-            <input 
-                type="text" placeholder="Regarding your website tracking..." required
-                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 focus:bg-white text-black transition-all font-bold"
-                value={subject} onChange={(e) => setSubject(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase ml-1 tracking-wider">Message</label>
-            <textarea 
-                placeholder="Write a message that converts..." rows={6} required
-                className="w-full p-5 bg-gray-50 rounded-3xl outline-none border-2 border-transparent focus:border-blue-500 focus:bg-white text-black transition-all resize-none font-medium"
-                value={message} onChange={(e) => setMessage(e.target.value)}
-            />
-          </div>
-
-          <div className="pt-4">
-              <button 
-                type="submit" disabled={loading || !activeSender}
-                className="w-full py-5 bg-black text-white rounded-3xl font-black text-lg hover:bg-blue-600 transform hover:-translate-y-1 active:scale-95 transition-all shadow-xl disabled:bg-gray-200 flex justify-center items-center gap-3"
-              >
-                {loading ? <Loader2 className="animate-spin" /> : <><Send size={20} /> Send Outreach Now</>}
-              </button>
-          </div>
-
-          {status && (
-            <div className="flex justify-center items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-[0.2em] mt-4">
-                <CheckCircle2 size={14} />
-                {status}
+          <div className="relative group">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+              <Briefcase size={20} />
             </div>
-          )}
+            <select 
+              required
+              className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700 appearance-none cursor-pointer"
+              value={selectedService}
+              onChange={(e) => handleServiceChange(e.target.value)}
+            >
+              <option value="" disabled>Select Targeted Service</option>
+              {SERVICES.map(service => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+            </select>
+          </div>
+
+          <input type="text" placeholder="Subject Line" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg" value={subject} onChange={(e) => setSubject(e.target.value)} />
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-black text-gray-400 uppercase tracking-wider ml-1">Message Body</label>
+            <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-gray-50">
+              <EditorProvider>
+                <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
+                  <BtnBold /> <BtnItalic /> <BtnUnderline /> <BtnStrikeThrough />
+                  <span className="w-px h-6 bg-gray-200 mx-1"></span>
+                  <BtnNumberedList /> <BtnBulletList />
+                  <span className="w-px h-6 bg-gray-200 mx-1"></span>
+                  <BtnLink />
+                  <button type="button" onClick={addImage} className="p-1.5 hover:bg-blue-50 rounded-md border border-gray-200 flex items-center justify-center transition-all group">
+                    <ImageIcon size={16} className="text-gray-600 group-hover:text-blue-600" />
+                  </button>
+                  <BtnClearFormatting />
+                </Toolbar>
+                <Editor value={message} onChange={(e: any) => setMessage(e.target.value)} className="min-h-[300px] p-5 bg-transparent outline-none text-gray-800 font-medium email-editor-content" />
+              </EditorProvider>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-blue-500 ml-1">SCHEDULE SEND</span>
+              <input type="datetime-local" min={minDateTime} className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+            </div>
+            <button 
+              type="submit" 
+              disabled={loading || !isEmailPatternValid(email) || !selectedService} 
+              className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {loading ? <Loader2 className="animate-spin" /> : <><Send size={20} /><span>Send Outreach</span></>}
+            </button>
+          </div>
+          {status && <div className="text-center text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-4 flex justify-center items-center gap-2"><CheckCircle2 size={14} />{status}</div>}
         </form>
       </div>
+
+      <style jsx global>{`
+        .rsw-editor { border: none !important; background: transparent !important; }
+        .email-editor-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; }
+        .email-editor-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
+      `}</style>
     </div>
   )
 }

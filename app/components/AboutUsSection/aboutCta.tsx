@@ -38,7 +38,7 @@ export default function AboutCTA() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-4">
-              <Link href="/booking" className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black transition-all shadow-xl shadow-blue-500/25 group">
+              <Link href="/book-audit" className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black transition-all shadow-xl shadow-blue-500/25 group">
                 Book a Free Consultation <Calendar size={20} />
               </Link>
               

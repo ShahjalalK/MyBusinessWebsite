@@ -1,9 +1,9 @@
-name: Daily Follow-up Job
+name: Semi-Hourly Follow-up Job
 
 on:
   schedule:
-    - cron: '0 0 * * *' # প্রতিদিন রাত ১২টায় চলবে
-  workflow_dispatch: # চাইলে ম্যানুয়ালিও চালানো যাবে
+    - cron: '*/30 * * * *' # প্রতি ৩০ মিনিট পর পর চলবে (যেমন ১:০০, ১:৩০, ২:০০)
+  workflow_dispatch: # ম্যানুয়ালি চালানোর অপশন
 
 jobs:
   run-followup:

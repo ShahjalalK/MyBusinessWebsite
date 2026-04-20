@@ -137,7 +137,7 @@ export default function EmailSigantureInteractiveGmailPreview() {
               <div className="flex flex-col max-w-[550px] mt-10">
                 <div className="flex items-stretch">
                   {/* Left Column */}
-                  <div className="pr-4 border-r-2 border-[#041f60] flex flex-col items-center gap-3">
+                  <div className="pr-4 border-r-3 border-[#041f60] flex flex-col items-center gap-3">
                     <div className="w-36 h-36 rounded-full overflow-hidden border-2 border-slate-50 shadow-sm">
                       <img src={formData.profileImg} alt="Profile" className="w-full h-full object-cover" />
                     </div>
@@ -179,7 +179,7 @@ export default function EmailSigantureInteractiveGmailPreview() {
                 </div>
 
                 {/* Bottom CTA Section */}
-                <div className="mt-5 border-2 border-[#041f60] p-2  flex items-center justify-between bg-white">
+                <div className="mt-2 border-3 border-[#041f60] p-2  flex items-center justify-between bg-white">
                   <div className="flex-1">
                     <img src={formData.logoImg} alt="Company Logo" className="h-auto w-40 object-contain" />
                   </div>
