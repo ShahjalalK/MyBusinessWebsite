@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../../lib/firebase'
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore'
-import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, Eye, UserPlus, AlertCircle, ImageIcon, Layers, Clock } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, AlertCircle, Layers, Clock } from 'lucide-react'
 import { 
   Editor, 
   EditorProvider, 
@@ -33,10 +33,11 @@ export default function FollowUpAutomationPage() {
   const [activeStep, setActiveStep] = useState('step1')
   const [leads, setLeads] = useState<any[]>([])
   
+  // Default delay 1440 minutes (1 Day)
   const [categoryVariants, setCategoryVariants] = useState<any>({
-    'Email Signature': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 60 }])),
-    'Google Ads': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 60 }])),
-    'Server Side Tracking': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 60 }]))
+    'Email Signature': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }])),
+    'Google Ads': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }])),
+    'Server Side Tracking': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }]))
   })
   const [showEmails, setShowEmails] = useState<string | null>(null);
 
@@ -45,11 +46,7 @@ export default function FollowUpAutomationPage() {
       const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
       if (configDoc.exists()) setCategoryVariants(configDoc.data());
       
-      const q = query(
-        collection(db, "outreach_leads"), 
-        where("status", "in", ["interested", "opened"])
-      );
-      
+      const q = query(collection(db, "outreach_leads"), where("status", "in", ["interested", "opened"]));
       const snapshot = await getDocs(q);
       setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
@@ -57,9 +54,12 @@ export default function FollowUpAutomationPage() {
     loadData();
   }, [activeTab]);
 
-  const currentCategoryData = categoryVariants[activeTab]?.[activeStep] || { variants: [{ id: 'V1', content: "" }], delay: 60 };
+  const currentCategoryData = categoryVariants[activeTab]?.[activeStep] || { variants: [{ id: 'V1', content: "" }], delay: 1440 };
   const currentVariants = currentCategoryData.variants;
   const currentCategoryLeads = leads.filter(l => (l.service || 'Email Signature') === activeTab);
+
+  // ক্যালকুলেশন: মিনিট থেকে দিনে রূপান্তর
+  const days = Math.floor((currentCategoryData.delay || 1440) / 1440);
 
   const getEmailsForVariant = (variantId: string) => {
     const validVariants = currentVariants.filter((v: any) => v.content.trim() !== "");
@@ -116,7 +116,7 @@ export default function FollowUpAutomationPage() {
         </button>
       </div>
 
-      {/* Professional Time & Step Switcher */}
+      {/* Step Switcher & Day Input */}
       <div className="flex flex-wrap items-center gap-4 mb-8">
         <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
           {STEPS.map((step, idx) => (
@@ -127,27 +127,24 @@ export default function FollowUpAutomationPage() {
           ))}
         </div>
 
-        {/* Professional Wait Time Input */}
-        <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-3xl border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-2 border-r border-gray-100 pr-3">
-            <Clock size={16} className="text-blue-500" />
-            <span className="text-[10px] font-black text-gray-500 uppercase">Wait Time:</span>
+        {/* Bullet Proof Wait Time - ONLY DAYS */}
+        <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 border-r border-gray-100 pr-4">
+            <Clock size={18} className="text-blue-500" />
+            <span className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Follow-up After:</span>
           </div>
-          <div className="flex items-center gap-1">
-            <input type="number" min="0" placeholder="0" value={Math.floor(currentCategoryData.delay / 60)} 
+          <div className="flex items-center gap-2">
+            <input 
+              type="number" 
+              min="1" 
+              value={days} 
               onChange={(e) => {
-                const h = parseInt(e.target.value) || 0;
-                updateGlobalState({ ...currentCategoryData, delay: (h * 60) + (currentCategoryData.delay % 60) });
+                const d = parseInt(e.target.value) || 1;
+                updateGlobalState({ ...currentCategoryData, delay: d * 1440 });
               }}
-              className="w-8 bg-blue-50 rounded-lg py-1 text-center text-xs font-bold text-blue-700" />
-            <span className="text-[9px] font-black text-gray-400">H</span>
-            <input type="number" min="0" max="59" placeholder="0" value={currentCategoryData.delay % 60} 
-              onChange={(e) => {
-                const m = parseInt(e.target.value) || 0;
-                updateGlobalState({ ...currentCategoryData, delay: (Math.floor(currentCategoryData.delay / 60) * 60) + (m > 59 ? 59 : m) });
-              }}
-              className="w-8 bg-blue-50 rounded-lg py-1 text-center text-xs font-bold text-blue-700 ml-2" />
-            <span className="text-[9px] font-black text-gray-400">M</span>
+              className="w-12 bg-blue-50 rounded-xl py-1.5 text-center text-sm font-black text-blue-700 focus:ring-2 focus:ring-blue-200 outline-none" 
+            />
+            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Days</span>
           </div>
         </div>
       </div>
@@ -185,7 +182,10 @@ export default function FollowUpAutomationPage() {
                       <span className="w-px h-6 bg-gray-200 mx-1"></span>
                       <BtnLink />
                       <BtnClearFormatting />
-                      <button type="button" onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: v.content + " {name}" } : v) })} className="ml-auto flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase">
+                      <button type="button" onClick={() => {
+                        const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: v.content + " {name}" } : v);
+                        updateGlobalState({ ...currentCategoryData, variants: updatedVars });
+                      }} className="ml-auto flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase">
                         <UserPlus size={12} /> {`{Name}`}
                       </button>
                     </Toolbar>
@@ -200,7 +200,6 @@ export default function FollowUpAutomationPage() {
                   </EditorProvider>
                 </div>
                 
-                {/* Potential Leads Dropdown */}
                 <button onClick={() => setShowEmails(showEmails === variant.id ? null : variant.id)} className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100 hover:bg-gray-100 transition-colors">
                   <span className="text-[10px] font-black text-gray-600 uppercase flex items-center gap-2"><Mail size={14} /> Potential Leads ({targetEmails.length})</span>
                   {showEmails === variant.id ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}

@@ -1,9 +1,9 @@
-name: Semi-Hourly Follow-up Job
+name: Hourly Follow-up Job
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # প্রতি ৩০ মিনিট পর পর চলবে (যেমন ১:০০, ১:৩০, ২:০০)
-  workflow_dispatch: # ম্যানুয়ালি চালানোর অপশন
+    - cron: '0 * * * *' 
+  workflow_dispatch:
 
 jobs:
   run-followup:
@@ -11,4 +11,5 @@ jobs:
     steps:
       - name: Trigger Follow-up API
         run: |
-          curl -X GET "https://www.trackflowpro.com/api/cron/follow-up"
+          curl -X GET "https://www.trackflowpro.com/api/cron/follow-up" \
+          -H "x-cron-auth: ${{ secrets.CRON_SECRET }}"
