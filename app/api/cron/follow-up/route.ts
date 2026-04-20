@@ -1,40 +1,40 @@
 import { NextResponse } from 'next/server';
-import { db } from '../../../lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
-
-// ... আপনার ইম্পোর্টগুলো আগের মতোই থাকবে ...
+import { adminDb } from '../../../lib/firebase-admin'; 
+import admin from "firebase-admin";
 
 export async function GET(req: Request) {
   try {
     // ১. সিকিউরিটি চেক
     const authHeader = req.headers.get('x-cron-auth');
     if (authHeader !== process.env.CRON_SECRET) {
-      console.error("Auth mismatch. Expected:", process.env.CRON_SECRET, "Got:", authHeader);
+      console.error("Unauthorized access attempt.");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ২. কনফিগারেশন চেক (Try-catch এর ভেতর রাখুন যাতে না থাকলে ক্রাশ না করে)
-    const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
-    if (!configDoc.exists()) return NextResponse.json({ error: "Config not found" }, { status: 404 });
-    const categoryVariants = configDoc.data();
+    // ২. কনফিগারেশন ডাটা রিড (TypeScript Error Fixed)
+    const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
+    if (!configDoc.exists) {
+      return NextResponse.json({ error: "Config not found" }, { status: 404 });
+    }
+    
+    // টাইপস্ক্রিপ্ট এরর এড়াতে 'any' কাস্টিং
+    const categoryVariants = configDoc.data() as any;
 
     const now = new Date();
     const currentHourUTC = now.getUTCHours();
     
     // ৩. লিড কুয়েরি
-    const q = query(
-      collection(db, "outreach_leads"),
-      where("status", "in", ["opened", "interested"]),
-      where("follow_up_count", "<", 5) 
-    );
+    const querySnapshot = await adminDb.collection("outreach_leads")
+      .where("status", "in", ["opened", "interested"])
+      .where("follow_up_count", "<", 5)
+      .get();
 
-    const querySnapshot = await getDocs(q);
     const sentEmails: string[] = [];
 
-    for (const leadDoc of querySnapshot.docs) {
-      const lead = { id: leadDoc.id, ...leadDoc.data() } as any;
+    for (const doc of querySnapshot.docs) {
+      const lead = { id: doc.id, ...doc.data() } as any;
       
-      // Preferred Hour চেক (নিরাপদ ডিফল্ট ভ্যালু ১৪)
+      // Preferred Hour চেক
       const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14; 
       if (currentHourUTC !== preferredHour) continue;
 
@@ -42,19 +42,24 @@ export async function GET(req: Request) {
       const currentStepKey = `step${nextStepCount}`;
       const delayMinutes = lead[`${currentStepKey}Delay`] || 1440;
       
-      // ৪. বেস টাইম নির্ধারণ (আপনার ডাটাবেস ফিল্ডের নাম অনুযায়ী আপডেট করা হয়েছে)
+      // বেস টাইম চেক
       const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.last_opened;
       if (!baseTimeObj) continue;
 
-      const baseTimeMillis = typeof baseTimeObj.toMillis === 'function' ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
+      // Firestore Timestamp সেফ কনভারশন
+      const baseTimeMillis = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
       const diffInMinutes = (now.getTime() - baseTimeMillis) / (1000 * 60);
 
-      // ৫. টাইমিং চেক
+      // ৪. টাইমিং ম্যাচ হলে মেইল পাঠানো
       if (diffInMinutes >= (delayMinutes - 30)) {
         const service = lead.service || 'Email Signature';
+        
+        // এখানে আপনার এররটি আসছিল, যা এখন ফিক্সড
         const stepConfig = categoryVariants[service]?.[currentStepKey];
+        if (!stepConfig) continue;
+
         const assignedVariantId = lead[`${currentStepKey}AssignedVariant`];
-        const finalVariant = stepConfig?.variants?.find((v: any) => v.id === assignedVariantId) || stepConfig?.variants?.[0];
+        const finalVariant = stepConfig.variants?.find((v: any) => v.id === assignedVariantId) || stepConfig.variants?.[0];
 
         if (!finalVariant || !finalVariant.content) continue;
 
@@ -62,7 +67,7 @@ export async function GET(req: Request) {
         const senderName = lead.sender_name || "Shahjalal Khan";
         const senderEmail = lead.sender_email || "shahjalal@trackflowpro.com";
 
-        // ৬. Brevo API কল
+        // ৫. Brevo API কল
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
@@ -86,8 +91,9 @@ export async function GET(req: Request) {
         });
 
         if (response.ok) {
-          await updateDoc(doc(db, "outreach_leads", lead.id), {
-            lastFollowUp: serverTimestamp(),
+          // ৬. ডাটাবেস আপডেট
+          await adminDb.collection("outreach_leads").doc(lead.id).update({
+            lastFollowUp: admin.firestore.FieldValue.serverTimestamp(),
             follow_up_count: nextStepCount,
             status: nextStepCount === 5 ? 'finished' : lead.status
           });
