@@ -33,7 +33,6 @@ export default function FollowUpAutomationPage() {
   const [activeStep, setActiveStep] = useState('step1')
   const [leads, setLeads] = useState<any[]>([])
   
-  // Default delay 1440 minutes (1 Day)
   const [categoryVariants, setCategoryVariants] = useState<any>({
     'Email Signature': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }])),
     'Google Ads': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }])),
@@ -43,41 +42,55 @@ export default function FollowUpAutomationPage() {
 
   useEffect(() => {
     async function loadData() {
-      const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
-      if (configDoc.exists()) setCategoryVariants(configDoc.data());
-      
-      const q = query(collection(db, "outreach_leads"), where("status", "in", ["interested", "opened"]));
-      const snapshot = await getDocs(q);
-      setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
+      try {
+        const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
+        if (configDoc.exists()) {
+          const fetchedData = configDoc.data();
+          // নিশ্চিত করা হচ্ছে যে সব ক্যাটাগরি এবং স্টেপ উপস্থিত আছে
+          const mergedData = { ...categoryVariants, ...fetchedData };
+          setCategoryVariants(mergedData);
+        }
+        
+        const q = query(collection(db, "outreach_leads"), where("status", "in", ["interested", "opened"]));
+        const snapshot = await getDocs(q);
+        setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error loading data:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     loadData();
-  }, [activeTab]);
+  }, []); // শুধু একবার লোড হবে
 
-  const currentCategoryData = categoryVariants[activeTab]?.[activeStep] || { variants: [{ id: 'V1', content: "" }], delay: 1440 };
-  const currentVariants = currentCategoryData.variants;
+  // নিরাপদ ডাটা রিডিং লজিক
+  const currentTabSettings = categoryVariants[activeTab] || {};
+  const currentCategoryData = currentTabSettings[activeStep] || { variants: [{ id: 'V1', content: "" }], delay: 1440 };
+  const currentVariants = currentCategoryData.variants || [];
   const currentCategoryLeads = leads.filter(l => (l.service || 'Email Signature') === activeTab);
 
-  // ক্যালকুলেশন: মিনিট থেকে দিনে রূপান্তর
   const days = Math.floor((currentCategoryData.delay || 1440) / 1440);
 
   const getEmailsForVariant = (variantId: string) => {
-    const validVariants = currentVariants.filter((v: any) => v.content.trim() !== "");
+    const validVariants = currentVariants.filter((v: any) => v && v.content && v.content.trim() !== "");
     const vIndex = validVariants.findIndex((v: any) => v.id === variantId);
     if (vIndex === -1) return [];
     return currentCategoryLeads.filter((_, index) => index % validVariants.length === vIndex);
   };
 
   const updateGlobalState = (newStepData: any) => {
-    setCategoryVariants({
-      ...categoryVariants,
-      [activeTab]: { ...categoryVariants[activeTab], [activeStep]: newStepData }
-    });
+    setCategoryVariants((prev: any) => ({
+      ...prev,
+      [activeTab]: { 
+        ...(prev[activeTab] || {}), 
+        [activeStep]: newStepData 
+      }
+    }));
     setHasUnsavedChanges(true);
   };
 
   const handleSaveSettings = async () => {
-    const filteredVariants = currentVariants.filter((v: any) => v.content.trim() !== "");
+    const filteredVariants = currentVariants.filter((v: any) => v.content && v.content.trim() !== "");
     if (filteredVariants.length === 0) return alert("Please write something!");
 
     setSaving(true);
@@ -94,17 +107,29 @@ export default function FollowUpAutomationPage() {
       await Promise.all(batchPromises);
       setHasUnsavedChanges(false);
       alert(`✅ ${activeTab} ${activeStep.toUpperCase()} Synced!`);
-    } catch (error) { console.error(error); } finally { setSaving(false); }
+    } catch (error) { 
+      console.error(error); 
+      alert("Save failed!");
+    } finally { 
+      setSaving(false); 
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#FAFBFF]">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen pb-40">
-      
       {/* Services Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
           {SERVICES.map((s) => (
-            <button key={s.id} onClick={() => setActiveTab(s.id)}
+            <button key={s.id} onClick={() => { setActiveTab(s.id); setActiveStep('step1'); }}
               className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs transition-all ${activeTab === s.id ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-50'}`}>
               {s.icon} {s.id}
             </button>
@@ -127,7 +152,6 @@ export default function FollowUpAutomationPage() {
           ))}
         </div>
 
-        {/* Bullet Proof Wait Time - ONLY DAYS */}
         <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
           <div className="flex items-center gap-2 border-r border-gray-100 pr-4">
             <Clock size={18} className="text-blue-500" />
@@ -159,6 +183,7 @@ export default function FollowUpAutomationPage() {
       {/* Editor Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {currentVariants.map((variant: any, index: number) => {
+          if (!variant) return null;
           const targetEmails = getEmailsForVariant(variant.id);
           return (
             <div key={variant.id} className="bg-white rounded-[40px] shadow-xl border border-gray-50 flex flex-col overflow-hidden">
@@ -183,14 +208,14 @@ export default function FollowUpAutomationPage() {
                       <BtnLink />
                       <BtnClearFormatting />
                       <button type="button" onClick={() => {
-                        const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: v.content + " {name}" } : v);
+                        const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {name}" } : v);
                         updateGlobalState({ ...currentCategoryData, variants: updatedVars });
                       }} className="ml-auto flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase">
                         <UserPlus size={12} /> {`{Name}`}
                       </button>
                     </Toolbar>
                     <Editor 
-                      value={variant.content} 
+                      value={variant.content || ""} 
                       onChange={(e: any) => {
                         const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: e.target.value } : v);
                         updateGlobalState({ ...currentCategoryData, variants: updatedVars });
