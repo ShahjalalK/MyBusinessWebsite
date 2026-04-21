@@ -20,30 +20,37 @@ export async function GET(req: Request) {
 
     if (!snapshot.empty) {
       const leadDoc = snapshot.docs[0];
+      const leadData = leadDoc.data();
       const docRef = outreachRef.doc(leadDoc.id);
 
-      // একদম স্ট্যাটিক অবজেক্ট - কোনো হেডার বা ডাইনামিক ডেটা নেই
-      const staticEntry = {
-        device: "Test Device",
-        ip: "1.1.1.1",
-        location: "Test Location, BD",
+      // নতুন ফিল্ড নেম: tracking_history (সম্পূর্ণ স্ট্যাটিক ডাটা দিয়ে টেস্ট)
+      const activityEntry = {
+        device: "Email/Browser",
+        ip: "Tracking IP",
+        location: "Tracking Location",
         time: admin.firestore.Timestamp.now()
       };
 
-      // আপডেট অপারেশন
-      await docRef.update({
+      // আপডেট অবজেক্ট
+      const updatePayload: any = {
         open_count: admin.firestore.FieldValue.increment(1),
         lastOpenedAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'opened',
-        // সরাসরি অ্যারে ইউনিয়ন (স্ট্যাটিক ডেটা দিয়ে)
-        device_info: admin.firestore.FieldValue.arrayUnion(staticEntry)
-      });
-      
-      console.log("Tracking Success for ID:", trackingId);
+        status: 'opened'
+      };
+
+      // যদি tracking_history ফিল্ডটি না থাকে, তবে নতুন অ্যারে সেট করবে
+      if (!leadData.tracking_history || !Array.isArray(leadData.tracking_history)) {
+        updatePayload.tracking_history = [activityEntry];
+      } else {
+        // যদি থাকে, তবে arrayUnion করবে
+        updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion(activityEntry);
+      }
+
+      await docRef.update(updatePayload);
+      console.log("Activity logged successfully for ID:", trackingId);
     }
   } catch (error) {
-    // এররটি কনসোলে প্রিন্ট হবে যাতে আপনি Vercel Logs-এ দেখতে পারেন
-    console.error("Firebase Update Error:", error);
+    console.error("Critical Tracking Error:", error);
   }
 
   return new NextResponse(pixel, { headers });
