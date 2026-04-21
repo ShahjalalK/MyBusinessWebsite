@@ -188,6 +188,8 @@ export default function Navbar() {
             <div className="container mx-auto px-6 py-10 flex flex-col gap-6">
               <MobileNavLink href="/" onClick={() => {setIsOpen(false); handleNavClick('Mobile Home');}}>Home</MobileNavLink>
               <MobileNavLink href="/tracking-checker" onClick={() => {setIsOpen(false); handleNavClick('Mobile Lab');}}>Tracking Lab</MobileNavLink>
+
+              <MobileNavLink href="/about" onClick={() => {setIsOpen(false); handleNavClick('Mobile Lab');}}>About Us</MobileNavLink>
               
               {isAdmin && (
                 <>
