@@ -14,59 +14,36 @@ export async function GET(req: Request) {
 
   if (!trackingId) return new NextResponse(pixel, { headers });
 
-  // রিকোয়েস্ট থেকে ডাটা সংগ্রহ
-  const userAgent = req.headers.get('user-agent') || 'Unknown Client';
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
-  const country = req.headers.get('x-vercel-ip-country') || 'Unknown';
-  const city = req.headers.get('x-vercel-ip-city') || '';
-  const locationText = city ? `${city}, ${country}` : country;
-
   try {
     const outreachRef = adminDb.collection("outreach_leads");
     const snapshot = await outreachRef.where("trackingId", "==", trackingId).limit(1).get();
 
     if (!snapshot.empty) {
       const leadDoc = snapshot.docs[0];
-      const leadData = leadDoc.data();
       const docRef = outreachRef.doc(leadDoc.id);
 
-      // ডিভাইস ডিটেকশন লজিক
-      let deviceType = "Desktop";
-      const ua = userAgent.toLowerCase();
-      if (/mobile|android|iphone|ipad/i.test(ua)) {
-        deviceType = "Mobile";
-      } else if (/tablet/i.test(ua)) {
-        deviceType = "Tablet";
-      } else if (/googleimageproxy/i.test(ua)) {
-        deviceType = "Gmail/Proxy"; // ইমেইল থেকে ওপেন হলে এটি ধরবে
-      }
-
-      // অবজেক্টটি স্ট্রিং এ কনভার্ট করা নিশ্চিত করা (যাতে undefined এরর না দেয়)
-      const newEntry = {
-        device: String(deviceType),
-        ip: String(ip),
-        location: String(locationText || "Private"),
+      // একদম স্ট্যাটিক অবজেক্ট - কোনো হেডার বা ডাইনামিক ডেটা নেই
+      const staticEntry = {
+        device: "Test Device",
+        ip: "1.1.1.1",
+        location: "Test Location, BD",
         time: admin.firestore.Timestamp.now()
       };
 
-      // আপডেট ডেটা অবজেক্ট
-      const updatePayload: any = {
+      // আপডেট অপারেশন
+      await docRef.update({
         open_count: admin.firestore.FieldValue.increment(1),
         lastOpenedAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'opened'
-      };
-
-      // গুরুত্বপূর্ণ: device_info যদি না থাকে বা ভুল ফরম্যাটে থাকে তবে নতুন অ্যারে তৈরি করবে
-      if (!leadData.device_info || !Array.isArray(leadData.device_info)) {
-        updatePayload.device_info = [newEntry];
-      } else {
-        updatePayload.device_info = admin.firestore.FieldValue.arrayUnion(newEntry);
-      }
-
-      await docRef.update(updatePayload);
+        status: 'opened',
+        // সরাসরি অ্যারে ইউনিয়ন (স্ট্যাটিক ডেটা দিয়ে)
+        device_info: admin.firestore.FieldValue.arrayUnion(staticEntry)
+      });
+      
+      console.log("Tracking Success for ID:", trackingId);
     }
   } catch (error) {
-    console.error("Tracking Update Failed:", error);
+    // এররটি কনসোলে প্রিন্ট হবে যাতে আপনি Vercel Logs-এ দেখতে পারেন
+    console.error("Firebase Update Error:", error);
   }
 
   return new NextResponse(pixel, { headers });
