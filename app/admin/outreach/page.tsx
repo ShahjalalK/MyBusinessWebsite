@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../lib/firebase'
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
-import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase, Building2 } from 'lucide-react'
 import { 
   Editor, 
   EditorProvider, 
@@ -33,6 +33,7 @@ const SERVICES = [
 export default function OutreachPage() {
   const [email, setEmail] = useState('')
   const [clientName, setClientName] = useState('')
+  const [companyName, setCompanyName] = useState('') // নতুন স্টেট
   const [businessType, setBusinessType] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('') 
@@ -121,17 +122,29 @@ export default function OutreachPage() {
 
     try {
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
+      
+      // API কলে নাম এবং কোম্পানি পাঠানো হচ্ছে
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, subject, message, sender: activeSender, clientName, businessType, scheduledAt: scheduledAtISO }),
+        body: JSON.stringify({ 
+            email, 
+            subject, 
+            message, 
+            sender: activeSender, 
+            clientName, 
+            companyName, // পাঠানো হচ্ছে
+            businessType, 
+            scheduledAt: scheduledAtISO 
+        }),
       });
       const data = await res.json();
       
       if (data.success) {
-        // ফায়ারবেসে ডাটা সেভ করার সময় trackingId এবং originalMessageId যোগ করা হয়েছে
+        // ফায়ারবেসে ডাটা সেভ
         await addDoc(collection(db, "outreach_leads"), {
           name: clientName, 
+          company_name: companyName, // ডাটাবেসে সেভ হচ্ছে
           business_type: businessType, 
           service: selectedService, 
           email, 
@@ -142,11 +155,13 @@ export default function OutreachPage() {
           originalMessageId: data.messageId,
           status: scheduledAtISO ? 'scheduled' : 'sent', 
           open_count: 0,
+          follow_up_count: 0, // ডিফল্ট ০
           scheduledAt: scheduledAtISO, 
           createdAt: serverTimestamp(),
         });
+
         setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Message Sent.');
-        setEmail(''); setClientName(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
+        setEmail(''); setClientName(''); setCompanyName(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
       } else {
         setStatus('Failed: ' + (data.error?.message || 'Unknown Error'));
       }
@@ -158,7 +173,8 @@ export default function OutreachPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-3 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
+    <div className="max-w-7xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-4 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
+      {/* Usage Sidebar */}
       <div className="lg:col-span-1 space-y-6">
         <h2 className="text-xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
@@ -183,11 +199,32 @@ export default function OutreachPage() {
         })}
       </div>
 
-      <div className="lg:col-span-2 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
+      {/* Form Section */}
+      <div className="lg:col-span-3 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
         <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch.</h1>
         <form onSubmit={handleSendEmail} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Prospect Name */}
             <input type="text" placeholder="Prospect Name" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+            
+            {/* Company Name (নতুন ফিল্ড) */}
+            <div className="relative group">
+               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                  <Building2 size={18} />
+               </div>
+               <input 
+                type="text" 
+                placeholder="Company Name" 
+                required 
+                className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" 
+                value={companyName} 
+                onChange={(e) => setCompanyName(e.target.value)} 
+               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Target Email */}
             <div className="relative">
               <input 
                 type="email" 
@@ -203,27 +240,30 @@ export default function OutreachPage() {
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="relative group">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
-              <Briefcase size={20} />
+            {/* Targeted Service */}
+            <div className="relative group">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                <Briefcase size={20} />
+              </div>
+              <select 
+                required
+                className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700 appearance-none cursor-pointer"
+                value={selectedService}
+                onChange={(e) => handleServiceChange(e.target.value)}
+              >
+                <option value="" disabled>Select Targeted Service</option>
+                {SERVICES.map(service => (
+                  <option key={service} value={service}>{service}</option>
+                ))}
+              </select>
             </div>
-            <select 
-              required
-              className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700 appearance-none cursor-pointer"
-              value={selectedService}
-              onChange={(e) => handleServiceChange(e.target.value)}
-            >
-              <option value="" disabled>Select Targeted Service</option>
-              {SERVICES.map(service => (
-                <option key={service} value={service}>{service}</option>
-              ))}
-            </select>
           </div>
 
+          {/* Subject Line */}
           <input type="text" placeholder="Subject Line" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg" value={subject} onChange={(e) => setSubject(e.target.value)} />
 
+          {/* Message Editor */}
           <div className="space-y-2">
             <label className="text-[11px] font-black text-gray-400 uppercase tracking-wider ml-1">Message Body</label>
             <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-gray-50">

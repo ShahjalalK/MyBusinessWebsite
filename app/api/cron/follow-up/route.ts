@@ -4,28 +4,27 @@ import admin from "firebase-admin";
 
 export async function GET(req: Request) {
   try {
-    // ১. সিকিউরিটি চেক
+    // ১. সিকিউরিটি চেক (Authorization)
     const authHeader = req.headers.get('x-cron-auth');
     if (authHeader !== process.env.CRON_SECRET) {
       console.error("Unauthorized access attempt.");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ২. কনফিগারেশন ডাটা রিড (TypeScript Error Fixed)
+    // ২. কনফিগারেশন ডাটা রিড
     const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
     if (!configDoc.exists) {
       return NextResponse.json({ error: "Config not found" }, { status: 404 });
     }
     
-    // টাইপস্ক্রিপ্ট এরর এড়াতে 'any' কাস্টিং
     const categoryVariants = configDoc.data() as any;
-
     const now = new Date();
     const currentHourUTC = now.getUTCHours();
     
-    // ৩. লিড কুয়েরি
+    // ৩. লিড কুয়েরি (যারা একটিভ আছে এবং ৫টির কম ফলো-আপ পেয়েছে)
+    // জালাল ভাই, এখানে আমরা শুধু 'opened' এবং 'interested' স্ট্যাটাসগুলোই ধরছি
     const querySnapshot = await adminDb.collection("outreach_leads")
-      .where("status", "in", ["opened", "interested"])
+      .where("status", "in", ["opened", "interested", "active"]) 
       .where("follow_up_count", "<", 5)
       .get();
 
@@ -33,28 +32,58 @@ export async function GET(req: Request) {
 
     for (const doc of querySnapshot.docs) {
       const lead = { id: doc.id, ...doc.data() } as any;
-      
-      // Preferred Hour চেক
+      const followUpCount = lead.follow_up_count || 0;
+
+      // --- লজিক ১: নাম এবং কোম্পানি চেক ---
+      if (followUpCount === 0) {
+        if (!lead.name || lead.name.trim() === "" || !lead.company_name || lead.company_name.trim() === "") {
+          continue;
+        }
+
+        // হিউম্যান ভেরিফিকেশন (২ বার ওপেন এবং ৩০ সেকেন্ড গ্যাপ)
+        if ((lead.open_count || 0) < 2) continue;
+
+        if (lead.device_info && lead.device_info.length >= 2) {
+          const firstOpen = lead.device_info[0].time;
+          const lastOpen = lead.device_info[lead.device_info.length - 1].time;
+          const firstMillis = firstOpen.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
+          const lastMillis = lastOpen.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
+          if ((lastMillis - firstMillis) / 1000 < 30) continue; 
+        } else {
+          continue; 
+        }
+      }
+
+      // --- লজিক ২: ওপেন রিসেন্সি চেক (পরবর্তী ফলো-আপের জন্য) ---
+      if (followUpCount >= 1) {
+        const lastFollowUpTime = lead.lastFollowUp;
+        const lastOpenedTime = lead.lastOpenedAt || lead.last_opened;
+        if (lastFollowUpTime && lastOpenedTime) {
+          const lastFollowUpMillis = lastFollowUpTime.toMillis ? lastFollowUpTime.toMillis() : new Date(lastFollowUpTime).getTime();
+          const lastOpenedMillis = lastOpenedTime.toMillis ? lastOpenedTime.toMillis() : new Date(lastOpenedTime).getTime();
+          if (lastOpenedMillis <= lastFollowUpMillis) continue;
+        } else {
+          continue;
+        }
+      }
+
+      // --- লজিক ৩: টাইমিং চেক ---
       const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14; 
       if (currentHourUTC !== preferredHour) continue;
 
-      const nextStepCount = (lead.follow_up_count || 0) + 1;
+      const nextStepCount = followUpCount + 1;
       const currentStepKey = `step${nextStepCount}`;
       const delayMinutes = lead[`${currentStepKey}Delay`] || 1440;
       
-      // বেস টাইম চেক
       const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.last_opened;
       if (!baseTimeObj) continue;
 
-      // Firestore Timestamp সেফ কনভারশন
       const baseTimeMillis = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
       const diffInMinutes = (now.getTime() - baseTimeMillis) / (1000 * 60);
 
-      // ৪. টাইমিং ম্যাচ হলে মেইল পাঠানো
-      if (diffInMinutes >= (delayMinutes - 30)) {
+      // টাইম ডিলে চেক
+      if (diffInMinutes >= (delayMinutes - 10)) { // ১০ মিনিট বাফার রাখা হয়েছে
         const service = lead.service || 'Email Signature';
-        
-        // এখানে আপনার এররটি আসছিল, যা এখন ফিক্সড
         const stepConfig = categoryVariants[service]?.[currentStepKey];
         if (!stepConfig) continue;
 
@@ -63,9 +92,14 @@ export async function GET(req: Request) {
 
         if (!finalVariant || !finalVariant.content) continue;
 
-        const personalizedMessage = finalVariant.content.replace(/{name}/g, lead.name || 'there');
+        // ৪. পার্সোনালাইজেশন
+        let personalizedMessage = finalVariant.content;
+        personalizedMessage = personalizedMessage.replace(/{name}/g, lead.name || 'there');
+        personalizedMessage = personalizedMessage.replace(/{company}/g, lead.company_name || 'your company');
+
         const senderName = lead.sender_name || "Shahjalal Khan";
         const senderEmail = lead.sender_email || "shahjalal@trackflowpro.com";
+        const subject = `Re: ${lead.subject}`;
 
         // ৫. Brevo API কল
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -77,7 +111,7 @@ export async function GET(req: Request) {
           body: JSON.stringify({
             sender: { name: senderName, email: senderEmail },
             to: [{ email: lead.email }],
-            subject: `Re: ${lead.subject}`,
+            subject: subject,
             htmlContent: `
               <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -91,11 +125,19 @@ export async function GET(req: Request) {
         });
 
         if (response.ok) {
-          // ৬. ডাটাবেস আপডেট
+          // ৬. Bulletproof ডাটাবেস আপডেট (Thread History সহ)
           await adminDb.collection("outreach_leads").doc(lead.id).update({
             lastFollowUp: admin.firestore.FieldValue.serverTimestamp(),
             follow_up_count: nextStepCount,
-            status: nextStepCount === 5 ? 'finished' : lead.status
+            status: nextStepCount === 5 ? 'finished' : lead.status,
+            // ড্যাশবোর্ডে থ্রেড দেখানোর জন্য নিচের ডাটাগুলো পাঠানো হচ্ছে
+            sent_messages: admin.firestore.FieldValue.arrayUnion({
+              step: nextStepCount,
+              subject: subject,
+              body: personalizedMessage,
+              sentAt: admin.firestore.FieldValue.serverTimestamp(),
+              sender_email: senderEmail
+            })
           });
           sentEmails.push(lead.email);
         }
