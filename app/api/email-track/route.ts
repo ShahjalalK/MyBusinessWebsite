@@ -27,28 +27,30 @@ export async function GET(req: Request) {
     if (!snapshot.empty) {
       const leadDoc = snapshot.docs[0];
       
-      // ডিভাইস ডিটেকশন
+      // ডিভাইস ডিটেকশন (সহজ লজিক)
       let deviceType = "Desktop";
       if (/mobile|android|iphone|ipad/i.test(userAgent.toLowerCase())) {
         deviceType = "Mobile";
+      } else if (/tablet|ipad/i.test(userAgent.toLowerCase())) {
+        deviceType = "Tablet";
       }
 
-      // সরাসরি আপডেট - কোন ফিল্টার ছাড়াই একবার টেস্ট করুন
+      // আপডেট লজিক
       await outreachRef.doc(leadDoc.id).update({
         open_count: admin.firestore.FieldValue.increment(1),
-        lastOpenedAt: admin.firestore.FieldValue.serverTimestamp(), // আপনার ডাটাবেসের নামের সাথে মিল রেখে
+        lastOpenedAt: admin.firestore.FieldValue.serverTimestamp(), // সর্বশেষ সময়
         status: 'opened',
-        // এই অংশটি নিশ্চিতভাবে ডিভাইস ইনফো সেভ করবে
+        // device_info না পেলেও অন্তত সময় এবং IP সেভ হবে
         device_info: admin.firestore.FieldValue.arrayUnion({
-          device: deviceType,
+          device: deviceType || "Unknown",
           ip: ip,
-          location: locationText,
-          time: new Date().toISOString()
+          location: locationText || "Private",
+          time: admin.firestore.Timestamp.now() // ফায়ারবেস ফরম্যাটে টাইম
         })
       });
     }
   } catch (error) {
-    console.error("Final Test Error:", error);
+    console.error("Tracking Error:", error);
   }
 
   return new NextResponse(pixel, { headers });
