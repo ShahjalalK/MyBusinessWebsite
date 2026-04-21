@@ -16,6 +16,9 @@ import {
   BtnBulletList, 
   BtnClearFormatting 
 } from 'react-simple-wysiwyg';
+import AdminGuard from '@/app/components/AdminGuard'
+import Navbar from '@/app/components/navbar'
+import Footer from '@/app/components/footer'
 
 const SENDERS = [
   { name: "Shahjalal Khan", email: "shahjalal@trackflowpro.com", limit: 50 },
@@ -173,7 +176,12 @@ export default function OutreachPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-4 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
+    <>
+    <Navbar />
+
+<AdminGuard>
+
+       <div className="max-w-7xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-4 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
       {/* Usage Sidebar */}
       <div className="lg:col-span-1 space-y-6">
         <h2 className="text-xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
@@ -307,5 +315,13 @@ export default function OutreachPage() {
         .email-editor-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
       `}</style>
     </div>
+
+    </AdminGuard>
+
+    <Footer />
+    
+    
+    </>
+   
   )
 }

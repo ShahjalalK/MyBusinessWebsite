@@ -3,6 +3,9 @@ import React, { useState, useEffect } from 'react'
 import { db } from '../../../lib/firebase'
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { Mail, Clock, CheckCircle2, Trash2, X, Eye, Calendar, LayoutDashboard, User } from 'lucide-react'
+import AdminGuard from '@/app/components/AdminGuard'
+import Navbar from '@/app/components/navbar'
+import Footer from '@/app/components/footer'
 
 export default function Dashboard() {
   const [leads, setLeads] = useState<any[]>([])
@@ -43,7 +46,11 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen">
+   <>
+   <Navbar />
+
+<AdminGuard>
+     <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen">
       {/* List Header */}
       <div className="mb-10">
         <h1 className="text-4xl font-black text-gray-900 tracking-tighter flex items-center gap-3">
@@ -140,5 +147,10 @@ export default function Dashboard() {
         </div>
       )}
     </div>
+   </AdminGuard>
+
+   <Footer />
+   
+   </>
   )
 }

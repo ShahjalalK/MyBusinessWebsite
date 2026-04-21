@@ -16,6 +16,9 @@ import {
   BtnBulletList,
   BtnClearFormatting 
 } from 'react-simple-wysiwyg';
+import AdminGuard from '@/app/components/AdminGuard'
+import Navbar from '@/app/components/navbar'
+import Footer from '@/app/components/footer'
 
 const SERVICES = [
   { id: 'Email Signature', icon: <MousePointer2 size={18}/> },
@@ -153,7 +156,11 @@ export default function FollowUpAutomationPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen pb-40">
+    <>
+    <Navbar />
+
+<AdminGuard>
+      <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen pb-40">
       {/* Header Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
@@ -268,5 +275,10 @@ export default function FollowUpAutomationPage() {
         .email-editor-content { color: #1e293b !important; line-height: 1.6 !important; }
       `}</style>
     </div>
+    </AdminGuard>
+
+    <Footer />
+    
+    </>
   )
 }

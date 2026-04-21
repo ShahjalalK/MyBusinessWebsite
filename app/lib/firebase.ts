@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth } from "firebase/auth"; // 'Auth' এর বদলে 'getAuth' হবে
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -10,8 +11,11 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Next.js এর জন্য সেফ ইনিশিয়ালাইজেশন
+// Next.js এর জন্য সেফ ইনিশিয়ালাইজেশন
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
 
-export { db };
+// সার্ভিসগুলো ইনিশিয়ালাইজ করুন
+const db = getFirestore(app);
+const auth = getAuth(app); // এখানে auth অবজেক্টটি তৈরি করা হলো
+
+export { db, auth }; // ছোট হাতের 'auth' এক্সপোর্ট করুন

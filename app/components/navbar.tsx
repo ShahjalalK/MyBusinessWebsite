@@ -1,20 +1,35 @@
 "use client"
 import React, { useState, useEffect } from 'react'
-import { Menu, X, ArrowRight, ChevronDown, Rocket, ShieldCheck, Mail, Activity } from 'lucide-react'
+import { Menu, X, ArrowRight, ChevronDown, Rocket, ShieldCheck, Mail, Activity, LayoutDashboard, Send, Clock, UserCheck, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
+import { auth } from '../lib/firebase' 
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user && user.email === ADMIN_EMAIL) {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+      }
+    });
 
-  // --- GA4 Click Tracking Function ---
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      unsubscribe();
+    };
+  }, [ADMIN_EMAIL]);
+
   const handleNavClick = async (label: string) => {
     try {
       const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
@@ -63,7 +78,6 @@ export default function Navbar() {
               Solutions <ChevronDown className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
             </button>
             
-            {/* মেঘা মেনু (Dropdown) */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
               <div className="w-[580px] bg-white dark:bg-slate-900 shadow-[0px_20px_50px_rgba(0,0,0,0.1)] rounded-[2rem] border border-slate-100 dark:border-slate-800 p-8 grid grid-cols-2 gap-4">
                 
@@ -113,7 +127,22 @@ export default function Navbar() {
 
           <NavLink href="/about" onClick={() => handleNavClick('About')}>About Us</NavLink>
 
-          {/* ৩. নতুন হাইলাইটেড ট্র্যাকিং চেকার বাটন */}
+          {isAdmin && (
+            <div className="group relative">
+              <button className="flex items-center gap-1 text-[15px] font-black text-blue-600 py-2">
+                <Lock className="w-3 h-3" /> Admin <ChevronDown className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
+              </button>
+              <div className="absolute top-full left-0 pt-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
+                <div className="w-[260px] bg-white dark:bg-slate-900 shadow-2xl rounded-3xl border border-blue-100 dark:border-slate-800 p-4 flex flex-col gap-1">
+                  <AdminLink href="/admin/dashboard" label="Main Dashboard" icon={<LayoutDashboard size={16} />} onClick={() => handleNavClick('Admin Dashboard')} />
+                  <AdminLink href="/admin/outreach" label="Outreach System" icon={<Send size={16} />} onClick={() => handleNavClick('Admin Outreach')} />
+                  <AdminLink href="/admin/outreach/follow-up" label="Follow-up Manager" icon={<UserCheck size={16} />} onClick={() => handleNavClick('Admin FollowUp')} />
+                  <AdminLink href="/admin/email-schedule/dashboard" label="Email Schedules" icon={<Clock size={16} />} onClick={() => handleNavClick('Admin Schedules')} />
+                </div>
+              </div>
+            </div>
+          )}
+
           <Link 
             href="/tracking-checker" 
             onClick={() => handleNavClick('Tracking Checker')}
@@ -159,8 +188,17 @@ export default function Navbar() {
             <div className="container mx-auto px-6 py-10 flex flex-col gap-6">
               <MobileNavLink href="/" onClick={() => {setIsOpen(false); handleNavClick('Mobile Home');}}>Home</MobileNavLink>
               <MobileNavLink href="/tracking-checker" onClick={() => {setIsOpen(false); handleNavClick('Mobile Lab');}}>Tracking Lab</MobileNavLink>
-              <MobileNavLink href="/about" onClick={() => {setIsOpen(false); handleNavClick('Mobile About');}}>About Us</MobileNavLink>
               
+              {isAdmin && (
+                <>
+                  <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-2" />
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Admin Control</p>
+                  <Link href="/admin/dashboard" onClick={() => setIsOpen(false)} className="text-xl font-bold text-slate-700 dark:text-slate-300">Dashboard</Link>
+                  <Link href="/admin/outreach" onClick={() => setIsOpen(false)} className="text-xl font-bold text-slate-700 dark:text-slate-300">Outreach</Link>
+                  <Link href="/admin/outreach/follow-up" onClick={() => setIsOpen(false)} className="text-xl font-bold text-slate-700 dark:text-slate-300">Follow-ups</Link>
+                </>
+              )}
+
               <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-2" />
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Our Solutions</p>
               
@@ -168,6 +206,8 @@ export default function Navbar() {
                 <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile Server Side');}} href="/services/server-side-tracking" className="text-base font-bold text-slate-700 dark:text-slate-300">Server-Side Tracking</Link>
                 <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile FB CAPI');}} href="/services/facebook-capi" className="text-base font-bold text-slate-700 dark:text-slate-300">Facebook CAPI</Link>
                 <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile Google Ads');}} href="/services/google-ads-expert" className="text-base font-bold text-slate-700 dark:text-slate-300">Google Ads</Link>
+                {/* Email Signature link added below */}
+                <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile Email Signature');}} href="/services/email-signature" className="text-base font-bold text-slate-700 dark:text-slate-300">Email Signature</Link>
               </div>
 
               <a href="mailto:shahjalal@trackflowpro.com" className="w-full text-center bg-blue-600 text-white py-5 rounded-2xl font-black shadow-lg shadow-blue-500/30">
@@ -181,6 +221,7 @@ export default function Navbar() {
   )
 }
 
+// Helper Components
 function NavLink({ href, onClick, children }: { href: string, onClick?: () => void, children: React.ReactNode }) {
   return (
     <Link href={href} onClick={onClick} className="text-[15px] font-bold text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors relative group">
@@ -214,4 +255,17 @@ function SolutionItem({ title, desc, icon, href, onClick }: { title: string, des
       </div>
     </Link>
   )
+}
+
+function AdminLink({ href, label, icon, onClick }: { href: string, label: string, icon: React.ReactNode, onClick: () => void }) {
+  return (
+    <Link 
+      href={href} 
+      onClick={onClick}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-all font-bold text-sm"
+    >
+      <span className="text-blue-500">{icon}</span>
+      {label}
+    </Link>
+  );
 }
