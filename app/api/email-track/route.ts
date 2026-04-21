@@ -14,8 +14,9 @@ export async function GET(req: Request) {
 
   if (!trackingId) return new NextResponse(pixel, { headers });
 
-  const userAgent = req.headers.get('user-agent') || 'Email Client';
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'Unknown IP';
+  // রিকোয়েস্ট থেকে ডাটা সংগ্রহ
+  const userAgent = req.headers.get('user-agent') || 'Unknown Client';
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
   const country = req.headers.get('x-vercel-ip-country') || 'Unknown';
   const city = req.headers.get('x-vercel-ip-city') || '';
   const locationText = city ? `${city}, ${country}` : country;
@@ -29,14 +30,18 @@ export async function GET(req: Request) {
       const leadData = leadDoc.data();
       const docRef = outreachRef.doc(leadDoc.id);
 
-      // ডিভাইস ডিটেকশন
-      let deviceType = "Desktop/Other";
-      if (/mobile|android|iphone|ipad/i.test(userAgent.toLowerCase())) {
+      // ডিভাইস ডিটেকশন লজিক
+      let deviceType = "Desktop";
+      const ua = userAgent.toLowerCase();
+      if (/mobile|android|iphone|ipad/i.test(ua)) {
         deviceType = "Mobile";
-      } else if (/googleimageproxy/i.test(userAgent.toLowerCase())) {
-        deviceType = "Gmail/Proxy";
+      } else if (/tablet/i.test(ua)) {
+        deviceType = "Tablet";
+      } else if (/googleimageproxy/i.test(ua)) {
+        deviceType = "Gmail/Proxy"; // ইমেইল থেকে ওপেন হলে এটি ধরবে
       }
 
+      // অবজেক্টটি স্ট্রিং এ কনভার্ট করা নিশ্চিত করা (যাতে undefined এরর না দেয়)
       const newEntry = {
         device: String(deviceType),
         ip: String(ip),
@@ -44,25 +49,24 @@ export async function GET(req: Request) {
         time: admin.firestore.Timestamp.now()
       };
 
-      // সমাধান: যদি device_info আগে থেকেই স্ট্রিং থাকে, তবে সেটাকে অ্যারেতে কনভার্ট করা
-      let updateData: any = {
+      // আপডেট ডেটা অবজেক্ট
+      const updatePayload: any = {
         open_count: admin.firestore.FieldValue.increment(1),
         lastOpenedAt: admin.firestore.FieldValue.serverTimestamp(),
         status: 'opened'
       };
 
-      if (typeof leadData.device_info === 'string' || !leadData.device_info) {
-        // যদি ফিল্ডটি স্ট্রিং হয় বা না থাকে, তবে নতুন অ্যারে তৈরি করুন
-        updateData.device_info = [newEntry];
+      // গুরুত্বপূর্ণ: device_info যদি না থাকে বা ভুল ফরম্যাটে থাকে তবে নতুন অ্যারে তৈরি করবে
+      if (!leadData.device_info || !Array.isArray(leadData.device_info)) {
+        updatePayload.device_info = [newEntry];
       } else {
-        // যদি অলরেডি অ্যারে থাকে, তবে নতুন আইটেম যোগ করুন
-        updateData.device_info = admin.firestore.FieldValue.arrayUnion(newEntry);
+        updatePayload.device_info = admin.firestore.FieldValue.arrayUnion(newEntry);
       }
 
-      await docRef.update(updateData);
+      await docRef.update(updatePayload);
     }
   } catch (error) {
-    console.error("Tracking Error:", error);
+    console.error("Tracking Update Failed:", error);
   }
 
   return new NextResponse(pixel, { headers });
