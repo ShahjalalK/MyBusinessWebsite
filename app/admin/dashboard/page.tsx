@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { db } from '../../lib/firebase'
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore'
 import { 
-  X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, MapPin, Clock, User, Eye
+  X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, MapPin, Clock, User
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminGuard from '@/app/components/AdminGuard'
@@ -15,6 +15,7 @@ interface DeviceInfo {
   device: string;
   time: any; 
   location?: string;
+  ip?: string;
 }
 
 interface SentMessage {
@@ -34,6 +35,7 @@ interface Lead {
   open_count: number;
   status: 'active' | 'archived' | 'interested' | 'opened'; 
   createdAt: any;
+  lastOpenedAt?: any; // আপনার নতুন অ্যাড করা ফিল্ড
   device_info?: DeviceInfo[];
   follow_up_count?: number;
   sent_messages?: SentMessage[]; 
@@ -47,7 +49,6 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [displayLimit, setDisplayLimit] = useState<number>(100);
   const [activeService, setActiveService] = useState<string>('All'); 
-  const [activeStepTab, setActiveStepTab] = useState<string>('All');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   useEffect(() => {
@@ -61,7 +62,6 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [displayLimit]);
 
-  // তারিখ ও সময় ফরম্যাট করার ফাংশন (যেমন: 21/04/2026 05:23 PM)
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "N/A";
     try {
@@ -124,14 +124,12 @@ export default function DashboardPage() {
                   </div>
                 </td>
                 
-                {/* ১. ড্যাশবোর্ডে লাস্ট ওপেন টাইম */}
+                {/* ১. ড্যাশবোর্ডে লাস্ট ওপেন টাইম - এখন সরাসরি lastOpenedAt ফিল্ড থেকে */}
                 <td className="p-6 text-center">
                     <div className="flex flex-col items-center gap-1">
-                        <span className="text-[9px] font-black text-gray-400 uppercase">Last Opened At</span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Last Opened At</span>
                         <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
-                            {lead.device_info && lead.device_info.length > 0 
-                             ? formatDate(lead.device_info[lead.device_info.length - 1].time) 
-                             : "Not Opened Yet"}
+                            {lead.lastOpenedAt ? formatDate(lead.lastOpenedAt) : "Not Opened Yet"}
                         </span>
                     </div>
                 </td>
@@ -151,7 +149,6 @@ export default function DashboardPage() {
         </table>
       </div>
 
-      {/* Lead Profile Panel */}
       <AnimatePresence>
         {selectedLead && (
           <>
@@ -163,10 +160,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="p-8 space-y-8">
-                {/* ২. প্রোফাইলে লিডের ডিটেইলস */}
                 <section className="bg-white p-6 rounded-[30px] border border-gray-100 shadow-sm">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shrink-0">
+                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg">
                             <User size={24} />
                         </div>
                         <div>
@@ -185,64 +181,79 @@ export default function DashboardPage() {
                     </div>
                 </section>
 
-                {/* ৩. ফুল ওপেনিং হিস্ট্রি (লিস্ট আকারে) */}
-                {/* tracking history listing */}
-<div className="space-y-3 mt-4">
-  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-     <Clock size={12} /> Open History Log
-  </h4>
-  
-  {selectedLead?.device_info && [...selectedLead.device_info].reverse().map((info, idx) => (
-    <div key={idx} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-2xl shadow-sm">
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2">
-          <Monitor size={10} className="text-blue-500" />
-          <span className="text-[10px] font-black text-gray-800 uppercase">{info.device || "Unknown"}</span>
-        </div>
-        <span className="text-[9px] text-gray-400 font-bold ml-4">{info.location || "No Location"}</span>
-      </div>
-      <div className="text-right">
-        {/* formatDate ফাংশনটি আগে যেটা দিয়েছিলাম সেটা ব্যবহার করবেন */}
-        <span className="text-[10px] font-black text-blue-600 block">{formatDate(info.time)}</span>
-        <span className="text-[8px] text-gray-400 font-bold uppercase italic">Email Opened</span>
-      </div>
-    </div>
-  ))}
-  
-  {(!selectedLead?.device_info || selectedLead.device_info.length === 0) && (
-    <p className="text-center text-[10px] text-gray-400 italic py-4">No open history found.</p>
-  )}
-</div>
+                {/* ২. ওপেন হিস্ট্রি - ডিভাইস এবং টাইম আলাদা সেকশনে */}
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                     <Activity size={12} /> Live Device & Time Logs
+                  </h4>
+                  
+                  <div className="space-y-2">
+                  {selectedLead?.device_info && [...selectedLead.device_info].reverse().map((info, idx) => (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-[24px] p-4 shadow-sm group hover:border-blue-200 transition-all">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-gray-50 rounded-xl text-blue-600">
+                             <Monitor size={14} />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black text-gray-800 uppercase block">{info.device || "Unknown Device"}</span>
+                            <div className="flex items-center gap-1">
+                               <MapPin size={8} className="text-gray-400" />
+                               <span className="text-[9px] text-gray-400 font-bold tracking-tight">{info.location || "Private Location"}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">
+                          Live Open
+                        </div>
+                      </div>
+                      
+                      {/* টাইম সেকশন আলাদা করে হাইলাইট করা */}
+                      <div className="flex items-center justify-between border-t border-gray-50 pt-3 mt-1">
+                        <div className="flex items-center gap-1.5">
+                           <Clock size={10} className="text-gray-400" />
+                           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Opening Timestamp:</span>
+                        </div>
+                        <span className="text-[10px] font-black text-blue-600 italic bg-blue-50/50 px-2 py-1 rounded-lg">
+                           {formatDate(info.time)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  </div>
+                  
+                  {(!selectedLead?.device_info || selectedLead.device_info.length === 0) && (
+                    <p className="text-center text-[10px] text-gray-400 italic py-4 bg-gray-50 rounded-2xl">No open history found yet.</p>
+                  )}
+                </div>
 
                 <section className="bg-gray-50/80 p-6 rounded-[35px] border border-gray-100">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <MessageSquare size={14} /> Outreach Thread
                   </h4>
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-200 flex flex-col">
-                    {/* ফলো-আপগুলো উপরে */}
                     {selectedLead.sent_messages && [...selectedLead.sent_messages].reverse().map((msg, idx) => (
                       <div key={idx} className="relative pl-8">
                         <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-black border-4 border-white shadow-sm z-10" />
                         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                           <span className="text-[8px] font-bold text-gray-400 uppercase block mb-1">{formatDate(msg.sentAt)}</span>
-                          <p className="text-[11px] font-bold text-gray-800 leading-tight mb-2">Phase {msg.step}: {msg.subject}</p>
+                          <p className="text-[11px] font-bold text-gray-800 leading-tight mb-2 uppercase tracking-tighter italic">Phase {msg.step}: {msg.subject}</p>
                           <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-xl">"{msg.body}"</div>
                         </div>
                       </div>
                     ))}
-                    {/* প্রথম ইমেইলটি নিচে */}
                     <div className="relative pl-8">
                       <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-blue-600 border-4 border-white shadow-sm z-10" />
                       <div className="bg-white p-4 rounded-2xl border border-blue-50 shadow-sm">
                         <span className="text-[8px] font-bold text-gray-400 uppercase block mb-1">{formatDate(selectedLead.createdAt)}</span>
-                        <p className="text-[11px] font-black text-blue-600 mb-2">Initial Outreach</p>
+                        <p className="text-[11px] font-black text-blue-600 mb-2 uppercase tracking-tighter italic">Initial Message</p>
                         <div className="text-[10px] text-gray-500 italic bg-gray-50 p-3 rounded-xl">"{selectedLead.message}"</div>
                       </div>
                     </div>
                   </div>
                 </section>
 
-                <button className="w-full bg-blue-600 text-white p-5 rounded-[28px] flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all hover:bg-blue-700">
+                <button className="w-full bg-blue-600 text-white p-5 rounded-[28px] flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all hover:bg-blue-700 shadow-blue-100">
                     <Send size={18} />
                     <div className="text-left leading-tight">
                         <p className="text-[10px] font-black opacity-70 uppercase">Ready for Next Phase</p>
