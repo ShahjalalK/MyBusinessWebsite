@@ -53,7 +53,8 @@ export default function FollowUpAutomationPage() {
           setCategoryVariants(mergedData);
         }
         
-        const q = query(collection(db, "outreach_leads"), where("status", "in", ["interested", "opened"]));
+        // আগ্রহী বা ইমেইল ওপেন করেছে এমন সব লিড ফেচ করা হচ্ছে
+        const q = query(collection(db, "outreach_leads"), where("status", "in", ["interested", "opened", "active", "sent"]));
         const snapshot = await getDocs(q);
         setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (err) {
@@ -65,35 +66,49 @@ export default function FollowUpAutomationPage() {
     loadData();
   }, []);
 
-  // --- স্মার্ট ফিল্টারিং লজিক ---
+  // --- স্মার্ট ফিল্টারিং লজিক (ক্রন জব লজিকের সাথে হুবহু মিল রাখা হয়েছে) ---
   const currentCategoryLeads = leads.filter(l => {
     if ((l.service || 'Email Signature') !== activeTab) return false;
     const followUpCount = l.follow_up_count || 0;
     const currentStepIdx = STEPS.indexOf(activeStep);
+    
+    // লিডটি বর্তমানে কোন স্টেপে আছে তা চেক করা
     if (followUpCount !== currentStepIdx) return false;
 
-    // F-1 এর জন্য নাম এবং কোম্পানি থাকা বাধ্যতামূলক চেক
+    // F-1 (প্রথম ফলো-আপ) এর জন্য বিশেষ ফিল্টারিং
     if (activeStep === 'step1') {
-      if (!l.name || !l.company_name) return false; 
+      // শুধু নাম থাকলে চলবে, কোম্পানি নাম বাধ্যতামূলক নয়
+      if (!l.name) return false; 
+      
+      // অন্তত ২ বার ওপেন হতে হবে
       if ((l.open_count || 0) < 2) return false;
 
-      if (l.device_info && l.device_info.length >= 2) {
-        const firstOpen = l.device_info[0].time;
-        const lastOpen = l.device_info[l.device_info.length - 1].time;
+      // ২ মিনিট (১২০ সেকেন্ড) গ্যাপ চেক
+      const history = l.tracking_history || [];
+      const openEvents = history.filter((h: any) => h.event === 'opened');
+
+      if (openEvents.length >= 2) {
+        const firstOpen = openEvents[0].time;
+        const lastOpen = openEvents[openEvents.length - 1].time;
         const firstMillis = firstOpen?.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
         const lastMillis = lastOpen?.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
-        if ((lastMillis - firstMillis) / 1000 < 30) return false;
+        
+        // ১২০ সেকেন্ড বা ২ মিনিটের কম গ্যাপ থাকলে সেটি ড্যাশবোর্ডে দেখাবে না
+        if ((lastMillis - firstMillis) / 1000 < 120) return false;
       } else {
         return false;
       }
     }
 
+    // পরবর্তী ধাপগুলোর (F-2 থেকে F-5) জন্য রিসেন্সি লজিক
     if (currentStepIdx > 0) {
       const lastFollowUpTime = l.lastFollowUp;
       const lastOpenedTime = l.lastOpenedAt || l.last_opened;
       if (lastFollowUpTime && lastOpenedTime) {
         const lastFollowUpMillis = lastFollowUpTime.toMillis ? lastFollowUpTime.toMillis() : new Date(lastFollowUpTime).getTime();
         const lastOpenedMillis = lastOpenedTime.toMillis ? lastOpenedTime.toMillis() : new Date(lastOpenedTime).getTime();
+        
+        // শেষ ফলো-আপের পর আবার ওপেন করলেই কেবল পরবর্তী ফলো-আপের লিস্টে আসবে
         if (lastOpenedMillis <= lastFollowUpMillis) return false;
       } else {
         return false;
@@ -111,6 +126,7 @@ export default function FollowUpAutomationPage() {
     const validVariants = currentVariants.filter((v: any) => v && v.content && v.content.trim() !== "");
     const vIndex = validVariants.findIndex((v: any) => v.id === variantId);
     if (vIndex === -1) return [];
+    // ভেরিয়েন্ট অনুযায়ী লিডগুলোকে ভাগ করে দেখানো
     return currentCategoryLeads.filter((_, index) => index % validVariants.length === vIndex);
   };
 
@@ -127,41 +143,53 @@ export default function FollowUpAutomationPage() {
 
   const handleSaveSettings = async () => {
     const filteredVariants = currentVariants.filter((v: any) => v.content && v.content.trim() !== "");
-    if (filteredVariants.length === 0) return alert("Please write something!");
+    if (filteredVariants.length === 0) return alert("Please write something in the variant!");
 
     setSaving(true);
     try {
+      // ১. গ্লোবাল কনফিগারেশন সেভ
       await setDoc(doc(db, "automation_settings", "followup_config"), categoryVariants);
+      
+      // ২. বর্তমান ক্যাটাগরির লিডগুলোর জন্য ভেরিয়েন্ট এবং ডিলে এসাইন করা
       const batchPromises = currentCategoryLeads.map((lead, index) => {
         const assignedVariantId = filteredVariants[index % filteredVariants.length].id; 
         return updateDoc(doc(db, "outreach_leads", lead.id), { 
           [`${activeStep}AssignedVariant`]: assignedVariantId, 
           [`${activeStep}Delay`]: currentCategoryData.delay,
-          followUpReady: true 
+          followUpReady: true // ক্রন জবকে সিগন্যাল দেওয়া যে এই লিডটি প্রস্তুত
         });
       });
       await Promise.all(batchPromises);
+      
       setHasUnsavedChanges(false);
-      alert(`✅ ${activeTab} ${activeStep.toUpperCase()} Synced!`);
+      alert(`✅ ${activeTab} ${activeStep.toUpperCase()} Settings Synced Successfully!`);
     } catch (error) { 
       console.error(error); 
-      alert("Save failed!");
+      alert("Synchronization failed!");
     } finally { 
       setSaving(false); 
     }
   };
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center bg-[#FAFBFF]"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#FAFBFF]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-blue-600" size={40} />
+          <p className="font-black text-xs text-gray-400 tracking-widest uppercase">Loading Leads...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <>
     <Navbar />
 
-<AdminGuard>
+    <AdminGuard>
       <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen pb-40">
-      {/* Header Tabs */}
+      
+      {/* Header Tabs: Services Selection */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
           {SERVICES.map((s) => (
@@ -177,7 +205,7 @@ export default function FollowUpAutomationPage() {
         </button>
       </div>
 
-      {/* Step & Delay Switcher */}
+      {/* Step (F1-F5) & Delay Control */}
       <div className="flex flex-wrap items-center gap-4 mb-8">
         <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
           {STEPS.map((step, idx) => (
@@ -191,11 +219,11 @@ export default function FollowUpAutomationPage() {
           <Clock size={18} className="text-blue-500" />
           <input type="number" min="1" value={days} onChange={(e) => updateGlobalState({ ...currentCategoryData, delay: (parseInt(e.target.value) || 1) * 1440 })}
             className="w-12 bg-blue-50 rounded-xl py-1.5 text-center text-sm font-black text-blue-700 outline-none" />
-          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Days</span>
+          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Days Gap</span>
         </div>
       </div>
 
-      {/* Editor Grid */}
+      {/* Variation Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {currentVariants.map((variant: any, index: number) => {
           if (!variant) return null;
@@ -203,8 +231,12 @@ export default function FollowUpAutomationPage() {
           return (
             <div key={variant.id} className="bg-white rounded-[40px] shadow-xl border border-gray-50 flex flex-col overflow-hidden">
               <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
-                <span className="text-[10px] font-black px-4 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-widest">{activeStep.toUpperCase()} - VARIATION {index + 1}</span>
-                <button onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.filter((v: any) => v.id !== variant.id) })} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
+                <span className="text-[10px] font-black px-4 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-widest">
+                  {activeStep.toUpperCase()} - VARIATION {index + 1}
+                </span>
+                <button onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.filter((v: any) => v.id !== variant.id) })} className="text-gray-300 hover:text-red-500 transition-colors">
+                  <Trash2 size={16} />
+                </button>
               </div>
 
               <div className="p-6 flex-1 flex flex-col space-y-4">
@@ -218,7 +250,7 @@ export default function FollowUpAutomationPage() {
                       <BtnLink />
                       <BtnClearFormatting />
                       
-                      {/* Dynamic Tabs Section */}
+                      {/* Shortcode Buttons */}
                       <div className="ml-auto flex gap-1">
                         <button type="button" onClick={() => {
                           const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {name}" } : v);
@@ -227,7 +259,6 @@ export default function FollowUpAutomationPage() {
                           <UserPlus size={12} /> {`{Name}`}
                         </button>
                         
-                        {/* কোম্পানির জন্য নতুন বাটন */}
                         <button type="button" onClick={() => {
                           const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {company}" } : v);
                           updateGlobalState({ ...currentCategoryData, variants: updatedVars });
@@ -241,18 +272,26 @@ export default function FollowUpAutomationPage() {
                   </EditorProvider>
                 </div>
                 
-                <button onClick={() => setShowEmails(showEmails === variant.id ? null : variant.id)} className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100 hover:bg-gray-100">
-                  <span className="text-[10px] font-black text-gray-600 uppercase flex items-center gap-2"><Mail size={14} /> Leads ({targetEmails.length})</span>
+                {/* Leads Drawer for this Variant */}
+                <button onClick={() => setShowEmails(showEmails === variant.id ? null : variant.id)} className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100 hover:bg-gray-100 transition-colors">
+                  <span className="text-[10px] font-black text-gray-600 uppercase flex items-center gap-2">
+                    <Mail size={14} className="text-blue-500" /> Active Leads ({targetEmails.length})
+                  </span>
                   {showEmails === variant.id ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                 </button>
+                
                 {showEmails === variant.id && (
                   <div className="mt-2 max-h-40 overflow-y-auto space-y-1 p-2 bg-white rounded-xl border border-gray-100 text-[9px]">
-                    {targetEmails.map((l: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center p-2 border-b last:border-0">
-                        <span className="font-bold text-gray-700">{l.email}</span>
-                        <span className="text-blue-500 font-bold">Opens: {l.open_count || 0}</span>
-                      </div>
-                    ))}
+                    {targetEmails.length === 0 ? (
+                      <p className="text-center py-4 text-gray-400 font-bold uppercase italic">No Leads Found in this step</p>
+                    ) : (
+                      targetEmails.map((l: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center p-2 border-b last:border-0 hover:bg-blue-50 transition-colors">
+                          <span className="font-bold text-gray-700">{l.email}</span>
+                          <span className="text-blue-500 font-black px-2 py-0.5 bg-blue-50 rounded-md">Opens: {l.open_count || 0}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -261,11 +300,16 @@ export default function FollowUpAutomationPage() {
         })}
       </div>
 
-      {/* Sync Button */}
+      {/* Fixed Sync Button */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-50">
         <button onClick={handleSaveSettings} disabled={saving || !hasUnsavedChanges} 
           className={`w-full p-5 rounded-[30px] font-black text-base shadow-2xl transition-all flex items-center justify-center gap-3 border-4 border-white ${hasUnsavedChanges ? 'bg-blue-600 text-white scale-105 shadow-blue-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-          {saving ? <Loader2 className="animate-spin" /> : <><Save size={20} /> {hasUnsavedChanges ? `SYNC ALL ${activeStep.toUpperCase()} SETTINGS` : `EVERYTHING SYNCED`}</>}
+          {saving ? <Loader2 className="animate-spin" /> : (
+            <>
+              <Save size={20} /> 
+              {hasUnsavedChanges ? `SYNC ALL ${activeStep.toUpperCase()} SETTINGS` : `SETTINGS UP TO DATE`}
+            </>
+          )}
         </button>
       </div>
 
@@ -273,6 +317,7 @@ export default function FollowUpAutomationPage() {
         .rsw-editor { border: none !important; background: transparent !important; }
         .rsw-toolbar { background: white !important; border: none !important; padding: 10px !important; }
         .email-editor-content { color: #1e293b !important; line-height: 1.6 !important; }
+        .email-editor-content a { color: #2563eb !important; text-decoration: underline !important; }
       `}</style>
     </div>
     </AdminGuard>
