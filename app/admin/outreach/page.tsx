@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import { db } from '../../lib/firebase'
-import { collection, serverTimestamp, query, where, getDocs, doc, setDoc } from 'firebase/firestore' // doc এবং setDoc যোগ করা হয়েছে
+import { collection, serverTimestamp, query, where, getDocs, doc, setDoc } from 'firebase/firestore' 
 import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase, Building2 } from 'lucide-react'
 import { 
   Editor, 
@@ -118,30 +118,28 @@ export default function OutreachPage() {
     setStatus('Generating Unique ID...');
 
     try {
-      // ১. প্রতিটি ইমেলের জন্য ইউনিক ট্র্যাকিং আইডি তৈরি (UUID)
       const uniqueTrackingId = crypto.randomUUID();
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
       
-      // ২. API কল (ইউনিক ট্র্যাকিং আইডি পাঠানো হচ্ছে)
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             email, 
             subject, 
-            message, 
+            message, // API-তে মেসেজ যাচ্ছে
             sender: activeSender, 
             clientName, 
             companyName,
             businessType, 
-            trackingId: uniqueTrackingId, // ইউনিক আইডি এখানে পাঠালাম
+            trackingId: uniqueTrackingId,
             scheduledAt: scheduledAtISO 
         }),
       });
       const data = await res.json();
       
       if (data.success) {
-        // ৩. ফায়ারবেসে ডাটা সেভ (setDoc ব্যবহার করছি ইউনিক আইডিটি সরাসরি ব্যবহারের জন্য)
+        // ফায়ারবেসে মেসেজ ফিল্ডটি অ্যাড করা হলো
         const leadRef = doc(collection(db, "outreach_leads")); 
         
         await setDoc(leadRef, {
@@ -152,9 +150,9 @@ export default function OutreachPage() {
           email, 
           sender_email: activeSender.email, 
           subject, 
-          message, 
-          trackingId: uniqueTrackingId, // আপনার UUID আইডিটি এখানে সেভ হলো
-          originalMessageId: data.messageId, // ব্রেভোর পাঠানো আইডি
+          message, // এখানে আপনার সম্পূর্ণ ইমেইল মেসেজটি ডেটাবেসে সেভ হচ্ছে
+          trackingId: uniqueTrackingId,
+          originalMessageId: data.messageId,
           status: scheduledAtISO ? 'scheduled' : 'sent', 
           open_count: 0,
           follow_up_count: 0,
@@ -205,7 +203,7 @@ export default function OutreachPage() {
           })}
         </div>
 
-        {/* Form */}
+        {/* Form Container */}
         <div className="lg:col-span-3 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
           <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch Outreach.</h1>
           <form onSubmit={handleSendEmail} className="space-y-6">
