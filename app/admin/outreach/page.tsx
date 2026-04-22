@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import { db } from '../../lib/firebase'
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore'
+import { collection, serverTimestamp, query, where, getDocs, doc, setDoc } from 'firebase/firestore' // doc এবং setDoc যোগ করা হয়েছে
 import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase, Building2 } from 'lucide-react'
 import { 
   Editor, 
@@ -36,7 +36,7 @@ const SERVICES = [
 export default function OutreachPage() {
   const [email, setEmail] = useState('')
   const [clientName, setClientName] = useState('')
-  const [companyName, setCompanyName] = useState('') // নতুন স্টেট
+  const [companyName, setCompanyName] = useState('') 
   const [businessType, setBusinessType] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('') 
@@ -102,10 +102,6 @@ export default function OutreachPage() {
         counts[sender.email] = snapshot.size;
       }
       setSenderCounts(counts);
-      if (!localStorage.getItem('outreach_selected_sender')) {
-        const firstAvailable = SENDERS.find(s => (counts[s.email] || 0) < s.limit);
-        if (firstAvailable) handleSenderChange(firstAvailable.email);
-      }
     }
     fetchCounts();
   }, [loading]);
@@ -117,16 +113,16 @@ export default function OutreachPage() {
     if (!isEmailPatternValid(email)) { setEmailError('Please enter a valid email address!'); return; }
     if (!selectedService) return alert("Please select a service first!");
     if (!activeSender) return alert("Please select an active sender!");
-    const currentCount = senderCounts[activeSender.email] || 0;
-    if (currentCount >= activeSender.limit) return alert("Daily limit reached!");
-
+    
     setLoading(true);
-    setStatus('Processing...');
+    setStatus('Generating Unique ID...');
 
     try {
+      // ১. প্রতিটি ইমেলের জন্য ইউনিক ট্র্যাকিং আইডি তৈরি (UUID)
+      const uniqueTrackingId = crypto.randomUUID();
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
       
-      // API কলে নাম এবং কোম্পানি পাঠানো হচ্ছে
+      // ২. API কল (ইউনিক ট্র্যাকিং আইডি পাঠানো হচ্ছে)
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,29 +132,32 @@ export default function OutreachPage() {
             message, 
             sender: activeSender, 
             clientName, 
-            companyName, // পাঠানো হচ্ছে
+            companyName,
             businessType, 
+            trackingId: uniqueTrackingId, // ইউনিক আইডি এখানে পাঠালাম
             scheduledAt: scheduledAtISO 
         }),
       });
       const data = await res.json();
       
       if (data.success) {
-        // ফায়ারবেসে ডাটা সেভ
-        await addDoc(collection(db, "outreach_leads"), {
+        // ৩. ফায়ারবেসে ডাটা সেভ (setDoc ব্যবহার করছি ইউনিক আইডিটি সরাসরি ব্যবহারের জন্য)
+        const leadRef = doc(collection(db, "outreach_leads")); 
+        
+        await setDoc(leadRef, {
           name: clientName, 
-          company_name: companyName, // ডাটাবেসে সেভ হচ্ছে
+          company_name: companyName,
           business_type: businessType, 
           service: selectedService, 
           email, 
           sender_email: activeSender.email, 
           subject, 
           message, 
-          trackingId: data.trackingId, 
-          originalMessageId: data.messageId,
+          trackingId: uniqueTrackingId, // আপনার UUID আইডিটি এখানে সেভ হলো
+          originalMessageId: data.messageId, // ব্রেভোর পাঠানো আইডি
           status: scheduledAtISO ? 'scheduled' : 'sent', 
           open_count: 0,
-          follow_up_count: 0, // ডিফল্ট ০
+          follow_up_count: 0,
           scheduledAt: scheduledAtISO, 
           createdAt: serverTimestamp(),
         });
@@ -169,6 +168,7 @@ export default function OutreachPage() {
         setStatus('Failed: ' + (data.error?.message || 'Unknown Error'));
       }
     } catch (error) {
+      console.error(error);
       setStatus('Network Error.');
     } finally {
       setLoading(false);
@@ -178,135 +178,98 @@ export default function OutreachPage() {
   return (
     <>
     <Navbar />
-
-<AdminGuard>
-
-       <div className="max-w-7xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-4 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
-      {/* Usage Sidebar */}
-      <div className="lg:col-span-1 space-y-6">
-        <h2 className="text-xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-            Today's Usage
-        </h2>
-        {SENDERS.map((s) => {
-          const count = senderCounts[s.email] || 0;
-          const isActive = selectedSender === s.email;
-          const isLimitReached = count >= s.limit;
-          return (
-            <div key={s.email} onClick={() => handleSenderChange(s.email)}
-                className={`p-5 rounded-3xl border-2 cursor-pointer transition-all duration-300 ${isActive ? 'border-blue-500 bg-white shadow-lg scale-105' : 'border-gray-100 bg-gray-50/50 hover:border-blue-200'} ${isLimitReached ? 'opacity-60 grayscale' : ''}`}>
-              <div className="flex justify-between items-start mb-2">
-                <p className={`font-bold text-xs truncate w-2/3 ${isActive ? 'text-blue-600' : 'text-gray-900'}`}>{s.email}</p>
-                <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isLimitReached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{count}/{s.limit}</span>
-              </div>
-              <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                <div className={`h-full transition-all duration-500 ${isLimitReached ? 'bg-red-50' : 'bg-blue-500'}`} style={{ width: `${Math.min((count / s.limit) * 100, 100)}%` }}></div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Form Section */}
-      <div className="lg:col-span-3 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
-        <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch.</h1>
-        <form onSubmit={handleSendEmail} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Prospect Name */}
-            <input type="text" placeholder="Prospect Name" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={clientName} onChange={(e) => setClientName(e.target.value)} />
-            
-            {/* Company Name (নতুন ফিল্ড) */}
-            <div className="relative group">
-               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                  <Building2 size={18} />
-               </div>
-               <input 
-                type="text" 
-                placeholder="Company Name" 
-                required 
-                className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" 
-                value={companyName} 
-                onChange={(e) => setCompanyName(e.target.value)} 
-               />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Target Email */}
-            <div className="relative">
-              <input 
-                type="email" 
-                placeholder="Target Email" 
-                required 
-                className={`w-full p-4 bg-gray-50 rounded-2xl outline-none border transition-all font-medium ${emailError ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-blue-500'}`} 
-                value={email} 
-                onChange={(e) => { setEmail(e.target.value); setEmailError(''); }}
-              />
-              {emailError && (
-                <div className="flex items-center gap-1 text-red-500 text-[10px] font-black mt-2 ml-2 uppercase tracking-tight">
-                  <AlertCircle size={12}/> {emailError}
+    <AdminGuard>
+      <div className="max-w-7xl mx-auto p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-4 gap-8 mt-10 bg-[#FAFBFF] text-slate-900">
+        {/* Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          <h2 className="text-xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
+              Today's Usage
+          </h2>
+          {SENDERS.map((s) => {
+            const count = senderCounts[s.email] || 0;
+            const isActive = selectedSender === s.email;
+            const isLimitReached = count >= s.limit;
+            return (
+              <div key={s.email} onClick={() => handleSenderChange(s.email)}
+                  className={`p-5 rounded-3xl border-2 cursor-pointer transition-all duration-300 ${isActive ? 'border-blue-500 bg-white shadow-lg scale-105' : 'border-gray-100 bg-gray-50/50 hover:border-blue-200'} ${isLimitReached ? 'opacity-60 grayscale' : ''}`}>
+                <div className="flex justify-between items-start mb-2">
+                  <p className={`font-bold text-xs truncate w-2/3 ${isActive ? 'text-blue-600' : 'text-gray-900'}`}>{s.email}</p>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isLimitReached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{count}/{s.limit}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Targeted Service */}
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                <Briefcase size={20} />
+                <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
+                  <div className={`h-full transition-all duration-500 ${isLimitReached ? 'bg-red-400' : 'bg-blue-500'}`} style={{ width: `${Math.min((count / s.limit) * 100, 100)}%` }}></div>
+                </div>
               </div>
-              <select 
-                required
-                className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700 appearance-none cursor-pointer"
-                value={selectedService}
-                onChange={(e) => handleServiceChange(e.target.value)}
-              >
-                <option value="" disabled>Select Targeted Service</option>
-                {SERVICES.map(service => (
-                  <option key={service} value={service}>{service}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Subject Line */}
-          <input type="text" placeholder="Subject Line" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg" value={subject} onChange={(e) => setSubject(e.target.value)} />
-
-          {/* Message Editor */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-wider ml-1">Message Body</label>
-            <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-gray-50">
-              <EditorProvider>
-                <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
-                  <BtnBold /> <BtnItalic /> <BtnUnderline /> <BtnStrikeThrough />
-                  <span className="w-px h-6 bg-gray-200 mx-1"></span>
-                  <BtnNumberedList /> <BtnBulletList />
-                  <span className="w-px h-6 bg-gray-200 mx-1"></span>
-                  <BtnLink />
-                  <button type="button" onClick={addImage} className="p-1.5 hover:bg-blue-50 rounded-md border border-gray-200 flex items-center justify-center transition-all group">
-                    <ImageIcon size={16} className="text-gray-600 group-hover:text-blue-600" />
-                  </button>
-                  <BtnClearFormatting />
-                </Toolbar>
-                <Editor value={message} onChange={(e: any) => setMessage(e.target.value)} className="min-h-[300px] p-5 bg-transparent outline-none text-gray-800 font-medium email-editor-content" />
-              </EditorProvider>
+        {/* Form */}
+        <div className="lg:col-span-3 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
+          <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch Outreach.</h1>
+          <form onSubmit={handleSendEmail} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <input type="text" placeholder="Prospect Name" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+              <div className="relative group">
+                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                    <Building2 size={18} />
+                 </div>
+                 <input type="text" placeholder="Company Name" required className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-blue-500 ml-1">SCHEDULE SEND</span>
-              <input type="datetime-local" min={minDateTime} className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="relative">
+                <input type="email" placeholder="Target Email" required className={`w-full p-4 bg-gray-50 rounded-2xl outline-none border transition-all font-medium ${emailError ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-blue-500'}`} value={email} onChange={(e) => { setEmail(e.target.value); setEmailError(''); }} />
+                {emailError && <div className="flex items-center gap-1 text-red-500 text-[10px] font-black mt-2 ml-2 uppercase tracking-tight"><AlertCircle size={12}/> {emailError}</div>}
+              </div>
+
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                  <Briefcase size={20} />
+                </div>
+                <select required className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700 appearance-none cursor-pointer" value={selectedService} onChange={(e) => handleServiceChange(e.target.value)}>
+                  <option value="" disabled>Select Targeted Service</option>
+                  {SERVICES.map(service => <option key={service} value={service}>{service}</option>)}
+                </select>
+              </div>
             </div>
-            <button 
-              type="submit" 
-              disabled={loading || !isEmailPatternValid(email) || !selectedService} 
-              className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              {loading ? <Loader2 className="animate-spin" /> : <><Send size={20} /><span>Send Outreach</span></>}
-            </button>
-          </div>
-          {status && <div className="text-center text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-4 flex justify-center items-center gap-2"><CheckCircle2 size={14} />{status}</div>}
-        </form>
+
+            <input type="text" placeholder="Subject Line" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg" value={subject} onChange={(e) => setSubject(e.target.value)} />
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-gray-400 uppercase tracking-wider ml-1">Message Body</label>
+              <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-gray-50">
+                <EditorProvider>
+                  <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
+                    <BtnBold /> <BtnItalic /> <BtnUnderline /> <BtnStrikeThrough />
+                    <span className="w-px h-6 bg-gray-200 mx-1"></span>
+                    <BtnNumberedList /> <BtnBulletList />
+                    <span className="w-px h-6 bg-gray-200 mx-1"></span>
+                    <BtnLink />
+                    <button type="button" onClick={addImage} className="p-1.5 hover:bg-blue-50 rounded-md border border-gray-200 flex items-center justify-center transition-all group">
+                      <ImageIcon size={16} className="text-gray-600 group-hover:text-blue-600" />
+                    </button>
+                    <BtnClearFormatting />
+                  </Toolbar>
+                  <Editor value={message} onChange={(e: any) => setMessage(e.target.value)} className="min-h-[300px] p-5 bg-transparent outline-none text-gray-800 font-medium email-editor-content" />
+                </EditorProvider>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule Send</span>
+                <input type="datetime-local" min={minDateTime} className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+              </div>
+              <button type="submit" disabled={loading || !isEmailPatternValid(email) || !selectedService} className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300">
+                {loading ? <Loader2 className="animate-spin" /> : <><Send size={20} /><span>Send Outreach</span></>}
+              </button>
+            </div>
+            {status && <div className="text-center text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-4 flex justify-center items-center gap-2"><CheckCircle2 size={14} />{status}</div>}
+          </form>
+        </div>
       </div>
 
       <style jsx global>{`
@@ -314,14 +277,8 @@ export default function OutreachPage() {
         .email-editor-content ul { list-style-type: disc !important; padding-left: 1.5rem !important; }
         .email-editor-content ol { list-style-type: decimal !important; padding-left: 1.5rem !important; }
       `}</style>
-    </div>
-
     </AdminGuard>
-
     <Footer />
-    
-    
     </>
-   
   )
 }

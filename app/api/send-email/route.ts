@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { email, subject, message, sender, clientName, scheduledAt } = await req.json();
+    const { email, subject, message, sender, clientName, companyName, trackingId, scheduledAt } = await req.json();
 
-    // ট্র্যাকিং আইডি জেনারেট (এটি আমরা Tags হিসেবে পাঠাবো)
-    const trackingId = Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
+    // যদি কোনো কারণে ফ্রন্টএন্ড থেকে trackingId না আসে, তবে ব্যাকআপ হিসেবে একটি তৈরি করবে
+    const finalTrackingId = trackingId || Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -18,13 +18,18 @@ export async function POST(req: Request) {
         sender: { name: sender.name, email: sender.email },
         to: [{ email: email, name: clientName || "" }],
         subject: subject,
-        // আমরা trackingId টিকে ট্যাগ হিসেবে পাঠাচ্ছি যাতে Webhook এ এটি ফিরে পাওয়া যায়
-        tags: [trackingId], 
+        // ব্রেভোতে 'tags' হিসেবে trackingId পাঠানো হচ্ছে যাতে ওয়েব-হুকে এটি পাওয়া যায়
+        tags: [finalTrackingId], 
+        // ব্রেভো অনেক সময় কাস্টম হেডার সাপোর্ট করে, এটি ট্র্যাকিং-এর জন্য নিরাপদ ব্যাকআপ
+        headers: {
+          "X-Mailin-Tag": finalTrackingId
+        },
         ...(scheduledAt && { scheduledAt: scheduledAt }),
         htmlContent: `
           <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               ${message}
+              <div style="display:none; visibility:hidden; font-size:1px;">${finalTrackingId}</div>
             </body>
           </html>
         `,
@@ -37,9 +42,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ 
         success: true, 
         messageId: data.messageId, 
-        trackingId: trackingId 
+        trackingId: finalTrackingId 
       });
     } else {
+      console.error("Brevo API Error:", data);
       return NextResponse.json({ success: false, error: data }, { status: 400 });
     }
   } catch (error: any) {
