@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { db } from '../../lib/firebase'
 import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore'
 import { 
-  X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, MapPin, Clock, User
+  X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, MapPin, Clock, User, AlertCircle, CheckCircle2, ShieldAlert
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminGuard from '@/app/components/AdminGuard'
@@ -11,17 +11,15 @@ import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 
 // --- Interfaces ---
-interface DeviceInfo {
-  device: string;
-  time: any; 
-  location?: string;
-  ip?: string;
+interface TrackingHistory {
+  event: string;
+  time: any;
+  link?: string;
 }
 
 interface SentMessage {
   step: number;
   subject: string;
-  body: string;
   sentAt: any;
 }
 
@@ -33,10 +31,10 @@ interface Lead {
   subject: string;
   message?: string; 
   open_count: number;
-  status: 'active' | 'archived' | 'interested' | 'opened'; 
+  status: 'active' | 'archived' | 'interested' | 'opened' | 'sent' | 'bounced' | 'spam'; 
   createdAt: any;
-  lastOpenedAt?: any; // আপনার নতুন অ্যাড করা ফিল্ড
-  device_info?: DeviceInfo[];
+  lastOpenedAt?: any;
+  tracking_history?: TrackingHistory[];
   follow_up_count?: number;
   sent_messages?: SentMessage[]; 
   service?: string;
@@ -70,8 +68,16 @@ export default function DashboardPage() {
           day: '2-digit', month: '2-digit', year: 'numeric', 
           hour: '2-digit', minute: '2-digit', hour12: true 
       }).replace(',', '');
-    } catch (e) {
-      return "Invalid Date";
+    } catch (e) { return "Invalid Date"; }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'bounced': return <span className="text-[8px] bg-red-50 text-red-500 px-2 py-0.5 rounded-md font-bold flex items-center gap-1"><AlertCircle size={10}/> BOUNCED</span>;
+      case 'spam': return <span className="text-[8px] bg-orange-50 text-orange-500 px-2 py-0.5 rounded-md font-bold flex items-center gap-1"><ShieldAlert size={10}/> SPAM</span>;
+      case 'sent': return <span className="text-[8px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-md font-bold flex items-center gap-1"><Send size={10}/> SENT</span>;
+      case 'opened': return <span className="text-[8px] bg-emerald-50 text-emerald-500 px-2 py-0.5 rounded-md font-bold flex items-center gap-1"><CheckCircle2 size={10}/> DELIVERED</span>;
+      default: return null;
     }
   };
 
@@ -84,7 +90,7 @@ export default function DashboardPage() {
     });
   };
 
-  if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600">LOADING HUB...</div>
+  if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase">Loading Intelligence...</div>
 
   return (
   <>
@@ -95,7 +101,7 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row justify-between mb-10 gap-6 items-end">
         <div>
           <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">Intelligence Hub</h1>
-          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em]">Live Tracking Analytics</p>
+          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em]">Brevo Live Webhook Engine</p>
         </div>
         <input type="text" placeholder="Search leads..." className="px-5 py-3 bg-white shadow-sm border border-gray-100 rounded-2xl text-[10px] font-black outline-none w-72 focus:border-blue-500" onChange={(e) => setSearchTerm(e.target.value)} />
       </div>
@@ -105,9 +111,9 @@ export default function DashboardPage() {
           <thead className="bg-gray-50/50">
             <tr>
               <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead & Sender Info</th>
-              <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Last Open History</th>
-              <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Tracking</th>
-              <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Action</th>
+              <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Engagement Time</th>
+              <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Activity</th>
+              <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Delete</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -117,27 +123,31 @@ export default function DashboardPage() {
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                         <span className="font-black text-gray-900 uppercase italic tracking-tighter group-hover:text-blue-600">{lead.name || "Unknown"}</span>
-                        <span className="text-[9px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-md font-bold flex items-center gap-1"><Clock size={10}/> Sent: {formatDate(lead.createdAt)}</span>
+                        {getStatusBadge(lead.status)}
                     </div>
                     <span className="text-[10px] text-gray-500 font-bold">To: {lead.email}</span>
-                    <span className="text-[9px] font-black text-blue-600 uppercase mt-1">From: {lead.sender_email || "Not Set"}</span>
+                    <span className="text-[9px] font-black text-blue-600 uppercase mt-1 flex items-center gap-1">
+                       <Clock size={10}/> Initiated: {formatDate(lead.createdAt)}
+                    </span>
                   </div>
                 </td>
                 
-                {/* ১. ড্যাশবোর্ডে লাস্ট ওপেন টাইম - এখন সরাসরি lastOpenedAt ফিল্ড থেকে */}
                 <td className="p-6 text-center">
                     <div className="flex flex-col items-center gap-1">
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Last Opened At</span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest italic">Last Interaction</span>
                         <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
-                            {lead.lastOpenedAt ? formatDate(lead.lastOpenedAt) : "Not Opened Yet"}
+                            {lead.lastOpenedAt ? formatDate(lead.lastOpenedAt) : "No Action Yet"}
                         </span>
                     </div>
                 </td>
 
                 <td className="p-6 text-center">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black ${lead.open_count >= 1 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-                      {lead.open_count || 0} OPENS
-                  </span>
+                  <div className="flex flex-col items-center">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black ${lead.open_count >= 1 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+                        {lead.open_count || 0} TOTAL OPENS
+                    </span>
+                    {lead.follow_up_count ? <span className="text-[8px] font-black text-blue-500 uppercase mt-1">Step {lead.follow_up_count} Sent</span> : null}
+                  </div>
                 </td>
                 
                 <td className="p-6 text-right">
@@ -155,7 +165,7 @@ export default function DashboardPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedLead(null)} className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]" />
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-[101] overflow-y-auto border-l border-gray-100 shadow-2xl">
               <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-                <h2 className="text-2xl font-black uppercase tracking-tighter italic text-gray-900 leading-none">Lead Profile</h2>
+                <h2 className="text-2xl font-black uppercase tracking-tighter italic text-gray-900 leading-none">Intelligence Profile</h2>
                 <button onClick={() => setSelectedLead(null)} className="p-3 bg-white text-gray-400 rounded-2xl border border-gray-100 hover:text-black transition-colors"><X size={20} /></button>
               </div>
 
@@ -166,7 +176,7 @@ export default function DashboardPage() {
                             <User size={24} />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Recipient:</p>
+                            <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Target Client:</p>
                             <h3 className="text-lg font-black text-gray-900 uppercase italic tracking-tighter leading-none">{selectedLead.name || "N/A"}</h3>
                             <p className="text-xs font-bold text-gray-400 mt-1">{selectedLead.email}</p>
                         </div>
@@ -174,62 +184,56 @@ export default function DashboardPage() {
                 </section>
 
                 <section className="bg-blue-50/50 p-6 rounded-[30px] border border-blue-100">
-                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Sending From</p>
+                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Source Account</p>
                     <div className="flex items-center gap-2">
                         <Mail size={14} className="text-blue-500" />
-                        <p className="text-sm font-black text-gray-800">{selectedLead.sender_email}</p>
+                        <p className="text-sm font-black text-gray-800">{selectedLead.sender_email || "System Default"}</p>
                     </div>
                 </section>
 
-                {/* ২. ওপেন হিস্ট্রি - ডিভাইস এবং টাইম আলাদা সেকশনে */}
+                {/* ৩. লাইভ ডিভাইস ও টাইম লগস (আপডেটেড লজিক) */}
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                     <Activity size={12} /> Live Device & Time Logs
+                     <Activity size={12} /> Live Engagement Logs
                   </h4>
                   
                   <div className="space-y-2">
-                  {selectedLead?.device_info && [...selectedLead.device_info].reverse().map((info, idx) => (
+                  {selectedLead?.tracking_history && [...selectedLead.tracking_history].reverse().map((info, idx) => (
                     <div key={idx} className="bg-white border border-gray-100 rounded-[24px] p-4 shadow-sm group hover:border-blue-200 transition-all">
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
-                          <div className="p-2 bg-gray-50 rounded-xl text-blue-600">
-                             <Monitor size={14} />
+                          <div className={`p-2 rounded-xl ${info.event === 'opened' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                             {info.event === 'opened' ? <Monitor size={14} /> : <Send size={14} />}
                           </div>
                           <div>
-                            <span className="text-[10px] font-black text-gray-800 uppercase block">{info.device || "Unknown Device"}</span>
-                            <div className="flex items-center gap-1">
-                               <MapPin size={8} className="text-gray-400" />
-                               <span className="text-[9px] text-gray-400 font-bold tracking-tight">{info.location || "Private Location"}</span>
+                            <span className="text-[10px] font-black text-gray-800 uppercase block">Email {info.event}</span>
+                            <div className="flex items-center gap-1.5 mt-1">
+                               <Clock size={10} className="text-gray-400" />
+                               <span className="text-[10px] font-black text-blue-600 italic">{formatDate(info.time)}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">
-                          Live Open
+                        <div className={`text-[8px] font-black px-2 py-1 rounded-md uppercase ${info.event === 'opened' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                          {info.event}
                         </div>
                       </div>
-                      
-                      {/* টাইম সেকশন আলাদা করে হাইলাইট করা */}
-                      <div className="flex items-center justify-between border-t border-gray-50 pt-3 mt-1">
-                        <div className="flex items-center gap-1.5">
-                           <Clock size={10} className="text-gray-400" />
-                           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Opening Timestamp:</span>
+                      {info.link && (
+                        <div className="mt-2 text-[9px] bg-gray-50 p-2 rounded-lg text-blue-500 font-bold break-all">
+                           Clicked: {info.link}
                         </div>
-                        <span className="text-[10px] font-black text-blue-600 italic bg-blue-50/50 px-2 py-1 rounded-lg">
-                           {formatDate(info.time)}
-                        </span>
-                      </div>
+                      )}
                     </div>
                   ))}
                   </div>
                   
-                  {(!selectedLead?.device_info || selectedLead.device_info.length === 0) && (
-                    <p className="text-center text-[10px] text-gray-400 italic py-4 bg-gray-50 rounded-2xl">No open history found yet.</p>
+                  {(!selectedLead?.tracking_history || selectedLead.tracking_history.length === 0) && (
+                    <p className="text-center text-[10px] text-gray-400 italic py-4 bg-gray-50 rounded-2xl uppercase tracking-widest">Awaiting interaction...</p>
                   )}
                 </div>
 
                 <section className="bg-gray-50/80 p-6 rounded-[35px] border border-gray-100">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                    <MessageSquare size={14} /> Outreach Thread
+                    <MessageSquare size={14} /> Outreach Journey
                   </h4>
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-200 flex flex-col">
                     {selectedLead.sent_messages && [...selectedLead.sent_messages].reverse().map((msg, idx) => (
@@ -237,8 +241,8 @@ export default function DashboardPage() {
                         <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-black border-4 border-white shadow-sm z-10" />
                         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                           <span className="text-[8px] font-bold text-gray-400 uppercase block mb-1">{formatDate(msg.sentAt)}</span>
-                          <p className="text-[11px] font-bold text-gray-800 leading-tight mb-2 uppercase tracking-tighter italic">Phase {msg.step}: {msg.subject}</p>
-                          <div className="text-[10px] text-gray-500 bg-gray-50 p-3 rounded-xl">"{msg.body}"</div>
+                          <p className="text-[11px] font-black text-gray-800 leading-tight uppercase tracking-tighter italic">Follow-up {msg.step}</p>
+                          <p className="text-[9px] text-gray-500 mt-1">{msg.subject}</p>
                         </div>
                       </div>
                     ))}
@@ -246,8 +250,8 @@ export default function DashboardPage() {
                       <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-blue-600 border-4 border-white shadow-sm z-10" />
                       <div className="bg-white p-4 rounded-2xl border border-blue-50 shadow-sm">
                         <span className="text-[8px] font-bold text-gray-400 uppercase block mb-1">{formatDate(selectedLead.createdAt)}</span>
-                        <p className="text-[11px] font-black text-blue-600 mb-2 uppercase tracking-tighter italic">Initial Message</p>
-                        <div className="text-[10px] text-gray-500 italic bg-gray-50 p-3 rounded-xl">"{selectedLead.message}"</div>
+                        <p className="text-[11px] font-black text-blue-600 uppercase tracking-tighter italic">Initial Outreach</p>
+                        <div className="text-[10px] text-gray-500 italic mt-1 bg-gray-50 p-2 rounded-lg">"{selectedLead.subject}"</div>
                       </div>
                     </div>
                   </div>
@@ -256,8 +260,8 @@ export default function DashboardPage() {
                 <button className="w-full bg-blue-600 text-white p-5 rounded-[28px] flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all hover:bg-blue-700 shadow-blue-100">
                     <Send size={18} />
                     <div className="text-left leading-tight">
-                        <p className="text-[10px] font-black opacity-70 uppercase">Ready for Next Phase</p>
-                        <p className="text-sm font-black uppercase italic">Send Follow-up {(selectedLead.follow_up_count || 0) + 1}</p>
+                        <p className="text-[10px] font-black opacity-70 uppercase tracking-widest">Automation Active</p>
+                        <p className="text-sm font-black uppercase italic">Current Status: {selectedLead.status}</p>
                     </div>
                 </button>
               </div>
@@ -266,7 +270,7 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
     </div>
-   </AdminGuard>
+    </AdminGuard>
   <Footer />
   </>
   )

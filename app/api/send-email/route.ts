@@ -4,7 +4,7 @@ export async function POST(req: Request) {
   try {
     const { email, subject, message, sender, clientName, scheduledAt } = await req.json();
 
-    // ট্র্যাকিং আইডি জেনারেট
+    // ট্র্যাকিং আইডি জেনারেট (এটি আমরা Tags হিসেবে পাঠাবো)
     const trackingId = Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -18,18 +18,13 @@ export async function POST(req: Request) {
         sender: { name: sender.name, email: sender.email },
         to: [{ email: email, name: clientName || "" }],
         subject: subject,
+        // আমরা trackingId টিকে ট্যাগ হিসেবে পাঠাচ্ছি যাতে Webhook এ এটি ফিরে পাওয়া যায়
+        tags: [trackingId], 
         ...(scheduledAt && { scheduledAt: scheduledAt }),
         htmlContent: `
           <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               ${message}
-              <br/>
-              <div style="height: 1px; width: 1px; overflow: hidden; opacity: 0;">
-                <img src="https://www.trackflowpro.com/api/email-track?id=${trackingId}" 
-                    width="1" height="1" 
-                    style="border:none; display: inline-block;" 
-                    alt="" />
-              </div>
             </body>
           </html>
         `,
@@ -48,6 +43,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: data }, { status: 400 });
     }
   } catch (error: any) {
+    console.error("Email sending error:", error);
     return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }

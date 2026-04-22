@@ -4,27 +4,23 @@ import admin from "firebase-admin";
 
 export async function GET(req: Request) {
   try {
-    // ১. সিকিউরিটি চেক (Authorization)
+    // ১. সিকিউরিটি চেক
     const authHeader = req.headers.get('x-cron-auth');
     if (authHeader !== process.env.CRON_SECRET) {
-      console.error("Unauthorized access attempt.");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ২. কনফিগারেশন ডাটা রিড
+    // ২. কনফিগারেশন রিড
     const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
-    if (!configDoc.exists) {
-      return NextResponse.json({ error: "Config not found" }, { status: 404 });
-    }
+    if (!configDoc.exists) return NextResponse.json({ error: "Config not found" }, { status: 404 });
     
     const categoryVariants = configDoc.data() as any;
     const now = new Date();
     const currentHourUTC = now.getUTCHours();
     
-    // ৩. লিড কুয়েরি (যারা একটিভ আছে এবং ৫টির কম ফলো-আপ পেয়েছে)
-    // জালাল ভাই, এখানে আমরা শুধু 'opened' এবং 'interested' স্ট্যাটাসগুলোই ধরছি
+    // ৩. লিড কুয়েরি
     const querySnapshot = await adminDb.collection("outreach_leads")
-      .where("status", "in", ["opened", "interested", "active"]) 
+      .where("status", "in", ["opened", "interested", "active", "sent"]) 
       .where("follow_up_count", "<", 5)
       .get();
 
@@ -33,41 +29,42 @@ export async function GET(req: Request) {
     for (const doc of querySnapshot.docs) {
       const lead = { id: doc.id, ...doc.data() } as any;
       const followUpCount = lead.follow_up_count || 0;
+      const history = lead.tracking_history || [];
 
-      // --- লজিক ১: নাম এবং কোম্পানি চেক ---
+      // --- লজিক ১: প্রথম ফলো-আপের জন্য (২ বার ওপেন + ৩০ সেকেন্ড গ্যাপ) ---
       if (followUpCount === 0) {
-        if (!lead.name || lead.name.trim() === "" || !lead.company_name || lead.company_name.trim() === "") {
-          continue;
-        }
+        if (!lead.name || !lead.company_name) continue;
 
-        // হিউম্যান ভেরিফিকেশন (২ বার ওপেন এবং ৩০ সেকেন্ড গ্যাপ)
-        if ((lead.open_count || 0) < 2) continue;
+        // অন্তত ২টা ওপেন ইভেন্ট থাকতে হবে
+        const openEvents = history.filter((h: any) => h.event === 'opened');
+        if (openEvents.length < 2) continue;
 
-        if (lead.device_info && lead.device_info.length >= 2) {
-          const firstOpen = lead.device_info[0].time;
-          const lastOpen = lead.device_info[lead.device_info.length - 1].time;
-          const firstMillis = firstOpen.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
-          const lastMillis = lastOpen.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
-          if ((lastMillis - firstMillis) / 1000 < 30) continue; 
-        } else {
-          continue; 
-        }
+        // ৩০ সেকেন্ড গ্যাপ চেক (প্রথম এবং শেষ ওপেনের মধ্যে)
+        const firstOpen = openEvents[0].time;
+        const lastOpen = openEvents[openEvents.length - 1].time;
+        const firstMillis = firstOpen.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
+        const lastMillis = lastOpen.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
+
+        if ((lastMillis - firstMillis) / 1000 < 30) continue; 
       }
 
-      // --- লজিক ২: ওপেন রিসেন্সি চেক (পরবর্তী ফলো-আপের জন্য) ---
+      // --- লজিক ২: পরবর্তী ফলো-আপের জন্য (১ বার ওপেন রিসেন্সি চেক) ---
       if (followUpCount >= 1) {
         const lastFollowUpTime = lead.lastFollowUp;
-        const lastOpenedTime = lead.lastOpenedAt || lead.last_opened;
+        const lastOpenedTime = lead.lastOpenedAt;
+
         if (lastFollowUpTime && lastOpenedTime) {
           const lastFollowUpMillis = lastFollowUpTime.toMillis ? lastFollowUpTime.toMillis() : new Date(lastFollowUpTime).getTime();
           const lastOpenedMillis = lastOpenedTime.toMillis ? lastOpenedTime.toMillis() : new Date(lastOpenedTime).getTime();
+          
+          // যদি শেষ ফলো-আপের পর আর ওপেন না করে, তবে পরবর্তী ইমেল যাবে না
           if (lastOpenedMillis <= lastFollowUpMillis) continue;
         } else {
           continue;
         }
       }
 
-      // --- লজিক ৩: টাইমিং চেক ---
+      // --- লজিক ৩: টাইমিং এবং ডিলে চেক ---
       const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14; 
       if (currentHourUTC !== preferredHour) continue;
 
@@ -75,14 +72,13 @@ export async function GET(req: Request) {
       const currentStepKey = `step${nextStepCount}`;
       const delayMinutes = lead[`${currentStepKey}Delay`] || 1440;
       
-      const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.last_opened;
+      const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt;
       if (!baseTimeObj) continue;
 
       const baseTimeMillis = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
       const diffInMinutes = (now.getTime() - baseTimeMillis) / (1000 * 60);
 
-      // টাইম ডিলে চেক
-      if (diffInMinutes >= (delayMinutes - 10)) { // ১০ মিনিট বাফার রাখা হয়েছে
+      if (diffInMinutes >= (delayMinutes - 10)) {
         const service = lead.service || 'Email Signature';
         const stepConfig = categoryVariants[service]?.[currentStepKey];
         if (!stepConfig) continue;
@@ -93,13 +89,13 @@ export async function GET(req: Request) {
         if (!finalVariant || !finalVariant.content) continue;
 
         // ৪. পার্সোনালাইজেশন
-        let personalizedMessage = finalVariant.content;
-        personalizedMessage = personalizedMessage.replace(/{name}/g, lead.name || 'there');
-        personalizedMessage = personalizedMessage.replace(/{company}/g, lead.company_name || 'your company');
+        let personalizedMessage = finalVariant.content
+          .replace(/{name}/g, lead.name || 'there')
+          .replace(/{company}/g, lead.company_name || 'your company');
 
         const senderName = lead.sender_name || "Shahjalal Khan";
         const senderEmail = lead.sender_email || "shahjalal@trackflowpro.com";
-        const subject = `Re: ${lead.subject}`;
+        const subject = `Re: ${lead.subject || "Our Discussion"}`;
 
         // ৫. Brevo API কল
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -112,12 +108,12 @@ export async function GET(req: Request) {
             sender: { name: senderName, email: senderEmail },
             to: [{ email: lead.email }],
             subject: subject,
+            tags: [lead.trackingId || lead.id], // ট্র্যাকিং ট্যাগ যোগ
             htmlContent: `
               <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                   ${personalizedMessage}
                   <br/><p>Best Regards,<br><strong>${senderName}</strong></p>
-                  <img src="https://www.trackflowpro.com/api/email-track?id=${lead.trackingId || lead.id}" width="1" height="1" />
                 </body>
               </html>
             `,
@@ -125,18 +121,15 @@ export async function GET(req: Request) {
         });
 
         if (response.ok) {
-          // ৬. Bulletproof ডাটাবেস আপডেট (Thread History সহ)
+          // ৬. ডাটাবেস আপডেট
           await adminDb.collection("outreach_leads").doc(lead.id).update({
             lastFollowUp: admin.firestore.FieldValue.serverTimestamp(),
             follow_up_count: nextStepCount,
-            status: nextStepCount === 5 ? 'finished' : lead.status,
-            // ড্যাশবোর্ডে থ্রেড দেখানোর জন্য নিচের ডাটাগুলো পাঠানো হচ্ছে
+            status: nextStepCount === 5 ? 'finished' : 'active',
             sent_messages: admin.firestore.FieldValue.arrayUnion({
               step: nextStepCount,
               subject: subject,
-              body: personalizedMessage,
-              sentAt: admin.firestore.FieldValue.serverTimestamp(),
-              sender_email: senderEmail
+              sentAt: admin.firestore.Timestamp.now()
             })
           });
           sentEmails.push(lead.email);
