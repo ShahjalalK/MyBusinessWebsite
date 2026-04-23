@@ -11,7 +11,7 @@ import AdminGuard from '@/app/components/AdminGuard'
 import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 
-// --- Interfaces (Added website field) ---
+// --- Interfaces ---
 interface TrackingHistory {
   event: string;
   time: any;
@@ -29,7 +29,7 @@ interface Lead {
   id: string;
   name?: string;
   company_name?: string;
-  website?: string; // Website link field
+  website?: string;
   email: string;
   subject: string;
   message?: string; 
@@ -69,13 +69,81 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [displayLimit]);
 
+  // --- API Logic-er sathe mil rekhe updated Hot Lead Logic ---
   const isHotLead = (lead: Lead) => {
-    if (!lead.tracking_history || lead.tracking_history.length < 2) return false;
-    if (lead.open_count > 2) return true;
-    const history = lead.tracking_history;
-    const firstOpen = history[0].time?.toMillis ? history[0].time.toMillis() : new Date(history[0].time).getTime();
-    const lastOpen = history[history.length - 1].time?.toMillis ? history[history.length - 1].time.toMillis() : new Date(history[history.length - 1].time).getTime();
-    return (lastOpen - firstOpen) > 120000; 
+    if (!lead.tracking_history) return false;
+    
+    const openEvents = lead.tracking_history.filter((h: any) => h.event === 'opened');
+    
+    // API logic: অন্ততঃ ২ বার ওপেন হতে হবে
+    if (openEvents.length < 2) return false;
+
+    // API logic: প্রথম এবং শেষ ওপেনের মধ্যে ১২০ সেকেন্ডের গ্যাপ থাকতে হবে
+    const firstOpen = openEvents[0].time;
+    const lastOpen = openEvents[openEvents.length - 1].time;
+    const firstMillis = firstOpen?.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
+    const lastMillis = lastOpen?.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
+
+    const gapInSeconds = (lastMillis - firstMillis) / 1000;
+    return gapInSeconds >= 120; 
+  };
+
+  // --- API Logic onujayi Next Follow-up Prediction ---
+  const getNextFollowUpStatus = (lead: Lead) => {
+    if (lead.status === 'replied' || (lead.follow_up_count || 0) >= 5) return null;
+
+    const followUpCount = lead.follow_up_count || 0;
+    
+    // ১. প্রথম ফলো-আপের জন্য হট লিড হওয়া জরুরি
+    if (followUpCount === 0 && !isHotLead(lead)) {
+      return { label: "Waiting for Engagement", color: "text-gray-400" };
+    }
+
+    // ২. পরবর্তী ফলো-আপের জন্য রিসেন্সি চেক (Recency Check)
+    if (followUpCount >= 1) {
+      const lastFollowUp = lead.lastFollowUp;
+      const lastOpened = lead.lastOpenedAt;
+      if (lastFollowUp && lastOpened) {
+        const lfMillis = lastFollowUp.toMillis ? lastFollowUp.toMillis() : new Date(lastFollowUp).getTime();
+        const loMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
+        if (loMillis <= lfMillis) return { label: "Waiting for Client Open", color: "text-gray-400" };
+      } else {
+        return { label: "No Open Detected", color: "text-gray-400" };
+      }
+    }
+
+    // ৩. টাইমিং এবং ডিলে ক্যালকুলেশন
+    const nextStep = followUpCount + 1;
+    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
+    const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
+    
+    if (!baseTimeObj) return { label: "Time Pending", color: "text-gray-400" };
+
+    const baseMillis = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
+    const now = new Date();
+    
+    // Scheduled Date বের করা
+    let scheduledDate = new Date(baseMillis + delayMinutes * 60000);
+    const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14;
+    
+    // Preferred Hour সেট করা (UTC তে)
+    scheduledDate.setUTCHours(preferredHour, 0, 0, 0);
+    
+    // যদি নির্ধারিত সময় পার হয়ে যায় কিন্তু ডিলে শেষ না হয়, তবে পরের দিন
+    if (scheduledDate.getTime() < baseMillis + delayMinutes * 60000) {
+      scheduledDate.setUTCDate(scheduledDate.getUTCDate() + 1);
+    }
+
+    // টাইম ফরম্যাটিং
+    const timeString = scheduledDate.toLocaleString('en-GB', { 
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
+    });
+
+    if (now >= scheduledDate) {
+      return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
+    }
+
+    return { label: `Step ${nextStep} at:`, color: "text-blue-500", time: timeString };
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -94,26 +162,6 @@ export default function DashboardPage() {
           hour: '2-digit', minute: '2-digit', hour12: true 
       });
     } catch (e) { return "Invalid Date"; }
-  };
-
-  const getNextFollowUpTime = (lead: Lead) => {
-    if (!isHotLead(lead)) return null;
-    const count = lead.follow_up_count || 0;
-    if (count >= 5 || lead.status === 'replied') return null;
-    const nextStep = count + 1;
-    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
-    const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
-    if (!baseTimeObj) return "Calculating...";
-    const baseTime = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
-    let nextDate = new Date(baseTime + delayMinutes * 60000);
-    const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14;
-    nextDate.setUTCHours(preferredHour, 0, 0, 0);
-    if (nextDate.getTime() < baseTime + delayMinutes * 60000) {
-        nextDate.setUTCDate(nextDate.getUTCDate() + 1);
-    }
-    return nextDate.toLocaleString('en-GB', { 
-        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
-    });
   };
 
   const filteredLeads = useMemo(() => {
@@ -264,7 +312,6 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm font-medium opacity-70 mt-1">{selectedLead.email}</p>
                       
-                      {/* --- Added Website Link Button --- */}
                       {selectedLead.website && (
                         <a 
                           href={selectedLead.website.startsWith('http') ? selectedLead.website : `https://${selectedLead.website}`} 
@@ -283,9 +330,32 @@ export default function DashboardPage() {
                           <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${selectedLead.status === 'replied' ? 'bg-green-500' : 'bg-blue-600'}`}>Status: {selectedLead.status}</span>
                       </div>
                     </div>
-                    {/* Design Element */}
                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/20 blur-[80px] rounded-full" />
                 </section>
+
+                {/* --- UPDATED NEXT FOLLOW-UP PREDICTION SECTION --- */}
+                {getNextFollowUpStatus(selectedLead) && (
+                  <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
+                    <div className="flex items-start gap-4">
+                      <div className={`p-3 rounded-2xl bg-gray-50 ${getNextFollowUpStatus(selectedLead)?.color}`}>
+                        <Timer size={20} />
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-black uppercase tracking-tight ${getNextFollowUpStatus(selectedLead)?.color}`}>
+                          {getNextFollowUpStatus(selectedLead)?.label}
+                        </p>
+                        {getNextFollowUpStatus(selectedLead)?.time && (
+                          <p className="text-lg font-black text-gray-900 mt-1">
+                            {getNextFollowUpStatus(selectedLead)?.time}
+                          </p>
+                        )}
+                        <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 italic leading-tight">
+                          * Based on {selectedLead.preferred_hour || 14}:00 UTC Preferred Hour & Step Delay
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                )}
 
                 {/* Engagement History */}
                 <div className="space-y-4">
@@ -296,7 +366,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-3">
                             <Monitor size={14} className="text-blue-500" />
                             <div>
-                                <p className="text-[10px] font-black text-gray-800 uppercase">Email Opened</p>
+                                <p className="text-[10px] font-black text-gray-800 uppercase">{info.event === 'opened' ? 'Email Opened' : info.event}</p>
                                 <p className="text-[9px] font-bold text-blue-600 italic">{formatDate(info.time)}</p>
                             </div>
                         </div>
@@ -313,19 +383,6 @@ export default function DashboardPage() {
                   </h4>
                   
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-gray-100">
-                    
-                    {/* --- NEXT FOLLOW-UP PREDICTION --- */}
-                    {getNextFollowUpTime(selectedLead) && (
-                        <div className="relative pl-8 mb-8">
-                            <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-orange-100 border-2 border-orange-500 z-10 flex items-center justify-center animate-pulse"><Timer size={10} className="text-orange-600"/></div>
-                            <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 border-dashed">
-                                <p className="text-[11px] font-black text-orange-600 uppercase tracking-tight">Next Follow-up Scheduled</p>
-                                <p className="text-[13px] font-black text-gray-900 mt-1">{getNextFollowUpTime(selectedLead)}</p>
-                                <p className="text-[8px] font-bold text-orange-400 uppercase mt-1 italic">* Automation Triggered for Hot Lead</p>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Follow ups */}
                     {selectedLead.sent_messages && [...selectedLead.sent_messages].reverse().map((msg, idx) => (
                       <div key={idx} className="relative pl-8">
