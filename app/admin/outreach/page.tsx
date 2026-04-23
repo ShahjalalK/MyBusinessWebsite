@@ -37,7 +37,7 @@ export default function OutreachPage() {
   const [email, setEmail] = useState('')
   const [clientName, setClientName] = useState('')
   const [companyName, setCompanyName] = useState('') 
-  const [website, setWebsite] = useState('') // New Website State
+  const [website, setWebsite] = useState('') 
   const [businessType, setBusinessType] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('') 
@@ -109,6 +109,7 @@ export default function OutreachPage() {
 
   const activeSender = SENDERS.find(s => s.email === selectedSender);
 
+  // --- মেইন ইমেইল সেন্ডিং ফাংশন ---
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isEmailPatternValid(email)) { setEmailError('Please enter a valid email address!'); return; }
@@ -116,10 +117,11 @@ export default function OutreachPage() {
     if (!activeSender) return alert("Please select an active sender!");
     
     setLoading(true);
-    setStatus('Generating Unique ID...');
+    setStatus('Launching Campaign...');
 
     try {
-      const uniqueTrackingId = crypto.randomUUID();
+      // ১. ইউনিক বেস আইডি জেনারেট করা (এটি ফলো-আপের জন্যও মেইন আইডি হিসেবে থাকবে)
+      const baseTrackingId = crypto.randomUUID().substring(0, 8) + Date.now().toString(36).substring(4);
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
       
       const res = await fetch('/api/send-email', {
@@ -132,9 +134,9 @@ export default function OutreachPage() {
             sender: activeSender, 
             clientName, 
             companyName,
-            website, // API তে পাঠানো হচ্ছে
+            website, 
             businessType, 
-            trackingId: uniqueTrackingId,
+            trackingId: baseTrackingId, // এখানে বেস আইডি পাঠানো হচ্ছে
             scheduledAt: scheduledAtISO 
         }),
       });
@@ -143,33 +145,37 @@ export default function OutreachPage() {
       if (data.success) {
         const leadRef = doc(collection(db, "outreach_leads")); 
         
+        // ২. ফায়ারবেসে লিড সেভ করা
         await setDoc(leadRef, {
           name: clientName, 
           company_name: companyName,
-          website: website, // ফায়ারবেসে সেভ হচ্ছে
+          website: website, 
           business_type: businessType, 
           service: selectedService, 
           email, 
           sender_email: activeSender.email, 
+          sender_name: activeSender.name,
           subject, 
           message, 
-          trackingId: uniqueTrackingId,
+          trackingId: baseTrackingId, // মেইন আইডিটি সেভ রাখা হচ্ছে ফলো-আপের জন্য
           originalMessageId: data.messageId,
           status: scheduledAtISO ? 'scheduled' : 'sent', 
           open_count: 0,
           follow_up_count: 0,
           scheduledAt: scheduledAtISO, 
           createdAt: serverTimestamp(),
+          tracking_history: []
         });
 
-        setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Message Sent.');
+        setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Outreach Launched.');
+        // ফর্ম ক্লিয়ার করা
         setEmail(''); setClientName(''); setCompanyName(''); setWebsite(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
       } else {
         setStatus('Failed: ' + (data.error?.message || 'Unknown Error'));
       }
     } catch (error) {
       console.error(error);
-      setStatus('Network Error.');
+      setStatus('Network Error. Check Console.');
     } finally {
       setLoading(false);
     }
@@ -198,7 +204,7 @@ export default function OutreachPage() {
                   <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isLimitReached ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{count}/{s.limit}</span>
                 </div>
                 <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                  <div className={`h-full transition-all duration-500 ${isLimitReached ? 'bg-red-400' : 'bg-blue-500'}`} style={{ width: `${Math.min((count / s.limit) * 100, 100)}%` }}></div>
+                  <div className={`h-full transition-all duration-500 ${isLimitReached ? 'bg-red-400' : 'bg-blue-50'}`} style={{ width: `${Math.min((count / s.limit) * 100, 100)}%` }}></div>
                 </div>
               </div>
             );
@@ -210,7 +216,6 @@ export default function OutreachPage() {
           <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch Outreach.</h1>
           <form onSubmit={handleSendEmail} className="space-y-6">
             
-            {/* Row 1: Name & Company */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Client Name *</label>
@@ -219,7 +224,7 @@ export default function OutreachPage() {
               
               <div className="space-y-1 group">
                 <label className="text-[10px] font-black text-blue-500 uppercase ml-2 tracking-widest flex items-center gap-1">
-                   <Building2 size={10}/> Company Name (Recommended)
+                   <Building2 size={10}/> Company Name
                 </label>
                 <div className="relative">
                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
@@ -230,7 +235,6 @@ export default function OutreachPage() {
               </div>
             </div>
 
-            {/* Row 2: Email & Website */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Target Email *</label>
@@ -240,7 +244,7 @@ export default function OutreachPage() {
 
               <div className="space-y-1 group">
                 <label className="text-[10px] font-black text-blue-500 uppercase ml-2 tracking-widest flex items-center gap-1">
-                   <Globe size={10}/> Website Link (Better Tracking)
+                   <Globe size={10}/> Website Link
                 </label>
                 <div className="relative">
                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
@@ -251,7 +255,6 @@ export default function OutreachPage() {
               </div>
             </div>
 
-            {/* Row 3: Service Selection */}
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Service Offered *</label>
               <div className="relative group">

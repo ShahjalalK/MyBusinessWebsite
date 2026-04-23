@@ -44,6 +44,7 @@ interface Lead {
   sent_messages?: SentMessage[]; 
   service?: string;
   preferred_hour?: number;
+  stopAutomation?: boolean;
   [key: string]: any; 
 }
 
@@ -81,57 +82,47 @@ export default function DashboardPage() {
     return gapInSeconds >= 120; 
   };
 
-  // --- API Logic-er sathe exact mil rekhe Next Follow-up Logic ---
+  // --- Updated API Logic (30-min rounding) ---
   const getNextFollowUpStatus = (lead: Lead) => {
-    if (lead.status === 'replied' || (lead.follow_up_count || 0) >= 5) return null;
+    if (lead.status === 'replied' || (lead.follow_up_count || 0) >= 5 || lead.stopAutomation) return null;
 
     const followUpCount = lead.follow_up_count || 0;
     
+    // ১. যোগ্যতার শর্ত: Initial মেইলের পর যদি Hot না হয়, তবে সে অযোগ্য।
     if (followUpCount === 0 && !isHotLead(lead)) {
-      return { label: "Waiting for Engagement", color: "text-gray-400" };
+      return { label: "Waiting for Engagement", color: "text-gray-400", time: null };
     }
 
+    // ২. যোগ্যতার শর্ত: ফলো-আপের পর যদি নতুন করে ওপেন না করে।
     if (followUpCount >= 1) {
-      const lastFollowUp = lead.lastFollowUp;
+      const lastSent = lead.lastFollowUp || lead.sentAt;
       const lastOpened = lead.lastOpenedAt;
-      if (lastFollowUp && lastOpened) {
-        const lfMillis = lastFollowUp.toMillis ? lastFollowUp.toMillis() : new Date(lastFollowUp).getTime();
-        const loMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
-        if (loMillis <= lfMillis) return { label: "Waiting for Client Open", color: "text-gray-400" };
+      if (lastSent && lastOpened) {
+        const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
+        const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
+        if (lastOpenedMillis <= lastSentMillis) return { label: "Waiting for Interaction", color: "text-amber-500", time: null };
       } else {
-        return { label: "No Open Detected", color: "text-gray-400" };
+        return { label: "No Interaction Found", color: "text-gray-400", time: null };
       }
     }
 
+    // ৩. স্লট ক্যালকুলেশন (Rounding to nearest 30 mins)
     const nextStep = followUpCount + 1;
     const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
-    const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
+    const baseTimeObj = lead.lastOpenedAt || lead.sentAt || lead.createdAt;
     
-    if (!baseTimeObj) return { label: "Time Pending", color: "text-gray-400" };
+    if (!baseTimeObj) return { label: "Syncing Data...", color: "text-gray-300", time: null };
 
-    const baseMillis = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
+    const baseDate = new Date(baseTimeObj.toMillis ? baseTimeObj.toMillis() : baseTimeObj);
+    
+    // ৩.১ API-র মত রাউন্ডিং লজিক
+    const roundedMinutes = Math.floor(baseDate.getMinutes() / 30) * 30;
+    const roundedBaseTime = new Date(baseDate);
+    roundedBaseTime.setMinutes(roundedMinutes, 0, 0);
+
+    // ৩.২ শিডিউল টাইম ক্যালকুলেশন
+    const scheduledDate = new Date(roundedBaseTime.getTime() + delayMinutes * 60000);
     const now = new Date();
-    
-    // ১. পছন্দের ঘন্টা বের করা (Preferred Hour Priority)
-    // লিডের ডাটাতে preferred_hour না থাকলে, লাস্ট ওপেন করার ঘন্টাকে নেওয়া হবে।
-    let preferredHourUTC = 14; // Default fallback UTC 14:00 (BD 8 PM)
-    if (typeof lead.preferred_hour === 'number') {
-      preferredHourUTC = lead.preferred_hour;
-    } else if (lead.lastOpenedAt) {
-      const loDate = new Date(lead.lastOpenedAt.toMillis ? lead.lastOpenedAt.toMillis() : lead.lastOpenedAt);
-      preferredHourUTC = loDate.getUTCHours();
-    }
-
-    // ২. ক্যালকুলেশন: Base Time + Delay
-    let scheduledDate = new Date(baseMillis + delayMinutes * 60000);
-    
-    // ৩. নির্দিষ্ট ইউটিসি ঘন্টাতে সেট করা
-    scheduledDate.setUTCHours(preferredHourUTC, 0, 0, 0);
-    
-    // ৪. যদি টাইমটি অলরেডি ডিলের সময়ের আগে হয়ে যায়, তবে পরবর্তী দিন পাঠিয়ে দেওয়া
-    if (scheduledDate.getTime() < baseMillis + (delayMinutes - 10) * 60000) {
-      scheduledDate.setUTCDate(scheduledDate.getUTCDate() + 1);
-    }
 
     const timeString = scheduledDate.toLocaleString('en-GB', { 
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
@@ -141,7 +132,7 @@ export default function DashboardPage() {
       return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
     }
 
-    return { label: `Step ${nextStep} at:`, color: "text-blue-500", time: timeString };
+    return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {

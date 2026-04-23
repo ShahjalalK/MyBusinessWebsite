@@ -4,7 +4,11 @@ export async function POST(req: Request) {
   try {
     const { email, subject, message, sender, clientName, companyName, trackingId, scheduledAt } = await req.json();
 
-    const finalTrackingId = trackingId || Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
+    // মেইন আইডি জেনারেট করা
+    const baseTrackingId = trackingId || Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
+    
+    // প্রথম ইমেইলের জন্য ইউনিক ট্যাগ (step1)
+    const stepTrackingId = `${baseTrackingId}_step1`;
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -19,23 +23,20 @@ export async function POST(req: Request) {
         replyTo: { email: "shahjalal@trackflowpro.com", name: "Shahjalal Khan" },
         subject: subject,
         
-        // --- ট্র্যাকিং নিশ্চিত করার অংশ ---
-        tags: [finalTrackingId], 
+        // Tags এ আমরা ইউনিক আইডি দিচ্ছি
+        tags: [stepTrackingId], 
+        
         htmlContent: `
           <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
               ${message}
-              <div style="display:none; visibility:hidden; font-size:1px;">${finalTrackingId}</div>
+              <div style="display:none; visibility:hidden; font-size:1px;">${stepTrackingId}</div>
             </body>
           </html>
         `,
-        // ব্রেভোতে ট্র্যাকিং অন করার প্যারামিটারগুলো নিচে দেওয়া হলো
-        // ব্রেভোর লেটেস্ট API অনুযায়ী এগুলো ডিফল্ট থাকে, তবুও আমরা ফোর্স করছি
         headers: {
-          "X-Mailin-Tag": finalTrackingId
+          "X-Mailin-Tag": stepTrackingId // হেডার এবং বডি একই আইডি শেয়ার করছে
         },
-        // ট্র্যাকিং প্যারামিটার (ব্রেভোর কিছু বিশেষ মডেলে লাগে)
-        // আমরা এখানে ব্রেভোর অপশনাল প্যারামিটারগুলো যোগ করছি
         ...(scheduledAt && { scheduledAt: scheduledAt }),
       }),
     });
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ 
         success: true, 
         messageId: data.messageId, 
-        trackingId: finalTrackingId 
+        trackingId: baseTrackingId // আমরা মেইন আইডিটি রিটার্ন দিচ্ছি ডাটাবেসে সেভ করার জন্য
       });
     } else {
       console.error("Brevo API Error:", data);

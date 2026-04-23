@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../../lib/firebase'
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore'
-import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, AlertCircle, Layers, Clock, Building2 } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, AlertCircle, Layers, Clock, Building2, Tag } from 'lucide-react'
 import { 
   Editor, 
   EditorProvider, 
@@ -49,12 +49,15 @@ export default function FollowUpAutomationPage() {
         const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
         if (configDoc.exists()) {
           const fetchedData = configDoc.data();
-          const mergedData = { ...categoryVariants, ...fetchedData };
-          setCategoryVariants(mergedData);
+          setCategoryVariants(fetchedData);
         }
         
-        // আগ্রহী বা ইমেইল ওপেন করেছে এমন সব লিড ফেচ করা হচ্ছে
-        const q = query(collection(db, "outreach_leads"), where("status", "in", ["interested", "opened", "active", "sent"]));
+        // শুধু যারা রিপ্লাই দেয়নি এবং অটোমেশন চালু আছে তাদের আনা হচ্ছে
+        const q = query(
+          collection(db, "outreach_leads"), 
+          where("status", "in", ["sent", "opened", "active"]),
+          where("stopAutomation", "==", false)
+        );
         const snapshot = await getDocs(q);
         setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (err) {
@@ -66,53 +69,44 @@ export default function FollowUpAutomationPage() {
     loadData();
   }, []);
 
-  // --- স্মার্ট ফিল্টারিং লজিক (ক্রন জব লজিকের সাথে হুবহু মিল রাখা হয়েছে) ---
+  // --- স্মার্ট ফিল্টারিং লজিক (API-র ৩০ মিনিট স্লট এবং সঠিক ট্র্যাকিং প্রপার্টি সহ) ---
   const currentCategoryLeads = leads.filter(l => {
+    // ১. সার্ভিস চেক
     if ((l.service || 'Email Signature') !== activeTab) return false;
+    
     const followUpCount = l.follow_up_count || 0;
     const currentStepIdx = STEPS.indexOf(activeStep);
     
-    // লিডটি বর্তমানে কোন স্টেপে আছে তা চেক করা
+    // ২. স্টেপ চেক (লিড বর্তমানে যে স্টেপে আছে সেটি ম্যাচ করতে হবে)
     if (followUpCount !== currentStepIdx) return false;
 
-    // F-1 (প্রথম ফলো-আপ) এর জন্য বিশেষ ফিল্টারিং
+    // ৩. F-1 (Step 1) লজিক: ২+ ওপেন এবং ২ মিনিটের ইন্টারভ্যাল
     if (activeStep === 'step1') {
-      // শুধু নাম থাকলে চলবে, কোম্পানি নাম বাধ্যতামূলক নয়
-      if (!l.name) return false; 
-      
-      // অন্তত ২ বার ওপেন হতে হবে
       if ((l.open_count || 0) < 2) return false;
-
-      // ২ মিনিট (১২০ সেকেন্ড) গ্যাপ চেক
       const history = l.tracking_history || [];
       const openEvents = history.filter((h: any) => h.event === 'opened');
 
       if (openEvents.length >= 2) {
-        const firstOpen = openEvents[0].time;
-        const lastOpen = openEvents[openEvents.length - 1].time;
-        const firstMillis = firstOpen?.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
-        const lastMillis = lastOpen?.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
+        const firstMillis = openEvents[0].time?.toMillis ? openEvents[0].time.toMillis() : new Date(openEvents[0].time).getTime();
+        const lastMillis = openEvents[openEvents.length - 1].time?.toMillis ? openEvents[openEvents.length - 1].time.toMillis() : new Date(openEvents[openEvents.length - 1].time).getTime();
         
-        // ১২০ সেকেন্ড বা ২ মিনিটের কম গ্যাপ থাকলে সেটি ড্যাশবোর্ডে দেখাবে না
+        // ২ মিনিটের গ্যাপ চেক
         if ((lastMillis - firstMillis) / 1000 < 120) return false;
-      } else {
-        return false;
-      }
+      } else return false;
     }
 
-    // পরবর্তী ধাপগুলোর (F-2 থেকে F-5) জন্য রিসেন্সি লজিক
+    // ৪. F2 to F5 লজিক: শেষ ফলোআপ পাঠানোর পর নতুন ওপেন হতে হবে
     if (currentStepIdx > 0) {
-      const lastFollowUpTime = l.lastFollowUp;
-      const lastOpenedTime = l.lastOpenedAt || l.last_opened;
-      if (lastFollowUpTime && lastOpenedTime) {
-        const lastFollowUpMillis = lastFollowUpTime.toMillis ? lastFollowUpTime.toMillis() : new Date(lastFollowUpTime).getTime();
-        const lastOpenedMillis = lastOpenedTime.toMillis ? lastOpenedTime.toMillis() : new Date(lastOpenedTime).getTime();
-        
-        // শেষ ফলো-আপের পর আবার ওপেন করলেই কেবল পরবর্তী ফলো-আপের লিস্টে আসবে
-        if (lastOpenedMillis <= lastFollowUpMillis) return false;
-      } else {
-        return false;
-      }
+      const lastSent = l.lastFollowUp || l.sentAt;
+      const lastOpened = l.lastOpenedAt;
+      
+      if (!lastSent || !lastOpened) return false;
+
+      const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
+      const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
+      
+      // ওপেন করার সময় যদি শেষ পাঠানোর সময়ের পরে হয়, তবেই সে যোগ্য
+      if (lastOpenedMillis <= lastSentMillis) return false;
     }
     return true;
   });
@@ -121,14 +115,6 @@ export default function FollowUpAutomationPage() {
   const currentCategoryData = currentTabSettings[activeStep] || { variants: [{ id: 'V1', content: "" }], delay: 1440 };
   const currentVariants = currentCategoryData.variants || [];
   const days = Math.floor((currentCategoryData.delay || 1440) / 1440);
-
-  const getEmailsForVariant = (variantId: string) => {
-    const validVariants = currentVariants.filter((v: any) => v && v.content && v.content.trim() !== "");
-    const vIndex = validVariants.findIndex((v: any) => v.id === variantId);
-    if (vIndex === -1) return [];
-    // ভেরিয়েন্ট অনুযায়ী লিডগুলোকে ভাগ করে দেখানো
-    return currentCategoryLeads.filter((_, index) => index % validVariants.length === vIndex);
-  };
 
   const updateGlobalState = (newStepData: any) => {
     setCategoryVariants((prev: any) => ({
@@ -143,53 +129,52 @@ export default function FollowUpAutomationPage() {
 
   const handleSaveSettings = async () => {
     const filteredVariants = currentVariants.filter((v: any) => v.content && v.content.trim() !== "");
-    if (filteredVariants.length === 0) return alert("Please write something in the variant!");
+    if (filteredVariants.length === 0) return alert("Please add content to variants!");
 
     setSaving(true);
     try {
-      // ১. গ্লোবাল কনফিগারেশন সেভ
+      // ১. গ্লোবাল সেটিংস সেভ
       await setDoc(doc(db, "automation_settings", "followup_config"), categoryVariants);
       
-      // ২. বর্তমান ক্যাটাগরির লিডগুলোর জন্য ভেরিয়েন্ট এবং ডিলে এসাইন করা
+      // ২. লিডগুলোর জন্য API বাফার টাইম (Timing Fix) সহ আপডেট
       const batchPromises = currentCategoryLeads.map((lead, index) => {
         const assignedVariantId = filteredVariants[index % filteredVariants.length].id; 
+        
+        // API বাফার: ১ দিন (১৪৪০ মিনিট) হলে তাকে ২ ঘণ্টা আগে (১৩২০ মিনিট) রেডি করা 
+        // যাতে ৩০ মিনিটের স্লট রাউন্ডিং হলেও মেইল ওই দিনেই যায়।
+        const adjustedDelay = (currentCategoryData.delay || 1440) - 120; 
+
         return updateDoc(doc(db, "outreach_leads", lead.id), { 
           [`${activeStep}AssignedVariant`]: assignedVariantId, 
-          [`${activeStep}Delay`]: currentCategoryData.delay,
-          followUpReady: true // ক্রন জবকে সিগন্যাল দেওয়া যে এই লিডটি প্রস্তুত
+          [`${activeStep}Delay`]: adjustedDelay,
+          followUpReady: true // এটি API ট্রিগার পয়েন্ট
         });
       });
       await Promise.all(batchPromises);
       
       setHasUnsavedChanges(false);
-      alert(`✅ ${activeTab} ${activeStep.toUpperCase()} Settings Synced Successfully!`);
+      alert(`✅ ${activeTab} ${activeStep.toUpperCase()} Synced & Ready for Send!`);
     } catch (error) { 
       console.error(error); 
-      alert("Synchronization failed!");
+      alert("Error syncing settings!");
     } finally { 
       setSaving(false); 
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#FAFBFF]">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin text-blue-600" size={40} />
-          <p className="font-black text-xs text-gray-400 tracking-widest uppercase">Loading Leads...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-[#FAFBFF]">
+      <Loader2 className="animate-spin text-blue-600" size={40} />
+    </div>
+  );
 
   return (
     <>
     <Navbar />
-
     <AdminGuard>
       <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen pb-40">
       
-      {/* Header Tabs: Services Selection */}
+      {/* Service Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
           {SERVICES.map((s) => (
@@ -200,17 +185,17 @@ export default function FollowUpAutomationPage() {
           ))}
         </div>
         <button onClick={() => updateGlobalState({ ...currentCategoryData, variants: [...currentVariants, { id: `V${Date.now()}`, content: "" }] })} 
-                className="flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-[22px] font-black text-xs hover:bg-blue-700 shadow-lg transition-all active:scale-95">
-          <Plus size={18} /> ADD NEW VARIANT
+                className="flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-[22px] font-black text-xs hover:bg-blue-700 shadow-lg active:scale-95 transition-all">
+          <Plus size={18} /> ADD VARIANT
         </button>
       </div>
 
-      {/* Step (F1-F5) & Delay Control */}
+      {/* Step Navigation & Delay */}
       <div className="flex flex-wrap items-center gap-4 mb-8">
         <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
           {STEPS.map((step, idx) => (
             <button key={step} onClick={() => setActiveStep(step)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[10px] tracking-tighter transition-all whitespace-nowrap ${activeStep === step ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'}`}>
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[10px] tracking-tighter transition-all ${activeStep === step ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'}`}>
               <Layers size={14} /> F-{idx + 1}
             </button>
           ))}
@@ -223,57 +208,47 @@ export default function FollowUpAutomationPage() {
         </div>
       </div>
 
-      {/* Variation Grid */}
+      {/* Editor Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {currentVariants.map((variant: any, index: number) => {
           if (!variant) return null;
-          const targetEmails = getEmailsForVariant(variant.id);
+          const validVariants = currentVariants.filter((v: any) => v && v.content?.trim() !== "");
+          const vIndex = validVariants.findIndex((v: any) => v.id === variant.id);
+          const targetEmails = vIndex === -1 ? [] : currentCategoryLeads.filter((_, idx) => idx % validVariants.length === vIndex);
+
           return (
             <div key={variant.id} className="bg-white rounded-[40px] shadow-xl border border-gray-50 flex flex-col overflow-hidden">
               <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
                 <span className="text-[10px] font-black px-4 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-widest">
-                  {activeStep.toUpperCase()} - VARIATION {index + 1}
+                  VARIATION {index + 1}
                 </span>
-                <button onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.filter((v: any) => v.id !== variant.id) })} className="text-gray-300 hover:text-red-500 transition-colors">
+                <button onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.filter((v: any) => v.id !== variant.id) })} className="text-gray-300 hover:text-red-500">
                   <Trash2 size={16} />
                 </button>
               </div>
 
               <div className="p-6 flex-1 flex flex-col space-y-4">
-                <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-gray-50">
+                <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden bg-gray-50">
                   <EditorProvider>
                     <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
-                      <BtnBold /> <BtnItalic /> <BtnUnderline /> <BtnStrikeThrough />
+                      <BtnBold /> <BtnItalic /> <BtnUnderline />
                       <span className="w-px h-6 bg-gray-200 mx-1"></span>
-                      <BtnNumberedList /> <BtnBulletList />
-                      <span className="w-px h-6 bg-gray-200 mx-1"></span>
-                      <BtnLink />
-                      <BtnClearFormatting />
-                      
-                      {/* Shortcode Buttons */}
                       <div className="ml-auto flex gap-1">
-                        <button type="button" onClick={() => {
-                          const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {name}" } : v);
-                          updateGlobalState({ ...currentCategoryData, variants: updatedVars });
-                        }} className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase hover:bg-blue-700 transition-colors">
-                          <UserPlus size={12} /> {`{Name}`}
+                        <button type="button" onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {name}" } : v) })} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase">
+                          <UserPlus size={12} className="inline mr-1" /> {`{Name}`}
                         </button>
-                        
-                        <button type="button" onClick={() => {
-                          const updatedVars = currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {company}" } : v);
-                          updateGlobalState({ ...currentCategoryData, variants: updatedVars });
-                        }} className="flex items-center gap-1 px-3 py-1 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase hover:bg-indigo-700 transition-colors">
-                          <Building2 size={12} /> {`{Company}`}
+                        <button type="button" onClick={() => updateGlobalState({ ...currentCategoryData, variants: currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: (v.content || "") + " {company}" } : v) })} className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase">
+                          <Building2 size={12} className="inline mr-1" /> {`{Company}`}
                         </button>
                       </div>
                     </Toolbar>
                     <Editor value={variant.content || ""} onChange={(e: any) => updateGlobalState({ ...currentCategoryData, variants: currentVariants.map((v: any) => v.id === variant.id ? { ...v, content: e.target.value } : v) })} 
-                      className="min-h-[250px] p-5 bg-transparent outline-none text-gray-800 font-medium email-editor-content" />
+                      className="min-h-[250px] p-5 outline-none text-gray-800 email-editor-content" />
                   </EditorProvider>
                 </div>
                 
-                {/* Leads Drawer for this Variant */}
-                <button onClick={() => setShowEmails(showEmails === variant.id ? null : variant.id)} className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100 hover:bg-gray-100 transition-colors">
+                {/* Leads Toggle */}
+                <button onClick={() => setShowEmails(showEmails === variant.id ? null : variant.id)} className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100">
                   <span className="text-[10px] font-black text-gray-600 uppercase flex items-center gap-2">
                     <Mail size={14} className="text-blue-500" /> Active Leads ({targetEmails.length})
                   </span>
@@ -281,14 +256,19 @@ export default function FollowUpAutomationPage() {
                 </button>
                 
                 {showEmails === variant.id && (
-                  <div className="mt-2 max-h-40 overflow-y-auto space-y-1 p-2 bg-white rounded-xl border border-gray-100 text-[9px]">
+                  <div className="mt-2 max-h-40 overflow-y-auto p-2 bg-white rounded-xl border border-gray-100">
                     {targetEmails.length === 0 ? (
-                      <p className="text-center py-4 text-gray-400 font-bold uppercase italic">No Leads Found in this step</p>
+                      <p className="text-center py-4 text-gray-400 text-[10px] font-bold uppercase">No matching leads in this step</p>
                     ) : (
                       targetEmails.map((l: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center p-2 border-b last:border-0 hover:bg-blue-50 transition-colors">
-                          <span className="font-bold text-gray-700">{l.email}</span>
-                          <span className="text-blue-500 font-black px-2 py-0.5 bg-blue-50 rounded-md">Opens: {l.open_count || 0}</span>
+                        <div key={i} className="flex flex-col p-2 border-b last:border-0 hover:bg-blue-50">
+                          <div className="flex justify-between">
+                            <span className="text-[11px] font-bold text-gray-700">{l.email}</span>
+                            <span className="text-[9px] text-blue-500 font-black">Opens: {l.open_count || 0}</span>
+                          </div>
+                          <span className="text-[8px] text-gray-400 font-bold uppercase mt-1">
+                             Status: {l.status} | Step: {l.follow_up_count || 0}
+                          </span>
                         </div>
                       ))
                     )}
@@ -300,30 +280,21 @@ export default function FollowUpAutomationPage() {
         })}
       </div>
 
-      {/* Fixed Sync Button */}
+      {/* Sync Button */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-50">
         <button onClick={handleSaveSettings} disabled={saving || !hasUnsavedChanges} 
-          className={`w-full p-5 rounded-[30px] font-black text-base shadow-2xl transition-all flex items-center justify-center gap-3 border-4 border-white ${hasUnsavedChanges ? 'bg-blue-600 text-white scale-105 shadow-blue-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
-          {saving ? <Loader2 className="animate-spin" /> : (
-            <>
-              <Save size={20} /> 
-              {hasUnsavedChanges ? `SYNC ALL ${activeStep.toUpperCase()} SETTINGS` : `SETTINGS UP TO DATE`}
-            </>
-          )}
+          className={`w-full p-5 rounded-[30px] font-black text-base shadow-2xl transition-all flex items-center justify-center gap-3 border-4 border-white ${hasUnsavedChanges ? 'bg-blue-600 text-white scale-105 shadow-blue-300' : 'bg-gray-200 text-gray-400'}`}>
+          {saving ? <Loader2 className="animate-spin" /> : <><Save size={20} /> SYNC {activeStep.toUpperCase()} SETTINGS</>}
         </button>
       </div>
 
       <style jsx global>{`
         .rsw-editor { border: none !important; background: transparent !important; }
-        .rsw-toolbar { background: white !important; border: none !important; padding: 10px !important; }
-        .email-editor-content { color: #1e293b !important; line-height: 1.6 !important; }
-        .email-editor-content a { color: #2563eb !important; text-decoration: underline !important; }
+        .email-editor-content { color: #1e293b !important; line-height: 1.6 !important; font-size: 14px; font-weight: 500; }
       `}</style>
     </div>
     </AdminGuard>
-
     <Footer />
-    
     </>
   )
 }

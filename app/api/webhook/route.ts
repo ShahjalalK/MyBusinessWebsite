@@ -10,9 +10,9 @@ export async function POST(req: Request) {
     const email = body.email;
     const rawMessageId = body['message-id'] || body.messageId;
     
-    // ব্রেভো থেকে ট্যাগ (Unique trackingId) সংগ্রহ করা
+    // ব্রেভো থেকে ট্যাগ সংগ্রহ করা (যা এখন 'abcd123_step2' ফরম্যাটে আসবে)
     const tags = body.tags || [];
-    const trackingIdFromTag = tags.length > 0 ? tags[0] : null;
+    const receivedTag = tags.length > 0 ? tags[0] : null;
 
     const timestamp = body.ts_event || Math.floor(Date.now() / 1000);
     const eventTime = admin.firestore.Timestamp.fromMillis(timestamp * 1000);
@@ -20,12 +20,16 @@ export async function POST(req: Request) {
     const outreachRef = adminDb.collection("outreach_leads");
     let leadDoc = null;
 
-    // ১. প্রথমে Unique trackingId (Tag) দিয়ে খুঁজি (সবচেয়ে নির্ভুল)
-    if (trackingIdFromTag) {
+    // --- ১. আইডি প্রসেসিং (নতুন লজিক) ---
+    if (receivedTag) {
+      // '_step' অংশটুকু বাদ দিয়ে মূল trackingId বের করা (যেমন: 'abcd123_step2' -> 'abcd123')
+      const originalTrackingId = receivedTag.split('_step')[0];
+
       const tagSnapshot = await outreachRef
-        .where("trackingId", "==", trackingIdFromTag)
+        .where("trackingId", "==", originalTrackingId)
         .limit(1)
         .get();
+
       if (!tagSnapshot.empty) {
         leadDoc = tagSnapshot.docs[0];
       }
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
       const leadData = leadDoc.data();
       let updatePayload: any = {};
 
-      // ৪. ইমেল স্ট্যাটাস লজিক (sent/bounced/spam)
+      // ৪. ইমেল স্ট্যাটাস লজিক
       if (event === 'request' || event === 'delivered') {
         updatePayload.status = 'sent';
         updatePayload.sentAt = eventTime;
@@ -59,25 +63,23 @@ export async function POST(req: Request) {
         updatePayload.status = 'spam';
       }
 
-      // ৫. ওপেন ট্র্যাকিং আপডেট (উইথ ডুপ্লিকেট প্রোটেকশন ও টাইম ট্র্যাকিং)
+      // ৫. ওপেন ট্র্যাকিং আপডেট
       if (event === 'opened') {
         const lastOpened = leadData.lastOpenedAt ? leadData.lastOpenedAt.toMillis() : 0;
         const currentRequestTime = eventTime.toMillis();
 
-        // যদি একই ইমেইল ২০ সেকেন্ডের মধ্যে আবার ওপেন হয়, তবে কাউন্ট বাড়াবো না
         if (currentRequestTime - lastOpened > 20000) { 
           updatePayload.status = 'opened';
           updatePayload.open_count = admin.firestore.FieldValue.increment(1);
           updatePayload.lastOpenedAt = eventTime;
 
-          // --- নতুন লজিক: প্রিফারড আওয়ার সেভ করা (UTC) ---
-          // এর ফলে ফলো-আপ ইমেলটি ক্লায়েন্টের ইমেল চেক করার সময়েই যাবে
           const dateObj = new Date(timestamp * 1000);
           updatePayload.preferred_hour = dateObj.getUTCHours();
           
           updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
             event: 'opened',
             time: eventTime,
+            step_tag: receivedTag, // কোন স্টেপের ইমেইল খুলল তা সেভ থাকল
             ip: body.ip || 'unknown',
             device: body['user-agent'] || 'unknown'
           });
@@ -89,11 +91,11 @@ export async function POST(req: Request) {
         updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
           event: 'clicked',
           time: eventTime,
+          step_tag: receivedTag,
           link: body.url || "unknown link"
         });
       }
 
-      // সবশেষে আপডেটগুলো ফায়ারবেসে পাঠিয়ে দেই
       if (Object.keys(updatePayload).length > 0) {
         await docRef.update(updatePayload);
       }
