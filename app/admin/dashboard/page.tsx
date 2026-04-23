@@ -69,37 +69,28 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [displayLimit]);
 
-  // --- API Logic-er sathe mil rekhe updated Hot Lead Logic ---
   const isHotLead = (lead: Lead) => {
     if (!lead.tracking_history) return false;
-    
     const openEvents = lead.tracking_history.filter((h: any) => h.event === 'opened');
-    
-    // API logic: অন্ততঃ ২ বার ওপেন হতে হবে
     if (openEvents.length < 2) return false;
-
-    // API logic: প্রথম এবং শেষ ওপেনের মধ্যে ১২০ সেকেন্ডের গ্যাপ থাকতে হবে
     const firstOpen = openEvents[0].time;
     const lastOpen = openEvents[openEvents.length - 1].time;
     const firstMillis = firstOpen?.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
     const lastMillis = lastOpen?.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
-
     const gapInSeconds = (lastMillis - firstMillis) / 1000;
     return gapInSeconds >= 120; 
   };
 
-  // --- API Logic onujayi Next Follow-up Prediction ---
+  // --- API Logic-er sathe exact mil rekhe Next Follow-up Logic ---
   const getNextFollowUpStatus = (lead: Lead) => {
     if (lead.status === 'replied' || (lead.follow_up_count || 0) >= 5) return null;
 
     const followUpCount = lead.follow_up_count || 0;
     
-    // ১. প্রথম ফলো-আপের জন্য হট লিড হওয়া জরুরি
     if (followUpCount === 0 && !isHotLead(lead)) {
       return { label: "Waiting for Engagement", color: "text-gray-400" };
     }
 
-    // ২. পরবর্তী ফলো-আপের জন্য রিসেন্সি চেক (Recency Check)
     if (followUpCount >= 1) {
       const lastFollowUp = lead.lastFollowUp;
       const lastOpened = lead.lastOpenedAt;
@@ -112,7 +103,6 @@ export default function DashboardPage() {
       }
     }
 
-    // ৩. টাইমিং এবং ডিলে ক্যালকুলেশন
     const nextStep = followUpCount + 1;
     const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
     const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
@@ -122,19 +112,27 @@ export default function DashboardPage() {
     const baseMillis = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
     const now = new Date();
     
-    // Scheduled Date বের করা
+    // ১. পছন্দের ঘন্টা বের করা (Preferred Hour Priority)
+    // লিডের ডাটাতে preferred_hour না থাকলে, লাস্ট ওপেন করার ঘন্টাকে নেওয়া হবে।
+    let preferredHourUTC = 14; // Default fallback UTC 14:00 (BD 8 PM)
+    if (typeof lead.preferred_hour === 'number') {
+      preferredHourUTC = lead.preferred_hour;
+    } else if (lead.lastOpenedAt) {
+      const loDate = new Date(lead.lastOpenedAt.toMillis ? lead.lastOpenedAt.toMillis() : lead.lastOpenedAt);
+      preferredHourUTC = loDate.getUTCHours();
+    }
+
+    // ২. ক্যালকুলেশন: Base Time + Delay
     let scheduledDate = new Date(baseMillis + delayMinutes * 60000);
-    const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14;
     
-    // Preferred Hour সেট করা (UTC তে)
-    scheduledDate.setUTCHours(preferredHour, 0, 0, 0);
+    // ৩. নির্দিষ্ট ইউটিসি ঘন্টাতে সেট করা
+    scheduledDate.setUTCHours(preferredHourUTC, 0, 0, 0);
     
-    // যদি নির্ধারিত সময় পার হয়ে যায় কিন্তু ডিলে শেষ না হয়, তবে পরের দিন
-    if (scheduledDate.getTime() < baseMillis + delayMinutes * 60000) {
+    // ৪. যদি টাইমটি অলরেডি ডিলের সময়ের আগে হয়ে যায়, তবে পরবর্তী দিন পাঠিয়ে দেওয়া
+    if (scheduledDate.getTime() < baseMillis + (delayMinutes - 10) * 60000) {
       scheduledDate.setUTCDate(scheduledDate.getUTCDate() + 1);
     }
 
-    // টাইম ফরম্যাটিং
     const timeString = scheduledDate.toLocaleString('en-GB', { 
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
     });
@@ -333,7 +331,7 @@ export default function DashboardPage() {
                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/20 blur-[80px] rounded-full" />
                 </section>
 
-                {/* --- UPDATED NEXT FOLLOW-UP PREDICTION SECTION --- */}
+                {/* --- NEXT FOLLOW-UP PREDICTION SECTION (AUTO-SYNCED) --- */}
                 {getNextFollowUpStatus(selectedLead) && (
                   <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
                     <div className="flex items-start gap-4">
@@ -350,7 +348,7 @@ export default function DashboardPage() {
                           </p>
                         )}
                         <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 italic leading-tight">
-                          * Based on {selectedLead.preferred_hour || 14}:00 UTC Preferred Hour & Step Delay
+                          * Syncing with Client's active hour
                         </p>
                       </div>
                     </div>
