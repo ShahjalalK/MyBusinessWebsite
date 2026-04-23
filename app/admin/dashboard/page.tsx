@@ -101,8 +101,13 @@ export default function DashboardPage() {
     } catch (e) { return "Invalid Date"; }
   };
 
+  // --- Updated Follow-up Logic: Only for Hot Leads ---
   const getNextFollowUpTime = (lead: Lead) => {
+    // ১. চেক করুন লিডটি হট কি না (আপনার দেওয়া শর্ত অনুযায়ী)
+    if (!isHotLead(lead)) return null;
+
     const count = lead.follow_up_count || 0;
+    // ২. যদি ৫ বার ফলোআপ হয়ে যায় বা রিপ্লাই দেয়, তবে আর শিডিউল নেই
     if (count >= 5 || lead.status === 'replied') return null;
 
     const nextStep = count + 1;
@@ -300,14 +305,14 @@ export default function DashboardPage() {
                   
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-gray-100">
                     
-                    {/* --- NEXT FOLLOW-UP PREDICTION (Only for Active Leads) --- */}
+                    {/* --- NEXT FOLLOW-UP PREDICTION (Only for HOT Leads) --- */}
                     {getNextFollowUpTime(selectedLead) && (
                         <div className="relative pl-8 mb-8">
                             <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-orange-100 border-2 border-orange-500 z-10 flex items-center justify-center animate-pulse"><Timer size={10} className="text-orange-600"/></div>
                             <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 border-dashed">
                                 <p className="text-[11px] font-black text-orange-600 uppercase tracking-tight">Next Follow-up Scheduled</p>
                                 <p className="text-[13px] font-black text-gray-900 mt-1">{getNextFollowUpTime(selectedLead)}</p>
-                                <p className="text-[8px] font-bold text-orange-400 uppercase mt-1 italic">* Automation is Active</p>
+                                <p className="text-[8px] font-bold text-orange-400 uppercase mt-1 italic">* Automation Triggered for Hot Lead</p>
                             </div>
                         </div>
                     )}
@@ -325,7 +330,7 @@ export default function DashboardPage() {
                       </div>
                     ))}
 
-                    {/* Initial Outreach (Fixed: Showing Full Message) */}
+                    {/* Initial Outreach */}
                     <div className="relative pl-8">
                       <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-blue-600 border-4 border-white shadow-sm z-10" />
                       <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100">
