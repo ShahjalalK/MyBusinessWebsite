@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../../lib/firebase'
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore'
-import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, AlertCircle, Layers, Clock, Building2, Tag } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, Layers, Clock, Building2 } from 'lucide-react'
 import { 
   Editor, 
   EditorProvider, 
@@ -52,7 +52,6 @@ export default function FollowUpAutomationPage() {
           setCategoryVariants(fetchedData);
         }
         
-        // শুধু যারা রিপ্লাই দেয়নি এবং অটোমেশন চালু আছে তাদের আনা হচ্ছে
         const q = query(
           collection(db, "outreach_leads"), 
           where("status", "in", ["sent", "opened", "active"]),
@@ -69,30 +68,33 @@ export default function FollowUpAutomationPage() {
     loadData();
   }, []);
 
-  // --- স্মার্ট ফিল্টারিং লজিক (API-র ৩০ মিনিট স্লট এবং সঠিক ট্র্যাকিং প্রপার্টি সহ) ---
+  // --- স্মার্ট ফিল্টারিং লজিক ---
   const currentCategoryLeads = leads.filter(l => {
-    // ১. সার্ভিস চেক
     if ((l.service || 'Email Signature') !== activeTab) return false;
     
     const followUpCount = l.follow_up_count || 0;
     const currentStepIdx = STEPS.indexOf(activeStep);
     
-    // ২. স্টেপ চেক (লিড বর্তমানে যে স্টেপে আছে সেটি ম্যাচ করতে হবে)
     if (followUpCount !== currentStepIdx) return false;
 
-    // ৩. F-1 (Step 1) লজিক: ২+ ওপেন এবং ২ মিনিটের ইন্টারভ্যাল
+    // ৩. F-1 (Step 1) লজিক: ৩+ ওপেন হলে সরাসরি, ২ বার হলে ২ মিনিট গ্যাপ
     if (activeStep === 'step1') {
-      if ((l.open_count || 0) < 2) return false;
-      const history = l.tracking_history || [];
-      const openEvents = history.filter((h: any) => h.event === 'opened');
+      const openCount = l.open_count || 0;
+      if (openCount >= 3) return true; // ৩ বা তার বেশি বার ওপেন করলে সরাসরি পাস
+      
+      if (openCount === 2) {
+        const history = l.tracking_history || [];
+        const openEvents = history.filter((h: any) => h.event === 'opened');
 
-      if (openEvents.length >= 2) {
-        const firstMillis = openEvents[0].time?.toMillis ? openEvents[0].time.toMillis() : new Date(openEvents[0].time).getTime();
-        const lastMillis = openEvents[openEvents.length - 1].time?.toMillis ? openEvents[openEvents.length - 1].time.toMillis() : new Date(openEvents[openEvents.length - 1].time).getTime();
-        
-        // ২ মিনিটের গ্যাপ চেক
-        if ((lastMillis - firstMillis) / 1000 < 120) return false;
-      } else return false;
+        if (openEvents.length >= 2) {
+          const firstMillis = openEvents[0].time?.toMillis ? openEvents[0].time.toMillis() : new Date(openEvents[0].time).getTime();
+          const lastMillis = openEvents[openEvents.length - 1].time?.toMillis ? openEvents[openEvents.length - 1].time.toMillis() : new Date(openEvents[openEvents.length - 1].time).getTime();
+          
+          if ((lastMillis - firstMillis) / 1000 < 120) return false; // ২ মিনিটের গ্যাপ চেক
+          return true;
+        }
+      }
+      return false;
     }
 
     // ৪. F2 to F5 লজিক: শেষ ফলোআপ পাঠানোর পর নতুন ওপেন হতে হবে
@@ -105,7 +107,6 @@ export default function FollowUpAutomationPage() {
       const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
       const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
       
-      // ওপেন করার সময় যদি শেষ পাঠানোর সময়ের পরে হয়, তবেই সে যোগ্য
       if (lastOpenedMillis <= lastSentMillis) return false;
     }
     return true;
@@ -133,21 +134,16 @@ export default function FollowUpAutomationPage() {
 
     setSaving(true);
     try {
-      // ১. গ্লোবাল সেটিংস সেভ
       await setDoc(doc(db, "automation_settings", "followup_config"), categoryVariants);
       
-      // ২. লিডগুলোর জন্য API বাফার টাইম (Timing Fix) সহ আপডেট
       const batchPromises = currentCategoryLeads.map((lead, index) => {
         const assignedVariantId = filteredVariants[index % filteredVariants.length].id; 
-        
-        // API বাফার: ১ দিন (১৪৪০ মিনিট) হলে তাকে ২ ঘণ্টা আগে (১৩২০ মিনিট) রেডি করা 
-        // যাতে ৩০ মিনিটের স্লট রাউন্ডিং হলেও মেইল ওই দিনেই যায়।
         const adjustedDelay = (currentCategoryData.delay || 1440) - 120; 
 
         return updateDoc(doc(db, "outreach_leads", lead.id), { 
           [`${activeStep}AssignedVariant`]: assignedVariantId, 
           [`${activeStep}Delay`]: adjustedDelay,
-          followUpReady: true // এটি API ট্রিগার পয়েন্ট
+          followUpReady: true 
         });
       });
       await Promise.all(batchPromises);
@@ -174,7 +170,6 @@ export default function FollowUpAutomationPage() {
     <AdminGuard>
       <div className="max-w-7xl mx-auto p-6 lg:p-10 bg-[#FAFBFF] min-h-screen pb-40">
       
-      {/* Service Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
           {SERVICES.map((s) => (
@@ -190,7 +185,6 @@ export default function FollowUpAutomationPage() {
         </button>
       </div>
 
-      {/* Step Navigation & Delay */}
       <div className="flex flex-wrap items-center gap-4 mb-8">
         <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
           {STEPS.map((step, idx) => (
@@ -208,7 +202,6 @@ export default function FollowUpAutomationPage() {
         </div>
       </div>
 
-      {/* Editor Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {currentVariants.map((variant: any, index: number) => {
           if (!variant) return null;
@@ -247,7 +240,6 @@ export default function FollowUpAutomationPage() {
                   </EditorProvider>
                 </div>
                 
-                {/* Leads Toggle */}
                 <button onClick={() => setShowEmails(showEmails === variant.id ? null : variant.id)} className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100">
                   <span className="text-[10px] font-black text-gray-600 uppercase flex items-center gap-2">
                     <Mail size={14} className="text-blue-500" /> Active Leads ({targetEmails.length})
@@ -280,7 +272,6 @@ export default function FollowUpAutomationPage() {
         })}
       </div>
 
-      {/* Sync Button */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-50">
         <button onClick={handleSaveSettings} disabled={saving || !hasUnsavedChanges} 
           className={`w-full p-5 rounded-[30px] font-black text-base shadow-2xl transition-all flex items-center justify-center gap-3 border-4 border-white ${hasUnsavedChanges ? 'bg-blue-600 text-white scale-105 shadow-blue-300' : 'bg-gray-200 text-gray-400'}`}>
