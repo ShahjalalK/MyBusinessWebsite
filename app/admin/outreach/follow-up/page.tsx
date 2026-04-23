@@ -69,48 +69,45 @@ export default function FollowUpAutomationPage() {
   }, []);
 
   // --- স্মার্ট ফিল্টারিং লজিক ---
-  const currentCategoryLeads = leads.filter(l => {
-    if ((l.service || 'Email Signature') !== activeTab) return false;
-    
-    const followUpCount = l.follow_up_count || 0;
-    const currentStepIdx = STEPS.indexOf(activeStep);
-    
-    if (followUpCount !== currentStepIdx) return false;
+ const currentCategoryLeads = leads.filter(l => {
+  // ১. সার্ভিস চেক (Case sensitive হতে পারে, তাই trim ব্যবহার করা ভালো)
+  if ((l.service || 'Email Signature').trim() !== activeTab.trim()) return false;
+  
+  const followUpCount = l.follow_up_count || 0;
+  const currentStepIdx = STEPS.indexOf(activeStep);
+  
+  // ২. বর্তমানে লিডটি কোন স্টেপে আছে সেটি চেক
+  if (followUpCount !== currentStepIdx) return false;
 
-    // ৩. F-1 (Step 1) লজিক: ৩+ ওপেন হলে সরাসরি, ২ বার হলে ২ মিনিট গ্যাপ
-    if (activeStep === 'step1') {
-      const openCount = l.open_count || 0;
-      if (openCount >= 3) return true; // ৩ বা তার বেশি বার ওপেন করলে সরাসরি পাস
+  // ৩. Step 1 (F-1) এর জন্য বিশেষ লজিক
+  if (activeStep === 'step1') {
+    const history = l.tracking_history || [];
+    const openEvents = history.filter((h: any) => h.event === 'opened');
+    const openCount = openEvents.length; // সরাসরি হিস্ট্রি থেকে কাউন্ট নিন
+
+    // ৩ বার বা তার বেশি ওপেন হলে সরাসরি ট্রু
+    if (openCount >= 3) return true;
+
+    // ২ বার ওপেন হলে ২ মিনিটের গ্যাপ চেক
+    if (openCount === 2) {
+      const firstTime = openEvents[0].time?.toMillis ? openEvents[0].time.toMillis() : new Date(openEvents[0].time).getTime();
+      const lastTime = openEvents[openCount - 1].time?.toMillis ? openEvents[openCount - 1].time.toMillis() : new Date(openEvents[openCount - 1].time).getTime();
       
-      if (openCount === 2) {
-        const history = l.tracking_history || [];
-        const openEvents = history.filter((h: any) => h.event === 'opened');
-
-        if (openEvents.length >= 2) {
-          const firstMillis = openEvents[0].time?.toMillis ? openEvents[0].time.toMillis() : new Date(openEvents[0].time).getTime();
-          const lastMillis = openEvents[openEvents.length - 1].time?.toMillis ? openEvents[openEvents.length - 1].time.toMillis() : new Date(openEvents[openEvents.length - 1].time).getTime();
-          
-          if ((lastMillis - firstMillis) / 1000 < 120) return false; // ২ মিনিটের গ্যাপ চেক
-          return true;
-        }
-      }
-      return false;
+      if ((lastTime - firstTime) / 1000 >= 120) return true;
     }
+    return false;
+  }
 
-    // ৪. F2 to F5 লজিক: শেষ ফলোআপ পাঠানোর পর নতুন ওপেন হতে হবে
-    if (currentStepIdx > 0) {
-      const lastSent = l.lastFollowUp || l.sentAt;
-      const lastOpened = l.lastOpenedAt;
-      
-      if (!lastSent || !lastOpened) return false;
+  // ৪. অন্যান্য স্টেপের জন্য (F2-F5)
+  const lastSent = l.lastFollowUp || l.sentAt;
+  const lastOpened = l.lastOpenedAt;
+  if (!lastSent || !lastOpened) return false;
 
-      const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
-      const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
-      
-      if (lastOpenedMillis <= lastSentMillis) return false;
-    }
-    return true;
-  });
+  const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
+  const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
+  
+  return lastOpenedMillis > lastSentMillis;
+});
 
   const currentTabSettings = categoryVariants[activeTab] || {};
   const currentCategoryData = currentTabSettings[activeStep] || { variants: [{ id: 'V1', content: "" }], delay: 1440 };
