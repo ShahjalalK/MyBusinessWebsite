@@ -43,7 +43,7 @@ interface Lead {
   sent_messages?: SentMessage[]; 
   service?: string;
   preferred_hour?: number;
-  [key: string]: any; // For dynamic step delays
+  [key: string]: any; 
 }
 
 export default function DashboardPage() {
@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [displayLimit] = useState<number>(100); 
   const [activeService, setActiveService] = useState<string>('All'); 
-  const [activeStep, setActiveStep] = useState<number | 'All'>('All'); // New Step Filter
+  const [activeStep, setActiveStep] = useState<number | 'All'>('All'); 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('All');
   const [showAllLogs, setShowAllLogs] = useState<boolean>(false);
@@ -67,6 +67,21 @@ export default function DashboardPage() {
     });
     return () => unsubscribe();
   }, [displayLimit]);
+
+  // --- 🔥 Smart Hot Lead Logic ---
+  const isHotLead = (lead: Lead) => {
+    if (!lead.tracking_history || lead.tracking_history.length < 2) return false;
+    
+    // ২ বারের বেশি ওপেন হলে সরাসরি হট
+    if (lead.open_count > 2) return true;
+
+    // ২ বার ওপেন হলে টাইম গ্যাপ চেক (কমপক্ষে ২ মিনিট/১২০০০০ মিলি-সেকেন্ড)
+    const history = lead.tracking_history;
+    const firstOpen = history[0].time?.toMillis ? history[0].time.toMillis() : new Date(history[0].time).getTime();
+    const lastOpen = history[history.length - 1].time?.toMillis ? history[history.length - 1].time.toMillis() : new Date(history[history.length - 1].time).getTime();
+    
+    return (lastOpen - firstOpen) > 120000; 
+  };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -86,13 +101,12 @@ export default function DashboardPage() {
     } catch (e) { return "Invalid Date"; }
   };
 
-  // --- Next Follow-up Calculation Logic ---
   const getNextFollowUpTime = (lead: Lead) => {
     const count = lead.follow_up_count || 0;
-    if (count >= 5 || lead.status === 'replied') return "Automation Stopped";
+    if (count >= 5 || lead.status === 'replied') return null;
 
     const nextStep = count + 1;
-    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; // Default 1 day
+    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
     const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
     
     if (!baseTimeObj) return "Calculating...";
@@ -100,11 +114,9 @@ export default function DashboardPage() {
     const baseTime = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
     let nextDate = new Date(baseTime + delayMinutes * 60000);
 
-    // Preferred Hour Adjustment (UTC)
     const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14;
     nextDate.setUTCHours(preferredHour, 0, 0, 0);
 
-    // If preferred hour already passed for that calculated date, move to next day
     if (nextDate.getTime() < baseTime + delayMinutes * 60000) {
         nextDate.setUTCDate(nextDate.getUTCDate() + 1);
     }
@@ -145,7 +157,9 @@ export default function DashboardPage() {
           <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">Intelligence Hub</h1>
           <div className="flex gap-4 mt-2">
             <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Active Leads: {filteredLeads.length}</span>
-            <span className="text-orange-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1"><Flame size={12}/> Hot: {leads.filter(l => l.open_count >= 2).length}</span>
+            <span className="text-orange-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1">
+                <Flame size={12}/> Hot Leads: {leads.filter(l => isHotLead(l)).length}
+            </span>
           </div>
         </div>
         
@@ -169,7 +183,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* --- NEW: Follow-up Step Tabs --- */}
+      {/* Follow-up Step Tabs */}
       {activeService !== 'All' && (
         <div className="flex gap-2 mb-8 bg-gray-100/50 p-1.5 rounded-2xl w-fit border border-gray-100">
             {[0, 1, 2, 3, 4].map((step) => {
@@ -192,7 +206,7 @@ export default function DashboardPage() {
           <thead className="bg-gray-50/50">
             <tr>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Lead Information</th>
-              <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Current Status</th>
+              <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Status & Time</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Engagement</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Action</th>
             </tr>
@@ -204,7 +218,7 @@ export default function DashboardPage() {
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                         <span className="font-black text-gray-900 uppercase italic tracking-tighter group-hover:text-blue-600">{lead.name || "Unknown"}</span>
-                        {lead.open_count >= 2 && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[8px] font-black flex items-center gap-1 animate-pulse"><Flame size={10}/> HOT</span>}
+                        {isHotLead(lead) && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[8px] font-black flex items-center gap-1 animate-pulse"><Flame size={10}/> HOT</span>}
                     </div>
                     <span className="text-[10px] text-gray-400 font-bold">{lead.email}</span>
                   </div>
@@ -234,7 +248,6 @@ export default function DashboardPage() {
           </tbody>
         </table>
         </div>
-        {filteredLeads.length === 0 && <div className="p-20 text-center text-gray-300 font-black uppercase tracking-widest">No Leads Found</div>}
       </div>
 
       {/* Side Panel */}
@@ -245,13 +258,13 @@ export default function DashboardPage() {
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-[101] overflow-y-auto shadow-2xl">
               
               <div className="p-8 border-b sticky top-0 bg-white/80 backdrop-blur-md z-10 flex justify-between items-center">
-                <h2 className="text-xl font-black uppercase italic tracking-tighter text-gray-900">Intelligence Profile</h2>
+                <h2 className="text-xl font-black uppercase italic tracking-tighter text-gray-900">Lead Intelligence</h2>
                 <button onClick={() => setSelectedLead(null)} className="p-2 bg-gray-50 text-gray-400 rounded-xl hover:text-black transition-colors"><X size={20} /></button>
               </div>
 
               <div className="p-8 space-y-8 pb-32">
                 <section className="bg-black p-6 rounded-[30px] text-white">
-                    <p className="text-[10px] font-bold opacity-50 uppercase mb-2">Target Information</p>
+                    <p className="text-[10px] font-bold opacity-50 uppercase mb-2">Target Profile</p>
                     <h3 className="text-2xl font-black uppercase italic tracking-tighter">{selectedLead.name || "Unknown Lead"}</h3>
                     <p className="text-sm font-medium opacity-70 mt-1">{selectedLead.email}</p>
                     <div className="mt-4 flex gap-2">
@@ -260,7 +273,7 @@ export default function DashboardPage() {
                     </div>
                 </section>
 
-                {/* --- Engagement History --- */}
+                {/* Engagement History */}
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Activity size={12} /> Engagement Logs</h4>
                   <div className="space-y-2">
@@ -276,15 +289,10 @@ export default function DashboardPage() {
                         <CheckCircle2 size={14} className="text-emerald-500" />
                       </div>
                     ))}
-                    {selectedLead.tracking_history && selectedLead.tracking_history.length > 3 && (
-                        <button onClick={() => setShowAllLogs(!showAllLogs)} className="w-full py-2 text-[9px] font-black text-gray-400 uppercase bg-gray-50/50 rounded-xl border border-dashed">
-                            {showAllLogs ? "Show Less" : `View ${selectedLead.tracking_history.length - 3} More Logs`}
-                        </button>
-                    )}
                   </div>
                 </div>
 
-                {/* --- Journey Tracking & Next Follow-up --- */}
+                {/* Journey Tracking */}
                 <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <MessageSquare size={14} /> Full Journey Tracking
@@ -292,14 +300,14 @@ export default function DashboardPage() {
                   
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-gray-100">
                     
-                    {/* --- NEXT FOLLOW-UP PREDICTION --- */}
-                    {selectedLead.status !== 'replied' && (selectedLead.follow_up_count || 0) < 5 && (
+                    {/* --- NEXT FOLLOW-UP PREDICTION (Only for Active Leads) --- */}
+                    {getNextFollowUpTime(selectedLead) && (
                         <div className="relative pl-8 mb-8">
                             <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-orange-100 border-2 border-orange-500 z-10 flex items-center justify-center animate-pulse"><Timer size={10} className="text-orange-600"/></div>
                             <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 border-dashed">
                                 <p className="text-[11px] font-black text-orange-600 uppercase tracking-tight">Next Follow-up Scheduled</p>
                                 <p className="text-[13px] font-black text-gray-900 mt-1">{getNextFollowUpTime(selectedLead)}</p>
-                                <p className="text-[8px] font-bold text-orange-400 uppercase mt-1 italic">* Based on Client's Active Time (UTC)</p>
+                                <p className="text-[8px] font-bold text-orange-400 uppercase mt-1 italic">* Automation is Active</p>
                             </div>
                         </div>
                     )}
@@ -312,18 +320,21 @@ export default function DashboardPage() {
                           <span className="text-[8px] font-black text-gray-400 uppercase block mb-1">{formatDate(msg.sentAt)}</span>
                           <p className="text-[11px] font-black text-gray-800 uppercase italic">Follow-up {msg.step}</p>
                           <p className="text-[10px] text-blue-600 font-bold mt-1">{msg.subject}</p>
-                          {msg.message && <div className="mt-2 text-[9px] text-gray-500 line-clamp-2 bg-white p-2 rounded-lg border border-gray-100 italic" dangerouslySetInnerHTML={{ __html: msg.message }} />}
+                          {msg.message && <div className="mt-2 text-[9px] text-gray-500 bg-white p-3 rounded-lg border border-gray-100 italic" dangerouslySetInnerHTML={{ __html: msg.message }} />}
                         </div>
                       </div>
                     ))}
 
-                    {/* Initial Outreach */}
+                    {/* Initial Outreach (Fixed: Showing Full Message) */}
                     <div className="relative pl-8">
                       <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-blue-600 border-4 border-white shadow-sm z-10" />
                       <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100">
                         <span className="text-[8px] font-black text-blue-400 uppercase block mb-1">{formatDate(selectedLead.createdAt)}</span>
                         <p className="text-[11px] font-black text-blue-600 uppercase italic tracking-tighter">Initial Outreach</p>
                         <p className="text-[10px] font-bold text-gray-700 mt-2">Sub: {selectedLead.subject}</p>
+                        {selectedLead.message && (
+                            <div className="mt-2 text-[9px] text-gray-500 bg-white p-3 rounded-lg border border-blue-50 italic" dangerouslySetInnerHTML={{ __html: selectedLead.message }} />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -332,7 +343,7 @@ export default function DashboardPage() {
 
               {/* Action Bar */}
               <div className="fixed bottom-0 w-full max-w-lg p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-3">
-                <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Send Direct Message</button>
+                <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Direct Email</button>
                 <button onClick={(e) => { handleDelete(selectedLead.id, e); setSelectedLead(null); }} className="p-4 bg-red-50 text-red-500 rounded-2xl"><Trash2 size={18} /></button>
               </div>
             </motion.div>
