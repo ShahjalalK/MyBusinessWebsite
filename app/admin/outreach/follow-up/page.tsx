@@ -69,37 +69,55 @@ export default function FollowUpAutomationPage() {
   }, []);
 
   
-// --- স্মার্ট ফিল্টারিং লজিক (সংশোধিত) ---
+// --- স্মার্ট ফিল্টারিং লজিক (চূড়ান্ত ফিক্স) ---
+// --- স্মার্ট ফিল্টারিং লজিক (TypeScript Error Fixed) ---
 const currentCategoryLeads = leads.filter(l => {
+  // ১. সার্ভিস চেক (Case insensitive)
   const leadService = (l.service || '').toLowerCase().trim();
   const currentTab = activeTab.toLowerCase().trim();
   if (leadService !== currentTab) return false;
   
   const followUpCount = l.follow_up_count || 0;
   const currentStepIdx = STEPS.indexOf(activeStep);
+  
+  // চেক করুন লিডটি সঠিক স্টেপে আছে কি না
   if (followUpCount !== currentStepIdx) return false;
 
-  // Step 1 (F-1) এর জন্য ওপেন কোয়ালিফিকেশন চেক
+  // ২. টাইম কনভার্সন হেল্পার (TypeScript এর জন্য Type নির্ধারণ করা হয়েছে)
+  const getTime = (t: any): number => {
+    if (!t) return 0;
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (t.seconds) return t.seconds * 1000;
+    return new Date(t).getTime();
+  };
+
+  // ৩. Step 1 (F-1) এর জন্য লজিক
   if (activeStep === 'step1') {
+    // সরাসরি ডাটাবেসের open_count চেক
+    const openCount = l.open_count || 0;
+    if (openCount >= 3) return true;
+
+    // হিস্ট্রি চেক
     const history = l.tracking_history || [];
     const openEvents = history.filter((h: any) => h.event === 'opened');
-    if (openEvents.length >= 3) return true;
+    
     if (openEvents.length === 2) {
-      const getTime = (t: any) => t?.toMillis ? t.toMillis() : (t?.seconds ? t.seconds * 1000 : new Date(t).getTime());
       const firstTime = getTime(openEvents[0].time);
       const lastTime = getTime(openEvents[openEvents.length - 1].time);
-      return (lastTime - firstTime) / 1000 >= 120;
+      // ১২০ সেকেন্ড বা ২ মিনিটের গ্যাপ চেক
+      if ((lastTime - firstTime) / 1000 >= 120) return true;
     }
     return false;
   }
 
-  // F2-F5 এর জন্য: আগের স্টেপের পর নতুন ওপেন হয়েছে কি না
-  const lastSent = l.lastFollowUp || l.sentAt;
-  const lastOpened = l.lastOpenedAt; 
-  if (!lastSent || !lastOpened) return false;
+  // ৪. অন্যান্য ফলো-আপ স্টেপের জন্য (F2-F5)
+  // লজিক: শেষ ইমেইল পাঠানোর পর অন্তত একবার ওপেন করতে হবে
+  const lastSent = getTime(l.lastFollowUp || l.sentAt);
+  const lastOpened = getTime(l.lastOpenedAt);
+  
+  if (lastSent === 0 || lastOpened === 0) return false;
 
-  const getTime = (t: any) => t?.toMillis ? t.toMillis() : (t?.seconds ? t.seconds * 1000 : new Date(t).getTime());
-  return getTime(lastOpened) > getTime(lastSent);
+  return lastOpened > lastSent;
 });
 
   const currentTabSettings = categoryVariants[activeTab] || {};
