@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     const outreachRef = adminDb.collection("outreach_leads");
     let leadDoc = null;
 
-    // ১. প্রথমে Unique trackingId (Tag) দিয়ে খুঁজি (সবচেয়ে নির্ভুল)
+    // ১. প্রথমে Unique trackingId (Tag) দিয়ে খুঁজি (সবচেয়ে নির্ভুল)
     if (trackingIdFromTag) {
       const tagSnapshot = await outreachRef
         .where("trackingId", "==", trackingIdFromTag)
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ২. ব্যাকআপ: যদি ট্যাগ দিয়ে না পায়, তবে Message ID দিয়ে খুঁজি
+    // ২. ব্যাকআপ: যদি ট্যাগ দিয়ে না পায়, তবে Message ID দিয়ে খুঁজি
     if (!leadDoc && rawMessageId) {
       const cleanId = rawMessageId.replace(/[<>]/g, '');
       const idSnapshot = await outreachRef
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ৩. যদি লিড পাওয়া যায়, আপডেট শুরু করি
+    // ৩. যদি লিড পাওয়া যায়, আপডেট শুরু করি
     if (leadDoc) {
       const docRef = outreachRef.doc(leadDoc.id);
       const leadData = leadDoc.data();
@@ -59,16 +59,21 @@ export async function POST(req: Request) {
         updatePayload.status = 'spam';
       }
 
-      // ৫. ওপেন ট্র্যাকিং আপডেট (উইথ ডুপ্লিকেট প্রোটেকশন)
+      // ৫. ওপেন ট্র্যাকিং আপডেট (উইথ ডুপ্লিকেট প্রোটেকশন ও টাইম ট্র্যাকিং)
       if (event === 'opened') {
         const lastOpened = leadData.lastOpenedAt ? leadData.lastOpenedAt.toMillis() : 0;
         const currentRequestTime = eventTime.toMillis();
 
-        // যদি একই ইমেইল ২০ সেকেন্ডের মধ্যে আবার ওপেন হয়, তবে কাউন্ট বাড়াবো না
+        // যদি একই ইমেইল ২০ সেকেন্ডের মধ্যে আবার ওপেন হয়, তবে কাউন্ট বাড়াবো না
         if (currentRequestTime - lastOpened > 20000) { 
           updatePayload.status = 'opened';
           updatePayload.open_count = admin.firestore.FieldValue.increment(1);
           updatePayload.lastOpenedAt = eventTime;
+
+          // --- নতুন লজিক: প্রিফারড আওয়ার সেভ করা (UTC) ---
+          // এর ফলে ফলো-আপ ইমেলটি ক্লায়েন্টের ইমেল চেক করার সময়েই যাবে
+          const dateObj = new Date(timestamp * 1000);
+          updatePayload.preferred_hour = dateObj.getUTCHours();
           
           updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
             event: 'opened',
@@ -88,7 +93,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // সবশেষে আপডেটগুলো ফায়ারবেসে পাঠিয়ে দেই
+      // সবশেষে আপডেটগুলো ফায়ারবেসে পাঠিয়ে দেই
       if (Object.keys(updatePayload).length > 0) {
         await docRef.update(updatePayload);
       }
