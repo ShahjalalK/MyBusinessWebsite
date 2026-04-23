@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../lib/firebase'
 import { collection, serverTimestamp, query, where, getDocs, doc, setDoc } from 'firebase/firestore' 
-import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase, Building2 } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase, Building2, Globe } from 'lucide-react'
 import { 
   Editor, 
   EditorProvider, 
@@ -37,6 +37,7 @@ export default function OutreachPage() {
   const [email, setEmail] = useState('')
   const [clientName, setClientName] = useState('')
   const [companyName, setCompanyName] = useState('') 
+  const [website, setWebsite] = useState('') // New Website State
   const [businessType, setBusinessType] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('') 
@@ -127,10 +128,11 @@ export default function OutreachPage() {
         body: JSON.stringify({ 
             email, 
             subject, 
-            message, // API-তে মেসেজ যাচ্ছে
+            message, 
             sender: activeSender, 
             clientName, 
             companyName,
+            website, // API তে পাঠানো হচ্ছে
             businessType, 
             trackingId: uniqueTrackingId,
             scheduledAt: scheduledAtISO 
@@ -139,18 +141,18 @@ export default function OutreachPage() {
       const data = await res.json();
       
       if (data.success) {
-        // ফায়ারবেসে মেসেজ ফিল্ডটি অ্যাড করা হলো
         const leadRef = doc(collection(db, "outreach_leads")); 
         
         await setDoc(leadRef, {
           name: clientName, 
           company_name: companyName,
+          website: website, // ফায়ারবেসে সেভ হচ্ছে
           business_type: businessType, 
           service: selectedService, 
           email, 
           sender_email: activeSender.email, 
           subject, 
-          message, // এখানে আপনার সম্পূর্ণ ইমেইল মেসেজটি ডেটাবেসে সেভ হচ্ছে
+          message, 
           trackingId: uniqueTrackingId,
           originalMessageId: data.messageId,
           status: scheduledAtISO ? 'scheduled' : 'sent', 
@@ -161,7 +163,7 @@ export default function OutreachPage() {
         });
 
         setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Message Sent.');
-        setEmail(''); setClientName(''); setCompanyName(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
+        setEmail(''); setClientName(''); setCompanyName(''); setWebsite(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
       } else {
         setStatus('Failed: ' + (data.error?.message || 'Unknown Error'));
       }
@@ -207,22 +209,51 @@ export default function OutreachPage() {
         <div className="lg:col-span-3 bg-white p-8 lg:p-12 rounded-[45px] shadow-2xl border border-gray-50">
           <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-10">Launch Outreach.</h1>
           <form onSubmit={handleSendEmail} className="space-y-6">
+            
+            {/* Row 1: Name & Company */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <input type="text" placeholder="Prospect Name" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={clientName} onChange={(e) => setClientName(e.target.value)} />
-              <div className="relative group">
-                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                    <Building2 size={18} />
-                 </div>
-                 <input type="text" placeholder="Company Name" required className="w-full p-4 pl-12 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Client Name *</label>
+                <input type="text" placeholder="Prospect Name" required className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+              </div>
+              
+              <div className="space-y-1 group">
+                <label className="text-[10px] font-black text-blue-500 uppercase ml-2 tracking-widest flex items-center gap-1">
+                   <Building2 size={10}/> Company Name (Recommended)
+                </label>
+                <div className="relative">
+                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                      <Building2 size={18} />
+                   </div>
+                   <input type="text" placeholder="e.g. Acme Corp" className="w-full p-4 pl-12 bg-blue-50/30 rounded-2xl outline-none border border-blue-100/50 focus:border-blue-500 transition-all font-medium" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                </div>
               </div>
             </div>
 
+            {/* Row 2: Email & Website */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="relative">
-                <input type="email" placeholder="Target Email" required className={`w-full p-4 bg-gray-50 rounded-2xl outline-none border transition-all font-medium ${emailError ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-blue-500'}`} value={email} onChange={(e) => { setEmail(e.target.value); setEmailError(''); }} />
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Target Email *</label>
+                <input type="email" placeholder="example@domain.com" required className={`w-full p-4 bg-gray-50 rounded-2xl outline-none border transition-all font-medium ${emailError ? 'border-red-400 bg-red-50' : 'border-transparent focus:border-blue-500'}`} value={email} onChange={(e) => { setEmail(e.target.value); setEmailError(''); }} />
                 {emailError && <div className="flex items-center gap-1 text-red-500 text-[10px] font-black mt-2 ml-2 uppercase tracking-tight"><AlertCircle size={12}/> {emailError}</div>}
               </div>
 
+              <div className="space-y-1 group">
+                <label className="text-[10px] font-black text-blue-500 uppercase ml-2 tracking-widest flex items-center gap-1">
+                   <Globe size={10}/> Website Link (Better Tracking)
+                </label>
+                <div className="relative">
+                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                      <Globe size={18} />
+                   </div>
+                   <input type="text" placeholder="www.website.com" className="w-full p-4 pl-12 bg-blue-50/30 rounded-2xl outline-none border border-blue-100/50 focus:border-blue-500 transition-all font-medium" value={website} onChange={(e) => setWebsite(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3: Service Selection */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Service Offered *</label>
               <div className="relative group">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
                   <Briefcase size={20} />

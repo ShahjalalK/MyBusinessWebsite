@@ -4,14 +4,14 @@ import { db } from '../../lib/firebase'
 import { collection, query, orderBy, onSnapshot, limit, doc, deleteDoc } from 'firebase/firestore'
 import { 
   X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, Clock, User, 
-  AlertCircle, CheckCircle2, ShieldAlert, Flame, Filter, Calendar, ChevronDown, ChevronUp, Timer
+  AlertCircle, CheckCircle2, ShieldAlert, Flame, Filter, Calendar, ChevronDown, ChevronUp, Timer, ExternalLink, Globe
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminGuard from '@/app/components/AdminGuard'
 import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 
-// --- Interfaces ---
+// --- Interfaces (Added website field) ---
 interface TrackingHistory {
   event: string;
   time: any;
@@ -29,6 +29,7 @@ interface Lead {
   id: string;
   name?: string;
   company_name?: string;
+  website?: string; // Website link field
   email: string;
   subject: string;
   message?: string; 
@@ -68,18 +69,12 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [displayLimit]);
 
-  // --- 🔥 Smart Hot Lead Logic ---
   const isHotLead = (lead: Lead) => {
     if (!lead.tracking_history || lead.tracking_history.length < 2) return false;
-    
-    // ২ বারের বেশি ওপেন হলে সরাসরি হট
     if (lead.open_count > 2) return true;
-
-    // ২ বার ওপেন হলে টাইম গ্যাপ চেক (কমপক্ষে ২ মিনিট/১২০০০০ মিলি-সেকেন্ড)
     const history = lead.tracking_history;
     const firstOpen = history[0].time?.toMillis ? history[0].time.toMillis() : new Date(history[0].time).getTime();
     const lastOpen = history[history.length - 1].time?.toMillis ? history[history.length - 1].time.toMillis() : new Date(history[history.length - 1].time).getTime();
-    
     return (lastOpen - firstOpen) > 120000; 
   };
 
@@ -101,31 +96,21 @@ export default function DashboardPage() {
     } catch (e) { return "Invalid Date"; }
   };
 
-  // --- Updated Follow-up Logic: Only for Hot Leads ---
   const getNextFollowUpTime = (lead: Lead) => {
-    // ১. চেক করুন লিডটি হট কি না (আপনার দেওয়া শর্ত অনুযায়ী)
     if (!isHotLead(lead)) return null;
-
     const count = lead.follow_up_count || 0;
-    // ২. যদি ৫ বার ফলোআপ হয়ে যায় বা রিপ্লাই দেয়, তবে আর শিডিউল নেই
     if (count >= 5 || lead.status === 'replied') return null;
-
     const nextStep = count + 1;
     const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
     const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
-    
     if (!baseTimeObj) return "Calculating...";
-
     const baseTime = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
     let nextDate = new Date(baseTime + delayMinutes * 60000);
-
     const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14;
     nextDate.setUTCHours(preferredHour, 0, 0, 0);
-
     if (nextDate.getTime() < baseTime + delayMinutes * 60000) {
         nextDate.setUTCDate(nextDate.getUTCDate() + 1);
     }
-
     return nextDate.toLocaleString('en-GB', { 
         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
     });
@@ -134,21 +119,20 @@ export default function DashboardPage() {
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
       const matchesSearch = lead.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (lead.name?.toLowerCase() || "").includes(searchTerm.toLowerCase());
+                            (lead.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+                            (lead.company_name?.toLowerCase() || "").includes(searchTerm.toLowerCase());
       const matchesService = activeService === 'All' || lead.service === activeService;
       const matchesStep = activeStep === 'All' || (lead.follow_up_count || 0) === activeStep;
-      
       let matchesMonth = true;
       if (selectedMonth !== 'All' && lead.createdAt) {
         const date = lead.createdAt.toMillis ? new Date(lead.createdAt.toMillis()) : new Date(lead.createdAt);
         matchesMonth = date.getMonth().toString() === selectedMonth;
       }
-
       return matchesSearch && matchesService && matchesMonth && matchesStep;
     });
   }, [leads, searchTerm, activeService, selectedMonth, activeStep]);
 
-  if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase">Syncing Intelligence...</div>
+  if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase text-xs">Syncing Intelligence...</div>
 
   return (
   <>
@@ -222,10 +206,11 @@ export default function DashboardPage() {
                 <td className="p-5">
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                        <span className="font-black text-gray-900 uppercase italic tracking-tighter group-hover:text-blue-600">{lead.name || "Unknown"}</span>
+                        <span className="font-black text-gray-900 uppercase italic tracking-tighter group-hover:text-blue-600 leading-none">{lead.name || "Unknown"}</span>
                         {isHotLead(lead) && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[8px] font-black flex items-center gap-1 animate-pulse"><Flame size={10}/> HOT</span>}
                     </div>
-                    <span className="text-[10px] text-gray-400 font-bold">{lead.email}</span>
+                    <span className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{lead.company_name || "No Company"}</span>
+                    <span className="text-[10px] text-gray-300 font-bold">{lead.email}</span>
                   </div>
                 </td>
                 
@@ -268,14 +253,38 @@ export default function DashboardPage() {
               </div>
 
               <div className="p-8 space-y-8 pb-32">
-                <section className="bg-black p-6 rounded-[30px] text-white">
-                    <p className="text-[10px] font-bold opacity-50 uppercase mb-2">Target Profile</p>
-                    <h3 className="text-2xl font-black uppercase italic tracking-tighter">{selectedLead.name || "Unknown Lead"}</h3>
-                    <p className="text-sm font-medium opacity-70 mt-1">{selectedLead.email}</p>
-                    <div className="mt-4 flex gap-2">
-                        <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest">{selectedLead.service}</span>
-                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${selectedLead.status === 'replied' ? 'bg-green-500' : 'bg-blue-500'}`}>Status: {selectedLead.status}</span>
+                <section className="bg-black p-8 rounded-[35px] text-white shadow-2xl relative overflow-hidden">
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-bold opacity-50 uppercase mb-2 tracking-widest">Target Profile</p>
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <h3 className="text-2xl font-black uppercase italic tracking-tighter">{selectedLead.name || "Unknown Lead"}</h3>
+                        {selectedLead.company_name && (
+                          <span className="text-blue-400 font-black text-xs uppercase italic tracking-tighter">/ {selectedLead.company_name}</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-medium opacity-70 mt-1">{selectedLead.email}</p>
+                      
+                      {/* --- Added Website Link Button --- */}
+                      {selectedLead.website && (
+                        <a 
+                          href={selectedLead.website.startsWith('http') ? selectedLead.website : `https://${selectedLead.website}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl transition-all group"
+                        >
+                          <Globe size={14} className="text-blue-400" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Visit Website</span>
+                          <ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </a>
+                      )}
+
+                      <div className="mt-6 flex gap-2">
+                          <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest border border-white/5">{selectedLead.service}</span>
+                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${selectedLead.status === 'replied' ? 'bg-green-500' : 'bg-blue-600'}`}>Status: {selectedLead.status}</span>
+                      </div>
                     </div>
+                    {/* Design Element */}
+                    <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/20 blur-[80px] rounded-full" />
                 </section>
 
                 {/* Engagement History */}
@@ -305,7 +314,7 @@ export default function DashboardPage() {
                   
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-gray-100">
                     
-                    {/* --- NEXT FOLLOW-UP PREDICTION (Only for HOT Leads) --- */}
+                    {/* --- NEXT FOLLOW-UP PREDICTION --- */}
                     {getNextFollowUpTime(selectedLead) && (
                         <div className="relative pl-8 mb-8">
                             <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-orange-100 border-2 border-orange-500 z-10 flex items-center justify-center animate-pulse"><Timer size={10} className="text-orange-600"/></div>
