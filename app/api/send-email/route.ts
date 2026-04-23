@@ -16,6 +16,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         sender: { name: sender.name, email: sender.email },
         to: [{ email: email, name: clientName || "" }],
+        replyTo: { email: "shahjalal@trackflowpro.com", name: "Shahjalal Khan" },
         subject: subject,
         
         // --- ট্র্যাকিং নিশ্চিত করার অংশ ---

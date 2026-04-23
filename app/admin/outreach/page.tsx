@@ -21,10 +21,10 @@ import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 
 const SENDERS = [
+  { name: "Shahjalal Khan", email: "shahjalal@mail.trackflowpro.com", limit: 50 },
+  { name: "Shahjalal Khan", email: "hello@mail.trackflowpro.com", limit: 50 },
+  { name: "Shahjalal Khan", email: "support@mail.trackflowpro.com", limit: 50 },
   { name: "Shahjalal Khan", email: "shahjalal@trackflowpro.com", limit: 50 },
-  { name: "Shahjalal Khan", email: "support@trackflowpro.com", limit: 50 },
-  { name: "Shahjalal Khan", email: "contact@trackflowpro.com", limit: 50 },
-  { name: "Shahjalal Khan", email: "admin@trackflowpro.com", limit: 50 },
 ];
 
 const SERVICES = [

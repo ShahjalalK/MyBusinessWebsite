@@ -114,6 +114,7 @@ export async function GET(req: Request) {
         body: JSON.stringify({
           sender: { name: senderName, email: senderEmail },
           to: [{ email: lead.email }],
+          replyTo: { email: "shahjalal@trackflowpro.com", name: "Shahjalal Khan" },
           subject: subject,
           tags: [lead.trackingId], 
           htmlContent: `
