@@ -9,8 +9,6 @@ export async function POST(req: Request) {
     const event = body.event; 
     const email = body.email;
     const rawMessageId = body['message-id'] || body.messageId;
-    
-    // ব্রেভো থেকে ট্যাগ সংগ্রহ করা (যা এখন 'abcd123_step2' ফরম্যাটে আসবে)
     const tags = body.tags || [];
     const receivedTag = tags.length > 0 ? tags[0] : null;
 
@@ -20,11 +18,9 @@ export async function POST(req: Request) {
     const outreachRef = adminDb.collection("outreach_leads");
     let leadDoc = null;
 
-    // --- ১. আইডি প্রসেসিং (নতুন লজিক) ---
+    // ১. আইডি প্রসেসিং
     if (receivedTag) {
-      // '_step' অংশটুকু বাদ দিয়ে মূল trackingId বের করা (যেমন: 'abcd123_step2' -> 'abcd123')
       const originalTrackingId = receivedTag.split('_step')[0];
-
       const tagSnapshot = await outreachRef
         .where("trackingId", "==", originalTrackingId)
         .limit(1)
@@ -35,7 +31,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ২. ব্যাকআপ: যদি ট্যাগ দিয়ে না পায়, তবে Message ID দিয়ে খুঁজি
+    // ২. ব্যাকআপ সার্চ (Message ID)
     if (!leadDoc && rawMessageId) {
       const cleanId = rawMessageId.replace(/[<>]/g, '');
       const idSnapshot = await outreachRef
@@ -47,23 +43,35 @@ export async function POST(req: Request) {
       }
     }
 
-    // ৩. যদি লিড পাওয়া যায়, আপডেট শুরু করি
     if (leadDoc) {
       const docRef = outreachRef.doc(leadDoc.id);
       const leadData = leadDoc.data();
       let updatePayload: any = {};
 
-      // ৪. ইমেল স্ট্যাটাস লজিক
+      // ৩. ডেলিভারি লজিক (অটোমেশন স্টেপ আপডেট করার জন্য এটি গুরুত্বপূর্ণ)
       if (event === 'request' || event === 'delivered') {
         updatePayload.status = 'sent';
         updatePayload.sentAt = eventTime;
+        updatePayload.lastFollowUp = eventTime; // ফিল্টারিং লজিকের জন্য
+        updatePayload.followUpReady = false; // পরবর্তী ম্যানুয়াল সিঙ্ক না হওয়া পর্যন্ত বন্ধ
+
+        // যদি এটি একটি ফলোআপ স্টেপ হয় (যেমন step2, step3), তবে count বাড়ানো
+        if (receivedTag && receivedTag.includes('_step')) {
+          const stepNumber = parseInt(receivedTag.split('_step')[1]); // 'step2' -> 2
+          // আমরা চাই follow_up_count যেন বর্তমান স্টেপের সমান হয়
+          if (stepNumber > (leadData.follow_up_count || 0)) {
+            updatePayload.follow_up_count = stepNumber;
+          }
+        }
       } else if (event === 'hard_bounce' || event === 'soft_bounce') {
         updatePayload.status = 'bounced';
+        updatePayload.stopAutomation = true; // বাউন্স করলে অটোমেশন অফ করা ভালো
       } else if (event === 'spam') {
         updatePayload.status = 'spam';
+        updatePayload.stopAutomation = true;
       }
 
-      // ৫. ওপেন ট্র্যাকিং আপডেট
+      // ৪. ওপেন ট্র্যাকিং আপডেট
       if (event === 'opened') {
         const lastOpened = leadData.lastOpenedAt ? leadData.lastOpenedAt.toMillis() : 0;
         const currentRequestTime = eventTime.toMillis();
@@ -79,19 +87,19 @@ export async function POST(req: Request) {
           updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
             event: 'opened',
             time: eventTime,
-            step_tag: receivedTag, // কোন স্টেপের ইমেইল খুলল তা সেভ থাকল
+            step_tag: receivedTag || 'initial',
             ip: body.ip || 'unknown',
             device: body['user-agent'] || 'unknown'
           });
         }
       }
 
-      // ৬. ক্লিক ট্র্যাকিং আপডেট
+      // ৫. ক্লিক ট্র্যাকিং আপডেট
       if (event === 'click') {
         updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
           event: 'clicked',
           time: eventTime,
-          step_tag: receivedTag,
+          step_tag: receivedTag || 'initial',
           link: body.url || "unknown link"
         });
       }
