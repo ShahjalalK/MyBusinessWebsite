@@ -1,10 +1,10 @@
 "use client"
 import React, { useEffect, useState, useMemo } from 'react'
 import { db } from '../../lib/firebase'
-import { collection, query, orderBy, onSnapshot, limit, doc, deleteDoc, where } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, limit, doc, deleteDoc } from 'firebase/firestore'
 import { 
   X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, Clock, User, 
-  AlertCircle, CheckCircle2, ShieldAlert, Flame, Filter, Calendar, ChevronDown, ChevronUp
+  AlertCircle, CheckCircle2, ShieldAlert, Flame, Filter, Calendar, ChevronDown, ChevronUp, Timer
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminGuard from '@/app/components/AdminGuard'
@@ -21,7 +21,7 @@ interface TrackingHistory {
 interface SentMessage {
   step: number;
   subject: string;
-  message?: string; // মেসেজ বডি যোগ করা হয়েছে
+  message?: string;
   sentAt: any;
 }
 
@@ -33,28 +33,31 @@ interface Lead {
   subject: string;
   message?: string; 
   open_count: number;
-  status: 'active' | 'archived' | 'interested' | 'opened' | 'sent' | 'bounced' | 'spam'; 
+  status: string; 
   createdAt: any;
   lastOpenedAt?: any;
+  lastFollowUp?: any;
+  sentAt?: any;
   tracking_history?: TrackingHistory[];
   follow_up_count?: number;
   sent_messages?: SentMessage[]; 
   service?: string;
-  sender_email?: string;
+  preferred_hour?: number;
+  [key: string]: any; // For dynamic step delays
 }
 
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [searchTerm, setSearchTerm] = useState<string>('')
-  const [displayLimit, setDisplayLimit] = useState<number>(50); // Firebase Limit
+  const [displayLimit] = useState<number>(100); 
   const [activeService, setActiveService] = useState<string>('All'); 
+  const [activeStep, setActiveStep] = useState<number | 'All'>('All'); // New Step Filter
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('All');
   const [showAllLogs, setShowAllLogs] = useState<boolean>(false);
 
   useEffect(() => {
-    // Firebase কোটা বাঁচাতে লিমিটেড ডেটা এবং রিয়েল টাইম লিসেনার
     const q = query(collection(db, "outreach_leads"), orderBy("createdAt", "desc"), limit(displayLimit));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const leadsArray: Lead[] = [];
@@ -68,11 +71,7 @@ export default function DashboardPage() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if(window.confirm("Are you sure to delete this lead?")) {
-      try {
-        await deleteDoc(doc(db, "outreach_leads", id));
-      } catch (error) {
-        alert("Delete failed!");
-      }
+      try { await deleteDoc(doc(db, "outreach_leads", id)); } catch (error) { alert("Delete failed!"); }
     }
   };
 
@@ -87,11 +86,40 @@ export default function DashboardPage() {
     } catch (e) { return "Invalid Date"; }
   };
 
+  // --- Next Follow-up Calculation Logic ---
+  const getNextFollowUpTime = (lead: Lead) => {
+    const count = lead.follow_up_count || 0;
+    if (count >= 5 || lead.status === 'replied') return "Automation Stopped";
+
+    const nextStep = count + 1;
+    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; // Default 1 day
+    const baseTimeObj = lead.lastFollowUp || lead.lastOpenedAt || lead.sentAt || lead.createdAt;
+    
+    if (!baseTimeObj) return "Calculating...";
+
+    const baseTime = baseTimeObj.toMillis ? baseTimeObj.toMillis() : new Date(baseTimeObj).getTime();
+    let nextDate = new Date(baseTime + delayMinutes * 60000);
+
+    // Preferred Hour Adjustment (UTC)
+    const preferredHour = typeof lead.preferred_hour === 'number' ? lead.preferred_hour : 14;
+    nextDate.setUTCHours(preferredHour, 0, 0, 0);
+
+    // If preferred hour already passed for that calculated date, move to next day
+    if (nextDate.getTime() < baseTime + delayMinutes * 60000) {
+        nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    }
+
+    return nextDate.toLocaleString('en-GB', { 
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
+    });
+  };
+
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
       const matchesSearch = lead.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (lead.name?.toLowerCase() || "").includes(searchTerm.toLowerCase());
       const matchesService = activeService === 'All' || lead.service === activeService;
+      const matchesStep = activeStep === 'All' || (lead.follow_up_count || 0) === activeStep;
       
       let matchesMonth = true;
       if (selectedMonth !== 'All' && lead.createdAt) {
@@ -99,9 +127,9 @@ export default function DashboardPage() {
         matchesMonth = date.getMonth().toString() === selectedMonth;
       }
 
-      return matchesSearch && matchesService && matchesMonth;
+      return matchesSearch && matchesService && matchesMonth && matchesStep;
     });
-  }, [leads, searchTerm, activeService, selectedMonth]);
+  }, [leads, searchTerm, activeService, selectedMonth, activeStep]);
 
   if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase">Syncing Intelligence...</div>
 
@@ -116,8 +144,8 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">Intelligence Hub</h1>
           <div className="flex gap-4 mt-2">
-            <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Total: {filteredLeads.length}</span>
-            <span className="text-orange-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1"><Flame size={12}/> Hot: {filteredLeads.filter(l => l.open_count >= 2).length}</span>
+            <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Active Leads: {filteredLeads.length}</span>
+            <span className="text-orange-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1"><Flame size={12}/> Hot: {leads.filter(l => l.open_count >= 2).length}</span>
           </div>
         </div>
         
@@ -133,13 +161,29 @@ export default function DashboardPage() {
       </div>
 
       {/* Service Filter Tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
         {['All', 'Email Signature', 'Google Ads', 'Server Side Tracking'].map((s) => (
-          <button key={s} onClick={() => setActiveService(s)} className={`px-5 py-2 rounded-full text-[10px] font-black transition-all whitespace-nowrap ${activeService === s ? 'bg-black text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
+          <button key={s} onClick={() => {setActiveService(s); setActiveStep('All');}} className={`px-5 py-2 rounded-full text-[10px] font-black transition-all whitespace-nowrap ${activeService === s ? 'bg-black text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
             {s.toUpperCase()}
           </button>
         ))}
       </div>
+
+      {/* --- NEW: Follow-up Step Tabs --- */}
+      {activeService !== 'All' && (
+        <div className="flex gap-2 mb-8 bg-gray-100/50 p-1.5 rounded-2xl w-fit border border-gray-100">
+            {[0, 1, 2, 3, 4].map((step) => {
+                const count = leads.filter(l => l.service === activeService && (l.follow_up_count || 0) === step).length;
+                return (
+                    <button key={step} onClick={() => setActiveStep(step)} className={`px-4 py-2 rounded-xl text-[9px] font-black transition-all flex items-center gap-2 ${activeStep === step ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+                        {step === 0 ? "INITIAL" : `F-${step}`}
+                        <span className={`px-1.5 py-0.5 rounded-md ${activeStep === step ? 'bg-blue-50' : 'bg-gray-200'} text-[8px]`}>{count}</span>
+                    </button>
+                )
+            })}
+            <button onClick={() => setActiveStep('All')} className={`px-4 py-2 rounded-xl text-[9px] font-black ${activeStep === 'All' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'}`}>ALL</button>
+        </div>
+      )}
 
       {/* Table Container */}
       <div className="bg-white rounded-[30px] shadow-xl border border-gray-50 overflow-hidden">
@@ -148,7 +192,7 @@ export default function DashboardPage() {
           <thead className="bg-gray-50/50">
             <tr>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Lead Information</th>
-              <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Status & Service</th>
+              <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Current Status</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Engagement</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Action</th>
             </tr>
@@ -168,7 +212,9 @@ export default function DashboardPage() {
                 
                 <td className="p-5 text-center">
                     <div className="flex flex-col items-center gap-1">
-                        <span className="text-[8px] font-black bg-blue-50 text-blue-500 px-2 py-0.5 rounded uppercase">{lead.service || 'General'}</span>
+                        <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${lead.status === 'replied' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-500'}`}>
+                           {lead.follow_up_count ? `Follow-up ${lead.follow_up_count}` : 'Initial Sent'}
+                        </span>
                         <span className="text-[9px] font-bold text-gray-400 italic">{formatDate(lead.createdAt)}</span>
                     </div>
                 </td>
@@ -191,7 +237,7 @@ export default function DashboardPage() {
         {filteredLeads.length === 0 && <div className="p-20 text-center text-gray-300 font-black uppercase tracking-widest">No Leads Found</div>}
       </div>
 
-      {/* Side Panel (Lead Details) */}
+      {/* Side Panel */}
       <AnimatePresence>
         {selectedLead && (
           <>
@@ -204,22 +250,19 @@ export default function DashboardPage() {
               </div>
 
               <div className="p-8 space-y-8 pb-32">
-                {/* Client Info Card */}
                 <section className="bg-black p-6 rounded-[30px] text-white">
                     <p className="text-[10px] font-bold opacity-50 uppercase mb-2">Target Information</p>
                     <h3 className="text-2xl font-black uppercase italic tracking-tighter">{selectedLead.name || "Unknown Lead"}</h3>
                     <p className="text-sm font-medium opacity-70 mt-1">{selectedLead.email}</p>
                     <div className="mt-4 flex gap-2">
                         <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest">{selectedLead.service}</span>
-                        <span className="px-3 py-1 bg-blue-500 rounded-lg text-[9px] font-black uppercase tracking-widest">Status: {selectedLead.status}</span>
+                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${selectedLead.status === 'replied' ? 'bg-green-500' : 'bg-blue-500'}`}>Status: {selectedLead.status}</span>
                     </div>
                 </section>
 
-                {/* Live Engagement Logs - ২টা বা ৩টা পর ড্রপডাউন */}
+                {/* --- Engagement History --- */}
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                     <Activity size={12} /> Engagement History
-                  </h4>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Activity size={12} /> Engagement Logs</h4>
                   <div className="space-y-2">
                     {(selectedLead.tracking_history || []).slice(0, showAllLogs ? undefined : 3).reverse().map((info, idx) => (
                       <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex justify-between items-center">
@@ -233,22 +276,34 @@ export default function DashboardPage() {
                         <CheckCircle2 size={14} className="text-emerald-500" />
                       </div>
                     ))}
-
                     {selectedLead.tracking_history && selectedLead.tracking_history.length > 3 && (
-                        <button onClick={() => setShowAllLogs(!showAllLogs)} className="w-full py-2 text-[9px] font-black text-gray-400 uppercase bg-gray-50/50 rounded-xl border border-dashed hover:bg-gray-100 transition-all">
+                        <button onClick={() => setShowAllLogs(!showAllLogs)} className="w-full py-2 text-[9px] font-black text-gray-400 uppercase bg-gray-50/50 rounded-xl border border-dashed">
                             {showAllLogs ? "Show Less" : `View ${selectedLead.tracking_history.length - 3} More Logs`}
                         </button>
                     )}
                   </div>
                 </div>
 
-                {/* Outreach Journey - With Message Body */}
+                {/* --- Journey Tracking & Next Follow-up --- */}
                 <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <MessageSquare size={14} /> Full Journey Tracking
                   </h4>
+                  
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-gray-100">
                     
+                    {/* --- NEXT FOLLOW-UP PREDICTION --- */}
+                    {selectedLead.status !== 'replied' && (selectedLead.follow_up_count || 0) < 5 && (
+                        <div className="relative pl-8 mb-8">
+                            <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-orange-100 border-2 border-orange-500 z-10 flex items-center justify-center animate-pulse"><Timer size={10} className="text-orange-600"/></div>
+                            <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 border-dashed">
+                                <p className="text-[11px] font-black text-orange-600 uppercase tracking-tight">Next Follow-up Scheduled</p>
+                                <p className="text-[13px] font-black text-gray-900 mt-1">{getNextFollowUpTime(selectedLead)}</p>
+                                <p className="text-[8px] font-bold text-orange-400 uppercase mt-1 italic">* Based on Client's Active Time (UTC)</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Follow ups */}
                     {selectedLead.sent_messages && [...selectedLead.sent_messages].reverse().map((msg, idx) => (
                       <div key={idx} className="relative pl-8">
@@ -257,23 +312,18 @@ export default function DashboardPage() {
                           <span className="text-[8px] font-black text-gray-400 uppercase block mb-1">{formatDate(msg.sentAt)}</span>
                           <p className="text-[11px] font-black text-gray-800 uppercase italic">Follow-up {msg.step}</p>
                           <p className="text-[10px] text-blue-600 font-bold mt-1">{msg.subject}</p>
-                          {msg.message && <div className="mt-2 text-[9px] text-gray-500 line-clamp-3 bg-white p-2 rounded-lg border border-gray-100 italic" dangerouslySetInnerHTML={{ __html: msg.message }} />}
+                          {msg.message && <div className="mt-2 text-[9px] text-gray-500 line-clamp-2 bg-white p-2 rounded-lg border border-gray-100 italic" dangerouslySetInnerHTML={{ __html: msg.message }} />}
                         </div>
                       </div>
                     ))}
 
-                    {/* Initial Email */}
+                    {/* Initial Outreach */}
                     <div className="relative pl-8">
                       <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-blue-600 border-4 border-white shadow-sm z-10" />
                       <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100">
                         <span className="text-[8px] font-black text-blue-400 uppercase block mb-1">{formatDate(selectedLead.createdAt)}</span>
-                        <p className="text-[11px] font-black text-blue-600 uppercase italic tracking-tighter leading-none">Initial Outreach</p>
+                        <p className="text-[11px] font-black text-blue-600 uppercase italic tracking-tighter">Initial Outreach</p>
                         <p className="text-[10px] font-bold text-gray-700 mt-2">Sub: {selectedLead.subject}</p>
-                        {selectedLead.message && (
-                            <div className="mt-2 text-[9px] text-gray-500 italic bg-white p-3 rounded-xl border border-blue-50" 
-                                 dangerouslySetInnerHTML={{ __html: selectedLead.message.length > 200 ? selectedLead.message.substring(0, 200) + '...' : selectedLead.message }} 
-                            />
-                        )}
                       </div>
                     </div>
                   </div>
@@ -282,14 +332,9 @@ export default function DashboardPage() {
 
               {/* Action Bar */}
               <div className="fixed bottom-0 w-full max-w-lg p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-3">
-                <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all">
-                    Send Direct Message
-                </button>
-                <button onClick={(e) => { handleDelete(selectedLead.id, e); setSelectedLead(null); }} className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition-colors">
-                    <Trash2 size={18} />
-                </button>
+                <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Send Direct Message</button>
+                <button onClick={(e) => { handleDelete(selectedLead.id, e); setSelectedLead(null); }} className="p-4 bg-red-50 text-red-500 rounded-2xl"><Trash2 size={18} /></button>
               </div>
-
             </motion.div>
           </>
         )}
