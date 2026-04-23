@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const outreachRef = adminDb.collection("outreach_leads");
     let leadDoc = null;
 
-    // ১. আইডি প্রসেসিং
+    // ১. আইডি প্রসেসিং (trackingId দিয়ে সার্চ)
     if (receivedTag) {
       const originalTrackingId = receivedTag.split('_step')[0];
       const tagSnapshot = await outreachRef
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ২. ব্যাকআপ সার্চ (Message ID)
+    // ২. ব্যাকআপ সার্চ (Message ID দিয়ে সার্চ)
     if (!leadDoc && rawMessageId) {
       const cleanId = rawMessageId.replace(/[<>]/g, '');
       const idSnapshot = await outreachRef
@@ -48,24 +48,31 @@ export async function POST(req: Request) {
       const leadData = leadDoc.data();
       let updatePayload: any = {};
 
-      // ৩. ডেলিভারি লজিক (অটোমেশন স্টেপ আপডেট করার জন্য এটি গুরুত্বপূর্ণ)
+      // ৩. ডেলিভারি লজিক (সংশোধিত)
       if (event === 'request' || event === 'delivered') {
         updatePayload.status = 'sent';
         updatePayload.sentAt = eventTime;
-        updatePayload.lastFollowUp = eventTime; // ফিল্টারিং লজিকের জন্য
-        updatePayload.followUpReady = false; // পরবর্তী ম্যানুয়াল সিঙ্ক না হওয়া পর্যন্ত বন্ধ
+        updatePayload.lastFollowUp = eventTime; 
+        updatePayload.followUpReady = false; 
 
-        // যদি এটি একটি ফলোআপ স্টেপ হয় (যেমন step2, step3), তবে count বাড়ানো
         if (receivedTag && receivedTag.includes('_step')) {
-          const stepNumber = parseInt(receivedTag.split('_step')[1]); // 'step2' -> 2
-          // আমরা চাই follow_up_count যেন বর্তমান স্টেপের সমান হয়
-          if (stepNumber > (leadData.follow_up_count || 0)) {
-            updatePayload.follow_up_count = stepNumber;
+          // 'step1' -> 1, 'step2' -> 2
+          const stepNumber = parseInt(receivedTag.split('_step')[1]); 
+          
+          /**
+           * লজিক সংশোধন: 
+           * প্রথম আউটরিচ (step1) হলে count হবে 0 (যাতে F-1 ট্যাবে থাকে)
+           * দ্বিতীয় আউটরিচ (step2) হলে count হবে 1 (যাতে F-2 ট্যাবে থাকে)
+           */
+          const targetCount = stepNumber - 1; 
+
+          if (targetCount > (leadData.follow_up_count || 0)) {
+            updatePayload.follow_up_count = targetCount;
           }
         }
       } else if (event === 'hard_bounce' || event === 'soft_bounce') {
         updatePayload.status = 'bounced';
-        updatePayload.stopAutomation = true; // বাউন্স করলে অটোমেশন অফ করা ভালো
+        updatePayload.stopAutomation = true; 
       } else if (event === 'spam') {
         updatePayload.status = 'spam';
         updatePayload.stopAutomation = true;
@@ -76,6 +83,7 @@ export async function POST(req: Request) {
         const lastOpened = leadData.lastOpenedAt ? leadData.lastOpenedAt.toMillis() : 0;
         const currentRequestTime = eventTime.toMillis();
 
+        // ২০ সেকেন্ডের মধ্যে মাল্টিপল ওপেন ইগনোর করা
         if (currentRequestTime - lastOpened > 20000) { 
           updatePayload.status = 'opened';
           updatePayload.open_count = admin.firestore.FieldValue.increment(1);
