@@ -70,65 +70,70 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [displayLimit]);
 
-  const isHotLead = (lead: Lead) => {
-    if (!lead.tracking_history) return false;
-    const openEvents = lead.tracking_history.filter((h: any) => h.event === 'opened');
-    if (openEvents.length < 2) return false;
-    const firstOpen = openEvents[0].time;
-    const lastOpen = openEvents[openEvents.length - 1].time;
-    const firstMillis = firstOpen?.toMillis ? firstOpen.toMillis() : new Date(firstOpen).getTime();
-    const lastMillis = lastOpen?.toMillis ? lastOpen.toMillis() : new Date(lastOpen).getTime();
-    const gapInSeconds = (lastMillis - firstMillis) / 1000;
-    return gapInSeconds >= 120; 
+  // --- Utility: Convert any timestamp format to Milliseconds ---
+  const toMillis = (time: any): number => {
+    if (!time) return 0;
+    if (typeof time.toMillis === 'function') return time.toMillis();
+    if (time.seconds) return time.seconds * 1000;
+    const date = new Date(time);
+    return isNaN(date.getTime()) ? 0 : date.getTime();
   };
 
-  // --- Updated API Logic (30-min rounding) ---
+  const isHotLead = (lead: Lead) => {
+    const history = lead.tracking_history || [];
+    const openEvents = history.filter((h: any) => h.event === 'opened');
+    
+    // Logic: At least 2 opens with 2 mins gap OR total 3+ opens
+    if (openEvents.length < 2) return (lead.open_count || 0) >= 3;
+    
+    const firstMillis = toMillis(openEvents[0].time);
+    const lastMillis = toMillis(openEvents[openEvents.length - 1].time);
+    const gapInSeconds = (lastMillis - firstMillis) / 1000;
+    
+    return gapInSeconds >= 120 || lead.open_count >= 3; 
+  };
+
   const getNextFollowUpStatus = (lead: Lead) => {
-    if (lead.status === 'replied' || (lead.follow_up_count || 0) >= 5 || lead.stopAutomation) return null;
+    if (lead.status === 'replied' || lead.stopAutomation) return null;
 
     const followUpCount = lead.follow_up_count || 0;
+    if (followUpCount >= 5) return { label: "Sequence Completed", color: "text-purple-500", time: null };
     
-    // ১. যোগ্যতার শর্ত: Initial মেইলের পর যদি Hot না হয়, তবে সে অযোগ্য।
+    // ১. যোগ্যতা যাচাই: Initial outreach এর পর Hot না হলে Waiting
     if (followUpCount === 0 && !isHotLead(lead)) {
       return { label: "Waiting for Engagement", color: "text-gray-400", time: null };
     }
 
-    // ২. যোগ্যতার শর্ত: ফলো-আপের পর যদি নতুন করে ওপেন না করে।
+    // ২. ইন্টারঅ্যাকশন চেক: ফলো-আপ পাঠানোর পর ওপেন করেছে কি না
     if (followUpCount >= 1) {
-      const lastSent = lead.lastFollowUp || lead.sentAt;
-      const lastOpened = lead.lastOpenedAt;
-      if (lastSent && lastOpened) {
-        const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
-        const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
-        if (lastOpenedMillis <= lastSentMillis) return { label: "Waiting for Interaction", color: "text-amber-500", time: null };
-      } else {
-        return { label: "No Interaction Found", color: "text-gray-400", time: null };
+      const lastSentMillis = toMillis(lead.lastFollowUp || lead.sentAt);
+      const lastOpenedMillis = toMillis(lead.lastOpenedAt);
+      if (lastOpenedMillis <= lastSentMillis) {
+        return { label: "Waiting for Interaction", color: "text-amber-500", time: null };
       }
     }
 
-    // ৩. স্লট ক্যালকুলেশন (Rounding to nearest 30 mins)
+    // ৩. ডাইনামিক শিডিউল ক্যালকুলেশন
     const nextStep = followUpCount + 1;
-    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
-    const baseTimeObj = lead.lastOpenedAt || lead.sentAt || lead.createdAt;
+    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; // DB থেকে ডিলে নিচ্ছে
+    const baseTime = toMillis(lead.lastOpenedAt || lead.lastFollowUp || lead.sentAt || lead.createdAt);
     
-    if (!baseTimeObj) return { label: "Syncing Data...", color: "text-gray-300", time: null };
+    if (!baseTime) return { label: "Syncing Data...", color: "text-gray-300", time: null };
 
-    const baseDate = new Date(baseTimeObj.toMillis ? baseTimeObj.toMillis() : baseTimeObj);
+    const baseDate = new Date(baseTime);
     
-    // ৩.১ API-র মত রাউন্ডিং লজিক
-    const roundedMinutes = Math.floor(baseDate.getMinutes() / 30) * 30;
-    const roundedBaseTime = new Date(baseDate);
-    roundedBaseTime.setMinutes(roundedMinutes, 0, 0);
+    // ৩.১ ৩০-মিনিট রাউন্ডিং (Bulletproof API Matching)
+    const roundedDate = new Date(baseDate);
+    roundedDate.setMinutes(Math.floor(baseDate.getMinutes() / 30) * 30, 0, 0);
 
-    // ৩.২ শিডিউল টাইম ক্যালকুলেশন
-    const scheduledDate = new Date(roundedBaseTime.getTime() + delayMinutes * 60000);
-    const now = new Date();
+    const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
+    const now = new Date().getTime();
 
-    const timeString = scheduledDate.toLocaleString('en-GB', { 
+    const timeString = new Date(scheduledMillis).toLocaleString('en-GB', { 
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
     });
 
-    if (now >= scheduledDate) {
+    if (now >= scheduledMillis) {
       return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
     }
 
@@ -143,14 +148,12 @@ export default function DashboardPage() {
   };
 
   const formatDate = (timestamp: any) => {
-    if (!timestamp) return "N/A";
-    try {
-      const date = timestamp.toMillis ? new Date(timestamp.toMillis()) : new Date(timestamp);
-      return date.toLocaleString('en-GB', { 
-          day: '2-digit', month: 'short', year: 'numeric', 
-          hour: '2-digit', minute: '2-digit', hour12: true 
-      });
-    } catch (e) { return "Invalid Date"; }
+    const millis = toMillis(timestamp);
+    if (millis === 0) return "N/A";
+    return new Date(millis).toLocaleString('en-GB', { 
+        day: '2-digit', month: 'short', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit', hour12: true 
+    });
   };
 
   const filteredLeads = useMemo(() => {
@@ -162,7 +165,7 @@ export default function DashboardPage() {
       const matchesStep = activeStep === 'All' || (lead.follow_up_count || 0) === activeStep;
       let matchesMonth = true;
       if (selectedMonth !== 'All' && lead.createdAt) {
-        const date = lead.createdAt.toMillis ? new Date(lead.createdAt.toMillis()) : new Date(lead.createdAt);
+        const date = new Date(toMillis(lead.createdAt));
         matchesMonth = date.getMonth().toString() === selectedMonth;
       }
       return matchesSearch && matchesService && matchesMonth && matchesStep;
@@ -339,7 +342,7 @@ export default function DashboardPage() {
                           </p>
                         )}
                         <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 italic leading-tight">
-                          * Syncing with Client's active hour
+                          * Syncing with Database Slot
                         </p>
                       </div>
                     </div>
