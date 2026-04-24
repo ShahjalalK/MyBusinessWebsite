@@ -93,52 +93,44 @@ export default function DashboardPage() {
     return gapInSeconds >= 120 || lead.open_count >= 3; 
   };
 
-  const getNextFollowUpStatus = (lead: Lead) => {
-    if (lead.status === 'replied' || lead.stopAutomation) return null;
+const getNextFollowUpStatus = (lead: Lead) => {
+  if (lead.status === 'replied' || lead.stopAutomation) return null;
 
-    const followUpCount = lead.follow_up_count || 0;
-    if (followUpCount >= 5) return { label: "Sequence Completed", color: "text-purple-500", time: null };
-    
-    // ১. যোগ্যতা যাচাই: Initial outreach এর পর Hot না হলে Waiting
-    if (followUpCount === 0 && !isHotLead(lead)) {
-      return { label: "Waiting for Engagement", color: "text-gray-400", time: null };
-    }
+  const followUpCount = lead.follow_up_count || 0;
+  if (followUpCount >= 5) return null;
 
-    // ২. ইন্টারঅ্যাকশন চেক: ফলো-আপ পাঠানোর পর ওপেন করেছে কি না
-    if (followUpCount >= 1) {
-      const lastSentMillis = toMillis(lead.lastFollowUp || lead.sentAt);
-      const lastOpenedMillis = toMillis(lead.lastOpenedAt);
-      if (lastOpenedMillis <= lastSentMillis) {
-        return { label: "Waiting for Interaction", color: "text-amber-500", time: null };
-      }
-    }
+  // ১. বেস টাইম হিসেবে lastOpenedAt, lastFollowUp ba initial sent time ke neya hochche
+  const rawBaseTime = lead.lastOpenedAt || lead.lastFollowUp || lead.sentAt || lead.createdAt;
+  if (!rawBaseTime) return { label: "Syncing...", color: "text-gray-300", time: null };
 
-    // ৩. ডাইনামিক শিডিউল ক্যালকুলেশন
-    const nextStep = followUpCount + 1;
-    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; // DB থেকে ডিলে নিচ্ছে
-    const baseTime = toMillis(lead.lastOpenedAt || lead.lastFollowUp || lead.sentAt || lead.createdAt);
-    
-    if (!baseTime) return { label: "Syncing Data...", color: "text-gray-300", time: null };
+  const baseDate = new Date(toMillis(rawBaseTime));
 
-    const baseDate = new Date(baseTime);
-    
-    // ৩.১ ৩০-মিনিট রাউন্ডিং (Bulletproof API Matching)
-    const roundedDate = new Date(baseDate);
-    roundedDate.setMinutes(Math.floor(baseDate.getMinutes() / 30) * 30, 0, 0);
+  // ২. আপনার কাঙ্ক্ষিত ৩০-মিনিট রাউন্ডিং লজিক (Round DOWN)
+  // Jate 2:10 hoye jay 2:00, 2:45 hoye jay 2:30
+  const roundedDate = new Date(baseDate);
+  const minutes = baseDate.getMinutes();
+  const roundedMinutes = minutes >= 30 ? 30 : 0; 
+  
+  roundedDate.setMinutes(roundedMinutes, 0, 0); // Seconds and milliseconds zero kore deya holo
 
-    const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
-    const now = new Date().getTime();
+  // ৩. এবার আপনার ডাটাবেস থেকে পাওয়া ডিলে (Delay) যোগ করা হচ্ছে
+  const nextStep = followUpCount + 1;
+  const delayMinutes = lead[`step${nextStep}Delay`] || 1440; // Default 24 hours
+  
+  const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
+  const now = new Date().getTime();
 
-    const timeString = new Date(scheduledMillis).toLocaleString('en-GB', { 
-      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
-    });
+  const timeString = new Date(scheduledMillis).toLocaleString('en-GB', { 
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
+  });
 
-    if (now >= scheduledMillis) {
-      return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
-    }
+  // ৪. কালার এবং লেবেল কন্ডিশন
+  if (now >= scheduledMillis) {
+    return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
+  }
 
-    return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
-  };
+  return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
+};
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
