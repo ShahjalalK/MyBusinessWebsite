@@ -30,67 +30,23 @@ export async function GET(req: Request) {
     for (const docSnapshot of querySnapshot.docs) {
       const lead = { id: docSnapshot.id, ...docSnapshot.data() } as any;
       const followUpCount = lead.follow_up_count || 0;
-      const history = lead.tracking_history || [];
 
-      // --- লজিক ১: ওপেনিং কোয়ালিফিকেশন (ওপেন কাউন্ট ও গ্যাপ চেক) ---
-      if (followUpCount === 0) {
-        const openEvents = history.filter((h: any) => h.event === 'opened');
-        const openCount = openEvents.length;
+      /** * সাময়িকভাবে ওপেন কাউন্ট লজিক এবং টাইমিং লজিক বন্ধ রাখা হয়েছে 
+       * যাতে আপনি Thunder Client দিয়ে হিট করলেই ইমেইল পাঠিয়ে টেস্ট করতে পারেন।
+       **/
 
-        if (openCount < 2) {
-          continue; // ২ বারের কম ওপেন করলে ইমেইল যাবে না
-        } else if (openCount === 2) {
-          // ঠিক ২ বার ওপেন করলে ২ মিনিটের গ্যাপ থাকতে হবে
-          const firstMillis = openEvents[0].time?.toMillis ? openEvents[0].time.toMillis() : new Date(openEvents[0].time).getTime();
-          const lastMillis = openEvents[openEvents.length - 1].time?.toMillis ? openEvents[openEvents.length - 1].time.toMillis() : new Date(openEvents[openEvents.length - 1].time).getTime();
-          
-          if ((lastMillis - firstMillis) / 1000 < 120) continue; 
-        }
-        // ৩ বার বা তার বেশি ওপেন করলে সরাসরি কোয়ালিফাই করবে (কোনো গ্যাপ চেক ছাড়াই)
-      }
-
-      // --- লজিক ২: রিসেন্সি চেক (Follow-up 1 এর পর থেকে) ---
-      if (followUpCount >= 1) {
-        const lastSent = lead.lastFollowUp || lead.sentAt;
-        const lastOpened = lead.lastOpenedAt || lead.last_opened;
-        
-        if (lastSent && lastOpened) {
-          const lastSentMillis = lastSent.toMillis ? lastSent.toMillis() : new Date(lastSent).getTime();
-          const lastOpenedMillis = lastOpened.toMillis ? lastOpened.toMillis() : new Date(lastOpened).getTime();
-          
-          // শেষ ইমেইল পাঠানোর পর যদি সে অন্তত একবার ওপেন না করে, তবে পরবর্তী ইমেইল যাবে না
-          if (lastOpenedMillis <= lastSentMillis) continue;
-        } else {
-          continue; 
-        }
-      }
-
-      // --- লজিক ৩: ৩০ মিনিটের স্লট (Rounding Down Logic) ---
+      // --- লজিক ৩: পরবর্তী ধাপ নির্ধারণ করা ---
       const nextStepCount = followUpCount + 1;
       const currentStepKey = `step${nextStepCount}`;
-      const delayMinutes = lead[`${currentStepKey}Delay`] || 1440; 
       
-      const baseTimeObj = lead.lastOpenedAt || lead.last_opened || lead.sentAt;
-      if (!baseTimeObj) continue;
-
-      const baseTimeDate = new Date(baseTimeObj.toMillis ? baseTimeObj.toMillis() : baseTimeObj);
-      
-      // রাউন্ড ডাউন: মিনিটকে ৩০ দিয়ে ভাগ করে ফ্লোর করা (১০:২৩ -> ১০:০০, ১০:৪৩ -> ১০:৩০)
-      const roundedMinutes = Math.floor(baseTimeDate.getMinutes() / 30) * 30;
-      const roundedBaseTime = new Date(baseTimeDate);
-      roundedBaseTime.setMinutes(roundedMinutes, 0, 0);
-
-      // শিডিউল টাইম ক্যালকুলেশন
-      const scheduledTimeMillis = roundedBaseTime.getTime() + (delayMinutes * 60000);
-
-      // যদি বর্তমান সময় শিডিউল সময়ের চেয়ে কম হয়, তবে স্কিপ করবে
-      // ৩০ মিনিট ক্রন জবের জন্য এটি পারফেক্ট কারণ এটি রাউন্ডেড সময় অতিক্রম হলেই ইমেইল পাঠাবে
-      if (now.getTime() < scheduledTimeMillis) continue;
-
       // ৫. কন্টেন্ট সিলেকশন (Service-wise)
       const service = lead.service || 'Email Signature';
       const stepConfig = categoryVariants[service]?.[currentStepKey];
-      if (!stepConfig) continue;
+      
+      if (!stepConfig) {
+        console.log(`No config found for service: ${service}, step: ${currentStepKey}`);
+        continue;
+      }
 
       const assignedVariantId = lead[`${currentStepKey}AssignedVariant`];
       const finalVariant = stepConfig.variants?.find((v: any) => v.id === assignedVariantId) || stepConfig.variants?.[0];
@@ -99,7 +55,7 @@ export async function GET(req: Request) {
 
       // ৬. পার্সোনালাইজেশন ও Brevo API কল
       const senderName = lead.sender_name || "Shahjalal Khan";
-      const senderEmail = lead.sender_email || "shahjalal@trackflowpro.com";
+      const senderEmail = lead.sender_email || "support@mail.trackflowpro.com";
       const subject = `Re: ${lead.subject || "Our Discussion"}`;
       const currentStepTag = `${lead.trackingId || lead.id}_step${nextStepCount}`;
 
@@ -144,7 +100,11 @@ export async function GET(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, totalSent: sentEmails.length, emails: sentEmails });
+    return NextResponse.json({ 
+        success: true, 
+        totalSent: sentEmails.length, 
+        emails: sentEmails 
+    });
 
   } catch (error: any) {
     console.error("Cron Error:", error.message);
