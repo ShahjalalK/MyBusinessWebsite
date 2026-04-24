@@ -97,50 +97,61 @@ const getNextFollowUpStatus = (lead: Lead) => {
   if (lead.status === 'replied' || lead.stopAutomation) return null;
 
   const followUpCount = lead.follow_up_count || 0;
-  if (followUpCount >= 5) return { label: "Sequence Finished", color: "text-purple-500", time: null };
+  if (followUpCount >= 5) return null;
 
-  // ১. রেফারেন্স টাইম (lastOpenedAt ই মেইন, না থাকলে lastFollowUp)
-  const rawTime = lead.lastOpenedAt || lead.lastFollowUp || lead.sentAt || lead.createdAt;
-  if (!rawTime) return { label: "Syncing...", color: "text-gray-300", time: null };
-
-  const baseDate = new Date(toMillis(rawTime));
-
-  // ২. পিওর রাউন্ডিং লজিক (১০:১৪ AM -> ১০:০০ AM)
-  const scheduledDate = new Date(baseDate);
-  const mins = baseDate.getMinutes();
-  const roundedMins = mins >= 30 ? 30 : 0;
+  const history = lead.tracking_history || [];
+  const openEvents = history.filter((h: any) => h.event === 'opened');
   
-  // সময়কে একদম শার্প করা (00 সেকেন্ড এবং 00 মিলিসেকেন্ড সহ)
-  scheduledDate.setMinutes(roundedMins, 0, 0);
+  // --- Qualification logic (API matching) ---
+  
+  // ১. প্রথম ফলো-আপের জন্য (Step 1)
+  if (followUpCount === 0) {
+    // অন্তত ২ বার ওপেন করতে হবে
+    if (openEvents.length < 2) return null; 
 
-  // ৩. ডাইনামিক ডিলে যোগ করা (যেমন ২ দিন = ২৮৮০ মিনিট)
+    // প্রথম এবং শেষ ওপেনিং এর মধ্যে অন্তত ২ মিনিটের গ্যাপ থাকতে হবে
+    const firstMillis = toMillis(openEvents[0].time);
+    const lastMillis = toMillis(openEvents[openEvents.length - 1].time);
+    const gapInSeconds = (lastMillis - firstMillis) / 1000;
+
+    if (gapInSeconds < 120) return null; 
+  }
+
+  // ২. পরবর্তী ফলো-আপগুলোর জন্য (Step 2, 3, etc.)
+  if (followUpCount >= 1) {
+    const lastSent = toMillis(lead.lastFollowUp || lead.sentAt);
+    const lastOpened = toMillis(lead.lastOpenedAt || lead.last_opened);
+    
+    // ইমেইল পাঠানোর পর অন্তত একবার ওপেন করতে হবে
+    if (!lastOpened || lastOpened <= lastSent) return null;
+  }
+
+  // --- টাইম ক্যালকুলেশন ---
+  const rawBaseTime = lead.lastOpenedAt || lead.lastFollowUp || lead.sentAt;
+  if (!rawBaseTime) return { label: "Syncing...", color: "text-gray-300", time: null };
+
+  const baseDate = new Date(toMillis(rawBaseTime));
+  const roundedDate = new Date(baseDate);
+  const minutes = baseDate.getMinutes();
+  const roundedMinutes = Math.floor(minutes / 30) * 30; 
+  roundedDate.setMinutes(roundedMinutes, 0, 0);
+
   const nextStep = followUpCount + 1;
-  const delayMinutes = lead[`step${nextStep}Delay`] || 1440;
+  const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
   
-  scheduledDate.setMinutes(scheduledDate.getMinutes() + delayMinutes);
+  const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
+  const now = new Date().getTime();
 
-  const now = new Date();
-  const timeString = scheduledDate.toLocaleString('en-GB', { 
+  const timeString = new Date(scheduledMillis).toLocaleString('en-GB', { 
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
   });
 
-  // ৪. স্ট্যাটাস রিটার্ন
-  if (now >= scheduledDate) {
-    return { 
-      label: `Ready: Step ${nextStep}`, 
-      color: "text-green-500", 
-      time: timeString 
-    };
+  if (now >= scheduledMillis) {
+    return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
   }
 
-  return { 
-    label: `Step ${nextStep} Scheduled:`, 
-    color: "text-blue-500", 
-    time: timeString 
-  };
+  return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
 };
-
-
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if(window.confirm("Are you sure to delete this lead?")) {
@@ -175,11 +186,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
 
   if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase text-xs">Syncing Intelligence...</div>
 
-
-  const statusInfo = selectedLead ? getNextFollowUpStatus(selectedLead) : null;
-
-  // যদি statusInfo থাকে তবেই এই সেকশনটি রেন্ডার হবে
-  if (!statusInfo) return null;
   return (
   <>
   <Navbar />
@@ -332,31 +338,28 @@ const getNextFollowUpStatus = (lead: Lead) => {
                 </section>
 
                 {/* --- NEXT FOLLOW-UP PREDICTION SECTION (AUTO-SYNCED) --- */}
-               <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
-      <div className="flex items-start gap-4">
-        {/* কালার ডাইনামিকালি সেট হচ্ছে */}
-        <div className={`p-3 rounded-2xl bg-gray-50 ${statusInfo.color}`}>
-          <Timer size={20} />
-        </div>
-        <div>
-          <p className={`text-[11px] font-black uppercase tracking-tight ${statusInfo.color}`}>
-            {statusInfo.label}
-          </p>
-          
-          {statusInfo.time && (
-            <p className="text-lg font-black text-gray-900 mt-1">
-              {statusInfo.time}
-            </p>
-          )}
-          
-          <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 italic leading-tight">
-            * Syncing with Database Slot
-          </p>
-        </div>
-      </div>
-      {/* ডিজাইন সুন্দর করার জন্য একটি হালকা ব্যাকগ্রাউন্ড গ্লো */}
-      <div className={`absolute -right-4 -top-4 w-12 h-12 rounded-full blur-2xl opacity-10 ${statusInfo.color.replace('text', 'bg')}`} />
-    </section>
+                {getNextFollowUpStatus(selectedLead) && (
+                  <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
+                    <div className="flex items-start gap-4">
+                      <div className={`p-3 rounded-2xl bg-gray-50 ${getNextFollowUpStatus(selectedLead)?.color}`}>
+                        <Timer size={20} />
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-black uppercase tracking-tight ${getNextFollowUpStatus(selectedLead)?.color}`}>
+                          {getNextFollowUpStatus(selectedLead)?.label}
+                        </p>
+                        {getNextFollowUpStatus(selectedLead)?.time && (
+                          <p className="text-lg font-black text-gray-900 mt-1">
+                            {getNextFollowUpStatus(selectedLead)?.time}
+                          </p>
+                        )}
+                        <p className="text-[9px] font-bold text-gray-400 uppercase mt-1 italic leading-tight">
+                          * Syncing with Database Slot
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                )}
 
                 {/* Engagement History */}
                 <div className="space-y-4">
