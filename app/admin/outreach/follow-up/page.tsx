@@ -35,6 +35,8 @@ export default function FollowUpAutomationPage() {
   const [activeTab, setActiveTab] = useState('Email Signature')
   const [activeStep, setActiveStep] = useState('step1')
   const [leads, setLeads] = useState<any[]>([])
+
+  console.log("Leads", leads)
   
   const [categoryVariants, setCategoryVariants] = useState<any>({
     'Email Signature': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }])),
@@ -43,36 +45,55 @@ export default function FollowUpAutomationPage() {
   })
   const [showEmails, setShowEmails] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
-        if (configDoc.exists()) {
-          const fetchedData = configDoc.data();
-          setCategoryVariants(fetchedData);
-        }
-        
-        const q = query(
-          collection(db, "outreach_leads"), 
-          where("status", "in", ["sent", "opened", "active"]),
-          where("stopAutomation", "==", false)
-        );
-        const snapshot = await getDocs(q);
-        setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        console.error("Error loading data:", err);
-      } finally {
-        setLoading(false);
+ 
+useEffect(() => {
+  async function loadData() {
+    try {
+      setLoading(true);
+      
+      // ১. কনফিগ লোড করা
+      const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
+      if (configDoc.exists()) {
+        setCategoryVariants(configDoc.data());
       }
+      
+      // ২. সব লেড নিয়ে আসা (কোনো ফিল্টার ছাড়া যাতে ইনডেক্স এরর না আসে)
+      const q = query(collection(db, "outreach_leads"));
+      const snapshot = await getDocs(q);
+      
+      const allFetchedLeads = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+
+      
+
+      // ৩. ক্লায়েন্ট সাইডে ফিল্টার করা (এটিই এখন আপনার ইনডেক্সের কাজ করবে)
+      const filtered = allFetchedLeads.filter((l: any) => {
+        // স্টপ অটোমেশন চেক (Boolean check)
+        const isStopped = l.stopAutomation === true;
+        // ভ্যালিড স্ট্যাটাস চেক
+        const isValidStatus = ["sent", "opened", "active"].includes(l.status);
+        
+        return !isStopped && isValidStatus;
+      });
+
+      console.log("Leads after status filtering:", filtered.length);
+      setLeads(filtered);
+      
+    } catch (err) {
+      console.error("Error loading data:", err);
+    } finally {
+      setLoading(false);
     }
-    loadData();
-  }, []);
+  }
+  loadData();
+}, []);
 
   
-// --- স্মার্ট ফিল্টারিং লজিক (চূড়ান্ত ফিক্স) ---
-// --- স্মার্ট ফিল্টারিং লজিক (TypeScript Error Fixed) ---
+// --- স্মার্ট ফিল্টারিং লজিক (১০০% একুরেট ডাটা দেখানোর জন্য) ---
 const currentCategoryLeads = leads.filter(l => {
-  // ১. সার্ভিস চেক (Case insensitive)
+  // ১. সার্ভিস চেক (Case insensitive এবং Trim করা)
   const leadService = (l.service || '').toLowerCase().trim();
   const currentTab = activeTab.toLowerCase().trim();
   if (leadService !== currentTab) return false;
@@ -80,10 +101,10 @@ const currentCategoryLeads = leads.filter(l => {
   const followUpCount = l.follow_up_count || 0;
   const currentStepIdx = STEPS.indexOf(activeStep);
   
-  // চেক করুন লিডটি সঠিক স্টেপে আছে কি না
+  // চেক করুন লিডটি সঠিক স্টেপে (F1, F2 ইত্যাদি) আছে কি না
   if (followUpCount !== currentStepIdx) return false;
 
-  // ২. টাইম কনভার্সন হেল্পার (TypeScript এর জন্য Type নির্ধারণ করা হয়েছে)
+  // টাইম কনভার্সন হেল্পার
   const getTime = (t: any): number => {
     if (!t) return 0;
     if (typeof t.toMillis === 'function') return t.toMillis();
@@ -91,32 +112,32 @@ const currentCategoryLeads = leads.filter(l => {
     return new Date(t).getTime();
   };
 
-  // ৩. Step 1 (F-1) এর জন্য লজিক
+  // ২. Step 1 (F-1) এর জন্য লজিক
   if (activeStep === 'step1') {
-    // সরাসরি ডাটাবেসের open_count চেক
+    // সরাসরি ডাটাবেসের open_count চেক (আপনার স্ক্রিনশটে ৩ ছিল)
     const openCount = l.open_count || 0;
     if (openCount >= 3) return true;
 
-    // হিস্ট্রি চেক
     const history = l.tracking_history || [];
     const openEvents = history.filter((h: any) => h.event === 'opened');
     
-    if (openEvents.length === 2) {
+    // যদি ২ বার ওপেন হয় এবং অন্তত ২ মিনিটের গ্যাপ থাকে
+    if (openEvents.length >= 2) {
       const firstTime = getTime(openEvents[0].time);
       const lastTime = getTime(openEvents[openEvents.length - 1].time);
-      // ১২০ সেকেন্ড বা ২ মিনিটের গ্যাপ চেক
       if ((lastTime - firstTime) / 1000 >= 120) return true;
     }
     return false;
   }
 
-  // ৪. অন্যান্য ফলো-আপ স্টেপের জন্য (F2-F5)
-  // লজিক: শেষ ইমেইল পাঠানোর পর অন্তত একবার ওপেন করতে হবে
+  // ৩. অন্যান্য স্টেপের জন্য (F2-F5)
+  // লজিক: শেষ ইমেইল পাঠানোর পর অন্তত একবার নতুন করে ওপেন করতে হবে
   const lastSent = getTime(l.lastFollowUp || l.sentAt);
-  const lastOpened = getTime(l.lastOpenedAt);
+  const lastOpened = getTime(l.lastOpenedAt || l.last_opened);
   
-  if (lastSent === 0 || lastOpened === 0) return false;
-
+  if (lastSent === 0) return false; // পাঠানোই হয়নি এমন লিড বাদ
+  
+  // যদি পাঠানোর পর ওপেন টাইম বেশি হয়, তার মানে সে ইমেইল দেখেছে
   return lastOpened > lastSent;
 });
 
