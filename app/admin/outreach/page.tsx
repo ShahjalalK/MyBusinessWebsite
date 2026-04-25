@@ -146,26 +146,32 @@ export default function OutreachPage() {
         const leadRef = doc(collection(db, "outreach_leads")); 
         
         // ২. ফায়ারবেসে লিড সেভ করা
-        await setDoc(leadRef, {
-          name: clientName, 
-          company_name: companyName,
-          website: website, 
-          business_type: businessType, 
-          service: selectedService, 
-          email, 
-          sender_email: activeSender.email, 
-          sender_name: activeSender.name,
-          subject, 
-          message, 
-          trackingId: baseTrackingId, // মেইন আইডিটি সেভ রাখা হচ্ছে ফলো-আপের জন্য
-          originalMessageId: data.messageId,
-          status: scheduledAtISO ? 'scheduled' : 'sent', 
-          open_count: 0,
-          follow_up_count: 0,
-          scheduledAt: scheduledAtISO, 
-          createdAt: serverTimestamp(),
-          tracking_history: []
-        });
+      // ২. ফায়ারবেসে লিড সেভ করা
+            await setDoc(leadRef, {
+              name: clientName, 
+              company_name: companyName,
+              website: website, 
+              business_type: businessType, 
+              service: selectedService, 
+              email, 
+              sender_email: activeSender.email, 
+              sender_name: activeSender.name,
+              subject, 
+              message, 
+              trackingId: baseTrackingId,
+              originalMessageId: data.messageId,
+              status: scheduledAtISO ? 'scheduled' : 'sent', 
+              
+              // --- এই লাইনটি যোগ করুন ---
+              stopAutomation: false, 
+              // -------------------------
+
+              open_count: 0,
+              follow_up_count: 0,
+              scheduledAt: scheduledAtISO, 
+              createdAt: serverTimestamp(),
+              tracking_history: []
+            });
 
         setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Outreach Launched.');
         // ফর্ম ক্লিয়ার করা

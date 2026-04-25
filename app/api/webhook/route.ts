@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     
     const event = body.event; 
-    const email = body.email;
+    const email = body.email; // Brevo থেকে আসা ইমেইল
     const rawMessageId = body['message-id'] || body.messageId;
     const tags = body.tags || [];
     const receivedTag = tags.length > 0 ? tags[0] : null;
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const outreachRef = adminDb.collection("outreach_leads");
     let leadDoc = null;
 
-    // ১. আইডি প্রসেসিং (trackingId দিয়ে সার্চ)
+    // ১. আইডি প্রসেসিং (trackingId দিয়ে নিখুঁত সার্চ)
     if (receivedTag) {
       const originalTrackingId = receivedTag.split('_step')[0];
       const tagSnapshot = await outreachRef
@@ -31,11 +31,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // ২. ব্যাকআপ সার্চ (Message ID দিয়ে সার্চ)
+    // ২. ব্যাকআপ সার্চ (Message ID দিয়ে নিখুঁত সার্চ - এখানে '>=' এর বদলে '==' করা হয়েছে)
     if (!leadDoc && rawMessageId) {
       const cleanId = rawMessageId.replace(/[<>]/g, '');
       const idSnapshot = await outreachRef
-        .where("originalMessageId", ">=", cleanId)
+        .where("originalMessageId", "==", cleanId) // এখানে '==' নিশ্চিত করা হয়েছে
         .limit(1)
         .get();
       if (!idSnapshot.empty) {
@@ -43,12 +43,21 @@ export async function POST(req: Request) {
       }
     }
 
+    // লিড পাওয়া গেলে প্রসেসিং শুরু হবে
     if (leadDoc) {
-      const docRef = outreachRef.doc(leadDoc.id);
       const leadData = leadDoc.data();
+      const docRef = outreachRef.doc(leadDoc.id);
+
+      // ৩. নিরাপত্তা চেক: ইমেইল অ্যাড্রেস কি মিলছে? 
+      // এটি নিশ্চিত করবে যে আইডি ম্যাচ করলেও ভুল ইমেইলের ডাটা আপডেট হবে না
+      if (leadData.email !== email) {
+        console.log(`Email mismatch for ID: ${leadData.trackingId}. DB: ${leadData.email}, Webhook: ${email}`);
+        return NextResponse.json({ message: "Lead identity mismatch" }, { status: 403 });
+      }
+
       let updatePayload: any = {};
 
-      // ৩. ডেলিভারি লজিক (সংশোধিত)
+      // ৪. ডেলিভারি লজিক
       if (event === 'request' || event === 'delivered') {
         updatePayload.status = 'sent';
         updatePayload.sentAt = eventTime;
@@ -56,14 +65,7 @@ export async function POST(req: Request) {
         updatePayload.followUpReady = false; 
 
         if (receivedTag && receivedTag.includes('_step')) {
-          // 'step1' -> 1, 'step2' -> 2
           const stepNumber = parseInt(receivedTag.split('_step')[1]); 
-          
-          /**
-           * লজিক সংশোধন: 
-           * প্রথম আউটরিচ (step1) হলে count হবে 0 (যাতে F-1 ট্যাবে থাকে)
-           * দ্বিতীয় আউটরিচ (step2) হলে count হবে 1 (যাতে F-2 ট্যাবে থাকে)
-           */
           const targetCount = stepNumber - 1; 
 
           if (targetCount > (leadData.follow_up_count || 0)) {
@@ -78,12 +80,12 @@ export async function POST(req: Request) {
         updatePayload.stopAutomation = true;
       }
 
-      // ৪. ওপেন ট্র্যাকিং আপডেট
+      // ৫. ওপেন ট্র্যাকিং আপডেট
       if (event === 'opened') {
         const lastOpened = leadData.lastOpenedAt ? leadData.lastOpenedAt.toMillis() : 0;
         const currentRequestTime = eventTime.toMillis();
 
-        // ২০ সেকেন্ডের মধ্যে মাল্টিপল ওপেন ইগনোর করা
+        // ২০ সেকেন্ডের সেফটি বাফার
         if (currentRequestTime - lastOpened > 20000) { 
           updatePayload.status = 'opened';
           updatePayload.open_count = admin.firestore.FieldValue.increment(1);
@@ -102,7 +104,7 @@ export async function POST(req: Request) {
         }
       }
 
-      // ৫. ক্লিক ট্র্যাকিং আপডেট
+      // ৬. ক্লিক ট্র্যাকিং আপডেট
       if (event === 'click') {
         updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
           event: 'clicked',
@@ -112,6 +114,7 @@ export async function POST(req: Request) {
         });
       }
 
+      // ফাইনাল ডাটা আপডেট
       if (Object.keys(updatePayload).length > 0) {
         await docRef.update(updatePayload);
       }
@@ -119,7 +122,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Webhook processed" }, { status: 200 });
     }
 
-    return NextResponse.json({ message: "Lead not found" }, { status: 404 });
+    // যদি লিড খুঁজে না পাওয়া যায়
+    return NextResponse.json({ message: "Lead not found in database" }, { status: 404 });
 
   } catch (error: any) {
     console.error("Brevo Webhook Error:", error);

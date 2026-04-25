@@ -18,6 +18,8 @@ export async function GET(req: Request) {
     const now = new Date();
 
     // ৩. ডাটাবেস থেকে যোগ্য লিডগুলো খুঁজে বের করা
+    // এখানে আমরা 'stopAutomation' ফিল্টারটি ফিরিয়ে আনছি কারণ এটি থাকা ভালো। 
+    // যদি আপনার ডাটাবেসে এই ফিল্ড না থাকে, তবে টেস্টের জন্য এটি কমেন্ট রাখতে পারেন।
     const querySnapshot = await adminDb.collection("outreach_leads")
       .where("status", "in", ["opened", "interested", "active", "sent"]) 
       .where("follow_up_count", "<", 5)
@@ -30,15 +32,31 @@ export async function GET(req: Request) {
     for (const docSnapshot of querySnapshot.docs) {
       const lead = { id: docSnapshot.id, ...docSnapshot.data() } as any;
       const followUpCount = lead.follow_up_count || 0;
-
-      /** * সাময়িকভাবে ওপেন কাউন্ট লজিক এবং টাইমিং লজিক বন্ধ রাখা হয়েছে 
-       * যাতে আপনি Thunder Client দিয়ে হিট করলেই ইমেইল পাঠিয়ে টেস্ট করতে পারেন।
-       **/
-
-      // --- লজিক ৩: পরবর্তী ধাপ নির্ধারণ করা ---
       const nextStepCount = followUpCount + 1;
       const currentStepKey = `step${nextStepCount}`;
+
+      // --- লজিক: টাইমিং ক্যালকুলেশন (rounding to 30 mins) ---
+      // বেস টাইম হিসেবে আমরা শেষ ওপেনিং টাইম অথবা পাঠানো টাইম নেব
+      const baseTimeObj = lead.lastOpenedAt || lead.last_opened || lead.sentAt;
+      if (!baseTimeObj) continue;
+
+      const baseTimeDate = new Date(baseTimeObj.toMillis ? baseTimeObj.toMillis() : baseTimeObj);
       
+      // আপনার চাহিদা অনুযায়ী ৩০ মিনিটের রাউন্ডিং লজিক (১০:২৩ -> ১০:০০, ১০:৩৭ -> ১০:৩০)
+      const roundedMinutes = Math.floor(baseTimeDate.getMinutes() / 30) * 30;
+      const roundedBaseTime = new Date(baseTimeDate);
+      roundedBaseTime.setMinutes(roundedMinutes, 0, 0);
+
+      // কতদিন পর (Delay) ইমেইল যাবে তা বের করা (ডিফল্ট ১ দিন বা ১৪৪০ মিনিট)
+      const delayMinutes = lead[`${currentStepKey}Delay`] || 1440; 
+      const scheduledTimeMillis = roundedBaseTime.getTime() + (delayMinutes * 60000);
+
+      // এখনকার সময়ের সাথে তুলনা
+      if (now.getTime() < scheduledTimeMillis) {
+        console.log(`Skipping ${lead.email}: Not scheduled yet.`);
+        continue;
+      }
+
       // ৫. কন্টেন্ট সিলেকশন (Service-wise)
       const service = lead.service || 'Email Signature';
       const stepConfig = categoryVariants[service]?.[currentStepKey];

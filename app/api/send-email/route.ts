@@ -4,11 +4,20 @@ export async function POST(req: Request) {
   try {
     const { email, subject, message, sender, clientName, companyName, trackingId, scheduledAt } = await req.json();
 
-    // মেইন আইডি জেনারেট করা
+    // Main base ID
     const baseTrackingId = trackingId || Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
+
+   
     
-    // প্রথম ইমেইলের জন্য ইউনিক ট্যাগ (step1)
+    // Step ID for tracking
     const stepTrackingId = `${baseTrackingId}_step1`;
+
+     console.log("stepTrackingId", stepTrackingId)
+
+    // Unique Message ID jeno puron thread e na dhoke
+    const uniqueMessageId = `<${Date.now()}.${baseTrackingId}@mail.trackflowpro.com>`;
+
+    console.log("uniqueMessageId", uniqueMessageId)
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -23,7 +32,6 @@ export async function POST(req: Request) {
         replyTo: { email: "shahjalal@trackflowpro.com", name: "Shahjalal Khan" },
         subject: subject,
         
-        // Tags এ আমরা ইউনিক আইডি দিচ্ছি
         tags: [stepTrackingId], 
         
         htmlContent: `
@@ -35,7 +43,9 @@ export async function POST(req: Request) {
           </html>
         `,
         headers: {
-          "X-Mailin-Tag": stepTrackingId // হেডার এবং বডি একই আইডি শেয়ার করছে
+          "X-Mailin-Tag": stepTrackingId,
+          "Message-ID": uniqueMessageId, // Notun thread suru korar jonno
+          "X-Entity-Ref-ID": baseTrackingId, // Gmail er kache unique vabe uposthapon korar jonno
         },
         ...(scheduledAt && { scheduledAt: scheduledAt }),
       }),
@@ -47,14 +57,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ 
         success: true, 
         messageId: data.messageId, 
-        trackingId: baseTrackingId // আমরা মেইন আইডিটি রিটার্ন দিচ্ছি ডাটাবেসে সেভ করার জন্য
+        trackingId: baseTrackingId 
       });
     } else {
-      console.error("Brevo API Error:", data);
       return NextResponse.json({ success: false, error: data }, { status: 400 });
     }
   } catch (error: any) {
-    console.error("Email sending error:", error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    console.error("Email sending error:", error);   
+    return NextResponse.json({ success: false,  error: 'Internal Server Error' }, { status: 500 });
   }
 }
+
+

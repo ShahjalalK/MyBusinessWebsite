@@ -92,6 +92,7 @@ useEffect(() => {
 
   
 // --- স্মার্ট ফিল্টারিং লজিক (১০০% একুরেট ডাটা দেখানোর জন্য) ---
+// --- স্মার্ট ফিল্টারিং লজিক (ব্যাকএন্ড ক্রন জবের সাথে মিল রেখে) ---
 const currentCategoryLeads = leads.filter(l => {
   // ১. সার্ভিস চেক (Case insensitive এবং Trim করা)
   const leadService = (l.service || '').toLowerCase().trim();
@@ -101,10 +102,18 @@ const currentCategoryLeads = leads.filter(l => {
   const followUpCount = l.follow_up_count || 0;
   const currentStepIdx = STEPS.indexOf(activeStep);
   
-  // চেক করুন লিডটি সঠিক স্টেপে (F1, F2 ইত্যাদি) আছে কি না
+  // চেক করুন লিডটি সঠিক স্টেপে আছে কি না (উদা: F-1 এর জন্য count 0 হতে হবে)
   if (followUpCount !== currentStepIdx) return false;
 
-  // টাইম কনভার্সন হেল্পার
+  // ২. ফলো-আপ ১ (F-1) এর জন্য লজিক: অন্তত ১ বার ওপেন করলেই হবে
+  if (activeStep === 'step1') {
+    const openCount = l.open_count || 0;
+    // ১ বার বা তার বেশি ওপেন হলেই সে এই লিস্টে চলে আসবে
+    return openCount >= 1;
+  }
+
+  // ৩. অন্যান্য স্টেপের জন্য (F2-F5)
+  // লজিক: শেষ ইমেইল পাঠানোর পর অন্তত একবার নতুন করে ওপেন করতে হবে
   const getTime = (t: any): number => {
     if (!t) return 0;
     if (typeof t.toMillis === 'function') return t.toMillis();
@@ -112,32 +121,12 @@ const currentCategoryLeads = leads.filter(l => {
     return new Date(t).getTime();
   };
 
-  // ২. Step 1 (F-1) এর জন্য লজিক
-  if (activeStep === 'step1') {
-    // সরাসরি ডাটাবেসের open_count চেক (আপনার স্ক্রিনশটে ৩ ছিল)
-    const openCount = l.open_count || 0;
-    if (openCount >= 3) return true;
-
-    const history = l.tracking_history || [];
-    const openEvents = history.filter((h: any) => h.event === 'opened');
-    
-    // যদি ২ বার ওপেন হয় এবং অন্তত ২ মিনিটের গ্যাপ থাকে
-    if (openEvents.length >= 2) {
-      const firstTime = getTime(openEvents[0].time);
-      const lastTime = getTime(openEvents[openEvents.length - 1].time);
-      if ((lastTime - firstTime) / 1000 >= 120) return true;
-    }
-    return false;
-  }
-
-  // ৩. অন্যান্য স্টেপের জন্য (F2-F5)
-  // লজিক: শেষ ইমেইল পাঠানোর পর অন্তত একবার নতুন করে ওপেন করতে হবে
   const lastSent = getTime(l.lastFollowUp || l.sentAt);
   const lastOpened = getTime(l.lastOpenedAt || l.last_opened);
   
-  if (lastSent === 0) return false; // পাঠানোই হয়নি এমন লিড বাদ
+  if (lastSent === 0) return false; // পাঠানোই হয়নি এমন লিড বাদ
   
-  // যদি পাঠানোর পর ওপেন টাইম বেশি হয়, তার মানে সে ইমেইল দেখেছে
+  // পাঠানোর পর ওপেন টাইম বেশি হওয়া মানেই সে পরবর্তী ফলো-আপের জন্য যোগ্য
   return lastOpened > lastSent;
 });
 

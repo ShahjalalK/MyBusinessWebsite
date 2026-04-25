@@ -16,6 +16,7 @@ interface TrackingHistory {
   event: string;
   time: any;
   link?: string;
+  step?: number; // ফলো-আপ স্টেপ ট্র্যাকিংয়ের জন্য
 }
 
 interface SentMessage {
@@ -70,7 +71,6 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [displayLimit]);
 
-  // --- Utility: Convert any timestamp format to Milliseconds ---
   const toMillis = (time: any): number => {
     if (!time) return 0;
     if (typeof time.toMillis === 'function') return time.toMillis();
@@ -79,55 +79,26 @@ export default function DashboardPage() {
     return isNaN(date.getTime()) ? 0 : date.getTime();
   };
 
-  const isHotLead = (lead: Lead) => {
-    const history = lead.tracking_history || [];
-    const openEvents = history.filter((h: any) => h.event === 'opened');
-    
-    // Logic: At least 2 opens with 2 mins gap OR total 3+ opens
-    if (openEvents.length < 2) return (lead.open_count || 0) >= 3;
-    
-    const firstMillis = toMillis(openEvents[0].time);
-    const lastMillis = toMillis(openEvents[openEvents.length - 1].time);
-    const gapInSeconds = (lastMillis - firstMillis) / 1000;
-    
-    return gapInSeconds >= 120 || lead.open_count >= 3; 
-  };
+const isHotLead = (lead: Lead) => {
+  return (lead.open_count || 0) >= 2; 
+};
 
 const getNextFollowUpStatus = (lead: Lead) => {
   if (lead.status === 'replied' || lead.stopAutomation) return null;
-
   const followUpCount = lead.follow_up_count || 0;
   if (followUpCount >= 5) return null;
 
-  const history = lead.tracking_history || [];
-  const openEvents = history.filter((h: any) => h.event === 'opened');
+  const lastSent = toMillis(lead.lastFollowUp || lead.sentAt);
+  const lastOpened = toMillis(lead.lastOpenedAt || lead.last_opened || 0);
   
-  // --- Qualification logic (API matching) ---
-  
-  // ১. প্রথম ফলো-আপের জন্য (Step 1)
   if (followUpCount === 0) {
-    // অন্তত ২ বার ওপেন করতে হবে
-    if (openEvents.length < 2) return null; 
-
-    // প্রথম এবং শেষ ওপেনিং এর মধ্যে অন্তত ২ মিনিটের গ্যাপ থাকতে হবে
-    const firstMillis = toMillis(openEvents[0].time);
-    const lastMillis = toMillis(openEvents[openEvents.length - 1].time);
-    const gapInSeconds = (lastMillis - firstMillis) / 1000;
-
-    if (gapInSeconds < 120) return null; 
+    if ((lead.open_count || 0) < 1) return null; 
   }
-
-  // ২. পরবর্তী ফলো-আপগুলোর জন্য (Step 2, 3, etc.)
   if (followUpCount >= 1) {
-    const lastSent = toMillis(lead.lastFollowUp || lead.sentAt);
-    const lastOpened = toMillis(lead.lastOpenedAt || lead.last_opened);
-    
-    // ইমেইল পাঠানোর পর অন্তত একবার ওপেন করতে হবে
-    if (!lastOpened || lastOpened <= lastSent) return null;
+    if (!lastOpened || lastOpened <= lastSent) return { label: "Waiting for Open", color: "text-orange-400", time: null };
   }
 
-  // --- টাইম ক্যালকুলেশন ---
-  const rawBaseTime = lead.lastOpenedAt || lead.lastFollowUp || lead.sentAt;
+  const rawBaseTime = lead.lastOpenedAt || lead.last_opened || lead.lastFollowUp || lead.sentAt;
   if (!rawBaseTime) return { label: "Syncing...", color: "text-gray-300", time: null };
 
   const baseDate = new Date(toMillis(rawBaseTime));
@@ -138,7 +109,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
 
   const nextStep = followUpCount + 1;
   const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
-  
   const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
   const now = new Date().getTime();
 
@@ -146,12 +116,10 @@ const getNextFollowUpStatus = (lead: Lead) => {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
   });
 
-  if (now >= scheduledMillis) {
-    return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
-  }
-
+  if (now >= scheduledMillis) return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
   return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
 };
+
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if(window.confirm("Are you sure to delete this lead?")) {
@@ -191,8 +159,7 @@ const getNextFollowUpStatus = (lead: Lead) => {
   <Navbar />
   <AdminGuard>
   <div className="max-w-7xl mx-auto p-4 lg:p-10 bg-[#FAFBFF] min-h-screen">
-      
-      {/* Header & Stats */}
+      {/* Header, Stats, Filters (আগের মতোই থাকবে) */}
       <div className="flex flex-col md:flex-row justify-between mb-10 gap-6 items-start md:items-end">
         <div>
           <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">Intelligence Hub</h1>
@@ -203,7 +170,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
             </span>
           </div>
         </div>
-        
         <div className="flex flex-wrap gap-3">
             <select onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-[10px] font-black outline-none shadow-sm">
                 <option value="All">All Months</option>
@@ -215,7 +181,7 @@ const getNextFollowUpStatus = (lead: Lead) => {
         </div>
       </div>
 
-      {/* Service Filter Tabs */}
+      {/* Service & Step Tabs (আগের মতোই থাকবে) */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
         {['All', 'Email Signature', 'Google Ads', 'Server Side Tracking'].map((s) => (
           <button key={s} onClick={() => {setActiveService(s); setActiveStep('All');}} className={`px-5 py-2 rounded-full text-[10px] font-black transition-all whitespace-nowrap ${activeService === s ? 'bg-black text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
@@ -224,7 +190,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
         ))}
       </div>
 
-      {/* Follow-up Step Tabs */}
       {activeService !== 'All' && (
         <div className="flex gap-2 mb-8 bg-gray-100/50 p-1.5 rounded-2xl w-fit border border-gray-100">
             {[0, 1, 2, 3, 4].map((step) => {
@@ -240,7 +205,7 @@ const getNextFollowUpStatus = (lead: Lead) => {
         </div>
       )}
 
-      {/* Table Container */}
+      {/* Table (আগের মতোই থাকবে) */}
       <div className="bg-white rounded-[30px] shadow-xl border border-gray-50 overflow-hidden">
         <div className="overflow-x-auto">
         <table className="w-full text-left">
@@ -265,7 +230,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
                     <span className="text-[10px] text-gray-300 font-bold">{lead.email}</span>
                   </div>
                 </td>
-                
                 <td className="p-5 text-center">
                     <div className="flex flex-col items-center gap-1">
                         <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${lead.status === 'replied' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-500'}`}>
@@ -274,14 +238,12 @@ const getNextFollowUpStatus = (lead: Lead) => {
                         <span className="text-[9px] font-bold text-gray-400 italic">{formatDate(lead.createdAt)}</span>
                     </div>
                 </td>
-
                 <td className="p-5 text-center">
                   <div className="inline-flex flex-col items-center bg-gray-50 px-4 py-2 rounded-2xl border border-gray-100">
                     <span className="text-xs font-black text-gray-900">{lead.open_count || 0}</span>
                     <span className="text-[8px] font-black text-gray-400 uppercase">Opens</span>
                   </div>
                 </td>
-                
                 <td className="p-5 text-right">
                     <button onClick={(e) => handleDelete(lead.id, e)} className="p-3 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={16} /></button>
                 </td>
@@ -305,6 +267,7 @@ const getNextFollowUpStatus = (lead: Lead) => {
               </div>
 
               <div className="p-8 space-y-8 pb-32">
+                {/* Target Profile */}
                 <section className="bg-black p-8 rounded-[35px] text-white shadow-2xl relative overflow-hidden">
                     <div className="relative z-10">
                       <p className="text-[10px] font-bold opacity-50 uppercase mb-2 tracking-widest">Target Profile</p>
@@ -317,18 +280,12 @@ const getNextFollowUpStatus = (lead: Lead) => {
                       <p className="text-sm font-medium opacity-70 mt-1">{selectedLead.email}</p>
                       
                       {selectedLead.website && (
-                        <a 
-                          href={selectedLead.website.startsWith('http') ? selectedLead.website : `https://${selectedLead.website}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl transition-all group"
-                        >
+                        <a href={selectedLead.website.startsWith('http') ? selectedLead.website : `https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl transition-all group">
                           <Globe size={14} className="text-blue-400" />
                           <span className="text-[10px] font-black uppercase tracking-widest">Visit Website</span>
                           <ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                         </a>
                       )}
-
                       <div className="mt-6 flex gap-2">
                           <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest border border-white/5">{selectedLead.service}</span>
                           <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${selectedLead.status === 'replied' ? 'bg-green-500' : 'bg-blue-600'}`}>Status: {selectedLead.status}</span>
@@ -337,7 +294,7 @@ const getNextFollowUpStatus = (lead: Lead) => {
                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/20 blur-[80px] rounded-full" />
                 </section>
 
-                {/* --- NEXT FOLLOW-UP PREDICTION SECTION (AUTO-SYNCED) --- */}
+                {/* Next Follow-up Prediction */}
                 {getNextFollowUpStatus(selectedLead) && (
                   <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
                     <div className="flex items-start gap-4">
@@ -361,33 +318,53 @@ const getNextFollowUpStatus = (lead: Lead) => {
                   </section>
                 )}
 
-                {/* Engagement History */}
+                {/* Engagement History (এখানেই আমরা পরিবর্তন করেছি) */}
                 <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Activity size={12} /> Engagement Logs</h4>
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                      <Activity size={12} /> Full Engagement Logs
+                    </h4>
+                    { (selectedLead.tracking_history?.length || 0) > 3 && (
+                      <button onClick={() => setShowAllLogs(!showAllLogs)} className="text-[9px] font-black text-blue-600 uppercase">
+                        {showAllLogs ? "Show Less" : `View All (${selectedLead.tracking_history?.length})`}
+                      </button>
+                    )}
+                  </div>
+                  
                   <div className="space-y-2">
-                    {(selectedLead.tracking_history || []).slice(0, showAllLogs ? undefined : 3).reverse().map((info, idx) => (
-                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex justify-between items-center">
+                    {(selectedLead.tracking_history || [])
+                      .slice() // copy array
+                      .sort((a, b) => toMillis(b.time) - toMillis(a.time)) // Newest first
+                      .slice(0, showAllLogs ? undefined : 5) // Show 5 or all
+                      .map((info, idx) => (
+                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex justify-between items-center transition-all hover:border-blue-200">
                         <div className="flex items-center gap-3">
-                            <Monitor size={14} className="text-blue-500" />
+                            <div className={`p-2 rounded-lg ${info.event === 'opened' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                              <Monitor size={14} />
+                            </div>
                             <div>
-                                <p className="text-[10px] font-black text-gray-800 uppercase">{info.event === 'opened' ? 'Email Opened' : info.event}</p>
+                                <p className="text-[10px] font-black text-gray-800 uppercase">
+                                  {info.event === 'opened' ? 'Email Opened' : info.event}
+                                  {info.step ? <span className="ml-2 text-blue-500">[Step {info.step}]</span> : ""}
+                                </p>
                                 <p className="text-[9px] font-bold text-blue-600 italic">{formatDate(info.time)}</p>
                             </div>
                         </div>
                         <CheckCircle2 size={14} className="text-emerald-500" />
                       </div>
                     ))}
+                    {(!selectedLead.tracking_history || selectedLead.tracking_history.length === 0) && (
+                      <p className="text-[10px] text-gray-400 font-bold text-center py-4 italic">No engagement tracked yet.</p>
+                    )}
                   </div>
                 </div>
 
-                {/* Journey Tracking */}
+                {/* Journey Tracking (আগের মতোই থাকবে) */}
                 <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <MessageSquare size={14} /> Full Journey Tracking
                   </h4>
-                  
                   <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-gray-100">
-                    {/* Follow ups */}
                     {selectedLead.sent_messages && [...selectedLead.sent_messages].reverse().map((msg, idx) => (
                       <div key={idx} className="relative pl-8">
                         <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-white border-2 border-blue-500 z-10 flex items-center justify-center text-[8px] font-bold">{msg.step}</div>
@@ -399,8 +376,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
                         </div>
                       </div>
                     ))}
-
-                    {/* Initial Outreach */}
                     <div className="relative pl-8">
                       <div className="absolute left-0 top-1 w-[22px] h-[22px] rounded-full bg-blue-600 border-4 border-white shadow-sm z-10" />
                       <div className="bg-blue-50/30 p-4 rounded-2xl border border-blue-100">
