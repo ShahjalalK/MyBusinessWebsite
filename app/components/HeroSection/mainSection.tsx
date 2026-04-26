@@ -41,7 +41,7 @@ export default function MainSection() {
       <div className="container mx-auto px-6 relative z-10 py-12">
         <div className="flex flex-wrap items-center justify-center lg:justify-between -mx-4">
           
-          {/* ১. লেফট কন্টেন্ট - গ্যাপ কমানোর জন্য max-w এবং margin অ্যাডজাস্ট করা হয়েছে */}
+          {/* ১. লেফট কন্টেন্ট - এসইও অপ্টিমাইজড */}
           <div className="w-full lg:w-[52%] px-4 mb-12 lg:mb-0">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
@@ -51,24 +51,27 @@ export default function MainSection() {
               <div className="inline-flex items-center gap-2 py-1.5 px-4 mb-6 bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-full">
                 <span className="flex h-2 w-2 rounded-full bg-[#4285F4] animate-pulse" />
                 <span className="text-[10px] font-bold tracking-[0.15em] text-slate-600 dark:text-slate-400 uppercase">
-                   Advanced Conversion Specialist
+                   Certified Google Ads & GA4 Expert
                 </span>
               </div>
 
+              {/* H1: মেইন কীওয়ার্ড "GA4 Server Side Tracking" যুক্ত করা হয়েছে */}
               <h1 className="text-5xl md:text-6xl xl:text-7xl font-black text-slate-900 dark:text-white mb-6 leading-[1.1] tracking-tight">
-                Scale Your Ads with <span className="text-[#4285F4]">100% Data</span> Accuracy.
+                Advanced <span className="text-[#4285F4]">GA4 Server Side</span> Tracking Expert.
               </h1>
               
+              {/* P: "client side vs server side" এবং "lost data" কীওয়ার্ড যুক্ত করা হয়েছে */}
               <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-lg leading-relaxed">
-                We help businesses recover <span className="font-bold text-slate-900 dark:text-slate-200">30%+ lost data</span> due to iOS 14+ through GTM Server-Side Tracking and professional digital branding.
+                Stop losing 30%+ data to iOS 14 updates. We bridge the gap between <span className="font-bold text-slate-900 dark:text-slate-200">client side vs server side tracking</span> to boost your Ad ROAS and precision.
               </p>
 
+              {/* সার্ভিসের লিস্টে মেইন কীওয়ার্ডগুলো সেট করা হয়েছে */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-2 mb-10 max-w-md">
                 {[
-                  "Server-Side Tracking",
-                  "GA4 / GTM Specialist",
-                  "Clickable Email Signature",
-                  "Conversion Tracking"
+                  "GA4 Server-Side Setup",
+                  "Facebook CAPI Expert",
+                  "Google Ads Audit Service",
+                  "Clickable Email Signature"
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300 font-bold text-[13px]">
                     <div className="bg-blue-50 dark:bg-blue-900/30 p-1 rounded-md">
@@ -80,12 +83,13 @@ export default function MainSection() {
               </div>
 
               <div className="flex flex-wrap gap-4">
+                {/* Button: "Google Ads Audit Service" এর 0% KD কীওয়ার্ডকে টার্গেট করা হয়েছে */}
                 <MotionLink href="/contact"
                   whileHover={{ y: -3 }}
                   whileTap={{ scale: 0.98 }}
                   className="bg-[#4285F4] hover:bg-[#3367d6] text-white font-black py-4 px-7 rounded-xl shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all text-sm"
                 >
-                  Get A Free Audit <ArrowRight className="w-4 h-4" />
+                  Get Free Google Ads Audit <ArrowRight className="w-4 h-4" />
                 </MotionLink>
                 
                 <MotionLink href="/portfolio"
@@ -97,7 +101,7 @@ export default function MainSection() {
             </motion.div>
           </div>
 
-          {/* ২. রাইট সাইড: গুগল অ্যাডস গ্রিড স্টাইল ড্যাশবোর্ড */}
+          {/* ২. রাইট সাইড (আগের মতোই থাকবে, এটি ভিজ্যুয়াল রিপ্রেজেন্টেশন) */}
           <div className="w-full lg:w-[45%] px-4 flex justify-center lg:justify-end">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -107,29 +111,25 @@ export default function MainSection() {
             >
               <div className="relative bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-slate-100 dark:border-slate-800 overflow-hidden">
                 
-                {/* কার্ড হেডার */}
                 <div className="flex justify-between items-center mb-8 px-1">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 bg-[#4285F4] rounded-lg flex items-center justify-center shadow-md">
                        <BarChart3 className="w-4 h-4 text-white" />
                     </div>
                     <div>
-                      <h4 className="text-slate-400 text-[9px] font-black uppercase tracking-tighter leading-none mb-1">Analytics Dashboard</h4>
-                      <p className="text-slate-900 dark:text-white text-sm font-black leading-none">Performance Overview</p>
+                      <h4 className="text-slate-400 text-[9px] font-black uppercase tracking-tighter leading-none mb-1">Tracking Accuracy</h4>
+                      <p className="text-slate-900 dark:text-white text-sm font-black leading-none">Server-Side Data</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-[#34a853] text-[13px] font-black flex items-center justify-end gap-0.5">
-                      <TrendingUp className="w-3 h-3" /> +30.5%
+                      <TrendingUp className="w-3 h-3" /> +100%
                     </p>
-                    <p className="text-slate-400 text-[8px] font-bold uppercase tracking-tighter">Recovered</p>
+                    <p className="text-slate-400 text-[8px] font-bold uppercase tracking-tighter">Verified</p>
                   </div>
                 </div>
 
-                {/* চার্ট সেকশন উইথ গ্রিড টেবিল */}
                 <div className="relative h-44 mb-6 px-1">
-                  
-                  {/* গ্রিড লাইনস (টেবিল ইফেক্ট) */}
                   <div className="absolute inset-0 flex flex-col justify-between z-0">
                     {[...Array(5)].map((_, i) => (
                       <div key={i} className="w-full border-t border-slate-100 dark:border-slate-800 h-0" />
@@ -141,7 +141,6 @@ export default function MainSection() {
                     ))}
                   </div>
 
-                  {/* Rising Blue Line - গ্রিড পার করে উপরে উঠছে */}
                   <svg className="absolute inset-0 w-full h-full z-20" viewBox="0 0 100 100" preserveAspectRatio="none">
                     <motion.path
                       d="M 0 85 C 20 80, 35 60, 50 50 C 65 40, 80 25, 100 10"
@@ -153,18 +152,8 @@ export default function MainSection() {
                       animate={{ pathLength: 1 }}
                       transition={{ duration: 2.5, ease: "easeOut" }}
                     />
-                    {/* গ্রিডের উপরে একটি গ্লো ইফেক্ট */}
-                    <motion.path
-                      d="M 0 85 C 20 80, 35 60, 50 50 C 65 40, 80 25, 100 10"
-                      fill="none"
-                      stroke="#4285F4"
-                      strokeWidth="6"
-                      strokeOpacity="0.1"
-                      strokeLinecap="round"
-                    />
                   </svg>
 
-                  {/* ডাটা পয়েন্ট ডট */}
                   <motion.div 
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
@@ -173,29 +162,27 @@ export default function MainSection() {
                   />
                 </div>
 
-                {/* মেট্রিক কার্ডস */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-[#f8f9fa] dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-50 dark:border-white/5 text-center shadow-sm">
-                    <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Total Revenue</p>
+                    <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Recovered Revenue</p>
                     <p className="text-md font-black text-slate-900 dark:text-white">
                       <SalesCounter target={24500} />
                     </p>
                   </div>
                   <div className="bg-[#f8f9fa] dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-50 dark:border-white/5 text-center shadow-sm">
-                    <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Data Mismatch</p>
-                    <p className="text-md font-black text-[#4285F4]">0.01%</p>
+                    <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Data Loss Fix</p>
+                    <p className="text-md font-black text-[#4285F4]">99.9%</p>
                   </div>
                 </div>
               </div>
 
-              {/* SST Badge */}
               <motion.div
                 animate={{ y: [0, -8, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                 className="absolute -bottom-3 -right-3 bg-[#34a853] text-white py-2.5 px-5 rounded-xl shadow-xl shadow-green-500/20 flex items-center gap-2 z-30 border border-white/20"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wider">SST Verified</span>
+                <span className="text-[10px] font-black uppercase tracking-wider">CAPI Verified</span>
               </motion.div>
             </motion.div>
           </div>

@@ -12,25 +12,30 @@ import {
   TrendingUp
 } from 'lucide-react'
 
-// ১. এচিভমেন্ট ডাটা
+/**
+ * SEO & Conversion Optimization:
+ * 1. Keywords: Clickable signatures, professional brand identity, brand consistency.
+ * 2. Trust Signals: International track record, 100% satisfaction, device-agnostic testing.
+ */
+
 const achievements = [
   {
     icon: <Layers size={24} />,
-    number: "40+",
-    title: "Signatures Delivered",
-    desc: "Successfully completed projects for individual professionals and corporate teams."
+    number: "50+",
+    title: "Project Milestone",
+    desc: "Successfully crafted premium clickable signatures for diverse corporate brands and local startups."
   },
   {
     icon: <Globe2 size={24} />,
     number: "Global",
-    title: "International Clients",
-    desc: "Proven track record of working with global clients via freelance platforms and direct outreach."
+    title: "Worldwide Outreach",
+    desc: "Delivering professional email branding solutions to clients across USA, UK, and Europe via global platforms."
   },
   {
     icon: <Verified size={24} />,
     number: "100%",
-    title: "Quality Satisfaction",
-    desc: "Focused on delivering designs that are both visually appealing and technically reliable."
+    title: "Client Trust",
+    desc: "Maintaining a perfect success rate by prioritizing mobile-responsive designs and technical precision."
   }
 ];
 
@@ -46,16 +51,16 @@ export default function EmailSignatureProofExperience() {
             whileInView={{ opacity: 1, y: 0 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 text-amber-600 text-[10px] font-black uppercase tracking-[0.2em] mb-6"
           >
-            <Trophy size={14} /> Proven Track Record
+            <Trophy size={14} /> Global Track Record
           </motion.div>
           
           <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-none mb-6">
-            Trusted By Clients Across <br />
-            <span className="text-amber-600 italic">Multiple Industries.</span>
+            Elite Branding Trusted By <br />
+            <span className="text-amber-600 italic font-serif">Industry Leaders.</span>
           </h2>
           
           <p className="text-slate-500 dark:text-slate-400 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
-            We deliver high-quality clickable signatures that improve professional image and maintain brand consistency for every client we serve.
+            We specialize in transforming standard emails into powerful marketing tools with clickable HTML signatures that ensure <span className="text-slate-900 dark:text-white font-bold">brand consistency</span> and professionalism.
           </p>
         </div>
 
@@ -100,9 +105,9 @@ export default function EmailSignatureProofExperience() {
                    <Star size={20} fill="currentColor" />
                    <Star size={20} fill="currentColor" />
                 </div>
-                <h4 className="text-2xl font-black mb-4 tracking-tight">Built with Real-World Experience</h4>
-                <p className="text-slate-400 text-base leading-relaxed">
-                   Every email signature we create is based on practical experience — ensuring it works smoothly across all devices, email clients, and real-world use cases.
+                <h4 className="text-2xl font-black mb-4 tracking-tight">Proven Design Excellence</h4>
+                <p className="text-slate-400 text-base leading-relaxed font-medium">
+                   Our signatures are engineered with high-quality HTML code, ensuring they are <span className="text-white">fully responsive</span> and bypass spam filters while looking pixel-perfect on every screen.
                 </p>
               </div>
               <TrendingUp className="absolute bottom-[-20px] right-[-20px] text-white/5 size-40 group-hover:rotate-12 transition-transform duration-700" />
@@ -114,19 +119,19 @@ export default function EmailSignatureProofExperience() {
             className="p-10 rounded-[3rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-center"
            >
               <div className="inline-flex items-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest mb-6">
-                 <CheckCircle2 size={18} /> Reliable & Tested
+                 <CheckCircle2 size={18} /> Optimized & Tested
               </div>
-              <h4 className="text-2xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">Ready to Use Immediately</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed">
-                We don’t just design — we test and refine each signature to make sure it looks perfect and functions correctly before you ever hit send.
+              <h4 className="text-2xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">Enterprise-Grade Reliability</h4>
+              <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed font-medium">
+                We perform rigorous cross-platform testing on <span className="text-slate-900 dark:text-white font-bold">Outlook, Gmail, and Apple Mail</span> to guarantee your signature works flawlessly from the moment you install it.
               </p>
            </motion.div>
         </div>
 
         {/* Trust Footer */}
         <div className="mt-16 text-center">
-           <p className="text-slate-400 dark:text-slate-500 text-[11px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3">
-              <Award size={14} className="text-amber-500" /> Proven experience, consistent quality, and attention to detail.
+           <p className="text-slate-400 dark:text-slate-500 text-[11px] font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3 italic">
+              <Award size={14} className="text-amber-500" /> Professional Identity • Technical Precision • Global Standards
            </p>
         </div>
 

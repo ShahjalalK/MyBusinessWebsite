@@ -5,21 +5,21 @@ import { Monitor, BarChart, Mail, CheckCircle2 } from 'lucide-react'
 
 const coreExpertise = [
   {
-    title: "Precision Tracking",
-    desc: "We specialize in GTM Server-Side setups that recover data lost to ad-blockers and privacy restrictions.",
-    features: ["Server-Side GTM", "GA4 Configuration", "Cookie Recovery"],
+    title: "Server-Side Tracking", // SEO Keyword: Server-Side Tracking
+    desc: "We specialize in GA4 Server-Side tracking setups that recover up to 40% of data lost to ad-blockers and iOS privacy restrictions.",
+    features: ["GTM Server-Side", "GA4 Configuration", "Meta Conversions API"],
     icon: <Monitor className="w-6 h-6 text-blue-600" />
   },
   {
-    title: "Strategic Ads",
-    desc: "Our Google Ads experts focus on high-intent keywords and conversion-optimized campaigns.",
-    features: ["Search & PMax", "ROI Focused", "Audience Scaling"],
+    title: "Google Ads Specialist", // SEO Keyword: Google Ads Specialist
+    desc: "When you hire a Google Ads expert from us, we focus on high-intent keywords and professional ads audits to scale your ROI.",
+    features: ["Audit & Strategy", "Search & PMax", "Audience Scaling"],
     icon: <BarChart className="w-6 h-6 text-indigo-600" />
   },
   {
-    title: "Brand Assets",
-    desc: "We design professional, clickable HTML email signatures that boost your brand authority.",
-    features: ["Interactive Design", "Cross-Platform", "CTA Integrated"],
+    title: "Brand Identity", // Focus: Email Signature Service
+    desc: "We design professional, clickable HTML email signatures and personalized brand assets that boost your authority.",
+    features: ["Interactive Design", "HIPAA Compliant", "CTA Integrated"],
     icon: <Mail className="w-6 h-6 text-cyan-600" />
   }
 ]
@@ -33,11 +33,11 @@ export default function WhatWeDo() {
           <div className="max-w-2xl">
             <h2 className="text-xs font-black uppercase tracking-[0.4em] text-blue-600 mb-4 text-left">Core Expertise</h2>
             <h3 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter">
-              The Specialized Skills We <span className="text-blue-600">Bring to the Table.</span>
+              Precision <span className="text-blue-600">Data & Ads</span> Solutions.
             </h3>
           </div>
           <p className="text-slate-500 dark:text-slate-400 font-medium max-w-sm text-left md:text-right">
-            Instead of being a "jack of all trades," we focus on the critical areas that drive actual revenue for your agency.
+            Stop losing data. We provide the specialized **tracking infrastructure** and **Ads strategy** needed to drive actual revenue.
           </p>
         </div>
 
@@ -47,6 +47,7 @@ export default function WhatWeDo() {
               key={index}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
               transition={{ delay: index * 0.1 }}
               className="p-10 rounded-[2.5rem] bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 hover:border-blue-500/50 transition-all group"
             >

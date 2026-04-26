@@ -1,35 +1,33 @@
 "use client"
 import React from 'react'
 import { motion } from 'framer-motion'
-// Next.js এর আসল Link ইম্পোর্ট করুন
 import Link from 'next/link' 
 import { Check, Target, Server, Mail, ChevronRight } from 'lucide-react'
 
-// motion এবং Link কে একসাথে ব্যবহার করার জন্য
 const MotionLink = motion(Link);
 
 const detailedServices = [
   {
-    title: "Google Ads Management",
+    title: "Expert Google Ads Management", // 'Expert' keyword added
     icon: <Target className="w-8 h-8 text-blue-600" />,
-    description: "We don't just set up ads; we build revenue engines. From keyword research to scaling high-performance PMax campaigns.",
-    features: ["Search & Display Ads", "Performance Max (PMax)", "Remarketing Strategy", "Competitor Analysis"],
+    description: "As a certified Google Ads Specialist, I build conversion-focused campaigns. From deep keyword research to scaling high-performance PMax campaigns that maximize your ROAS.",
+    features: ["Search & Display Ads", "PMax Campaign Optimization", "Advanced Remarketing", "Competitor Data Analysis"],
     color: "blue",
     link: "/services/google-ads-expert",
   },
   {
-    title: "Server-Side Tracking (SST)",
+    title: "GTM Server-Side Tracking", // Keyword optimized title
     icon: <Server className="w-8 h-8 text-indigo-600" />,
-    description: "Future-proof your data. We set up private GTM servers to bypass iOS 14+ restrictions and recover lost conversions.",
-    features: ["GTM Server-Side Setup", "GA4 Configuration", "First-Party Cookies", "Data Accuracy Audit"],
+    description: "Future-proof your analytics. I set up private GTM server containers to bypass iOS 14+ restrictions, recover 40% of lost data, and fix tracking gaps permanently.",
+    features: ["First-Party Cookie Setup", "GA4 Server-Side Config", "Meta Conversions API", "Data Accuracy Audit"],
     color: "indigo",
     link: "/services/server-side-tracking",
   },
   {
-    title: "Clickable Email Signatures",
+    title: "Professional Email Signatures",
     icon: <Mail className="w-8 h-8 text-cyan-600" />,
-    description: "Transform every outgoing email into a marketing tool. Professional HTML signatures that drive traffic to your links.",
-    features: ["Interactive CTA Buttons", "Mobile Responsive Design", "Social Media Integration", "Brand Consistency"],
+    description: "Transform every outgoing email into a high-ticket client magnet. I design clickable, responsive HTML signatures that drive traffic and build instant brand authority.",
+    features: ["Interactive CTA Buttons", "Mobile Responsive Design", "Social Media Integration", "Custom Brand Branding"],
     color: "cyan",
     link: "/services/email-signature",
   }
@@ -49,11 +47,11 @@ export default function ServiceDetails() {
           >
             Deep Dive
           </motion.span>
-          <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-6">
-            Our Specialized <span className="text-blue-600">Solutions.</span>
+          <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-6 leading-tight">
+            Advanced Tracking & <br /> <span className="text-blue-600">Marketing Infrastructure.</span>
           </h2>
           <p className="text-slate-500 dark:text-slate-400 max-w-2xl font-medium leading-relaxed">
-            We focus on three core areas to ensure your business has the data, the visibility, and the professional branding it deserves.
+            We provide the technical backbone for modern e-commerce. From recovering lost conversion data to scaling ads that actually bring in revenue.
           </p>
         </div>
 
@@ -65,7 +63,7 @@ export default function ServiceDetails() {
               initial={{ opacity: 0, x: index % 2 === 0 ? -30 : 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className={`flex flex-col ${index % 2 === 0 ? 'lg:flex-row' : 'lg:flex-row-reverse'} gap-12 items-center p-8 md:p-12 rounded-[3.5rem] bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800`}
+              className={`flex flex-col ${index % 2 === 0 ? 'lg:flex-row' : 'lg:flex-row-reverse'} gap-12 items-center p-8 md:p-12 rounded-[3.5rem] bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 hover:shadow-xl transition-shadow duration-500`}
             >
               {/* Left Side */}
               <div className="w-full lg:w-1/2">
@@ -79,13 +77,12 @@ export default function ServiceDetails() {
                   {service.description}
                 </p>
                 
-                {/* সংশোধন করা লিঙ্ক অংশ */}
                 <MotionLink 
                   href={service.link} 
                   whileHover={{ x: 5 }}
-                  className="inline-flex items-center gap-2 text-blue-600 font-black uppercase tracking-widest text-xs group decoration-none"
+                  className="inline-flex items-center gap-2 text-blue-600 font-black uppercase tracking-widest text-xs group"
                 >
-                  Learn about our workflow 
+                  See how we solve this 
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </MotionLink>
               </div>
@@ -95,11 +92,11 @@ export default function ServiceDetails() {
                 {service.features.map((feature, i) => (
                   <motion.div 
                     key={i}
-                    whileHover={{ scale: 1.02 }}
-                    className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-start gap-4 shadow-sm"
+                    whileHover={{ scale: 1.05, backgroundColor: "rgba(59, 130, 246, 0.05)" }}
+                    className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-start gap-4 shadow-sm transition-all"
                   >
-                    <div className="mt-1 bg-blue-600/10 p-1 rounded-full">
-                      <Check className="w-4 h-4 text-blue-600" />
+                    <div className="mt-1 bg-emerald-500/10 p-1 rounded-full">
+                      <Check className="w-4 h-4 text-emerald-600" />
                     </div>
                     <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{feature}</span>
                   </motion.div>

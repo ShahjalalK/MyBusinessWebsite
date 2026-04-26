@@ -13,17 +13,17 @@ import {
 } from 'react-icons/si'
 
 const tools = [
-  { name: "Google Ads", icon: <SiGoogleads className="text-[#4285F4]" />, desc: "Ad Scaling" },
-  { name: "GA4", icon: <SiGoogleanalytics className="text-[#E37400]" />, desc: "Analytics" },
-  { name: "GTM SST", icon: <SiGoogletagmanager className="text-[#246FDB]" />, desc: "Server Tracking" },
-  { name: "Shopify", icon: <SiShopify className="text-[#95BF47]" />, desc: "E-commerce" },
-  { name: "Meta CAPI", icon: <SiMeta className="text-[#0668E1]" />, desc: "Data Sync" },
-  { name: "WordPress", icon: <SiWordpress className="text-[#21759B]" />, desc: "CMS Integration" },
-  { name: "Next.js", icon: <SiNextdotjs className="text-black dark:text-white" />, desc: "Custom Web" },
+  { name: "Google Ads", icon: <SiGoogleads className="text-[#4285F4]" />, desc: "Expert Scaling" },
+  { name: "GA4", icon: <SiGoogleanalytics className="text-[#E37400]" />, desc: "Server Side Tracking" }, // Keyword: ga4 server side tracking
+  { name: "GTM SST", icon: <SiGoogletagmanager className="text-[#246FDB]" />, desc: "Server Side Tagging" }, // Keyword: server side tagging gtm
+  { name: "Shopify", icon: <SiShopify className="text-[#95BF47]" />, desc: "CAPI Integration" },
+  { name: "Meta CAPI", icon: <SiMeta className="text-[#0668E1]" />, desc: "Conversion API" }, // Keyword: conversion api
+  { name: "WordPress", icon: <SiWordpress className="text-[#21759B]" />, desc: "SST Setup" },
+  { name: "Next.js", icon: <SiNextdotjs className="text-black dark:text-white" />, desc: "Data Intelligence" },
   { name: "Docker", icon: <SiDocker className="text-[#2496ED]" />, desc: "SST Hosting" },
 ]
 
-export default function OurExpertis() {
+export default function OurExpertise() {
   return (
     <section className="py-24 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-slate-800">
       <div className="container mx-auto px-6">
@@ -36,10 +36,10 @@ export default function OurExpertis() {
             The Tech Stack
           </motion.span>
           <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-6">
-            Industry-Leading <span className="text-blue-600">Tools & Tech.</span>
+            Optimized for <span className="text-blue-600">Performance & Privacy.</span>
           </h2>
           <p className="text-slate-500 dark:text-slate-400 max-w-2xl font-medium leading-relaxed">
-            We utilize a specialized suite of premium tools to ensure your tracking is bulletproof and your campaigns are fully optimized for growth.
+            As a specialized **Google Ads specialist** agency, we utilize industry-leading tools to ensure your **Server Side Tagging** is bulletproof and iOS-resistant.
           </p>
         </div>
 
@@ -50,6 +50,7 @@ export default function OurExpertis() {
               whileHover={{ y: -8, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}
               initial={{ opacity: 0, scale: 0.9 }}
               whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
               transition={{ delay: index * 0.05 }}
               className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-8 rounded-[2rem] flex flex-col items-center group transition-all"
             >
@@ -66,7 +67,7 @@ export default function OurExpertis() {
           ))}
         </div>
 
-        {/* Bottom Trust Note */}
+        {/* Bottom Trust Note - SEO Keyword Integrated */}
         <motion.div 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -74,7 +75,7 @@ export default function OurExpertis() {
           className="mt-16 p-6 bg-blue-600/5 dark:bg-blue-600/10 rounded-2xl border border-blue-600/10 text-center"
         >
           <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-            Professional Certification: <span className="text-blue-600">Google Ads Certified & Meta Business Partner Standard</span>
+            Professional Certification: <span className="text-blue-600">Hire a Google Ads Expert with GA4 & Meta CAPI Mastery</span>
           </p>
         </motion.div>
       </div>

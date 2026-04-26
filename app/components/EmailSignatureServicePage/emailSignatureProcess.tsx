@@ -12,27 +12,32 @@ import {
 } from 'lucide-react'
 import Link from 'next/link';
 
-// ১. প্রসেস স্টেপস ডাটা
+/**
+ * SEO & Workflow Optimization:
+ * 1. Keywords: Hand-coded HTML, Responsive setup, Professional email branding.
+ * 2. Focus: Efficiency, speed, and cross-platform compatibility.
+ */
+
 const steps = [
   {
     icon: <ClipboardList size={28} />,
-    title: "Share Your Details",
-    desc: "Provide your name, job title, contact information, logo, and design preferences. You can even choose a style you love."
+    title: "Project Briefing",
+    desc: "Share your brand assets—logo, contact info, and social links. We analyze your requirements to create a personalized identity."
   },
   {
     icon: <Code2 size={28} />,
-    title: "Design & Development",
-    desc: "We create your custom signature and hand-code it in clean HTML to ensure everything is pixel-perfect and clickable."
+    title: "HTML Development",
+    desc: "Our experts hand-code your signature in clean, table-based HTML, ensuring 100% clickability and mobile responsiveness."
   },
   {
     icon: <Eye size={28} />,
-    title: "Review & Revisions",
-    desc: "You receive a preview of your signature. We make any necessary adjustments until it matches your expectations perfectly."
+    title: "Quality Inspection",
+    desc: "We test the design across Gmail, Outlook, and Apple Mail. You review the preview and we refine it until it's perfect."
   },
   {
     icon: <Send size={28} />,
-    title: "Delivery & Setup",
-    desc: "Once approved, we deliver your ready-to-use signature with a simple installation guide or video tutorial."
+    title: "Instant Deployment",
+    desc: "Get your ready-to-use HTML file with an easy-to-follow installation guide. Your professional brand is now live."
   }
 ];
 
@@ -52,12 +57,12 @@ export default function EmailSignatureProcessSection() {
           </motion.div>
           
           <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-none mb-6">
-            Simple, Fast, and <br />
-            <span className="text-blue-600 italic">Hassle-Free.</span>
+            Four Steps to a <br />
+            <span className="text-blue-600 italic font-serif">Powerhouse Signature.</span>
           </h2>
           
           <p className="text-slate-500 dark:text-slate-400 text-lg font-medium">
-            We follow a clear process to deliver your professional email signature quickly and efficiently—without any confusion or delays.
+            We follow a technical and creative process to ensure your professional email branding is delivered with <span className="text-slate-900 dark:text-white font-bold">pixel-perfect precision.</span>
           </p>
         </div>
 
@@ -107,13 +112,13 @@ export default function EmailSignatureProcessSection() {
                   <CheckCircle2 size={32} />
                </div>
                <div>
-                  <h4 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ready to Use in Minutes</h4>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">No technical skills needed—just follow the guide and you're live.</p>
+                  <h4 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Optimized for All Platforms</h4>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Fully compatible with Gmail, Outlook, Apple Mail, and HubSpot.</p>
                </div>
             </div>
             
             <Link href="/contact" className="bg-slate-900 dark:bg-blue-600 hover:bg-blue-700 text-white font-black py-4 px-8 rounded-2xl flex items-center gap-3 transition-all uppercase text-xs tracking-widest active:scale-95 shadow-xl shadow-blue-600/10">
-               Start Your Project <ArrowRight size={16} />
+                Start Your Project <ArrowRight size={16} />
             </Link>
           </div>
 
@@ -124,7 +129,7 @@ export default function EmailSignatureProcessSection() {
         {/* Conversion Footer */}
         <div className="mt-12 text-center">
            <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.3em]">
-             ⚡ From details to delivery — we make it smooth and effortless.
+             ⚡ Clickable Signatures • Mobile Responsive • High-End Corporate Identity
            </p>
         </div>
 

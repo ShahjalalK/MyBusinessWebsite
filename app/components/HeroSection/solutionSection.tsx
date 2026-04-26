@@ -5,22 +5,22 @@ import { CheckCircle, BarChart, DatabaseZap, ShieldCheck } from 'lucide-react'
 
 const solutions = [
   {
-    title: "Bulletproof Server-Side Infrastructure",
-    desc: "We move your tracking from the browser to a secure server, bypassing iOS 14+ restrictions and ad-blockers entirely.",
+    title: "GTM Server-Side Tagging", // Optimized Title from Keyword Data
+    desc: "We migrate your tracking from the browser to a first-party server container, effectively bypassing iOS 14+ restrictions and ad-blockers.",
     icon: <DatabaseZap className="w-6 h-6 text-blue-600" />,
-    benefit: "100% Data Recovery"
+    benefit: "100% Data Precision"
   },
   {
     title: "First-Party Data Accuracy",
-    desc: "By using first-party cookies, we ensure your GA4 and Meta CAPI receive clean, undisputed data for better optimization.",
+    desc: "By implementing server-side cookies, we ensure your GA4 and Meta Conversion API (CAPI) receive clean, undisputed data for better attribution.",
     icon: <ShieldCheck className="w-6 h-6 text-emerald-600" />,
-    benefit: "No More Guesswork"
+    benefit: "Fix Tracking Gaps"
   },
   {
-    title: "Precision Ad Performance",
-    desc: "With accurate data, our Google Ads strategies focus on scaling the keywords and audiences that actually drive revenue.",
+    title: "High-ROI Google Ads Strategy", // Keyword focus
+    desc: "Leveraging accurate tracking to optimize your Google Ads campaigns, focusing on scaling the high-intent keywords that drive revenue.",
     icon: <BarChart className="w-6 h-6 text-indigo-600" />,
-    benefit: "Higher ROI/ROAS"
+    benefit: "Maximum ROAS"
   }
 ]
 
@@ -33,7 +33,7 @@ export default function SolutionSection() {
       <div className="container mx-auto px-6 relative z-10">
         <div className="flex flex-wrap items-center -mx-4">
           
-          {/* Left Side: Visual/Image Placeholder */}
+          {/* Left Side: Technical Summary Visual */}
           <div className="w-full lg:w-1/2 px-4 mb-12 lg:mb-0">
             <motion.div 
               initial={{ opacity: 0, x: -30 }}
@@ -43,15 +43,15 @@ export default function SolutionSection() {
               <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-[3rem] shadow-2xl">
                 <div className="bg-slate-900 rounded-[2.8rem] overflow-hidden p-8 aspect-square flex flex-col justify-center">
                   <h3 className="text-3xl font-black text-white mb-6 leading-tight">
-                    From <span className="text-red-500 line-through">Inaccurate</span> <br />
-                    To <span className="text-emerald-500 italic">Actionable.</span>
+                    From <span className="text-red-500 line-through">Data Loss</span> <br />
+                    To <span className="text-emerald-500 italic">Precision.</span>
                   </h3>
                   <div className="space-y-4">
                     {[
-                      "Server-Side GTM Setup",
-                      "Meta CAPI Integration",
-                      "Cookieless Tracking",
-                      "Google Ads Optimization"
+                      "Server-Side GTM Architecture",
+                      "Meta Conversions API (CAPI)",
+                      "First-Party Cookie Setup",
+                      "Google Ads Performance Audit"
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/10">
                         <CheckCircle className="w-5 h-5 text-emerald-500" />
@@ -61,14 +61,14 @@ export default function SolutionSection() {
                   </div>
                 </div>
               </div>
-              {/* Floating Badge */}
+              {/* Floating ROI Badge */}
               <motion.div 
                 animate={{ y: [0, -15, 0] }}
                 transition={{ duration: 4, repeat: Infinity }}
                 className="absolute -bottom-6 -right-6 bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-700"
               >
-                <p className="text-blue-600 font-black text-3xl">30%+</p>
-                <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest">Revenue Growth</p>
+                <p className="text-blue-600 font-black text-3xl">40%+</p>
+                <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center">Data Accuracy <br/> Increase</p>
               </motion.div>
             </motion.div>
           </div>
@@ -83,7 +83,7 @@ export default function SolutionSection() {
                 The Solution
               </span>
               <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-8 leading-tight">
-                We Build The <span className="text-blue-600">Infrastructure</span> For Your Success.
+                Bulletproof <span className="text-blue-600">Tracking</span> Infrastructure for Modern Marketing.
               </h2>
               
               <div className="space-y-10">

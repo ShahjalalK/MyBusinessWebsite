@@ -1,8 +1,14 @@
 "use client"
 import React from 'react'
 import { motion } from 'framer-motion'
-import { Send, CheckCircle2 } from 'lucide-react'
+import { Send, CheckCircle2, Award, Zap, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
+
+/**
+ * SEO & CTA Optimization:
+ * 1. Keywords: Professional HTML signature, Business branding, Clickable email identity.
+ * 2. Focus: Instant conversion and platform trust.
+ */
 
 export default function EmailSignatureFinalCTA() {
   return (
@@ -19,47 +25,61 @@ export default function EmailSignatureFinalCTA() {
           <div className="absolute top-0 right-0 w-80 h-80 bg-blue-400/10 rounded-full -mr-40 -mt-40 blur-[100px]"></div>
           <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/10 rounded-full -ml-40 -mb-40 blur-[100px]"></div>
 
+          {/* Badge */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.2em] backdrop-blur-md">
+              <Zap size={14} className="text-orange-400" fill="currentColor" /> Ready to transform your brand?
+            </div>
+          </div>
+
           {/* Heading */}
-          <h2 className="text-3xl md:text-6xl font-black text-white mb-8 tracking-tighter leading-[1.1]">
-            Upgrade Your Email <br className="hidden md:block" /> 
-            Signature Today
+          <h2 className="text-4xl md:text-7xl font-black text-white mb-8 tracking-tighter leading-[1] md:leading-[0.95]">
+            Power-Up Your <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white italic font-serif">Email Identity.</span>
           </h2>
           
           <p className="text-blue-100/70 text-lg md:text-xl mb-12 max-w-2xl mx-auto font-medium leading-relaxed">
-            Don't let a broken signature ruin your professional impression. 
-            Get a high-converting, hand-coded HTML signature that works everywhere.
+            Stop losing leads with broken or unprofessional signatures. Get a 
+            <span className="text-white"> hand-coded HTML signature</span> that ensures your brand looks premium on every device.
           </p>
 
           {/* Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-5 relative z-10">
             <Link 
               href="/contact" 
-              className="group bg-[#ff6a00] hover:bg-[#e65f00] text-white px-12 py-5 rounded-full font-black text-lg transition-all flex items-center gap-3 shadow-xl shadow-orange-900/40 w-full sm:w-auto justify-center"
+              className="group bg-[#ff6a00] hover:bg-[#ff8c33] text-white px-12 py-5 rounded-2xl font-black text-lg transition-all flex items-center gap-3 shadow-xl shadow-orange-950/40 w-full sm:w-auto justify-center active:scale-95"
             >
-              Order Now <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+              Order Your Project <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
             </Link>
             
             <Link 
               href="/contact" 
-              className="bg-white/5 hover:bg-white/10 backdrop-blur-md text-white border border-white/20 px-12 py-5 rounded-full font-black text-lg transition-all w-full sm:w-auto justify-center"
+              className="bg-white/5 hover:bg-white/10 backdrop-blur-md text-white border border-white/20 px-12 py-5 rounded-2xl font-black text-lg transition-all w-full sm:w-auto justify-center flex items-center gap-2"
             >
-              Contact Us
+              Consult an Expert
             </Link>
           </div>
 
-          {/* Trust Features - USA Client Focused */}
+          {/* Trust Features - USA/Global Client Focused */}
           <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 border-t border-white/10 pt-10">
-            <div className="flex items-center justify-center gap-2 text-white/80 text-sm font-bold uppercase tracking-widest">
-              <CheckCircle2 size={18} className="text-green-400" /> 100% Hand-Coded
+            <div className="flex items-center justify-center gap-2 text-white/60 text-[10px] font-black uppercase tracking-widest">
+              <ShieldCheck size={16} className="text-emerald-400" /> Spam-Safe Code
             </div>
-            <div className="flex items-center justify-center gap-2 text-white/80 text-sm font-bold uppercase tracking-widest">
-              <CheckCircle2 size={18} className="text-green-400" /> Fully Responsive
+            <div className="flex items-center justify-center gap-2 text-white/60 text-[10px] font-black uppercase tracking-widest">
+              <Award size={16} className="text-blue-400" /> 100% Satisfaction
             </div>
-            <div className="flex items-center justify-center gap-2 text-white/80 text-sm font-bold uppercase tracking-widest">
-              <CheckCircle2 size={18} className="text-green-400" /> Clickable Links
+            <div className="flex items-center justify-center gap-2 text-white/60 text-[10px] font-black uppercase tracking-widest">
+              <CheckCircle2 size={16} className="text-orange-400" /> Outlook & Gmail Ready
             </div>
           </div>
         </motion.div>
+
+        {/* Micro SEO Text */}
+        <div className="mt-12 text-center opacity-30">
+          <p className="text-[9px] font-black uppercase tracking-[0.6em] text-slate-500 dark:text-slate-400">
+            Clickable Signatures • Responsive HTML Coding • Digital Professionalism
+          </p>
+        </div>
       </div>
     </section>
   )

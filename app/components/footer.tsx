@@ -11,6 +11,7 @@ export default function Footer() {
   // --- GA4 Tracking Function for Subscribe ---
   const trackSubscription = async (email: string) => {
     try {
+      // Cookies থেকে GA ডাটা বের করা
       const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
       const sessionId = document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1];
 
@@ -18,11 +19,11 @@ export default function Footer() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: "Newsletter Subscriber",
+          event_name: "generate_lead", // Standard GA4 event
           email: email,
           service: "Newsletter",
-          clientId: gaCookie,
-          sessionId: sessionId,
+          clientId: gaCookie || "anonymous",
+          sessionId: sessionId || "none",
           pageTitle: "Footer Newsletter"
         }),
       });
@@ -36,7 +37,7 @@ export default function Footer() {
     setLoading(true);
 
     try {
-      // ১. Brevo-তে ডাটা পাঠানো
+      // ১. Brevo Integration (API Route-এ পাঠানো)
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,17 +45,17 @@ export default function Footer() {
       });
 
       if (response.ok) {
-        // ২. সাকসেস হলে GA4-এ ট্র্যাক করা
+        // ২. সাকসেস হলে GA4 Server-Side-এ ডেটা পাঠানো
         await trackSubscription(email);
         
-        alert("Thanks for subscribing, Shahjalal! Check your inbox.");
+        alert("Success! You're now subscribed to TrackFlow Pro updates.");
         setEmail("");
       } else {
-        alert("Subscription failed. Please try again.");
+        alert("Subscription failed. Please check the email and try again.");
       }
     } catch (error) {
       console.error("Subscription Error:", error);
-      alert("Something went wrong!");
+      alert("Something went wrong! Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -78,17 +79,19 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-base leading-relaxed max-w-xs">
-              Precision-engineered tracking solutions for modern agencies. We bridge the gap between privacy and performance.
+              Advanced GTM Server-Side Tracking and Google Ads optimization for modern agencies.
             </p>
             {/* Social Icons */}
             <div className="flex gap-4">
               {[
                 { icon: <BsFacebook />, link: "#" },
-                { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-it/" }, // আপনার প্রোফাইল অনুযায়ী
+                { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-it/" },
                 { icon: <BsTwitter />, link: "#" }
               ].map((social, i) => (
                 <motion.a 
                   key={i}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   whileHover={{ y: -5, color: '#2563eb' }}
                   href={social.link} 
                   className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 transition-all hover:border-blue-500/50"
@@ -99,11 +102,11 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Newsletter Section (Brevo & GA4 Integrated) */}
+          {/* Newsletter Section */}
           <div className="lg:col-span-4 lg:px-6">
             <h4 className="text-white font-black text-xs uppercase tracking-[0.3em] mb-6">Weekly Insights</h4>
             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-              Join 500+ marketers. Get server-side tracking tips and Google Ads updates directly in your inbox.
+              Join 500+ marketers. Get GA4 setup tips and tracking hacks directly in your inbox.
             </p>
             <form onSubmit={handleSubscribe} className="relative group">
               <input 
@@ -123,8 +126,8 @@ export default function Footer() {
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
             </form>
-            <p className="text-[10px] text-slate-600 mt-4 italic font-medium">
-              * Zero spam. Unsubscribe at any time.
+            <p className="text-[10px] text-slate-600 mt-4 italic font-medium uppercase tracking-widest">
+              * Secure & Private. No Spam.
             </p>
           </div>
 
@@ -148,7 +151,7 @@ export default function Footer() {
                   <MapPin size={18} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Headquarters</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Location</p>
                   <p className="text-sm font-bold text-white">Kushtia, Bangladesh</p>
                 </div>
               </li>
@@ -160,10 +163,10 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="pt-10 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-6">
           <p className="text-xs font-bold text-slate-600 tracking-widest uppercase">
-            Built for precision. Managed with integrity.
+            Data Quality is our Priority.
           </p>
           <div className="flex flex-col items-center md:items-end gap-2 text-[10px] text-slate-500 uppercase tracking-widest font-black">
-            <p>© {new Date().getFullYear()} TrackFlow Pro Lab</p>
+            <p>© {new Date().getFullYear()} TrackFlow Pro. All Rights Reserved.</p>
             <div className="flex gap-6 opacity-60">
               <a href="#" className="hover:text-blue-500">Privacy Policy</a>
               <a href="#" className="hover:text-blue-500">Terms of Service</a>

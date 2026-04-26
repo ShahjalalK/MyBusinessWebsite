@@ -1,10 +1,10 @@
 "use client"
 import React, { useState, useEffect } from 'react'
-import { motion, useMotionValue, useSpring, useTransform, animate } from 'framer-motion'
-import { ArrowRight, BarChart3, Target, TrendingUp, DollarSign } from 'lucide-react'
+import { motion, animate } from 'framer-motion'
+import { ArrowRight, Target, TrendingUp, DollarSign } from 'lucide-react'
 import Link from 'next/link';
 
-// ১. নাম্বার কাউন্টার কম্পোনেন্ট (এটি এরর দূর করবে এবং এনিমেশন দেবে)
+// ১. নাম্বার কাউন্টার কম্পোনেন্ট
 function AnimatedNumber({ value }: { value: number }) {
   const [displayValue, setDisplayValue] = useState(0);
 
@@ -34,6 +34,8 @@ export default function GoogleAdsHero() {
           
           {/* Left Side: Content */}
           <div className="w-full lg:w-1/2 text-center lg:text-left flex flex-col items-center lg:items-start">
+            
+            {/* Tagline: Using keyword 'Certified Google Ads Partner' */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -42,22 +44,24 @@ export default function GoogleAdsHero() {
               <Target size={14} /> Certified Google Ads Partner
             </motion.div>
 
+            {/* H1 Optimization: Added 'Specialist' to target high volume keyword */}
             <motion.h1 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
               className="text-5xl md:text-6xl lg:text-7xl font-black text-slate-900 dark:text-white tracking-tighter leading-[1.05] mb-8"
             >
-              Get More Sales with <span className="text-blue-600">Data-Driven</span> Google Ads
+              Scale Your ROAS with a <span className="text-blue-600">Google Ads Specialist</span>
             </motion.h1>
 
+            {/* Paragraph Optimization: Target 'hire google ads expert' intent and 'Audit' */}
             <motion.p 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="text-lg md:text-xl text-slate-600 dark:text-slate-400 font-medium leading-relaxed max-w-xl lg:max-w-none mb-10"
             >
-              Stop wasting budget on clicks that don't convert. We set up, track, and optimize high-performance campaigns that actually scale your revenue.
+              Stop losing money on ineffective clicks. Hire a Google Ads expert to perform a professional account audit and build high-converting campaigns that drive real revenue.
             </motion.p>
 
             <motion.div 
@@ -66,8 +70,9 @@ export default function GoogleAdsHero() {
               transition={{ delay: 0.3 }}
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
             >
+              {/* Primary Action: Audit Keyword Focus */}
               <Link href="/booking" className="w-full sm:w-auto px-8 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-lg shadow-2xl shadow-blue-500/30 transition-all flex items-center justify-center gap-2 group">
-                Book a Free Audit <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                Free Google Ads Audit <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <button className="w-full sm:w-auto px-8 py-5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl font-black text-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
                 View Case Studies
@@ -75,7 +80,7 @@ export default function GoogleAdsHero() {
             </motion.div>
           </div>
 
-          {/* Right Side: Dashboard Mockup */}
+          {/* Right Side: Visual Evidence */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -86,28 +91,27 @@ export default function GoogleAdsHero() {
               
               <div className="flex items-center justify-between mb-8 border-b border-slate-100 dark:border-slate-800/50 pb-6">
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white">Campaign Performance</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Live data • Last 30 Days</p>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">Ads Performance Dashboard</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Real-time Campaign Data</p>
                 </div>
                 <div className="px-4 py-2 bg-emerald-500/10 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Optimized
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> High ROAS
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-6 mb-8">
                 <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1">Total Sales</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1">Total Conversion Value</p>
                   <p className="text-3xl font-black text-slate-900 dark:text-white">
                     $<AnimatedNumber value={14500} />
                   </p>
                 </div>
                 <div className="p-6 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/20">
-                  <p className="text-[10px] text-blue-100 font-bold uppercase tracking-widest mb-1">ROAS</p>
+                  <p className="text-[10px] text-blue-100 font-bold uppercase tracking-widest mb-1">Target ROAS</p>
                   <p className="text-3xl font-black text-white">5.8x</p>
                 </div>
               </div>
 
-              {/* Revenue Graph Area */}
               <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800/50 relative overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
                     <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest">Revenue Growth</p>
@@ -128,7 +132,6 @@ export default function GoogleAdsHero() {
               </div>
             </div>
 
-            {/* Floating Proof Card */}
             <motion.div 
               animate={{ y: [0, -10, 0] }}
               transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
@@ -138,8 +141,8 @@ export default function GoogleAdsHero() {
                 <DollarSign size={20} />
               </div>
               <div>
-                <p className="text-xs font-black text-slate-900 dark:text-white">Conversion Rate</p>
-                <p className="text-[10px] font-bold text-emerald-500">+115% vs last month</p>
+                <p className="text-xs font-black text-slate-900 dark:text-white">Audit Success</p>
+                <p className="text-[10px] font-bold text-emerald-500">+115% Sales Increase</p>
               </div>
             </motion.div>
           </motion.div>

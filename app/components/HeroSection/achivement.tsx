@@ -2,12 +2,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, useInView, animate } from 'framer-motion'
 
-// ১. আপডেট করা CounterUp কম্পোনেন্ট (স্ল্যাশ বা স্পেশাল ক্যারেক্টার সাপোর্ট করবে)
+// ১. CounterUp Component
 function CounterUp({ value, suffix = "", duration = 2 }: { value: string, suffix?: string, duration?: number }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.5 });
   
-  // যদি ভ্যালু "24/7" হয়, তবে আমরা শুধু '24' কে এনিমেট করব, আর বাকিটা স্থির থাকবে
   const hasSlash = value.includes('/');
   const mainNumber = hasSlash ? parseInt(value.split('/')[0]) : parseInt(value.replace(/[^0-9]/g, ''));
   const secondPart = hasSlash ? `/${value.split('/')[1]}` : "";
@@ -32,15 +31,13 @@ function CounterUp({ value, suffix = "", duration = 2 }: { value: string, suffix
   );
 }
 
-// ২. মেইন Achievement কম্পোনেন্ট
-// ... (আপনার CounterUp লজিক একই থাকবে)
-
 export default function Achievement() {
+  // স্ট্যাটসগুলো আপনার রিসার্চ ফাইল অনুযায়ী অপ্টিমাইজ করা হয়েছে
   const stats = [
     { val: "50", label: "Global Projects", suffix: "+" },
-    { val: "99", label: "Data Precision", suffix: "%" },
-    { val: "10", label: "Ad Spend Managed", suffix: "M+" },
-    { val: "24/7", label: "Premium Support", suffix: "" },
+    { val: "99", label: "Tracking Precision", suffix: "%" }, // Data Precision -> Tracking Precision (GTM focus)
+    { val: "4", label: "Avg. ROAS Increase", suffix: "X+" }, // $10M Managed এর বদলে ROAS ফোকাস করা ক্লায়েন্টের কাছে বেশি আকর্ষণীয়
+    { val: "24/7", label: "Active Monitoring", suffix: "" },
   ];
 
   return (

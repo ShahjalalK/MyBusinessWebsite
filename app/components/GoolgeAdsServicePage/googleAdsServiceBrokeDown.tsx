@@ -8,32 +8,32 @@ const detailedServices = [
   {
     step: "01",
     icon: <Search className="text-blue-600" size={24} />,
-    title: "Strategic Keyword Research",
-    description: "We don't just find keywords; we find 'Buyer Intent'. We analyze search volume, competition, and negative keywords to ensure you only pay for high-value traffic."
+    title: "In-Depth Keyword Research",
+    description: "We don't just find keywords; we identify 'Buyer Intent'. We analyze search volume and negative keywords to ensure you only pay for high-value traffic with low CPC."
   },
   {
     step: "02",
     icon: <Rocket className="text-blue-600" size={24} />,
-    title: "Expert Campaign Setup",
-    description: "From Search and Shopping to Display and Remarketing, we build campaign structures (Alpha-Beta/SKAGs) that Google's algorithm loves."
+    title: "Professional Campaign Setup",
+    description: "Whether you need to hire a Google Ads expert for Search, Shopping, or Display, we build Alpha-Beta structures that maximize your Quality Score."
   },
   {
     step: "03",
     icon: <PenTool className="text-blue-600" size={24} />,
-    title: "High-Converting Ad Copy",
-    description: "Words that sell. We write compelling headlines and descriptions that increase your Click-Through Rate (CTR) and lower your Cost-Per-Click."
+    title: "High-CTR Ad Copywriting",
+    description: "Words that convert. We craft compelling headlines and descriptions that increase your Click-Through Rate (CTR) and significantly lower your Cost-Per-Click."
   },
   {
     step: "04",
     icon: <BarChart4 className="text-blue-600" size={24} />,
-    title: "Full Conversion Tracking",
-    description: "The backbone of ROI. We set up GTM, GA4, and Server-Side tracking to ensure every conversion is attributed correctly to the right campaign."
+    title: "Advanced Tracking (GA4 & GTM)",
+    description: "The backbone of ROAS. We implement GTM server-side tracking and GA4 to ensure 100% data accuracy for every dollar spent on your ads."
   },
   {
     step: "05",
     icon: <Settings2 className="text-blue-600" size={24} />,
-    title: "Continuous Optimization",
-    description: "Data-driven scaling. We perform weekly bid adjustments, A/B testing, and audience refining to keep your ROAS growing month after month."
+    title: "Ongoing Account Optimization",
+    description: "Data-driven scaling. We perform weekly bid adjustments, A/B testing, and negative keyword scrubbing to keep your campaign performance growing."
   }
 ];
 
@@ -49,14 +49,14 @@ export default function GoogleAdsServicesBreakdown() {
             whileInView={{ opacity: 1, y: 0 }}
             className="text-blue-600 font-black uppercase tracking-[0.3em] text-[10px] mb-4 inline-block"
           >
-            What's Included
+            Our Full-Service Management
           </motion.span>
           <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-6">
-            Everything You Need to <br />
+            The Complete Framework to <br />
             <span className="text-blue-600">Dominating Google Search.</span>
           </h2>
           <p className="text-slate-500 dark:text-slate-400 font-medium text-lg">
-            A complete, end-to-end management service designed to take the guesswork out of your advertising.
+            A results-oriented service designed for those looking to hire a Google Ads specialist who delivers more than just clicks—we deliver growth.
           </p>
         </div>
 
@@ -90,18 +90,18 @@ export default function GoogleAdsServicesBreakdown() {
             </motion.div>
           ))}
 
-          {/* Special CTA Card */}
+          {/* Special CTA Card: Optimized with High-Value Keyword */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             className="p-8 rounded-[2.5rem] bg-blue-600 flex flex-col justify-center items-center text-center text-white"
           >
-            <h3 className="text-2xl font-black mb-4">Ready to Grow?</h3>
+            <h3 className="text-2xl font-black mb-4">Hidden Opportunities?</h3>
             <p className="text-blue-100 text-sm mb-8">
-              Let's audit your account and find the hidden opportunities.
+              Get a professional Google Ads account audit and identify exactly where you are losing money.
             </p>
             <Link href="/book-audit" className="px-6 py-3 bg-white text-blue-600 font-black rounded-xl text-sm shadow-xl hover:bg-slate-100 transition-all">
-              Book Free Audit
+              Book My Free Audit
             </Link>
           </motion.div>
 

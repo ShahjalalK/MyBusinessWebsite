@@ -5,6 +5,8 @@ import { CheckCircle2, Video, Globe, ShieldCheck, ArrowRight } from 'lucide-reac
 import Navbar from '../components/navbar'
 import Footer from '../components/footer'
 
+
+
 export default function BookingPage() {
 
   // --- ১০০% নিশ্চিত সার্ভার-সাইড ট্র্যাকিং ফাংশন ---

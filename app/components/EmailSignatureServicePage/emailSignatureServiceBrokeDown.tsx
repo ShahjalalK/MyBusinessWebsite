@@ -10,133 +10,125 @@ import {
   Users, 
   RotateCcw,
   CheckCircle,
-  Layout
+  Layout,
+  ArrowRight
 } from 'lucide-react'
+import Link from 'next/link';
 
-// ১. সার্ভিস ব্রেকডাউন ডাটা
 const services = [
   {
-    icon: <Palette size={24} />,
-    title: "Custom Signature Design",
-    desc: "Tailored to your brand identity, including logo, brand colors, and professional typography."
+    icon: <Palette size={26} />,
+    title: "Signature Brand Design",
+    desc: "Custom designs tailored to your corporate identity, utilizing your logo and brand colors.",
+    color: "bg-blue-500"
   },
   {
-    icon: <Code2 size={24} />,
-    title: "HTML Coding (Clickable)",
-    desc: "Professionally hand-coded HTML ensuring all links like phone, website, and social icons work perfectly."
+    icon: <Code2 size={26} />,
+    title: "Hand-Coded HTML",
+    desc: "Pixel-perfect, clickable HTML code ensuring your links work flawlessly on every click.",
+    color: "bg-emerald-500"
   },
   {
-    icon: <Smartphone size={24} />,
-    title: "Mobile-Responsive Layout",
-    desc: "A layout designed to look flawless on desktop, tablet, and mobile devices automatically."
+    icon: <Smartphone size={26} />,
+    title: "Mobile-Adaptive Layout",
+    desc: "Responsive designs optimized for flawless display across all mobile devices and tablets.",
+    color: "bg-purple-500"
   },
   {
-    icon: <MailCheck size={24} />,
-    title: "Platform Compatibility",
-    desc: "Tested to work smoothly across Gmail, Outlook, Apple Mail, and all major email clients."
+    icon: <MailCheck size={26} />,
+    title: "Platform Optimization",
+    desc: "100% compatibility with Gmail, Outlook, Apple Mail, and professional email clients.",
+    color: "bg-orange-500"
   },
   {
-    icon: <Wrench size={24} />,
-    title: "Easy Installation Guide",
-    desc: "Simple step-by-step or video instructions to install your signature without any technical hassle."
+    icon: <Wrench size={26} />,
+    title: "Technical Installation",
+    desc: "Step-by-step documentation and support to set up your signature without any hassle.",
+    color: "bg-pink-500"
   },
   {
-    icon: <Users size={24} />,
-    title: "Multiple Team Signatures",
-    desc: "Need it for your team? We ensure a consistent and polished brand image for every member."
-  },
-  {
-    icon: <RotateCcw size={24} />,
-    title: "Revisions & Support",
-    desc: "Unlimited revisions until you're satisfied, plus post-delivery support for any setup help."
+    icon: <Users size={26} />,
+    title: "Team-Wide Consistency",
+    desc: "Maintain a unified and professional brand image across your entire organization.",
+    color: "bg-cyan-500"
   }
 ];
 
 export default function EmailSignatureServicesBreakdown() {
   return (
-    <section className="py-24 bg-slate-50 dark:bg-slate-900/50 font-sans overflow-hidden">
+    <section className="py-24 bg-[#050a1a] font-sans overflow-hidden">
       <div className="container mx-auto px-6">
         
-        {/* Header Section */}
-        <div className="max-w-3xl mb-20">
+        {/* Header - Center Aligned for Better Impact */}
+        <div className="max-w-3xl mx-auto text-center mb-24">
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 text-slate-500 font-black uppercase text-[10px] tracking-[0.3em] mb-4"
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-black uppercase tracking-[0.3em] mb-8"
           >
-            <Layout size={14} /> Comprehensive Solutions
+            <Layout size={14} /> Our Expertise
           </motion.div>
-          <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight mb-6">
-            Everything You Need For A <br />
-            <span className="text-blue-600 underline decoration-slate-200 underline-offset-8 italic">Perfect Email Signature</span>
+          <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-none mb-8">
+            Complete Solutions for <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 italic">Digital Branding.</span>
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 text-lg font-medium">
-            We provide a complete, done-for-you solution — from design to coding — so you can start using your professional signature without any hassle.
+          <p className="text-slate-400 text-lg font-medium max-w-2xl mx-auto">
+            We handle everything from creative design to technical HTML coding, delivering a signature that works as hard as you do.
           </p>
         </div>
 
-        {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-12 gap-x-8">
+        {/* Services Grid - Modern Card Design */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {services.map((service, idx) => (
             <motion.div
               key={idx}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.1 }}
-              className="flex flex-col group"
+              transition={{ delay: idx * 0.05 }}
+              whileHover={{ y: -10 }}
+              className="relative group p-10 rounded-[2.5rem] bg-slate-900/40 border border-slate-800 hover:border-blue-500/50 transition-all duration-500 backdrop-blur-sm"
             >
-              <div className="mb-5 flex items-center justify-between">
-                <div className="p-3 bg-white dark:bg-slate-800 text-blue-600 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
+              {/* Background Glow */}
+              <div className={`absolute top-0 right-0 w-24 h-24 ${service.color} opacity-0 blur-[60px] group-hover:opacity-20 transition-opacity rounded-full`} />
+              
+              <div className="relative z-10">
+                <div className={`mb-8 p-4 w-fit rounded-2xl text-white ${service.color} shadow-lg shadow-black/20 group-hover:scale-110 transition-transform duration-500`}>
                   {service.icon}
                 </div>
-                <span className="text-slate-200 dark:text-slate-800 font-black text-4xl group-hover:text-slate-300 dark:group-hover:text-slate-700 transition-colors">
-                  0{idx + 1}
-                </span>
+                
+                <h3 className="text-2xl font-black text-white mb-4 tracking-tight">
+                  {service.title}
+                </h3>
+                
+                <p className="text-slate-400 text-[15px] leading-relaxed font-medium">
+                  {service.desc}
+                </p>
               </div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">
-                {service.title}
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed font-medium">
-                {service.desc}
-              </p>
             </motion.div>
           ))}
         </div>
 
-        {/* Final Conclusion Box */}
+        {/* Final CTA Card - Glassmorphism */}
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          className="mt-24 p-8 md:p-12 rounded-[3rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/20"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          className="mt-24 p-1 rounded-[3rem] bg-gradient-to-br from-blue-500/20 to-emerald-500/20"
         >
-          <div className="flex flex-col md:flex-row items-center gap-8 justify-between">
-            <div className="text-center md:text-left flex-1">
-              <div className="inline-flex items-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest mb-4">
-                <CheckCircle size={16} /> Ready to Use
-              </div>
-              <h4 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white mb-4 tracking-tighter leading-tight">
-                Simple, Clean, and Ready to Use 🚀
+          <div className="bg-[#0b1224] rounded-[2.9rem] p-10 md:p-16 flex flex-col lg:flex-row items-center justify-between gap-10">
+            <div className="text-center lg:text-left">
+              <h4 className="text-3xl md:text-4xl font-black text-white mb-4 tracking-tighter">
+                Ready to elevate your emails? 🚀
               </h4>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-                Our goal is to deliver a high-quality email signature that works flawlessly — so you can focus on your business while we handle the rest.
+              <p className="text-slate-400 text-lg font-medium">
+                Join 500+ professionals using our clickable HTML signatures.
               </p>
             </div>
             
-            <div className="flex flex-col items-center gap-4 border-t md:border-t-0 md:border-l border-slate-100 dark:border-slate-800 pt-8 md:pt-0 md:pl-12">
-               <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">No technical skills needed</p>
-               <div className="px-6 py-3 bg-blue-600 text-white text-xs font-black rounded-xl uppercase tracking-widest shadow-lg shadow-blue-600/20">
-                  Full Setup Handled
-               </div>
-            </div>
+            <Link href="/contact" className="flex items-center gap-3 px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-xl shadow-blue-600/20 active:scale-95 group">
+              Start Project Now <ArrowRight size={18} className="group-hover:translate-x-2 transition-transform" />
+            </Link>
           </div>
         </motion.div>
-
-        {/* Optional Conversion Line */}
-        <div className="mt-12 text-center opacity-60">
-           <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em]">
-             From initial design to final setup — we take care of it all.
-           </p>
-        </div>
 
       </div>
     </section>

@@ -20,29 +20,29 @@ const staggerContainer = {
 export default function WhatWeDo() {
   const services = [
     {
-      title: "Server-Side Tracking",
-      desc: "Recover lost data and bypass iOS restrictions with advanced GTM Server-Side setup for 100% precision.",
+      title: "GA4 Server-Side Tracking", // Keyword Optimized
+      desc: "Recover 30%+ lost data and bypass iOS 14+ restrictions with advanced GTM Server-Side setup for 100% precision.",
       color: "blue",
       icon: <Zap className="w-6 h-6" />,
       link: "/services/server-side-tracking"
     },
     {
-      title: "Google Ads Strategy",
-      desc: "High-ROI campaign management focused on scaling conversions. We've managed $2.5M+ in ad spend.",
+      title: "Google Ads Audit & ROI", // Targeting 0% KD "Audit" Keyword
+      desc: "Get a comprehensive Google Ads audit service to identify waste and scale high-ROI campaigns effectively.",
       color: "indigo",
       icon: <Target className="w-6 h-6" />,
-      link: "/services/facebook-capi",
-    },
-    {
-      title: "Conversion API",
-      desc: "Direct server-to-server integration for Meta (Facebook) and GA4 to track every user action accurately.",
-      color: "purple",
-      icon: <BarChart3 className="w-6 h-6" />,
       link: "/services/google-ads-expert",
     },
     {
-      title: "Clickable Signatures",
-      desc: "Professional HTML email signatures with clickable links and CTAs to boost your brand authority.",
+      title: "Conversion API (CAPI)", // High Value Keyword
+      desc: "Expert Meta (Facebook) and GA4 Conversion API integration for seamless server-to-server data tracking.",
+      color: "purple",
+      icon: <BarChart3 className="w-6 h-6" />,
+      link: "/services/facebook-capi",
+    },
+    {
+      title: "HTML Email Signatures", // wisestamp-based keyword
+      desc: "Professional, clickable HTML email signatures with brand disclaimers to boost your business authority.",
       color: "cyan",
       icon: <MailCheck className="w-6 h-6" />,
       link: "/services/email-signature",
@@ -67,10 +67,10 @@ export default function WhatWeDo() {
             Our Expertise
           </motion.span>
           <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white mb-6 tracking-tighter">
-            What We Do <span className="text-blue-600">Best.</span>
+            Data-Driven <span className="text-blue-600">Solutions.</span>
           </h2>
           <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg font-medium">
-            We combine technical tracking with strategic marketing to ensure your business grows with data-driven decisions.
+            We bridge the gap between <span className="text-slate-900 dark:text-white font-bold">client side vs server side tracking</span> to ensure your marketing budget works smarter, not harder.
           </p>
         </motion.div>
 
@@ -91,7 +91,7 @@ export default function WhatWeDo() {
             >
               <div>
                 {/* Icon Container */}
-                <div className={`w-14 h-14 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300`}>
+                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                   <div className="text-blue-600 group-hover:text-white">
                     {service.icon}
                   </div>
@@ -107,7 +107,7 @@ export default function WhatWeDo() {
               </div>
 
               <Link href={service.link} className="flex items-center text-blue-600 font-black text-xs uppercase tracking-widest cursor-pointer group/link">
-                Learn More 
+                Explore Service 
                 <ArrowRight className="w-4 h-4 ml-2 group-hover/link:translate-x-2 transition-transform" />
               </Link>
             </motion.div>

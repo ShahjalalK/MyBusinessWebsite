@@ -1,29 +1,29 @@
 "use client"
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaPlus, FaMinus, FaQuestionCircle } from 'react-icons/fa'
+import { FaPlus, FaMinus, FaQuestionCircle, FaArrowRight } from 'react-icons/fa'
 import Link from 'next/link';
 
 const faqs = [
   {
     question: "What exactly is Facebook Conversion API (CAPI)?",
-    answer: "CAPI is a server-to-server tracking tool that sends data directly from your website's server to Facebook. Unlike the standard browser pixel, it isn't affected by ad-blockers, iOS 14 privacy updates, or cookie restrictions."
+    answer: "CAPI is a server-to-server tracking tool that sends data directly from your server to Meta. Unlike the standard browser pixel, it bypasses ad-blockers and iOS privacy restrictions. As a google ads specialist, I recommend this to recover up to 40% of lost conversion data."
   },
   {
-    question: "Is it really necessary for my business in 2026?",
-    answer: "Yes! Browser-based tracking is losing up to 40% of data. Without CAPI, your Facebook Ads are 'blind' to a large portion of your audience, leading to higher costs and poor optimization. It's now a requirement for serious advertisers."
+    question: "Why should I use GTM Server-Side tracking?",
+    answer: "Implementing gtm server side tracking allows you to own your data. It improves website speed, enhances data privacy compliance, and provides a much stronger signal for Facebook and Google Ads algorithms compared to traditional tracking."
   },
   {
-    question: "How long does the setup take?",
-    answer: "A standard professional setup usually takes 3 to 5 business days. This includes the initial audit, server configuration, event matching, and a minimum of 48 hours of testing to ensure data accuracy."
+    question: "How long does a professional CAPI setup take?",
+    answer: "A standard high-performance setup takes 3 to 5 business days. This includes a deep google ads account audit, server configuration, advanced event deduplication, and 48 hours of rigorous validation."
   },
   {
-    question: "Is it compatible with my website (Shopify, WordPress, etc.)?",
-    answer: "Absolutely! I can implement CAPI on almost any platform including WordPress, Shopify, Next.js, and custom-coded sites using Google Tag Manager (GTM) Server-Side."
+    question: "Is this compatible with Shopify, WordPress, or Next.js?",
+    answer: "Yes! Whether it's a Shopify store, a WordPress site, or a custom Next.js application, I can implement a robust facebook capi and GA4 server-side architecture using GTM."
   },
   {
-    question: "What do you need from me to get started?",
-    answer: "I will need access to your Facebook Business Manager, Google Tag Manager, and your website's backend. Don't worry, I'll provide a simple guide or jump on a quick call to help you with the access."
+    question: "What is your process for a Google Ads account audit?",
+    answer: "I use a proprietary google ads audit checklist to identify tracking leaks, conversion discrepancies, and low-quality event matching. This ensures your ad spend is optimized for actual sales, not just clicks."
   }
 ];
 
@@ -31,56 +31,81 @@ export default function CapiFAQSection() {
   const [activeIdx, setActiveIdx] = useState<number | null>(0);
 
   return (
-    <section className="py-24 bg-white dark:bg-slate-950">
-      <div className="container mx-auto px-6">
+    <section className="py-28 bg-white dark:bg-[#020617] relative overflow-hidden">
+      
+      {/* Background Blurs */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px] -z-0"></div>
+      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-cyan-600/5 rounded-full blur-[120px] -z-0"></div>
+
+      <div className="container mx-auto px-6 relative z-10">
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
           
-          {/* Left: Heading */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-600 text-3xl">
-              <FaQuestionCircle />
-            </div>
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter leading-tight">
-              Common <br /> <span className="text-blue-600">Questions.</span>
-            </h2>
-            <p className="text-slate-500 dark:text-slate-400 font-medium">
-              Everything you need to know about the setup process and how it benefits your business. 
-            </p>
-            <div className="pt-4">
-              <p className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest">
-                Still have questions?
+          {/* Left Side: Sticky Content */}
+          <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-24 h-fit">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              className="space-y-6"
+            >
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-3xl flex items-center justify-center text-white text-4xl shadow-xl shadow-blue-500/20">
+                <FaQuestionCircle />
+              </div>
+              
+              <h2 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.9] lg:max-w-xs">
+                Clarity in <br /> <span className="text-blue-600 italic">Tracking.</span>
+              </h2>
+              
+              <p className="text-slate-500 dark:text-slate-400 font-bold text-lg leading-relaxed">
+                Everything you need to know about professional tracking and why businesses hire a specialized <span className="text-blue-600">google ads specialist</span>.
               </p>
-              <Link href="/contact" className="text-blue-600 font-black hover:underline mt-2 inline-block">
-                Contact me directly →
-              </Link>
-            </div>
+
+              <div className="pt-6">
+                <div className="p-8 bg-slate-50 dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 relative group overflow-hidden">
+                   <div className="relative z-10">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Need more help?</p>
+                      <h4 className="text-xl font-black text-slate-900 dark:text-white mb-4">Have a custom tracking issue?</h4>
+                      <Link href="/book-audit" className="inline-flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-sm hover:gap-5 transition-all">
+                        Get Free Audit <FaArrowRight />
+                      </Link>
+                   </div>
+                   {/* Decorative icon */}
+                   <FaQuestionCircle className="absolute -bottom-4 -right-4 text-slate-200 dark:text-slate-800 text-8xl opacity-20 group-hover:rotate-12 transition-transform" />
+                </div>
+              </div>
+            </motion.div>
           </div>
 
-          {/* Right: Accordion */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Right Side: Accordion Grid */}
+          <div className="lg:col-span-8 space-y-5">
             {faqs.map((faq, idx) => (
-              <div 
+              <motion.div 
                 key={idx}
-                className={`border rounded-[2rem] transition-all duration-300 ${
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className={`group rounded-[2.5rem] transition-all duration-500 border overflow-hidden ${
                   activeIdx === idx 
-                  ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-900/10' 
-                  : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50'
+                  ? 'border-blue-600/50 bg-blue-50/20 dark:bg-blue-600/5 shadow-2xl shadow-blue-500/10' 
+                  : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/50 hover:border-blue-200 dark:hover:border-blue-900'
                 }`}
               >
                 <button
                   onClick={() => setActiveIdx(activeIdx === idx ? null : idx)}
-                  className="w-full flex items-center justify-between p-8 text-left"
+                  className="w-full flex items-center justify-between p-8 md:p-10 text-left outline-none"
                 >
-                  <span className={`text-lg font-black tracking-tight ${
-                    activeIdx === idx ? 'text-blue-600' : 'text-slate-900 dark:text-white'
+                  <span className={`text-xl md:text-2xl font-black tracking-tight leading-snug pr-6 transition-colors duration-300 ${
+                    activeIdx === idx ? 'text-blue-600' : 'text-slate-900 dark:text-white group-hover:text-blue-600'
                   }`}>
                     {faq.question}
                   </span>
-                  <div className={`shrink-0 ml-4 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                    activeIdx === idx ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                  
+                  <div className={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                    activeIdx === idx 
+                    ? 'bg-blue-600 text-white rotate-180' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600'
                   }`}>
-                    {activeIdx === idx ? <FaMinus size={12} /> : <FaPlus size={12} />}
+                    {activeIdx === idx ? <FaMinus size={14} /> : <FaPlus size={14} />}
                   </div>
                 </button>
 
@@ -90,16 +115,18 @@ export default function CapiFAQSection() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="overflow-hidden"
+                      transition={{ duration: 0.4, ease: "circOut" }}
                     >
-                      <div className="px-8 pb-8 text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                        {faq.answer}
+                      <div className="px-8 md:px-10 pb-10">
+                        <div className="h-px w-full bg-gradient-to-r from-blue-600/20 to-transparent mb-6"></div>
+                        <p className="text-slate-500 dark:text-slate-400 font-bold text-lg leading-relaxed lg:max-w-2xl">
+                          {faq.answer}
+                        </p>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             ))}
           </div>
 

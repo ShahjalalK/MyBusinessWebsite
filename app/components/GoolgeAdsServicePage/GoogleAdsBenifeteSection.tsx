@@ -7,20 +7,20 @@ const benefits = [
   {
     icon: <Target className="text-white" size={24} />,
     color: "bg-blue-600",
-    title: "More Qualified Leads",
-    description: "Stop sorting through junk. We target high-intent users who are ready to buy, ensuring your sales team only talks to real prospects."
+    title: "High-Intent Qualified Leads",
+    description: "Stop wasting money on junk clicks. We target high-intent users ready to hire a Google Ads expert, ensuring your budget only attracts real prospects."
   },
   {
     icon: <Rocket className="text-white" size={24} />,
     color: "bg-indigo-600",
-    title: "Better ROI / ROAS",
-    description: "Maximize every cent. By cutting waste and scaling winners, we help you get a higher return on your ad spend consistently."
+    title: "Maximum ROI / ROAS",
+    description: "Scale your revenue consistently. By cutting waste and optimizing bids, we help you achieve the highest possible return on your ad spend (ROAS)."
   },
   {
     icon: <PieChart className="text-white" size={24} />,
     color: "bg-purple-600",
-    title: "Clear Data Insights",
-    description: "No more guessing games. Get crystal-clear reports that show exactly which ads are driving revenue and how your business is growing."
+    title: "Accurate Conversion Insights",
+    description: "No more guesswork. With professional GTM tracking, you get crystal-clear reports showing exactly which ads are driving your business growth."
   }
 ];
 
@@ -38,18 +38,22 @@ export default function GoogleAdsBenefitsSection() {
               whileInView={{ opacity: 1, x: 0 }}
               className="text-blue-600 font-black uppercase tracking-[0.3em] text-[10px] mb-4 inline-block"
             >
-              The Impact
+              The Impact of Expert Management
             </motion.span>
             <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-8 leading-[1.1]">
-              Results That Move The <br />
-              <span className="text-blue-600">Needle Forward.</span>
+              Results That Move Your <br />
+              <span className="text-blue-600">Business Forward.</span>
             </h2>
             <p className="text-slate-600 dark:text-slate-400 font-medium text-lg leading-relaxed mb-10 max-w-lg">
-              Partnering with a Google Ads specialist means you stop managing "clicks" and start managing "growth". Here is what you can expect:
+              Partnering with a certified <span className="text-slate-900 dark:text-white font-bold">Google Ads specialist</span> means you stop paying for clicks and start investing in scalable growth.
             </p>
 
             <div className="space-y-4">
-              {["100% Data Accuracy", "Weekly Performance Sync", "Transparent Reporting"].map((item, i) => (
+              {[
+                "100% Tracking Accuracy with GA4", 
+                "Weekly Performance Optimization", 
+                "Lower CPC & Higher Quality Scores"
+              ].map((item, i) => (
                 <div key={i} className="flex items-center gap-3 text-slate-800 dark:text-slate-200 font-bold">
                   <CheckCircle size={18} className="text-blue-600" />
                   {item}

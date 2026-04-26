@@ -18,26 +18,26 @@ export default function WorkingProcess() {
   const steps = [
     {
       num: "01",
-      title: "Audit & Plan",
-      desc: "We analyze your current tracking setup and identify data gaps.",
+      title: "GA4 & GTM Audit", // SEO Keyword: GA4 Audit
+      desc: "Detailed analysis of your current tracking setup to identify data gaps and fix tracking errors.",
       color: "blue"
     },
     {
       num: "02",
-      title: "SST Setup",
-      desc: "Implementing GTM Server-Side Tracking for maximum privacy and accuracy.",
+      title: "Server-Side Setup", // SEO Keyword: Server-Side Tracking
+      desc: "Implementing GTM Server-Side Tracking to bypass iOS restrictions and improve data privacy.",
       color: "indigo"
     },
     {
       num: "03",
-      title: "API Integration",
-      desc: "Connecting Facebook CAPI and GA4 for real-time conversion data.",
+      title: "CAPI Integration", // SEO Keyword: Conversion API / CAPI
+      desc: "Connecting Meta Conversions API and GA4 for accurate server-to-server event tracking.",
       color: "purple"
     },
     {
       num: "04",
-      title: "Scale & Optimize",
-      desc: "Scale your Google Ads using precise data to increase your overall ROI.",
+      title: "Ads ROI Scaling", // SEO Keyword: Google Ads ROI
+      desc: "Using precise tracking data to optimize your Google Ads and increase overall conversion ROI.",
       color: "green"
     }
   ];
@@ -46,7 +46,7 @@ export default function WorkingProcess() {
     <section className="py-24 bg-white dark:bg-slate-950 overflow-hidden">
       <div className="container mx-auto px-6">
         
-        {/* Header Section */}
+        {/* Header Section - SEO Optimized Title */}
         <motion.div 
           className="text-center mb-20"
           initial={{ opacity: 0, scale: 0.9 }}
@@ -55,10 +55,10 @@ export default function WorkingProcess() {
           transition={{ duration: 0.6 }}
         >
           <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-4 tracking-tighter">
-            Our 4-Step <span className="text-blue-600">Success Process</span>
+            Our Data-Driven <span className="text-blue-600">Tracking Workflow</span>
           </h2>
           <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-            We follow a proven workflow to ensure your tracking is flawless and your ads perform at their best.
+            A proven 4-step process for flawless <strong>Server-Side Tracking</strong> and <strong>Google Ads optimization</strong> to maximize your marketing performance.
           </p>
         </motion.div>
 
@@ -73,6 +73,7 @@ export default function WorkingProcess() {
             whileInView="whileInView"
             viewport={{ once: true }}
           >
+            {/* Semantic Step Content */}
             {steps.map((step, index) => (
               <motion.div 
                 key={index}
@@ -87,10 +88,12 @@ export default function WorkingProcess() {
                   {step.num}
                 </motion.div>
 
+                {/* Title using strong terminology */}
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 group-hover:text-blue-600 transition-colors">
                   {step.title}
                 </h3>
                 
+                {/* Descriptive text with niche-specific keywords */}
                 <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed px-4">
                   {step.desc}
                 </p>

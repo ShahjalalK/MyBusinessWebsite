@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react'
-import { Menu, X, ArrowRight, ChevronDown, Rocket, ShieldCheck, Mail, Activity, LayoutDashboard, Send, Clock, UserCheck, Lock } from 'lucide-react'
+import { Menu, X, ArrowRight, ChevronDown, Rocket, ShieldCheck, Mail, Activity, LayoutDashboard, Send, Clock, UserCheck, Lock, Sparkles, BookOpen, Briefcase } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { auth } from '../lib/firebase' 
@@ -17,11 +17,8 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll);
     
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user && user.email === ADMIN_EMAIL) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
+      const isUserAdmin = !!(user && user.email && user.email === ADMIN_EMAIL);
+      setIsAdmin(isUserAdmin);
     });
 
     return () => {
@@ -34,7 +31,6 @@ export default function Navbar() {
     try {
       const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
       const sessionId = document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1];
-
       await fetch('/api/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -59,7 +55,7 @@ export default function Navbar() {
     }`}>
       <div className="container mx-auto px-6 flex items-center justify-between">
         
-        {/* ১. ব্র্যান্ড লোগো */}
+        {/* লোগো */}
         <Link href="/" className="relative z-10 flex items-center group">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center mr-3 group-hover:rotate-[10deg] transition-all duration-300 shadow-lg shadow-blue-500/30">
             <span className="text-white font-black text-xl">T</span>
@@ -69,8 +65,8 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* ২. ডেস্কটপ মেনু */}
-        <div className="hidden lg:flex items-center gap-10">
+        {/* ডেস্কটপ মেনু (অপরিবর্তিত) */}
+        <div className="hidden lg:flex items-center gap-8">
           <NavLink href="/" onClick={() => handleNavClick('Home')}>Home</NavLink>
           
           <div className="group relative">
@@ -79,53 +75,17 @@ export default function Navbar() {
             </button>
             
             <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
-              <div className="w-[580px] bg-white dark:bg-slate-900 shadow-[0px_20px_50px_rgba(0,0,0,0.1)] rounded-[2rem] border border-slate-100 dark:border-slate-800 p-8 grid grid-cols-2 gap-4">
-                
-                <SolutionItem 
-                  title="Server-Side Tracking" 
-                  desc="Recover 25%+ data lost to iOS/Adblockers."
-                  icon={<ShieldCheck className="w-5 h-5 text-blue-500" />}
-                  href="/services/server-side-tracking"
-                  onClick={() => handleNavClick('Server-Side Tracking')}
-                />
-                
-                <SolutionItem 
-                  title="Google Ads Expert" 
-                  desc="Scaling your business with precision."
-                  icon={<ArrowRight className="w-5 h-5 text-green-500" />}
-                  href="/services/google-ads-expert" 
-                  onClick={() => handleNavClick('Google Ads Expert')}
-                />
-
-                <SolutionItem 
-                  title="Facebook CAPI" 
-                  desc="Advanced Conversion API for better ROAS."
-                  icon={<Rocket className="w-5 h-5 text-indigo-500" />}
-                  href="/services/facebook-capi" 
-                  onClick={() => handleNavClick('Facebook CAPI')}
-                />
-               
-                <SolutionItem 
-                  title="Email Signature" 
-                  desc="Interactive & Clickable HTML Signatures."
-                  icon={<Mail className="w-5 h-5 text-orange-500" />}
-                  href="/services/email-signature" 
-                  onClick={() => handleNavClick('Email Signature')}
-                />
-                
-                <Link 
-                  href="/case-studies" 
-                  onClick={() => handleNavClick('All Case Studies')}
-                  className="col-span-2 mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-between hover:bg-blue-600 group/btn transition-all duration-300"
-                >
-                  <span className="text-sm font-black uppercase tracking-widest group-hover/btn:text-white transition-colors">View All Case Studies</span>
-                  <ArrowRight className="w-5 h-5 group-hover/btn:text-white group-hover/btn:translate-x-2 transition-all" />
-                </Link>
+              <div className="w-[650px] bg-white dark:bg-slate-900 shadow-[0px_30px_60px_rgba(0,0,0,0.12)] rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 grid grid-cols-2 gap-6">
+                <SolutionItem title="Server-Side Tracking" desc="Bypass ITP & iOS restrictions to recover 25% lost data with high precision." icon={<ShieldCheck className="w-6 h-6 text-blue-500" />} href="/services/server-side-tracking" onClick={() => handleNavClick('SST')} />
+                <SolutionItem title="Google Ads Expert" desc="Strategic campaign management to scale your ROAS using data-driven insights." icon={<Rocket className="w-6 h-6 text-green-500" />} href="/services/google-ads-expert" onClick={() => handleNavClick('GAds')} />
+                <SolutionItem title="Facebook CAPI" desc="Advanced Conversion API integration to stabilize your pixel performance." icon={<Activity className="w-6 h-6 text-indigo-500" />} href="/services/facebook-capi" onClick={() => handleNavClick('CAPI')} />
+                <SolutionItem title="Email Signature" desc="Custom, clickable HTML signatures that enhance your brand's outreach." icon={<Mail className="w-6 h-6 text-orange-500" />} href="/services/email-signature" onClick={() => handleNavClick('EmailSign')} />
               </div>
             </div>
           </div>
 
-          <NavLink href="/about" onClick={() => handleNavClick('About')}>About Us</NavLink>
+          <NavLink href="/blog" onClick={() => handleNavClick('Blog')}>Blog</NavLink>
+          <NavLink href="/jobs" onClick={() => handleNavClick('Jobs')}>Jobs</NavLink>
 
           {isAdmin && (
             <div className="group relative">
@@ -145,76 +105,79 @@ export default function Navbar() {
 
           <Link 
             href="/tracking-checker" 
-            onClick={() => handleNavClick('Tracking Checker')}
-            className="relative group px-5 py-2 bg-blue-600/10 border border-blue-600/30 text-blue-600 rounded-full text-[13px] font-black hover:bg-blue-600 hover:text-white transition-all shadow-[0_0_15px_rgba(37,99,235,0.1)] flex items-center gap-2"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 rounded-2xl text-[13px] font-black hover:scale-105 transition-all shadow-sm"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-            Tracking Lab
+            <Sparkles size={14} className="animate-pulse" /> Tracking Lab
           </Link>
         </div>
 
-        {/* ৪. অ্যাকশন বাটন */}
+        {/* Action Button */}
         <div className="flex items-center gap-4 relative z-10">
           <Link 
             href="/contact" 
-            onClick={() => handleNavClick('Contact Button')}
-            className="hidden sm:flex items-center gap-2 relative group bg-slate-900 dark:bg-blue-600 text-white px-8 py-3.5 rounded-full text-sm font-black transition-all duration-300 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95 overflow-hidden"
+            className="hidden sm:flex items-center gap-2 bg-slate-900 dark:bg-blue-600 text-white px-7 py-3 rounded-2xl text-sm font-black transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/40 active:scale-95 group"
           >
-            <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" />
-            Get Started <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            Hire Expert <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
 
-          <button 
-            onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white transition-colors"
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          <button onClick={() => setIsOpen(!isOpen)} className="lg:hidden w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white">
+            {isOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </div>
 
-      {/* মোবাইল মেনু */}
+      {/* মোবাইল মেনু - সম্পূর্ণ ফিক্সড এবং অপ্টিমাইজড */}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl"
+            initial={{ opacity: 0, height: 0 }} 
+            animate={{ opacity: 1, height: 'auto' }} 
+            exit={{ opacity: 0, height: 0 }} 
+            className="lg:hidden bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 shadow-2xl overflow-y-auto max-h-[90vh]"
           >
-            <div className="container mx-auto px-6 py-10 flex flex-col gap-6">
-              <MobileNavLink href="/" onClick={() => {setIsOpen(false); handleNavClick('Mobile Home');}}>Home</MobileNavLink>
-              <MobileNavLink href="/tracking-checker" onClick={() => {setIsOpen(false); handleNavClick('Mobile Lab');}}>Tracking Lab</MobileNavLink>
-
-              <MobileNavLink href="/about" onClick={() => {setIsOpen(false); handleNavClick('Mobile Lab');}}>About Us</MobileNavLink>
-              
-              {isAdmin && (
-                <>
-                  <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-2" />
-                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Admin Control</p>
-                  <Link href="/admin/dashboard" onClick={() => setIsOpen(false)} className="text-xl font-bold text-slate-700 dark:text-slate-300">Dashboard</Link>
-                  <Link href="/admin/outreach" onClick={() => setIsOpen(false)} className="text-xl font-bold text-slate-700 dark:text-slate-300">Outreach</Link>
-                  <Link href="/admin/outreach/follow-up" onClick={() => setIsOpen(false)} className="text-xl font-bold text-slate-700 dark:text-slate-300">Follow-ups</Link>
-                </>
-              )}
-
-              <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-2" />
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Our Solutions</p>
-              
-              <div className="grid grid-cols-1 gap-4">
-                <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile Server Side');}} href="/services/server-side-tracking" className="text-base font-bold text-slate-700 dark:text-slate-300">Server-Side Tracking</Link>
-                <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile FB CAPI');}} href="/services/facebook-capi" className="text-base font-bold text-slate-700 dark:text-slate-300">Facebook CAPI</Link>
-                <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile Google Ads');}} href="/services/google-ads-expert" className="text-base font-bold text-slate-700 dark:text-slate-300">Google Ads</Link>
-                {/* Email Signature link added below */}
-                <Link onClick={() => {setIsOpen(false); handleNavClick('Mobile Email Signature');}} href="/services/email-signature" className="text-base font-bold text-slate-700 dark:text-slate-300">Email Signature</Link>
+            <div className="container mx-auto px-6 py-8 flex flex-col gap-6">
+              <div className="flex flex-col gap-4">
+                <MobileNavLink href="/" onClick={() => setIsOpen(false)}>Home</MobileNavLink>
+                <MobileNavLink href="/blog" onClick={() => setIsOpen(false)}>Blog</MobileNavLink>
+                <MobileNavLink href="/jobs" onClick={() => setIsOpen(false)}>Jobs</MobileNavLink>
+                
+                {/* Mobile Tracking Lab */}
+                <Link 
+                  href="/tracking-checker" 
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-2 w-fit px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-xl font-bold text-sm"
+                >
+                  <Sparkles size={16} /> Tracking Lab
+                </Link>
               </div>
 
-              <a href="mailto:shahjalal@trackflowpro.com" className="w-full text-center bg-blue-600 text-white py-5 rounded-2xl font-black shadow-lg shadow-blue-500/30">
-                Book A Consultation
-              </a>
+              {/* Mobile Solutions Section */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Our Solutions</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <MobileServiceLink href="/services/server-side-tracking" title="Server-Side Tracking" icon={<ShieldCheck size={18}/>} onClick={() => setIsOpen(false)} />
+                  <MobileServiceLink href="/services/google-ads-expert" title="Google Ads Expert" icon={<Rocket size={18}/>} onClick={() => setIsOpen(false)} />
+                  <MobileServiceLink href="/services/facebook-capi" title="Facebook CAPI" icon={<Activity size={18}/>} onClick={() => setIsOpen(false)} />
+                  <MobileServiceLink href="/services/email-signature" title="Email Signature" icon={<Mail size={18}/>} onClick={() => setIsOpen(false)} />
+                </div>
+              </div>
+              
+              {/* মোবাইল অ্যাডমিন অপশন (সম্পূর্ণ লিঙ্কসহ) */}
+              {isAdmin && (
+                <div className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
+                    <Lock size={10} /> Admin Control
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <Link href="/admin/dashboard" onClick={() => setIsOpen(false)} className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2"><LayoutDashboard size={14}/> Dashboard</Link>
+                    <Link href="/admin/outreach" onClick={() => setIsOpen(false)} className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Send size={14}/> Outreach</Link>
+                    <Link href="/admin/outreach/follow-up" onClick={() => setIsOpen(false)} className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2"><UserCheck size={14}/> Follow-ups</Link>
+                    <Link href="/admin/email-schedule/dashboard" onClick={() => setIsOpen(false)} className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Clock size={14}/> Schedules</Link>
+                  </div>
+                </div>
+              )}
+
+              <Link href="/contact" onClick={() => setIsOpen(false)} className="w-full text-center bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg">Hire Expert Now</Link>
             </div>
           </motion.div>
         )}
@@ -224,6 +187,15 @@ export default function Navbar() {
 }
 
 // Helper Components
+function MobileServiceLink({ href, title, icon, onClick }: { href: string, title: string, icon: React.ReactNode, onClick: () => void }) {
+  return (
+    <Link href={href} onClick={onClick} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold text-sm transition-all">
+      <span className="text-blue-500">{icon}</span>
+      {title}
+    </Link>
+  )
+}
+
 function NavLink({ href, onClick, children }: { href: string, onClick?: () => void, children: React.ReactNode }) {
   return (
     <Link href={href} onClick={onClick} className="text-[15px] font-bold text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors relative group">
@@ -235,7 +207,7 @@ function NavLink({ href, onClick, children }: { href: string, onClick?: () => vo
 
 function MobileNavLink({ href, onClick, children }: { href: string, onClick: () => void, children: React.ReactNode }) {
   return (
-    <Link href={href} onClick={onClick} className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none italic">
+    <Link href={href} onClick={onClick} className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
       {children}
     </Link>
   )
@@ -243,17 +215,13 @@ function MobileNavLink({ href, onClick, children }: { href: string, onClick: () 
 
 function SolutionItem({ title, desc, icon, href, onClick }: { title: string, desc: string, icon: React.ReactNode, href: string, onClick: () => void }) {
   return (
-    <Link 
-      href={href} 
-      onClick={onClick}
-      className="p-5 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-2xl transition-all duration-300 group/item border border-transparent hover:border-blue-100 dark:hover:border-blue-800 flex flex-col gap-3"
-    >
-      <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-lg shadow-sm flex items-center justify-center border border-slate-100 dark:border-slate-700 group-hover/item:scale-110 transition-transform">
+    <Link href={href} onClick={onClick} className="p-4 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 rounded-3xl transition-all duration-300 group/item border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50 flex flex-col gap-2">
+      <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center border border-slate-100 dark:border-slate-700 group-hover/item:scale-110 transition-transform">
         {icon}
       </div>
       <div>
-        <p className="text-[15px] font-black text-slate-900 dark:text-slate-100 group-hover/item:text-blue-600 transition-colors">{title}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{desc}</p>
+        <p className="text-[16px] font-black text-slate-900 dark:text-slate-100 group-hover/item:text-blue-600 transition-colors">{title}</p>
+        <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed font-medium">{desc}</p>
       </div>
     </Link>
   )
@@ -261,11 +229,7 @@ function SolutionItem({ title, desc, icon, href, onClick }: { title: string, des
 
 function AdminLink({ href, label, icon, onClick }: { href: string, label: string, icon: React.ReactNode, onClick: () => void }) {
   return (
-    <Link 
-      href={href} 
-      onClick={onClick}
-      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-all font-bold text-sm"
-    >
+    <Link href={href} onClick={onClick} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-all font-bold text-sm">
       <span className="text-blue-500">{icon}</span>
       {label}
     </Link>
