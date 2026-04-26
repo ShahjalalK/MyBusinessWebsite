@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../../../lib/firebase'
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore'
-import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, Layers, Clock, Building2 } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, Mail, ChevronDown, ChevronUp, Target, MousePointer2, Database, UserPlus, Layers, Clock, Building2, Zap } from 'lucide-react'
 import { 
   Editor, 
   EditorProvider, 
@@ -36,7 +36,8 @@ export default function FollowUpAutomationPage() {
   const [activeStep, setActiveStep] = useState('step1')
   const [leads, setLeads] = useState<any[]>([])
 
-  console.log("Leads", leads)
+  // নতুন স্টেট: প্রতিদিনের লিমিট সেভ করার জন্য
+  const [dailyLimit, setDailyLimit] = useState(50);
   
   const [categoryVariants, setCategoryVariants] = useState<any>({
     'Email Signature': Object.fromEntries(STEPS.map(s => [s, { variants: [{ id: 'V1', content: "" }], delay: 1440 }])),
@@ -45,19 +46,19 @@ export default function FollowUpAutomationPage() {
   })
   const [showEmails, setShowEmails] = useState<string | null>(null);
 
- 
 useEffect(() => {
   async function loadData() {
     try {
       setLoading(true);
       
-      // ১. কনফিগ লোড করা
       const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
       if (configDoc.exists()) {
-        setCategoryVariants(configDoc.data());
+        const data = configDoc.data();
+        setCategoryVariants(data);
+        // ডাটাবেস থেকে ডেইলি লিমিট লোড করা (না থাকলে ডিফল্ট ৫০)
+        setDailyLimit(data.daily_followup_limit || 50);
       }
       
-      // ২. সব লেড নিয়ে আসা (কোনো ফিল্টার ছাড়া যাতে ইনডেক্স এরর না আসে)
       const q = query(collection(db, "outreach_leads"));
       const snapshot = await getDocs(q);
       
@@ -66,19 +67,12 @@ useEffect(() => {
         ...doc.data() 
       }));
 
-      
-
-      // ৩. ক্লায়েন্ট সাইডে ফিল্টার করা (এটিই এখন আপনার ইনডেক্সের কাজ করবে)
       const filtered = allFetchedLeads.filter((l: any) => {
-        // স্টপ অটোমেশন চেক (Boolean check)
         const isStopped = l.stopAutomation === true;
-        // ভ্যালিড স্ট্যাটাস চেক
         const isValidStatus = ["sent", "opened", "active"].includes(l.status);
-        
         return !isStopped && isValidStatus;
       });
 
-      console.log("Leads after status filtering:", filtered.length);
       setLeads(filtered);
       
     } catch (err) {
@@ -90,11 +84,7 @@ useEffect(() => {
   loadData();
 }, []);
 
-  
-// --- স্মার্ট ফিল্টারিং লজিক (১০০% একুরেট ডাটা দেখানোর জন্য) ---
-// --- স্মার্ট ফিল্টারিং লজিক (ব্যাকএন্ড ক্রন জবের সাথে মিল রেখে) ---
 const currentCategoryLeads = leads.filter(l => {
-  // ১. সার্ভিস চেক (Case insensitive এবং Trim করা)
   const leadService = (l.service || '').toLowerCase().trim();
   const currentTab = activeTab.toLowerCase().trim();
   if (leadService !== currentTab) return false;
@@ -102,18 +92,13 @@ const currentCategoryLeads = leads.filter(l => {
   const followUpCount = l.follow_up_count || 0;
   const currentStepIdx = STEPS.indexOf(activeStep);
   
-  // চেক করুন লিডটি সঠিক স্টেপে আছে কি না (উদা: F-1 এর জন্য count 0 হতে হবে)
   if (followUpCount !== currentStepIdx) return false;
 
-  // ২. ফলো-আপ ১ (F-1) এর জন্য লজিক: অন্তত ১ বার ওপেন করলেই হবে
   if (activeStep === 'step1') {
     const openCount = l.open_count || 0;
-    // ১ বার বা তার বেশি ওপেন হলেই সে এই লিস্টে চলে আসবে
     return openCount >= 1;
   }
 
-  // ৩. অন্যান্য স্টেপের জন্য (F2-F5)
-  // লজিক: শেষ ইমেইল পাঠানোর পর অন্তত একবার নতুন করে ওপেন করতে হবে
   const getTime = (t: any): number => {
     if (!t) return 0;
     if (typeof t.toMillis === 'function') return t.toMillis();
@@ -124,9 +109,7 @@ const currentCategoryLeads = leads.filter(l => {
   const lastSent = getTime(l.lastFollowUp || l.sentAt);
   const lastOpened = getTime(l.lastOpenedAt || l.last_opened);
   
-  if (lastSent === 0) return false; // পাঠানোই হয়নি এমন লিড বাদ
-  
-  // পাঠানোর পর ওপেন টাইম বেশি হওয়া মানেই সে পরবর্তী ফলো-আপের জন্য যোগ্য
+  if (lastSent === 0) return false; 
   return lastOpened > lastSent;
 });
 
@@ -152,7 +135,13 @@ const currentCategoryLeads = leads.filter(l => {
 
     setSaving(true);
     try {
-      await setDoc(doc(db, "automation_settings", "followup_config"), categoryVariants);
+      // লিমিটসহ পুরো কনফিগারেশন আপডেট করা
+      const finalConfig = {
+        ...categoryVariants,
+        daily_followup_limit: dailyLimit
+      };
+
+      await setDoc(doc(db, "automation_settings", "followup_config"), finalConfig);
       
       const batchPromises = currentCategoryLeads.map((lead, index) => {
         const assignedVariantId = filteredVariants[index % filteredVariants.length].id; 
@@ -167,7 +156,7 @@ const currentCategoryLeads = leads.filter(l => {
       await Promise.all(batchPromises);
       
       setHasUnsavedChanges(false);
-      alert(`✅ ${activeTab} ${activeStep.toUpperCase()} Synced & Ready for Send!`);
+      alert(`✅ ${activeTab} ${activeStep.toUpperCase()} & Daily Limit Saved!`);
     } catch (error) { 
       console.error(error); 
       alert("Error syncing settings!");
@@ -212,11 +201,21 @@ const currentCategoryLeads = leads.filter(l => {
             </button>
           ))}
         </div>
+
+        {/* Days Gap Input */}
         <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
           <Clock size={18} className="text-blue-500" />
           <input type="number" min="1" value={days} onChange={(e) => updateGlobalState({ ...currentCategoryData, delay: (parseInt(e.target.value) || 1) * 1440 })}
             className="w-12 bg-blue-50 rounded-xl py-1.5 text-center text-sm font-black text-blue-700 outline-none" />
           <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Days Gap</span>
+        </div>
+
+        {/* NEW: Daily Sending Limit Input */}
+        <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
+          <Zap size={18} className="text-orange-500" />
+          <input type="number" min="1" value={dailyLimit} onChange={(e) => { setDailyLimit(parseInt(e.target.value) || 1); setHasUnsavedChanges(true); }}
+            className="w-16 bg-orange-50 rounded-xl py-1.5 text-center text-sm font-black text-orange-700 outline-none" />
+          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Daily Limit</span>
         </div>
       </div>
 
