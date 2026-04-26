@@ -1,21 +1,28 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShieldCheck, MapPin, Monitor, Globe, Database, ArrowRight, Zap, CheckCircle2, Cpu, Activity, TrendingDown, Target, Terminal, Fingerprint, Lock, ShieldAlert, Sparkles, MessageSquare } from 'lucide-react'
+import { 
+  MapPin, Monitor, Globe, Database, ArrowRight, Zap, CheckCircle2, 
+  Cpu, Terminal, Fingerprint, Lock, Sparkles, MessageSquare 
+} from 'lucide-react'
 import Link from 'next/link'
+// ফ্ল্যাগ আইকনের জন্য এগুলো ইমপোর্ট করুন (npm install country-flag-icons আগে করে নিন)
+import * as Flags from 'country-flag-icons/react/3x2'
 
 export default function TrackingLabClient() {
   const [userData, setUserData] = useState<any>(null);
   const [isScanning, setIsScanning] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
 
-  const getFlagEmoji = (countryCode: string) => {
-    if (!countryCode || countryCode.length !== 2) return "🌐";
-    const codePoints = countryCode
-      .toUpperCase()
-      .split("")
-      .map((char) => 127397 + char.charCodeAt(0));
-    return String.fromCodePoint(...codePoints);
+  // লোকেশন টেক্সট ছোট করার ফাংশন
+  const formatLocation = (loc: string) => {
+    if (!loc) return "Analyzing...";
+    const parts = loc.split(',');
+    // যদি অনেক বড় ঠিকানা হয়, তবে শুধু শেষ ২ অংশ (City, Country) দেখাবে
+    if (parts.length > 1) {
+      return `${parts[parts.length - 2].trim()}, ${parts[parts.length - 1].trim()}`;
+    }
+    return loc;
   };
 
   useEffect(() => {
@@ -160,12 +167,17 @@ export default function TrackingLabClient() {
                         icon={<MapPin size={20}/>} 
                         label="User Geo-Location" 
                         value={
-                            userData?.countryCode ? (
-                                <span className="flex items-center gap-2">
-                                    <span className="text-2xl leading-none">{getFlagEmoji(userData.countryCode)}</span> 
-                                    {userData.location}
-                                </span>
-                            ) : userData?.location
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            {userData?.countryCode && (
+                              <div className="w-6 h-4 shrink-0 overflow-hidden rounded-sm border border-slate-100 dark:border-white/10 shadow-sm">
+                                {/* SVG Flag Rendering */}
+                                {React.createElement((Flags as any)[userData.countryCode.toUpperCase()] || Flags.US)}
+                              </div>
+                            )}
+                            <span className="truncate" title={userData?.location}>
+                              {formatLocation(userData?.location)}
+                            </span>
+                          </div>
                         } 
                         color="blue" 
                     />
@@ -176,7 +188,6 @@ export default function TrackingLabClient() {
                     <GA4Card icon={<Lock size={20}/>} label="Endpoint IP" value={userData?.ip} color="emerald" />
                   </div>
 
-                  {/* Post-Scan Contact CTA */}
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -215,7 +226,6 @@ export default function TrackingLabClient() {
                 </div>
              </div>
 
-             {/* Sidebar Contact Card */}
              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-[3.5rem] p-10 shadow-xl">
                 <div className="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center mb-6">
                   <MessageSquare size={24} />
@@ -246,12 +256,12 @@ function GA4Card({ icon, label, value, color }: { icon: any, label: string, valu
   }
 
   return (
-    <motion.div whileHover={{ y: -5 }} className="p-8 bg-white dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-[2.5rem] transition-all relative overflow-hidden group shadow-sm hover:shadow-2xl">
-      <div className="flex flex-col gap-6">
-        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${colorMap[color]}`}>{icon}</div>
-        <div>
+    <motion.div whileHover={{ y: -5 }} className="p-8 bg-white dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-[2.5rem] transition-all relative overflow-hidden group shadow-sm hover:shadow-2xl min-h-[160px]">
+      <div className="flex flex-col gap-6 h-full justify-between">
+        <div className={`w-14 h-14 rounded-2xl shrink-0 flex items-center justify-center ${colorMap[color]}`}>{icon}</div>
+        <div className="overflow-hidden">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.25em] block mb-2">{label}</span>
-            <div className="text-xl font-black text-slate-900 dark:text-white truncate tracking-tight">{value || 'Analyzing...'}</div>
+            <div className="text-lg md:text-xl font-black text-slate-900 dark:text-white truncate tracking-tight">{value || 'Analyzing...'}</div>
         </div>
       </div>
     </motion.div>
