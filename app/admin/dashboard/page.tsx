@@ -1,10 +1,10 @@
 "use client"
 import React, { useEffect, useState, useMemo } from 'react'
 import { db } from '../../lib/firebase'
-import { collection, query, orderBy, onSnapshot, limit, doc, deleteDoc } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, limit, doc, deleteDoc, updateDoc } from 'firebase/firestore'
 import { 
   X, Send, MessageSquare, Activity, Trash2, Mail, Monitor, Clock, User, 
-  AlertCircle, CheckCircle2, ShieldAlert, Flame, Filter, Calendar, ChevronDown, ChevronUp, Timer, ExternalLink, Globe
+  AlertCircle, CheckCircle2, ShieldAlert, Flame, Filter, Calendar, ChevronDown, ChevronUp, Timer, ExternalLink, Globe, CheckCircle
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminGuard from '@/app/components/AdminGuard'
@@ -16,7 +16,7 @@ interface TrackingHistory {
   event: string;
   time: any;
   link?: string;
-  step?: number; // ফলো-আপ স্টেপ ট্র্যাকিংয়ের জন্য
+  step?: number;
 }
 
 interface SentMessage {
@@ -46,6 +46,7 @@ interface Lead {
   service?: string;
   preferred_hour?: number;
   stopAutomation?: boolean;
+  sender_email?: string;
   [key: string]: any; 
 }
 
@@ -79,51 +80,74 @@ export default function DashboardPage() {
     return isNaN(date.getTime()) ? 0 : date.getTime();
   };
 
-const isHotLead = (lead: Lead) => {
-  return (lead.open_count || 0) >= 2; 
-};
+  const isHotLead = (lead: Lead) => {
+    return (lead.open_count || 0) >= 1; 
+  };
 
-const getNextFollowUpStatus = (lead: Lead) => {
-  if (lead.status === 'replied' || lead.stopAutomation) return null;
-  const followUpCount = lead.follow_up_count || 0;
-  if (followUpCount >= 5) return null;
+  const handleMarkAsReplied = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm("Mark this lead as Replied and stop automation?")) {
+      try {
+        const docRef = doc(db, "outreach_leads", id);
+        await updateDoc(docRef, {
+          status: 'replied',
+          stopAutomation: true,
+          repliedAt: new Date()
+        });
+      } catch (error) {
+        console.error("Update error:", error);
+      }
+    }
+  };
 
-  const lastSent = toMillis(lead.lastFollowUp || lead.sentAt);
-  const lastOpened = toMillis(lead.lastOpenedAt || lead.last_opened || 0);
-  
-  if (followUpCount === 0) {
-    if ((lead.open_count || 0) < 1) return null; 
-  }
-  if (followUpCount >= 1) {
-    if (!lastOpened || lastOpened <= lastSent) return { label: "Waiting for Open", color: "text-orange-400", time: null };
-  }
+  const getNextFollowUpStatus = (lead: Lead) => {
+    if (lead.status === 'replied' || lead.stopAutomation) return null;
+    const followUpCount = lead.follow_up_count || 0;
+    if (followUpCount >= 5) return null;
 
-  const rawBaseTime = lead.lastOpenedAt || lead.last_opened || lead.lastFollowUp || lead.sentAt;
-  if (!rawBaseTime) return { label: "Syncing...", color: "text-gray-300", time: null };
+    const lastSent = toMillis(lead.lastFollowUp || lead.sentAt);
+    const lastOpened = toMillis(lead.lastOpenedAt || lead.last_opened || 0);
+    
+    if (followUpCount === 0) {
+      if ((lead.open_count || 0) < 1) return null; 
+    }
+    if (followUpCount >= 1) {
+      if (!lastOpened || lastOpened <= lastSent) return { label: "Waiting for Open", color: "text-orange-400", time: null };
+    }
 
-  const baseDate = new Date(toMillis(rawBaseTime));
-  const roundedDate = new Date(baseDate);
-  const minutes = baseDate.getMinutes();
-  const roundedMinutes = Math.floor(minutes / 30) * 30; 
-  roundedDate.setMinutes(roundedMinutes, 0, 0);
+    const rawBaseTime = lead.lastOpenedAt || lead.last_opened || lead.lastFollowUp || lead.sentAt;
+    if (!rawBaseTime) return { label: "Syncing...", color: "text-gray-300", time: null };
 
-  const nextStep = followUpCount + 1;
-  const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
-  const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
-  const now = new Date().getTime();
+    const baseDate = new Date(toMillis(rawBaseTime));
+    const roundedDate = new Date(baseDate);
+    const minutes = baseDate.getMinutes();
+    const roundedMinutes = Math.floor(minutes / 30) * 30; 
+    roundedDate.setMinutes(roundedMinutes, 0, 0);
 
-  const timeString = new Date(scheduledMillis).toLocaleString('en-GB', { 
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
-  });
+    const nextStep = followUpCount + 1;
+    const delayMinutes = lead[`step${nextStep}Delay`] || 1440; 
+    const scheduledMillis = roundedDate.getTime() + (delayMinutes * 60000);
+    const now = new Date().getTime();
 
-  if (now >= scheduledMillis) return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
-  return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
-};
+    const timeString = new Date(scheduledMillis).toLocaleString('en-GB', { 
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true 
+    });
+
+    if (now >= scheduledMillis) return { label: `Ready: Step ${nextStep}`, color: "text-green-500", time: timeString };
+    return { label: `Step ${nextStep} Scheduled:`, color: "text-blue-500", time: timeString };
+  };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if(window.confirm("Are you sure to delete this lead?")) {
-      try { await deleteDoc(doc(db, "outreach_leads", id)); } catch (error) { alert("Delete failed!"); }
+    if (window.confirm("Are you sure to delete this lead?")) {
+      try {
+        await deleteDoc(doc(db, "outreach_leads", id));
+        setSelectedLead(null); 
+        alert("Lead deleted successfully!");
+      } catch (error) {
+        console.error("Delete error:", error);
+        alert("Delete failed!");
+      }
     }
   };
 
@@ -159,7 +183,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
   <Navbar />
   <AdminGuard>
   <div className="max-w-7xl mx-auto p-4 lg:p-10 bg-[#FAFBFF] min-h-screen">
-      {/* Header, Stats, Filters (আগের মতোই থাকবে) */}
       <div className="flex flex-col md:flex-row justify-between mb-10 gap-6 items-start md:items-end">
         <div>
           <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">Intelligence Hub</h1>
@@ -181,7 +204,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
         </div>
       </div>
 
-      {/* Service & Step Tabs (আগের মতোই থাকবে) */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
         {['All', 'Email Signature', 'Google Ads', 'Server Side Tracking'].map((s) => (
           <button key={s} onClick={() => {setActiveService(s); setActiveStep('All');}} className={`px-5 py-2 rounded-full text-[10px] font-black transition-all whitespace-nowrap ${activeService === s ? 'bg-black text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
@@ -205,13 +227,13 @@ const getNextFollowUpStatus = (lead: Lead) => {
         </div>
       )}
 
-      {/* Table (আগের মতোই থাকবে) */}
       <div className="bg-white rounded-[30px] shadow-xl border border-gray-50 overflow-hidden">
         <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead className="bg-gray-50/50">
             <tr>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Lead Information</th>
+              <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Sender Email</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Status & Time</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Engagement</th>
               <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Action</th>
@@ -230,10 +252,15 @@ const getNextFollowUpStatus = (lead: Lead) => {
                     <span className="text-[10px] text-gray-300 font-bold">{lead.email}</span>
                   </div>
                 </td>
+                <td>
+                  <div className="flex flex-col">
+                      {lead.sender_email && <span className="text-[9px] text-gray-400 font-bold">{lead.sender_email}</span>}
+                  </div>
+                </td>
                 <td className="p-5 text-center">
                     <div className="flex flex-col items-center gap-1">
                         <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${lead.status === 'replied' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-500'}`}>
-                           {lead.follow_up_count ? `Follow-up ${lead.follow_up_count}` : 'Initial Sent'}
+                           {lead.status === 'replied' ? 'Replied' : (lead.follow_up_count ? `Follow-up ${lead.follow_up_count}` : 'Initial Sent')}
                         </span>
                         <span className="text-[9px] font-bold text-gray-400 italic">{formatDate(lead.createdAt)}</span>
                     </div>
@@ -245,7 +272,23 @@ const getNextFollowUpStatus = (lead: Lead) => {
                   </div>
                 </td>
                 <td className="p-5 text-right">
-                    <button onClick={(e) => handleDelete(lead.id, e)} className="p-3 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={16} /></button>
+                    <div className="flex items-center justify-end gap-2">
+                        {lead.status !== 'replied' && (
+                          <button 
+                            onClick={(e) => handleMarkAsReplied(lead.id, e)} 
+                            className="p-3 text-gray-200 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all"
+                            title="Mark as Replied"
+                          >
+                            <CheckCircle size={16} />
+                          </button>
+                        )}
+                        <button 
+                          onClick={(e) => handleDelete(lead.id, e)} 
+                          className="p-3 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                    </div>
                 </td>
               </tr>
             ))}
@@ -254,7 +297,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
         </div>
       </div>
 
-      {/* Side Panel */}
       <AnimatePresence>
         {selectedLead && (
           <>
@@ -267,7 +309,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
               </div>
 
               <div className="p-8 space-y-8 pb-32">
-                {/* Target Profile */}
                 <section className="bg-black p-8 rounded-[35px] text-white shadow-2xl relative overflow-hidden">
                     <div className="relative z-10">
                       <p className="text-[10px] font-bold opacity-50 uppercase mb-2 tracking-widest">Target Profile</p>
@@ -294,7 +335,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/20 blur-[80px] rounded-full" />
                 </section>
 
-                {/* Next Follow-up Prediction */}
                 {getNextFollowUpStatus(selectedLead) && (
                   <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
                     <div className="flex items-start gap-4">
@@ -318,7 +358,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
                   </section>
                 )}
 
-                {/* Engagement History (এখানেই আমরা পরিবর্তন করেছি) */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -333,9 +372,9 @@ const getNextFollowUpStatus = (lead: Lead) => {
                   
                   <div className="space-y-2">
                     {(selectedLead.tracking_history || [])
-                      .slice() // copy array
-                      .sort((a, b) => toMillis(b.time) - toMillis(a.time)) // Newest first
-                      .slice(0, showAllLogs ? undefined : 5) // Show 5 or all
+                      .slice() 
+                      .sort((a, b) => toMillis(b.time) - toMillis(a.time)) 
+                      .slice(0, showAllLogs ? undefined : 5) 
                       .map((info, idx) => (
                       <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex justify-between items-center transition-all hover:border-blue-200">
                         <div className="flex items-center gap-3">
@@ -359,7 +398,6 @@ const getNextFollowUpStatus = (lead: Lead) => {
                   </div>
                 </div>
 
-                {/* Journey Tracking (আগের মতোই থাকবে) */}
                 <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <MessageSquare size={14} /> Full Journey Tracking
@@ -391,10 +429,14 @@ const getNextFollowUpStatus = (lead: Lead) => {
                 </section>
               </div>
 
-              {/* Action Bar */}
               <div className="fixed bottom-0 w-full max-w-lg p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-3">
                 <button className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Direct Email</button>
-                <button onClick={(e) => { handleDelete(selectedLead.id, e); setSelectedLead(null); }} className="p-4 bg-red-50 text-red-500 rounded-2xl"><Trash2 size={18} /></button>
+                <button 
+                    onClick={(e) => handleDelete(selectedLead.id, e)} 
+                    className="p-4 bg-red-50 text-red-500 rounded-2xl"
+                  >
+                    <Trash2 size={18} />
+                  </button>
               </div>
             </motion.div>
           </>

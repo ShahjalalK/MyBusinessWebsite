@@ -112,6 +112,12 @@ export default function OutreachPage() {
   // --- মেইন ইমেইল সেন্ডিং ফাংশন ---
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const strippedMessage = message.replace(/<[^>]*>?/gm, '').trim();
+    if (!strippedMessage) {
+      return alert("Message body cannot be empty!");
+    }
+
     if (!isEmailPatternValid(email)) { setEmailError('Please enter a valid email address!'); return; }
     if (!selectedService) return alert("Please select a service first!");
     if (!activeSender) return alert("Please select an active sender!");
@@ -301,9 +307,21 @@ export default function OutreachPage() {
                 <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule Send</span>
                 <input type="datetime-local" min={minDateTime} className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
               </div>
-              <button type="submit" disabled={loading || !isEmailPatternValid(email) || !selectedService} className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300">
-                {loading ? <Loader2 className="animate-spin" /> : <><Send size={20} /><span>Send Outreach</span></>}
-              </button>
+             <button 
+                  type="submit" 
+                  // এই লজিকটিই ম্যাজিক করবে
+                  disabled={loading || !isEmailPatternValid(email) || !selectedService || !message.replace(/<[^>]*>?/gm, '').trim()} 
+                  className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <>
+                      <Send size={20} />
+                      <span>Send Outreach</span>
+                    </>
+                  )}
+                </button>
             </div>
             {status && <div className="text-center text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-4 flex justify-center items-center gap-2"><CheckCircle2 size={14} />{status}</div>}
           </form>

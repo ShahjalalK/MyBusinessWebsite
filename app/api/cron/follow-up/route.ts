@@ -20,11 +20,12 @@ export async function GET(req: Request) {
     // ৩. ডাটাবেস থেকে যোগ্য লিডগুলো খুঁজে বের করা
     // এখানে আমরা 'stopAutomation' ফিল্টারটি ফিরিয়ে আনছি কারণ এটি থাকা ভালো। 
     // যদি আপনার ডাটাবেসে এই ফিল্ড না থাকে, তবে টেস্টের জন্য এটি কমেন্ট রাখতে পারেন।
-    const querySnapshot = await adminDb.collection("outreach_leads")
-      .where("status", "in", ["opened", "interested", "active", "sent"]) 
-      .where("follow_up_count", "<", 5)
-      .where("stopAutomation", "==", false)
-      .get();
+ const querySnapshot = await adminDb.collection("outreach_leads")
+  // এখানে 'sent' বাদ দেওয়া হয়েছে। এখন শুধুমাত্র যারা অন্তত একবার ওপেন করেছে তাদের ইমেইল যাবে।
+  .where("status", "in", ["opened", "interested", "active"]) 
+  .where("follow_up_count", "<", 5)
+  .where("stopAutomation", "==", false)
+  .get();
 
     const sentEmails: string[] = [];
 
@@ -93,7 +94,7 @@ export async function GET(req: Request) {
             <html>
               <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 ${finalVariant.content.replace(/{name}/g, lead.name || 'there').replace(/{company}/g, lead.company_name || '')}
-                <br/><p>Best Regards,<br><strong>${senderName}</strong></p>
+                
                 <div style="display:none; visibility:hidden; font-size:1px;">${currentStepTag}</div>
               </body>
             </html>
@@ -102,20 +103,25 @@ export async function GET(req: Request) {
       });
 
       // ৭. ডাটাবেস আপডেট (ইমেইল সফলভাবে পাঠানো হলে)
-      if (response.ok) {
-        await adminDb.collection("outreach_leads").doc(lead.id).update({
-          lastFollowUp: admin.firestore.FieldValue.serverTimestamp(),
-          follow_up_count: nextStepCount,
-          status: nextStepCount >= 5 ? 'finished' : 'active',
-          sent_messages: admin.firestore.FieldValue.arrayUnion({
-            step: nextStepCount,
-            subject: subject,
-            trackingTag: currentStepTag,
-            sentAt: admin.firestore.Timestamp.now()
-          })
-        });
-        sentEmails.push(lead.email);
-      }
+    if (response.ok) {
+            await adminDb.collection("outreach_leads").doc(lead.id).update({
+              lastFollowUp: admin.firestore.FieldValue.serverTimestamp(),
+              follow_up_count: nextStepCount,
+              
+              // গুরুত্বপূর্ণ পরিবর্তন: ইমেইল পাঠানোর পর স্ট্যাটাস আবার 'sent' হয়ে যাবে। 
+              // এর ফলে যতক্ষণ না সে এই নতুন ইমেইলটি ওপেন করছে, 
+              // ততক্ষণ স্ট্যাটাস 'opened' হবে না এবং পরের ফলো-আপ যাবে না।
+              status: nextStepCount >= 5 ? 'finished' : 'sent', 
+              
+              sent_messages: admin.firestore.FieldValue.arrayUnion({
+                step: nextStepCount,
+                subject: subject,
+                trackingTag: currentStepTag,
+                sentAt: admin.firestore.Timestamp.now()
+              })
+            });
+            sentEmails.push(lead.email);
+          }
     }
 
     return NextResponse.json({ 
