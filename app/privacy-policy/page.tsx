@@ -108,7 +108,7 @@ export default function PrivacyPolicy() {
                   If you have any questions about this privacy policy, please contact us.
                 </p>
                 <a 
-                  href="mailto:contact@trackflowpro.com" 
+                  href="/contact" 
                   className="inline-block px-8 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-black text-xs uppercase tracking-widest transition-transform active:scale-95 shadow-lg"
                 >
                   Contact Support

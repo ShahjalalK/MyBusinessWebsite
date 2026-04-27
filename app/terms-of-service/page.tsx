@@ -3,6 +3,7 @@ import { Metadata } from 'next'
 import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 import { Scale, CheckCircle, AlertCircle, HelpCircle, ShieldCheck } from 'lucide-react'
+import Link from 'next/link'
 
 // ১. SEO Meta Tags: প্রফেশনাল সার্ভিসের জন্য অপ্টিমাইজড
 export const metadata: Metadata = {
@@ -106,12 +107,12 @@ export default function TermsOfService() {
                 <p className="text-slate-500 dark:text-slate-400 font-medium text-sm mb-6">
                   Have questions regarding our terms? Feel free to reach out.
                 </p>
-                <a 
-                  href="mailto:contact@trackflowpro.com" 
+                <Link
+                  href="/contact" 
                   className="inline-block px-8 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-xl"
                 >
                   Contact Legal Support
-                </a>
+                </Link>
               </section>
 
             </div>

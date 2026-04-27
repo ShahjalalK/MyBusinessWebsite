@@ -21,7 +21,7 @@ export default function SingleBlogAuthorBox({ post }: AuthorBoxProps) {
                {/* এখানে আপনার নিজের ছবি দিন */}
               <Image 
                 src="/team/ceo.jpg" 
-                alt="Shahjalal Jalal" 
+                alt="Shahjalal Khan" 
                 className="w-full h-full object-cover rounded-full"
               />
             </div>

@@ -4,15 +4,16 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { BsTwitter, BsLinkedin, BsFacebook } from 'react-icons/bs'
 import Link from 'next/link'
+import Turnstile from 'react-turnstile' // ১. টার্নস্টাইল ইমপোর্ট করা হয়েছে
 
 export default function Footer() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); // ২. টোকেন স্টেট
 
   // --- GA4 Tracking Function for Subscribe ---
   const trackSubscription = async (email: string) => {
     try {
-      // Cookies থেকে GA ডাটা বের করা
       const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
       const sessionId = document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1];
 
@@ -20,7 +21,7 @@ export default function Footer() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          event_name: "generate_lead", // Standard GA4 event
+          event_name: "generate_lead",
           email: email,
           service: "Newsletter",
           clientId: gaCookie || "anonymous",
@@ -35,20 +36,28 @@ export default function Footer() {
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ৩. ক্যাপচা ভেরিফিকেশন চেক
+    if (!turnstileToken) {
+      alert("Please complete the security check!");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // ১. Brevo Integration (API Route-এ পাঠানো)
+      // ৪. Brevo এবং Turnstile Token সার্ভারে পাঠানো
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ 
+          email, 
+          captchaToken: turnstileToken // টোকেনটি সার্ভারে ভেরিফিকেশনের জন্য পাঠানো হচ্ছে
+        }),
       });
 
       if (response.ok) {
-        // ২. সাকসেস হলে GA4 Server-Side-এ ডেটা পাঠানো
         await trackSubscription(email);
-        
         alert("Success! You're now subscribed to TrackFlow Pro updates.");
         setEmail("");
       } else {
@@ -66,7 +75,6 @@ export default function Footer() {
     <footer className="bg-slate-950 text-slate-400 pt-24 pb-12">
       <div className="container mx-auto px-6">
         
-        {/* Top Section: Brand & Newsletter */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-20">
           
           {/* Brand Column */}
@@ -82,7 +90,6 @@ export default function Footer() {
             <p className="text-base leading-relaxed max-w-xs">
               Advanced GTM Server-Side Tracking and Google Ads optimization for modern agencies.
             </p>
-            {/* Social Icons */}
             <div className="flex gap-4">
               {[
                 { icon: <BsFacebook />, link: "#" },
@@ -109,23 +116,34 @@ export default function Footer() {
             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
               Join 500+ marketers. Get GA4 setup tips and tracking hacks directly in your inbox.
             </p>
-            <form onSubmit={handleSubscribe} className="relative group">
-              <input 
-                type="email" 
-                required
-                disabled={loading}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email" 
-                className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:border-blue-600 transition-all placeholder:text-slate-600 disabled:opacity-50"
-              />
-              <button 
-                type="submit"
-                disabled={loading}
-                className="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center justify-center group-hover:shadow-lg group-hover:shadow-blue-500/20 disabled:bg-slate-700"
-              >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
+            <form onSubmit={handleSubscribe} className="relative group space-y-4">
+              <div className="relative">
+                <input 
+                  type="email" 
+                  required
+                  disabled={loading}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email" 
+                  className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:border-blue-600 transition-all placeholder:text-slate-600 disabled:opacity-50"
+                />
+                <button 
+                  type="submit"
+                  disabled={loading}
+                  className="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center justify-center group-hover:shadow-lg group-hover:shadow-blue-500/20 disabled:bg-slate-700"
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
+              </div>
+
+              {/* ৫. Turnstile Widget - একদম সহজ লুকে */}
+              <div className="flex justify-start overflow-hidden rounded-lg">
+                <Turnstile
+                  sitekey="YOUR_CLOUDFLARE_SITE_KEY" // এখানে আপনার সাইট কি বসান
+                  onVerify={(token) => setTurnstileToken(token)}
+                  theme="dark"
+                />
+              </div>
             </form>
             <p className="text-[10px] text-slate-600 mt-4 italic font-medium uppercase tracking-widest">
               * Secure & Private. No Spam.

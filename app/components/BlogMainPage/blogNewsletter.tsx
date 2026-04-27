@@ -2,21 +2,34 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, ShieldCheck, Mail, Sparkles, Loader2, CheckCircle2 } from 'lucide-react'
+import Turnstile from 'react-turnstile' // ১. টার্নস্টাইল ইমপোর্ট
 
 export default function NewsletterSignup() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); // ২. টোকেন স্টেট
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ৩. ক্যাপচা চেক
+    if (!turnstileToken) {
+      setStatus('error');
+      setMessage("Please complete the security check.");
+      return;
+    }
+
     setStatus('loading');
 
     try {
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ 
+          email,
+          captchaToken: turnstileToken // ৪. সার্ভারে টোকেন পাঠানো
+        }),
       });
 
       const data = await response.json();
@@ -24,7 +37,7 @@ export default function NewsletterSignup() {
       if (response.ok) {
         setStatus('success');
         setMessage("Success! Welcome to the TrackFlowPro community.");
-        setEmail(""); // ইনপুট ফিল্ড খালি করার জন্য
+        setEmail(""); 
       } else {
         throw new Error(data.error || "Something went wrong");
       }
@@ -73,6 +86,15 @@ export default function NewsletterSignup() {
                   />
                 </div>
 
+                {/* ৫. Turnstile Widget */}
+                <div className="flex justify-center md:justify-start">
+                  <Turnstile
+                    sitekey="YOUR_CLOUDFLARE_SITE_KEY" // এখানে আপনার সাইট কি বসান
+                    onVerify={(token) => setTurnstileToken(token)}
+                    theme="light" // সেকশন ব্যাকগ্রাউন্ড সাদা তাই light থিম ভালো লাগবে
+                  />
+                </div>
+
                 <motion.button 
                   disabled={status === 'loading' || status === 'success'}
                   whileHover={{ scale: 1.02 }}
@@ -91,22 +113,13 @@ export default function NewsletterSignup() {
                   )}
                 </motion.button>
 
-                {/* Status Messages */}
                 <AnimatePresence>
-                  {status === 'error' && (
+                  {(status === 'error' || status === 'success') && (
                     <motion.p 
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="text-red-500 text-xs font-bold text-center mt-2"
-                    >
-                      {message}
-                    </motion.p>
-                  )}
-                  {status === 'success' && (
-                    <motion.p 
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-emerald-500 text-xs font-bold text-center mt-2"
+                      exit={{ opacity: 0 }}
+                      className={`text-xs font-bold text-center mt-2 ${status === 'error' ? 'text-red-500' : 'text-emerald-500'}`}
                     >
                       {message}
                     </motion.p>
