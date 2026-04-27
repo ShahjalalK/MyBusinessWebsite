@@ -6,7 +6,7 @@ import { ShieldCheck, Zap, BarChart3 } from 'lucide-react' // Bakigulo Lucide th
 
 const team = [
   {
-    name: "Shahjalal Jalal",
+    name: "Shahjalal Khan",
     role: "Founding Tracking Architect",
     desc: "Expert in GTM Server-Side architecture and advanced data recovery for global e-commerce scaling.",
     image: "/team/ceo.jpg",
@@ -22,18 +22,18 @@ const team = [
     skill: "Ads Audit"
   },
   {
-    name: "Sarah Chen",
+    name: "Ebrahim Khan",
     role: "Meta CAPI Specialist",
     desc: "Bypassing iOS signal loss through Meta Conversions API integrations and server-to-server data syncing.",
-    image: "/team/shahjalalkweb.jpg",
+    image: "/team/kazol.png",
     linkedin: "#",
     skill: "Conversion API"
   },
   {
-    name: "David Smith",
+    name: "Sazzad Hossen",
     role: "GA4 Audit Expert",
     desc: "Identifying tracking gaps and ensuring 100% data accuracy through professional GA4 infrastructure audits.",
-    image: "/team/shahjalalkweb.jpg",
+    image: "/team/sany.jpg",
     linkedin: "#",
     skill: "GA4 Specialist"
   }
