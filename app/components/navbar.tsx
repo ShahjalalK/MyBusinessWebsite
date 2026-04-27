@@ -104,7 +104,7 @@ export default function Navbar() {
           )}
 
           <Link 
-            href="/tracking-checker" 
+            href="/tracking-lab" 
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 rounded-2xl text-[13px] font-black hover:scale-105 transition-all shadow-sm"
           >
             <Sparkles size={14} className="animate-pulse" /> Tracking Lab
@@ -143,7 +143,7 @@ export default function Navbar() {
                 
                 {/* Mobile Tracking Lab */}
                 <Link 
-                  href="/tracking-checker" 
+                  href="/tracking-lab" 
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2 w-fit px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-xl font-bold text-sm"
                 >
