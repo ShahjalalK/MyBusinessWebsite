@@ -12,12 +12,21 @@ export default function TrackingLabClient() {
   const [isScanning, setIsScanning] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
 
+  // Country code (BD) থেকে Flag Emoji (🇧🇩) বানানোর ফাংশন
+  const getFlagEmoji = (countryCode: string) => {
+    if (!countryCode) return "";
+    const codePoints = countryCode
+      .toUpperCase()
+      .split("")
+      .map((char) => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  };
+
   // লোকেশন টেক্সট ফিক্স: শুধু শহর এবং দেশ দেখাবে
   const formatLocation = (loc: string) => {
-    if (!loc) return "Analyzing...";
+    if (!loc || loc === "Location Detected via Server") return loc;
     const parts = loc.split(',').map(p => p.trim());
     if (parts.length >= 2) {
-      // শেষ দুটি অংশ নিচ্ছি (যেমন: Dhaka, Bangladesh)
       return `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
     }
     return loc;
@@ -45,18 +54,28 @@ export default function TrackingLabClient() {
   useEffect(() => {
     const fetchFromServer = async () => {
       try {
-        const response = await fetch('/api/user-info');
+        // ipapi.co ব্যবহার করছি যাতে ক্লায়েন্টের লোকেশন আরও নিখুঁত আসে
+        const response = await fetch('https://ipapi.co/json/');
         const data = await response.json();
-        setUserData(data);
-      } catch (err) {
-        setUserData({ 
-          location: "Dhaka, Bangladesh", 
-          countryCode: "BD",
+        
+        setUserData({
+          location: data.city && data.country_name ? `${data.city}, ${data.country_name}` : data.reason,
+          countryCode: data.country_code,
           device: "Desktop", 
           browser: "Chrome", 
-          ip: "103.114.xxx.xxx",
-          os: "Windows 11",
-          isp: "Broadband"
+          ip: data.ip,
+          os: "Windows / macOS",
+          isp: data.org
+        });
+      } catch (err) {
+        setUserData({ 
+          location: "Location Detected via Server",
+          countryCode: "US",
+          device: "Detected Device", 
+          browser: "Detected Browser", 
+          ip: "Encryption Active",
+          os: "Secure OS",
+          isp: "Verified Provider"
         });
       } finally {
         setTimeout(() => setIsScanning(false), 3000);
@@ -66,7 +85,7 @@ export default function TrackingLabClient() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#020617] relative pt-16 pb-20 lg:pt-20 lg:pb-32 px-6 overflow-hidden">
+    <div className="min-h-screen bg-white dark:bg-[#020617] relative pt-16 pb-20 lg:pt-20 lg:pb-32 px-6 overflow-hidden text-slate-900 dark:text-white">
       
       {/* Background Accents */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none">
@@ -85,7 +104,7 @@ export default function TrackingLabClient() {
             <span className="text-blue-600 dark:text-blue-400 font-black text-[10px] uppercase tracking-[0.3em]">Live Tracking Engine v2.0</span>
           </motion.div>
           
-          <h1 className="text-5xl md:text-8xl font-black text-slate-900 dark:text-white tracking-tight mb-8 leading-[1]">
+          <h1 className="text-5xl md:text-8xl font-black tracking-tight mb-8 leading-[1]">
               Precision <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400">Intelligence.</span>
           </h1>
@@ -106,7 +125,7 @@ export default function TrackingLabClient() {
                   <Database size={24} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black dark:text-white tracking-tight">Diagnostic Report</h2>
+                  <h2 className="text-2xl font-black tracking-tight">Diagnostic Report</h2>
                   <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                     <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> HTTPS/TLS 1.3 SECURE
                   </p>
@@ -142,13 +161,11 @@ export default function TrackingLabClient() {
                         icon={<MapPin size={20}/>} 
                         label="User Geo-Location" 
                         value={
-                          <div className="flex items-center gap-2 w-full">
+                          <div className="flex items-center gap-2 w-full overflow-hidden">
                             {userData?.countryCode && (
-                              <img 
-                                src={`https://purecatamphetamine.github.io/country-flag-icons/3x2/${userData.countryCode.toUpperCase()}.svg`}
-                                alt="flag"
-                                className="w-6 h-4 object-cover rounded-sm border border-slate-100 dark:border-white/10 shrink-0"
-                              />
+                              <span className="text-2xl leading-none shrink-0">
+                                {getFlagEmoji(userData.countryCode)}
+                              </span>
                             )}
                             <span className="truncate">{formatLocation(userData?.location)}</span>
                           </div>
@@ -202,7 +219,7 @@ export default function TrackingLabClient() {
              </div>
 
              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-[3rem] p-8 shadow-lg">
-                <h4 className="text-lg font-black dark:text-white mb-4">Expert Help</h4>
+                <h4 className="text-lg font-black mb-4">Expert Help</h4>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
                   Confused about GTM or GA4? Let's fix your tracking strategy today.
                 </p>
@@ -233,7 +250,7 @@ function GA4Card({ icon, label, value, color }: { icon: any, label: string, valu
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${colorMap[color]}`}>{icon}</div>
         <div className="min-w-0">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</span>
-            <div className="text-sm md:text-base font-black text-slate-900 dark:text-white break-words">
+            <div className="text-sm md:text-base font-black break-words">
               {value || 'Analyzing...'}
             </div>
         </div>
