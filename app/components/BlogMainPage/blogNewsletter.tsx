@@ -2,18 +2,18 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, ShieldCheck, Mail, Sparkles, Loader2, CheckCircle2 } from 'lucide-react'
-import Turnstile from 'react-turnstile' // ১. টার্নস্টাইল ইমপোর্ট
+import Turnstile from 'react-turnstile' 
 
 export default function NewsletterSignup() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState("");
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); // ২. টোকেন স্টেট
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); 
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ৩. ক্যাপচা চেক
+    // ১. ক্যাপচা চেক
     if (!turnstileToken) {
       setStatus('error');
       setMessage("Please complete the security check.");
@@ -28,7 +28,7 @@ export default function NewsletterSignup() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email,
-          captchaToken: turnstileToken // ৪. সার্ভারে টোকেন পাঠানো
+          captchaToken: turnstileToken // ২. সার্ভারে টোকেন পাঠানো হচ্ছে
         }),
       });
 
@@ -38,6 +38,7 @@ export default function NewsletterSignup() {
         setStatus('success');
         setMessage("Success! Welcome to the TrackFlowPro community.");
         setEmail(""); 
+        setTurnstileToken(null); // টোকেন রিসেট
       } else {
         throw new Error(data.error || "Something went wrong");
       }
@@ -86,12 +87,15 @@ export default function NewsletterSignup() {
                   />
                 </div>
 
-                {/* ৫. Turnstile Widget */}
+                {/* ৩. Turnstile Widget - ENV Variable ব্যবহার করা হয়েছে */}
                 <div className="flex justify-center md:justify-start">
                   <Turnstile
-                    sitekey="YOUR_CLOUDFLARE_SITE_KEY" // এখানে আপনার সাইট কি বসান
+                    sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} 
                     onVerify={(token) => setTurnstileToken(token)}
-                    theme="light" // সেকশন ব্যাকগ্রাউন্ড সাদা তাই light থিম ভালো লাগবে
+                    theme="light" 
+                    refresh-expired="auto"      // টোকেন শেষ হয়ে গেলে নিজে নিজে নতুন টোকেন নেবে
+                    onExpire={() => setTurnstileToken(null)} // এক্সপায়ার হলে টোকেন স্টেট খালি করে দেবে
+                    onError={() => setTurnstileToken(null)}
                   />
                 </div>
 

@@ -4,12 +4,12 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { BsTwitter, BsLinkedin, BsFacebook } from 'react-icons/bs'
 import Link from 'next/link'
-import Turnstile from 'react-turnstile' // ১. টার্নস্টাইল ইমপোর্ট করা হয়েছে
+import Turnstile from 'react-turnstile' 
 
 export default function Footer() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); // ২. টোকেন স্টেট
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); 
 
   // --- GA4 Tracking Function for Subscribe ---
   const trackSubscription = async (email: string) => {
@@ -52,7 +52,7 @@ export default function Footer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email, 
-          captchaToken: turnstileToken // টোকেনটি সার্ভারে ভেরিফিকেশনের জন্য পাঠানো হচ্ছে
+          captchaToken: turnstileToken 
         }),
       });
 
@@ -60,6 +60,7 @@ export default function Footer() {
         await trackSubscription(email);
         alert("Success! You're now subscribed to TrackFlow Pro updates.");
         setEmail("");
+        setTurnstileToken(null); // রিসেট টোকেন
       } else {
         alert("Subscription failed. Please check the email and try again.");
       }
@@ -136,12 +137,15 @@ export default function Footer() {
                 </button>
               </div>
 
-              {/* ৫. Turnstile Widget - একদম সহজ লুকে */}
+              {/* ৫. Turnstile Widget - ENV variable used */}
               <div className="flex justify-start overflow-hidden rounded-lg">
                 <Turnstile
-                  sitekey="YOUR_CLOUDFLARE_SITE_KEY" // এখানে আপনার সাইট কি বসান
+                  sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} 
                   onVerify={(token) => setTurnstileToken(token)}
                   theme="dark"
+                  refresh-expired="auto"      // টোকেন শেষ হয়ে গেলে নিজে নিজে নতুন টোকেন নেবে
+                onExpire={() => setTurnstileToken(null)} // এক্সপায়ার হলে টোকেন স্টেট খালি করে দেবে
+                onError={() => setTurnstileToken(null)}
                 />
               </div>
             </form>
