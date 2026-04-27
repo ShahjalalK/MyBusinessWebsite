@@ -26,10 +26,7 @@ export default function BlogPage() {
     <BlogHero />
       
       {/* ক্যাটাগরি কম্পোনেন্টে স্টেট পাঠানো হচ্ছে */}
-      <BlogCategories 
-        
-       
-      />
+      <BlogCategories/>
 
       {/* গ্রিড কম্পোনেন্টে ফিল্টার করা ডাটা পাঠানো হচ্ছে */}
       <BlogGrid />

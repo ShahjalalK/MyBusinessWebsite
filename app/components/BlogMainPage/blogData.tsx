@@ -18,7 +18,8 @@ export interface BlogPost {
   date: string;
   readTime: string;
   content: BlogContent[];
-  ctaType: "tracking" | "signature" | "ads"; // নতুন ফিল্ড
+  ctaType: "tracking" | "signature" | "ads";
+  isFeatured?: boolean; // নতুন যোগ করা হয়েছে
 }
 
 // ৩. ব্লগ ডাটা লিস্ট
@@ -31,7 +32,8 @@ export const blogPosts: BlogPost[] = [
     category: "Facebook CAPI",
     date: "April 10, 2026",
     readTime: "6 min read",
-    ctaType: "tracking", // এটি ট্র্যাকিং সার্ভিস প্রমোট করবে
+    ctaType: "tracking",
+    isFeatured: true, // এটি ট্র্যাকিং সার্ভিস প্রমোট করবে
     content: [
       { type: 'paragraph', text: "In today's privacy-first world, browser-side tracking is no longer enough. Facebook Conversion API (CAPI) allows you to send data directly from your server to Facebook." },
       { type: 'heading', text: "Why Browser Tracking is Failing?" },
