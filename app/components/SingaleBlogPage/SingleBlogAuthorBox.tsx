@@ -49,7 +49,7 @@ export default function SingleBlogAuthorBox({ post }: AuthorBoxProps) {
             {/* <a href="#" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-blue-400 hover:text-white transition-all shadow-sm">
               <FaTwitter size={14} />
             </a> */}
-            <Link href="www.trackflowpro.com/about" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-emerald-500 hover:text-white transition-all shadow-sm">
+            <Link href="/about" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-emerald-500 hover:text-white transition-all shadow-sm">
               <FaGlobe size={14} />
             </Link>
           </div>

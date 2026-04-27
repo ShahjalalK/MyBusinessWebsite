@@ -14,10 +14,10 @@ const team = [
     skill: "Server Side Tagging"
   },
   {
-    name: "Alex Rivera",
+    name: "Shamim Hossain",
     role: "Google Ads Specialist",
     desc: "Optimizing High-ROI Google Ads campaigns with a focus on Search, PMax, and precise conversion audits.",
-    image: "/team/profile.png",
+    image: "/team/samim.png",
     linkedin: "#",
     skill: "Ads Audit"
   },

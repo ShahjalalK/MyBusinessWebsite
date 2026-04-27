@@ -9,17 +9,17 @@ export default function ContactFAQShort() {
   const faqs = [
     {
       question: "How fast do you respond?",
-      answer: "I usually respond within 2 to 24 hours. For urgent project discussions, reaching out via WhatsApp or Fiverr is the fastest way to get a real-time update.",
+      answer: "We usually respond within 2 to 24 hours. For urgent project discussions, reaching out via WhatsApp or Fiverr is the fastest way to get a real-time update.",
       icon: <MessageSquare size={20} className="text-blue-500" />
     },
     {
       question: "Do you offer free consultation?",
-      answer: "Absolutely. I offer a 15-minute free technical audit. We can analyze your current GTM/GA4 setup and identify any tracking leakages before you commit to a project.",
+      answer: "Absolutely. We offer a 15-minute free technical audit. We can analyze your current GTM/GA4 setup and identify any tracking leakages before you commit to a project.",
       icon: <Sparkles size={20} className="text-orange-500" />
     },
     {
       question: "What are the available payment methods?",
-      answer: "I primarily work through Fiverr and Upwork to ensure secure transactions for both parties. For long-term retainers, I also accept Payoneer and direct bank transfers.",
+      answer: "We primarily work through Fiverr and Upwork to ensure secure transactions for both parties. For long-term retainers, I also accept Payoneer and direct bank transfers.",
       icon: <CreditCard size={20} className="text-emerald-500" />
     }
   ];
