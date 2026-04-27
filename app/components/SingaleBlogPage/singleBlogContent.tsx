@@ -47,31 +47,8 @@ export default function SingleBlogContent({ post }: SingleBlogContentProps) {
       <div className="container mx-auto px-6">
         <div className="max-w-3xl mx-auto">
           
-          {/* Share Buttons - Top Section */}
-          <div className="flex flex-wrap items-center gap-4 mb-12 pb-8 border-b border-slate-100 dark:border-slate-800">
-            <span className="text-sm font-black uppercase tracking-widest text-slate-400">Share Article:</span>
-            <div className="flex items-center gap-2">
-              {shareLinks.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 transition-all ${link.color} hover:text-white active:scale-90`}
-                  title={`Share on ${link.name}`}
-                >
-                  {link.icon}
-                </a>
-              ))}
-              <button
-                onClick={copyToClipboard}
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
-                title="Copy Link"
-              >
-                {copied ? <FaCheck className="text-sm" /> : <FaLink className="text-sm" />}
-              </button>
-            </div>
-          </div>
+          
+          
 
           {/* Loop through each content block */}
           <div className="space-y-10">

@@ -91,11 +91,13 @@ export default async function SingleBlogPage({ params }: Props) {
 
         <SingleBlogContent post={post} />
 
+      <RelatedPosts currentPostId={post.id} category={post.category} />
+
         <ServiceLinks />
 
         <BlogCTA type={post.ctaType as any} />
 
-        <RelatedPosts currentPostId={post.id} category={post.category} />
+        
       </main>
       <Footer />
     </>
