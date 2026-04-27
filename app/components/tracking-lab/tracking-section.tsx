@@ -193,7 +193,7 @@ useEffect(() => {
                         <p className="text-blue-100 text-xs">Get a free technical audit for your website.</p>
                       </div>
                     </div>
-                    <Link href="/contact" className="px-6 py-3 bg-white text-blue-600 rounded-xl font-black text-xs hover:bg-blue-50 transition-colors flex items-center gap-2">
+                    <Link href="/book-audit" className="px-6 py-3 bg-white text-blue-600 rounded-xl font-black text-xs hover:bg-blue-50 transition-colors flex items-center gap-2">
                       Start Free Audit <ArrowRight size={14} />
                     </Link>
                   </motion.div>
