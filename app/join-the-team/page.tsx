@@ -17,7 +17,7 @@ export default function CareersPage() {
                 <Search size={14} /> Career Opportunities
               </div>
               <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">
-                Work with <span className="text-blue-600">Shahjalal</span>
+                Work with <span className="text-blue-600">TrackFlowPro Team</span>
               </h1>
               <p className="text-lg text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-2xl mx-auto">
                 Join a team dedicated to precision tracking and data-driven marketing. We are always on the lookout for innovative minds.
@@ -43,7 +43,7 @@ export default function CareersPage() {
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                   <a 
-                    href="mailto:contact@shahjalal.me" 
+                    href="mailto:shahjalal@trackflowpro.com" 
                     className="w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black transition-all hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 dark:hover:text-white active:scale-95 text-sm uppercase tracking-widest shadow-lg"
                   >
                     <Mail size={18} /> Submit Your Resume
