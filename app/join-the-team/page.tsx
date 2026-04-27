@@ -3,6 +3,36 @@ import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 import { Briefcase, Mail, Target, Zap, Search } from 'lucide-react'
 
+
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Careers | Join the TrackFlowPro Team',
+  description: 'Join TrackFlowPro and build your career in digital marketing, GA4 tracking, and server-side solutions. Explore remote opportunities and grow with a data-driven agency.',
+  openGraph: {
+    title: 'Careers | Join the TrackFlowPro Team',
+    description: 'Looking for a career in technical tracking and digital marketing? Join TrackFlowPro and work on innovative data solutions.',
+    url: 'https://trackflowpro.com/careers',
+    siteName: 'TrackFlowPro',
+    images: [
+      {
+        url: 'https://trackflowpro.com/og-careers.jpg', // আপনার একটি ব্র্যান্ডেড ছবি এখানে দিতে পারেন
+        width: 1200,
+        height: 630,
+        alt: 'TrackFlowPro Careers',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Careers | Join the TrackFlowPro Team',
+    description: 'Work with TrackFlowPro on high-level tracking and marketing projects. Submit your resume for future openings.',
+    images: ['https://trackflowpro.com/og-careers.jpg'],
+  },
+}
+
 export default function CareersPage() {
   return (
     <>
