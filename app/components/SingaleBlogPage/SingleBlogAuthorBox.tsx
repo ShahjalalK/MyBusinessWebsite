@@ -1,6 +1,7 @@
 import React from 'react'
 import { FaLinkedinIn, FaTwitter, FaGlobe } from 'react-icons/fa'
 import { BlogPost } from '../BlogMainPage/blogData';
+import Image from 'next/image';
 
 
 interface AuthorBoxProps {
@@ -17,8 +18,8 @@ export default function SingleBlogAuthorBox({ post }: AuthorBoxProps) {
           <div className="relative">
             <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-blue-600 p-1">
                {/* এখানে আপনার নিজের ছবি দিন */}
-              <img 
-                src="https://your-photo-link.com/photo.jpg" 
+              <Image 
+                src="/team/ceo.jpg" 
                 alt="Shahjalal Jalal" 
                 className="w-full h-full object-cover rounded-full"
               />

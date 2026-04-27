@@ -1,36 +1,94 @@
-import React from 'react'
+"use client"
+import React, { useEffect, useState } from 'react'
 import { BlogPost } from '../BlogMainPage/blogData';
-
+import { FaFacebookF, FaLinkedinIn, FaTwitter, FaLink, FaCheck } from 'react-icons/fa';
 
 interface SingleBlogContentProps {
   post: BlogPost;
 }
 
 export default function SingleBlogContent({ post }: SingleBlogContentProps) {
+  const [currentUrl, setCurrentUrl] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setCurrentUrl(window.location.href);
+  }, []);
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(currentUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareLinks = [
+    { 
+      name: 'Facebook', 
+      icon: <FaFacebookF />, 
+      url: `https://www.facebook.com/sharer/sharer.php?u=${currentUrl}`,
+      color: 'hover:bg-[#1877F2]' 
+    },
+    { 
+      name: 'LinkedIn', 
+      icon: <FaLinkedinIn />, 
+      url: `https://www.linkedin.com/sharing/share-offsite/?url=${currentUrl}`,
+      color: 'hover:bg-[#0A66C2]' 
+    },
+    { 
+      name: 'Twitter', 
+      icon: <FaTwitter />, 
+      url: `https://twitter.com/intent/tweet?url=${currentUrl}&text=${post.title}`,
+      color: 'hover:bg-[#1DA1F2]' 
+    },
+  ];
+
   return (
-    <section className="py-16 bg-white dark:bg-slate-950">
+    <section className="py-16 bg-white dark:bg-slate-950 relative">
       <div className="container mx-auto px-6">
         <div className="max-w-3xl mx-auto">
           
+          {/* Share Buttons - Top Section */}
+          <div className="flex flex-wrap items-center gap-4 mb-12 pb-8 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-sm font-black uppercase tracking-widest text-slate-400">Share Article:</span>
+            <div className="flex items-center gap-2">
+              {shareLinks.map((link) => (
+                <a
+                  key={link.name}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 transition-all ${link.color} hover:text-white active:scale-90`}
+                  title={`Share on ${link.name}`}
+                >
+                  {link.icon}
+                </a>
+              ))}
+              <button
+                onClick={copyToClipboard}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
+                title="Copy Link"
+              >
+                {copied ? <FaCheck className="text-sm" /> : <FaLink className="text-sm" />}
+              </button>
+            </div>
+          </div>
+
           {/* Loop through each content block */}
           <div className="space-y-10">
             {post.content.map((block, index) => {
               switch (block.type) {
-                
                 case 'heading':
                   return (
                     <h2 key={index} className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tracking-tight mt-16">
                       {block.text}
                     </h2>
                   );
-
                 case 'paragraph':
                   return (
                     <p key={index} className="text-lg md:text-xl text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
                       {block.text}
                     </p>
                   );
-
                 case 'image':
                   return (
                     <div key={index} className="my-12">
@@ -44,13 +102,12 @@ export default function SingleBlogContent({ post }: SingleBlogContentProps) {
                       )}
                     </div>
                   );
-
                 case 'list':
                   return (
                     <ul key={index} className="space-y-4 my-8">
                       {block.items?.map((item, i) => (
                         <li key={i} className="flex items-start gap-4 text-lg text-slate-600 dark:text-slate-400">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600/10 text-blue-600 flex items-center justify-center text-xs font-bold mt-1">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600/10 text-blue-600 flex items-center justify-center text-[10px] font-black mt-1">
                             {i + 1}
                           </span>
                           <span className="font-medium">{item}</span>
@@ -58,7 +115,6 @@ export default function SingleBlogContent({ post }: SingleBlogContentProps) {
                       ))}
                     </ul>
                   );
-
                 case 'code':
                   return (
                     <div key={index} className="my-8 p-6 bg-slate-900 rounded-3xl overflow-x-auto border border-slate-800 shadow-inner">
@@ -72,11 +128,27 @@ export default function SingleBlogContent({ post }: SingleBlogContentProps) {
                       )}
                     </div>
                   );
-
                 default:
                   return null;
               }
             })}
+          </div>
+
+          {/* Bottom Share Section - Encouragement */}
+          <div className="mt-20 p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 text-center">
+             <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Did you find this helpful?</h3>
+             <p className="text-slate-500 dark:text-slate-400 mb-6 font-medium">Share this guide with your network to help others optimize their tracking!</p>
+             <div className="flex justify-center gap-3">
+                {shareLinks.map((link) => (
+                  <a
+                    key={link.name}
+                    href={link.url}
+                    className="px-6 py-3 rounded-xl bg-white dark:bg-slate-900 shadow-sm flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition-all hover:scale-105 active:scale-95"
+                  >
+                    {link.icon} {link.name}
+                  </a>
+                ))}
+             </div>
           </div>
 
         </div>
