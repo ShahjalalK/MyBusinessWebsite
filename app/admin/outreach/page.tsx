@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react'
+import { Turnstile } from '@marsidev/react-turnstile' // টার্নস্টাইল ইমপোর্ট
 import { db } from '../../lib/firebase'
 import { collection, serverTimestamp, query, where, getDocs, doc, setDoc } from 'firebase/firestore' 
 import { Send, Loader2, CheckCircle2, Image as ImageIcon, AlertCircle, Briefcase, Building2, Globe } from 'lucide-react'
@@ -49,6 +50,9 @@ export default function OutreachPage() {
   const [selectedSender, setSelectedSender] = useState<string>('') 
   const [minDateTime, setMinDateTime] = useState('')
   const [emailError, setEmailError] = useState('')
+  
+  // টার্নস্টাইল টোকেন স্টেট
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     const updateMinTime = () => {
@@ -109,24 +113,22 @@ export default function OutreachPage() {
 
   const activeSender = SENDERS.find(s => s.email === selectedSender);
 
-  // --- মেইন ইমেইল সেন্ডিং ফাংশন ---
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const strippedMessage = message.replace(/<[^>]*>?/gm, '').trim();
-    if (!strippedMessage) {
-      return alert("Message body cannot be empty!");
-    }
-
+    if (!strippedMessage) return alert("Message body cannot be empty!");
     if (!isEmailPatternValid(email)) { setEmailError('Please enter a valid email address!'); return; }
     if (!selectedService) return alert("Please select a service first!");
     if (!activeSender) return alert("Please select an active sender!");
+    
+    // টোকেন চেক
+    if (!turnstileToken) return alert("Security verification incomplete!");
     
     setLoading(true);
     setStatus('Launching Campaign...');
 
     try {
-      // ১. ইউনিক বেস আইডি জেনারেট করা (এটি ফলো-আপের জন্যও মেইন আইডি হিসেবে থাকবে)
       const baseTrackingId = crypto.randomUUID().substring(0, 8) + Date.now().toString(36).substring(4);
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
       
@@ -142,48 +144,43 @@ export default function OutreachPage() {
             companyName,
             website, 
             businessType, 
-            trackingId: baseTrackingId, // এখানে বেস আইডি পাঠানো হচ্ছে
-            scheduledAt: scheduledAtISO 
+            trackingId: baseTrackingId,
+            scheduledAt: scheduledAtISO,
+            cf_token: turnstileToken // API-তে টোকেন পাঠানো হচ্ছে
         }),
       });
+      
       const data = await res.json();
       
       if (data.success) {
         const leadRef = doc(collection(db, "outreach_leads")); 
-        
-        // ২. ফায়ারবেসে লিড সেভ করা
-      // ২. ফায়ারবেসে লিড সেভ করা
-            await setDoc(leadRef, {
-              name: clientName, 
-              company_name: companyName,
-              website: website, 
-              business_type: businessType, 
-              service: selectedService, 
-              email, 
-              sender_email: activeSender.email, 
-              sender_name: activeSender.name,
-              subject, 
-              message, 
-              trackingId: baseTrackingId,
-              originalMessageId: data.messageId,
-              status: scheduledAtISO ? 'scheduled' : 'sent', 
-              
-              // --- এই লাইনটি যোগ করুন ---
-              stopAutomation: false, 
-              // -------------------------
-
-              open_count: 0,
-              follow_up_count: 0,
-              scheduledAt: scheduledAtISO, 
-              createdAt: serverTimestamp(),
-              tracking_history: []
-            });
+        await setDoc(leadRef, {
+          name: clientName, 
+          company_name: companyName,
+          website: website, 
+          business_type: businessType, 
+          service: selectedService, 
+          email, 
+          sender_email: activeSender.email, 
+          sender_name: activeSender.name,
+          subject, 
+          message, 
+          trackingId: baseTrackingId,
+          originalMessageId: data.messageId,
+          status: scheduledAtISO ? 'scheduled' : 'sent', 
+          stopAutomation: false, 
+          open_count: 0,
+          follow_up_count: 0,
+          scheduledAt: scheduledAtISO, 
+          createdAt: serverTimestamp(),
+          tracking_history: []
+        });
 
         setStatus(scheduledAtISO ? 'Success! Email Scheduled.' : 'Success! Outreach Launched.');
-        // ফর্ম ক্লিয়ার করা
+        setTurnstileToken(null); // রিসেট টোকেন
         setEmail(''); setClientName(''); setCompanyName(''); setWebsite(''); setBusinessType(''); setSubject(''); setMessage(''); setScheduledTime('');
       } else {
-        setStatus('Failed: ' + (data.error?.message || 'Unknown Error'));
+        setStatus('Failed: ' + (data.error || 'Unknown Error'));
       }
     } catch (error) {
       console.error(error);
@@ -303,14 +300,22 @@ export default function OutreachPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule Send</span>
-                <input type="datetime-local" min={minDateTime} className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+              <div className="space-y-4">
+                {/* টার্নস্টাইল উইজেট */}
+                <div className="scale-90 origin-left">
+                  <Turnstile 
+                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!} 
+                    onSuccess={(token) => setTurnstileToken(token)} 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule Send</span>
+                  <input type="datetime-local" min={minDateTime} className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+                </div>
               </div>
-             <button 
+              <button 
                   type="submit" 
-                  // এই লজিকটিই ম্যাজিক করবে
-                  disabled={loading || !isEmailPatternValid(email) || !selectedService || !message.replace(/<[^>]*>?/gm, '').trim()} 
+                  disabled={loading || !turnstileToken || !isEmailPatternValid(email) || !selectedService || !message.replace(/<[^>]*>?/gm, '').trim()} 
                   className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   {loading ? (
