@@ -67,7 +67,7 @@ export default function Navbar() {
 
         {/* ডেস্কটপ মেনু (অপরিবর্তিত) */}
         <div className="hidden lg:flex items-center gap-8">
-          <NavLink href="/" onClick={() => handleNavClick('Home')}>Home</NavLink>
+         
           
           <div className="group relative">
             <button className="flex items-center gap-1 text-[15px] font-bold text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors py-2">
@@ -137,7 +137,7 @@ export default function Navbar() {
           >
             <div className="container mx-auto px-6 py-8 flex flex-col gap-6">
               <div className="flex flex-col gap-4">
-                <MobileNavLink href="/" onClick={() => setIsOpen(false)}>Home</MobileNavLink>
+               
                 <MobileNavLink href="/blog" onClick={() => setIsOpen(false)}>Blog</MobileNavLink>
                 <MobileNavLink href="/join-the-team" onClick={() => setIsOpen(false)}>Join the Team</MobileNavLink>
                 
