@@ -85,7 +85,7 @@ export default function Navbar() {
           </div>
 
           <NavLink href="/blog" onClick={() => handleNavClick('Blog')}>Blog</NavLink>
-          <NavLink href="/jobs" onClick={() => handleNavClick('Jobs')}>Jobs</NavLink>
+          <NavLink href="/join-the-team" onClick={() => handleNavClick('Jobs')}>Join the Team</NavLink>
 
           {isAdmin && (
             <div className="group relative">
@@ -139,7 +139,7 @@ export default function Navbar() {
               <div className="flex flex-col gap-4">
                 <MobileNavLink href="/" onClick={() => setIsOpen(false)}>Home</MobileNavLink>
                 <MobileNavLink href="/blog" onClick={() => setIsOpen(false)}>Blog</MobileNavLink>
-                <MobileNavLink href="/jobs" onClick={() => setIsOpen(false)}>Jobs</MobileNavLink>
+                <MobileNavLink href="/join-the-team" onClick={() => setIsOpen(false)}>Join the Team</MobileNavLink>
                 
                 {/* Mobile Tracking Lab */}
                 <Link 

@@ -2,6 +2,7 @@ import React from 'react'
 import { FaLinkedinIn, FaTwitter, FaGlobe } from 'react-icons/fa'
 import { BlogPost } from '../BlogMainPage/blogData';
 import Image from 'next/image';
+import Link from 'next/link';
 
 
 interface AuthorBoxProps {
@@ -42,15 +43,15 @@ export default function SingleBlogAuthorBox({ post }: AuthorBoxProps) {
           </div>
           
           <div className="flex items-center gap-3">
-            <a href="#" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+            <Link href="https://www.linkedin.com/in/shahjalal-khan/" target="_blank" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
               <FaLinkedinIn size={14} />
-            </a>
-            <a href="#" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-blue-400 hover:text-white transition-all shadow-sm">
+            </Link>
+            {/* <a href="#" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-blue-400 hover:text-white transition-all shadow-sm">
               <FaTwitter size={14} />
-            </a>
-            <a href="#" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-emerald-500 hover:text-white transition-all shadow-sm">
+            </a> */}
+            <Link href="www.trackflowpro.com/about" className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-emerald-500 hover:text-white transition-all shadow-sm">
               <FaGlobe size={14} />
-            </a>
+            </Link>
           </div>
         </div>
 
