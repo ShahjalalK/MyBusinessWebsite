@@ -51,57 +51,39 @@ export default function TrackingLabClient() {
     }
   }, [isScanning]);
 
- useEffect(() => {
-    const fetchFromServer = async () => {
-      // ১. ব্রাউজার থেকে ডিভাইস এবং ব্রাউজার ডিটেক্ট করা (এটি এপিআই এর ওপর নির্ভর করে না)
-      const ua = navigator.userAgent;
-      let device = "Desktop";
-      if (/Mobi|Android|iPhone/i.test(ua)) device = "Mobile";
+useEffect(() => {
+  const fetchFromServer = async () => {
+    try {
+      // আপনার নিজের তৈরি সার্ভার এপিআই থেকে ডেটা নিচ্ছি
+      const response = await fetch('/api/user-info'); 
+      const data = await response.json();
       
-      let browser = "Unknown";
-      if (ua.includes("Chrome")) browser = "Chrome";
-      else if (ua.includes("Safari")) browser = "Safari";
-      else if (ua.includes("Firefox")) browser = "Firefox";
-      else if (ua.includes("Edge")) browser = "Edge";
-
-      let os = "Unknown OS";
-      if (ua.includes("Win")) os = "Windows";
-      else if (ua.includes("Mac")) os = "macOS";
-      else if (ua.includes("Linux")) os = "Linux";
-      else if (ua.includes("Android")) os = "Android";
-      else if (ua.includes("iOS")) os = "iOS";
-
-      try {
-        // ২. লোকেশন এবং আইপি এর জন্য এপিআই কল
-        const response = await fetch('https://ipapi.co/json/');
-        const data = await response.json();
-        
-        setUserData({
-          location: data.city ? `${data.city}, ${data.country_name}` : "Bangladesh",
-          countryCode: data.country_code || "BD",
-          ip: data.ip || "Detected",
-          isp: data.org || "Local Provider",
-          device: device,
-          browser: browser,
-          os: os
-        });
-      } catch (err) {
-        // এপিআই ফেল করলেও ডিভাইস আর ব্রাউজার যেন দেখায়
-        setUserData({ 
-          location: "Bangladesh (Local)",
-          countryCode: "BD",
-          device: device, 
-          browser: browser, 
-          ip: "Secure Connection",
-          os: os,
-          isp: "Internet Provider"
-        });
-      } finally {
-        setTimeout(() => setIsScanning(false), 2000);
-      }
-    };
-    fetchFromServer();
-  }, []);
+      setUserData({
+        location: data.location,
+        countryCode: data.countryCode,
+        ip: data.ip,
+        isp: data.isp,
+        device: data.device,
+        browser: data.browser,
+        os: data.os
+      });
+    } catch (err) {
+      // একদম চরম পর্যায়ে যদি আপনার সার্ভারও রেসপন্স না করে
+      setUserData({ 
+        location: "System Encrypted",
+        countryCode: "",
+        device: "Cross-Platform Device", 
+        browser: "Secure Browser Engine", 
+        ip: "SST Protected",
+        os: "Verified OS",
+        isp: "Private Gateway"
+      });
+    } finally {
+      setTimeout(() => setIsScanning(false), 2500);
+    }
+  };
+  fetchFromServer();
+}, []);
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#020617] relative pt-16 pb-20 lg:pt-20 lg:pb-32 px-6 overflow-hidden text-slate-900 dark:text-white">
