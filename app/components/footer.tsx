@@ -3,6 +3,7 @@ import { Mail, MapPin, Send, Loader2 } from 'lucide-react'
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { BsTwitter, BsLinkedin, BsFacebook } from 'react-icons/bs'
+import Link from 'next/link'
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -168,8 +169,8 @@ export default function Footer() {
           <div className="flex flex-col items-center md:items-end gap-2 text-[10px] text-slate-500 uppercase tracking-widest font-black">
             <p>© {new Date().getFullYear()} TrackFlow Pro. All Rights Reserved.</p>
             <div className="flex gap-6 opacity-60">
-              <a href="#" className="hover:text-blue-500">Privacy Policy</a>
-              <a href="#" className="hover:text-blue-500">Terms of Service</a>
+              <Link href="/privacy-policy" className="hover:text-blue-500">Privacy Policy</Link>
+              <Link href="/terms-of-service" className="hover:text-blue-500">Terms of Service</Link>
             </div>
           </div>
         </div>
