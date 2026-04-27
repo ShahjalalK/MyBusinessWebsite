@@ -1,7 +1,7 @@
 "use client"
 import React from 'react'
 import { motion, Variants } from 'framer-motion'
-import { FaPenNib, FaSearch, FaEnvelope, FaIdCard, FaPalette } from 'react-icons/fa'
+import { FaSearch, FaChartLine, FaBullseye, FaCode, FaEnvelope, FaFingerprint } from 'react-icons/fa'
 import { useBlogStore } from '@/app/store/useBlogStore';
 
 const containerVariants: Variants = {
@@ -42,13 +42,13 @@ export default function BlogHero() {
   return (
     <section className="relative pt-16 pb-20 lg:pt-20 lg:pb-32 bg-white dark:bg-slate-950 overflow-hidden">
       
-      {/* Background Decor - Email & Design Icons */}
+      {/* Background Decor - Mixed Service Icons */}
       <div className="absolute inset-0 z-0 opacity-20 dark:opacity-10 pointer-events-none">
           {[
-            { icon: FaEnvelope, top: "20%", left: "10%" },
-            { icon: FaIdCard, top: "30%", right: "15%" },
-            { icon: FaPalette, bottom: "25%", left: "20%" },
-            { icon: FaPenNib, bottom: "35%", right: "25%" },
+            { icon: FaChartLine, top: "15%", left: "10%" },  // GA4/Tracking
+            { icon: FaBullseye, top: "25%", right: "12%" },   // Google Ads
+            { icon: FaCode, bottom: "20%", left: "15%" },     // Server-Side/GTM
+            { icon: FaEnvelope, bottom: "30%", right: "20%" }, // Email Signature
           ].map((item, idx) => (
             <motion.div 
               key={idx}
@@ -76,28 +76,28 @@ export default function BlogHero() {
             variants={childVariants}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest"
           >
-            <FaPenNib className="animate-bounce" /> Signature Design Tips
+            <FaFingerprint className="animate-pulse" /> Data-Driven Marketing Insights
           </motion.div>
 
-          {/* SEO Optimized H1: Focusing on Personalized & Professional Signatures */}
+          {/* SEO Optimized H1: High Value Keywords Included */}
           <motion.h1 
             variants={childVariants}
             className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.95]"
           >
-            Elevate Your Brand with <br />
+            Scale Your Growth with <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-500">
-               Professional Email Signatures.
+                Tracking & Paid Ads Mastery.
             </span>
           </motion.h1>
 
-          {/* Content focused on HIPAA compliance and personalized branding */}
+          {/* Content focusing on all major services based on your Keyword Research */}
           <motion.p 
             variants={childVariants}
             className="text-lg md:text-xl text-slate-500 dark:text-slate-400 font-medium max-w-3xl mx-auto leading-relaxed"
           >
-            Insights on creating <span className="text-slate-900 dark:text-slate-200 font-bold">personalized signatures</span>, 
-            mastering <span className="text-slate-900 dark:text-slate-200 font-bold">HIPAA disclaimers</span>, 
-            and building trust in every email you send.
+            Expert guides on <span className="text-slate-900 dark:text-slate-200 font-bold italic underline decoration-blue-500/30">GA4 Server-Side Tracking</span>, 
+            high-ROAS <span className="text-slate-900 dark:text-slate-200 font-bold italic underline decoration-blue-500/30">Google Ads Audits</span>, 
+            and <span className="text-slate-900 dark:text-slate-200 font-bold italic underline decoration-blue-500/30">Professional Brand Identity</span>.
           </motion.p>
 
           <motion.div 
@@ -112,8 +112,7 @@ export default function BlogHero() {
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search Design Articles"
-              placeholder="Search for Clickable signatures, HTML tips..." 
+              placeholder="Search for CAPI, Google Ads Audit, Tracking..." 
               className="w-full pl-14 pr-6 py-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] shadow-2xl shadow-slate-200/50 dark:shadow-none focus:outline-none focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 transition-all font-medium text-slate-900 dark:text-white placeholder:text-slate-400"
             />
           </motion.div>
