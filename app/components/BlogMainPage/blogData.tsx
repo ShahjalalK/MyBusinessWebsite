@@ -44,18 +44,67 @@ export const blogPosts: BlogPost[] = [
     ]
   },
   {
-    id: "google-ads-roas-optimization",
-    title: "Advanced Google Ads Strategies to Boost ROAS",
-    description: "Stop wasting budget on broad keywords. Discover the advanced bidding strategies that experts use to scale ROAS efficiently.",
-    image: "/blog1.jpg",
+    id: "ultimate-google-ads-audit-checklist",
+    title: "The Ultimate Google Ads Audit Checklist to Maximize ROAS",
+    description: "Stop wasting your ad spend. Learn how a professional Google Ads audit service can find hidden leaks and scale your business growth.",
+    image: "/blog-audit.jpg", // এখানে আপনার তৈরি করা লম্বা লম্বি ছবিটি ব্যবহার করতে পারেন
     category: "Google Ads",
-    date: "April 05, 2026",
-    readTime: "8 min read",
-    ctaType: "ads", // এটি গুগল অ্যাডস সার্ভিস প্রমোট করবে
+    date: "May 02, 2026",
+    readTime: "10 min read",
+    ctaType: "ads",
+    isFeatured: true, // এটিকে এখন Featured করতে পারেন
     content: [
-      { type: 'paragraph', text: "Scaling a Google Ads account requires more than just high budgets. It requires precision and data accuracy." },
-      { type: 'heading', text: "The Power of Value-Based Bidding" },
-      { type: 'paragraph', text: "Instead of focusing on clicks, focus on conversion value. This allows Google's AI to find customers who spend more." },
+      { 
+        type: 'paragraph', 
+        text: "Are you pumping money into Google Ads but seeing a declining Return on Ad Spend (ROAS)? Many businesses face this because their accounts are running on 'Auto-pilot'. A professional google ads audit service isn't just about finding errors; it's about uncovering growth opportunities that your competitors are missing." 
+      },
+      { 
+        type: 'heading', 
+        text: "1. Audit Your Conversion Tracking Accuracy" 
+      },
+      { 
+        type: 'paragraph', 
+        text: "The most common issue I find in audits is 'Broken Tracking'. If your GA4 or GTM conversion tags aren't firing correctly, Google's Smart Bidding will fail. You must ensure that you are using Server-Side Tracking to recover data lost to ad-blockers and ITP updates." 
+      },
+      { 
+        type: 'heading', 
+        text: "2. The Search Term Report: Stop Burning Cash" 
+      },
+      { 
+        type: 'paragraph', 
+        text: "Check your search terms. Are you paying for keywords that have zero intent to buy? By identifying these and moving them to a 'Negative Keyword List', you can instantly save 20-30% of your daily budget." 
+      },
+      { 
+        type: 'image', 
+        url: "/audit-dashboard.jpg", 
+        caption: "A deep dive into search term reports can save thousands of dollars." 
+      },
+      { 
+        type: 'heading', 
+        text: "3. Ad Copy & Asset (Extension) Quality" 
+      },
+      { 
+        type: 'paragraph', 
+        text: "Google Ads is a competition of attention. Your ads must have high CTR (Click-Through Rate). Audit your headlines and ensure you are using all relevant assets like Sitelinks, Callouts, and Structured Snippets to dominate the search results page." 
+      },
+      { 
+        type: 'heading', 
+        text: "Your Quick Google Ads Audit Checklist" 
+      },
+      { 
+        type: 'list', 
+        items: [
+          "Verify GA4 and Google Ads conversion link status.",
+          "Check for 'Limited by Budget' warnings and analyze Impression Share.",
+          "Review Campaign bidding strategies (Shift to Target ROAS if data allows).",
+          "Remove redundant keywords and consolidate 'Keyword Cannibalization'.",
+          "Test Landing Page loading speed and mobile responsiveness."
+        ] 
+      },
+      { 
+        type: 'paragraph', 
+        text: "If this sounds technical, don't worry. Performing a regular audit is a continuous process. However, the initial cleanup can often double your lead flow without increasing your spend by a single dollar." 
+      }
     ]
   },
   {
