@@ -3,11 +3,11 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, User, Mail, ChevronDown, MessageSquare, Sparkles, ArrowRight, CheckCircle2, Loader2, ShieldCheck, Lock, Sparkle } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
-import Turnstile from 'react-turnstile' // ১. টার্নস্টাইল ইমপোর্ট
+import Turnstile from 'react-turnstile' 
 
 export default function ContactForm() {
   const [loading, setLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); // ২. টোকেন স্টেট
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -27,7 +27,7 @@ export default function ContactForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ৩. ক্যাপচা চেক
+    // ১. ক্যাপচা চেক
     if (!turnstileToken) {
       toast.error("Please complete the security check.");
       return;
@@ -43,10 +43,10 @@ export default function ContactForm() {
       ? document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1]
       : null;
 
-    let clientId = gaCookie || localStorage.getItem('ga_client_id');
+    let clientId = gaCookie || (typeof window !== 'undefined' ? localStorage.getItem('ga_client_id') : null);
     if (!clientId) {
       clientId = `${Math.floor(Math.random() * 1000000000)}.${Math.floor(Date.now() / 1000)}`;
-      localStorage.setItem('ga_client_id', clientId);
+      if (typeof window !== 'undefined') localStorage.setItem('ga_client_id', clientId);
     }
 
     try {
@@ -55,7 +55,7 @@ export default function ContactForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          captchaToken: turnstileToken, // ৪. টোকেন সার্ভারে পাঠানো
+          captchaToken: turnstileToken, // টোকেন পাঠানো হচ্ছে
           clientId,
           sessionId,
           pageTitle: document.title,
@@ -66,12 +66,13 @@ export default function ContactForm() {
       if (response.ok) {
         toast.success('Strategy request sent! I\'ll contact you shortly.');
         setFormData({ name: '', email: '', service: 'Google Ads Audit & Strategy', message: '' });
-        setTurnstileToken(null); // ৫. সাকসেস হলে টোকেন রিসেট
+        setTurnstileToken(null); // রিসেট
       } else {
-        throw new Error("Failed to send");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send");
       }
-    } catch (error) {
-      toast.error('Network issue. Please try again.');
+    } catch (error: any) {
+      toast.error(error.message || 'Network issue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -122,7 +123,7 @@ export default function ContactForm() {
               </motion.div>
             </div>
 
-            {/* Right Column Content - Form */}
+            {/* Right Column - Form */}
             <div className="lg:col-span-7">
               <motion.div 
                 initial={{ opacity: 0, y: 40 }}
@@ -130,12 +131,11 @@ export default function ContactForm() {
                 viewport={{ once: true }}
                 className="relative"
               >
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-[2.5rem] blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-[2.5rem] blur opacity-20 transition duration-1000"></div>
 
                 <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 md:p-14 rounded-[2.5rem] shadow-2xl">
                   
                   <form onSubmit={handleSubmit} className="space-y-8">
-                    {/* ... (Inputs are same as yours) ... */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Client Name</label>
@@ -143,7 +143,7 @@ export default function ContactForm() {
                           <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                           <input 
                             type="text" required value={formData.name} placeholder="Alex Johnson"
-                            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
                             onChange={(e) => setFormData({...formData, name: e.target.value})}
                           />
                         </div>
@@ -155,20 +155,19 @@ export default function ContactForm() {
                           <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                           <input 
                             type="email" required value={formData.email} placeholder="alex@company.com"
-                            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
                             onChange={(e) => setFormData({...formData, email: e.target.value})}
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* Expertise Select & Message Textarea (Keep your original code here) */}
                     <div className="space-y-3">
                       <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Required Expertise</label>
                       <div className="relative group/select">
                         <select 
                           value={formData.service}
-                          className="w-full pl-6 pr-12 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all font-bold text-slate-900 dark:text-white appearance-none cursor-pointer"
+                          className="w-full pl-6 pr-12 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white appearance-none cursor-pointer"
                           onChange={(e) => setFormData({...formData, service: e.target.value})}
                         >
                           {services.map((service, i) => (
@@ -187,18 +186,21 @@ export default function ContactForm() {
                         <MessageSquare className="absolute left-4 top-5 text-slate-300" size={18} />
                         <textarea 
                           required rows={4} value={formData.message} placeholder="Tell me about your tracking setup..."
-                          className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all font-bold text-slate-900 dark:text-white resize-none"
+                          className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white resize-none"
                           onChange={(e) => setFormData({...formData, message: e.target.value})}
                         ></textarea>
                       </div>
                     </div>
 
-                    {/* ৬. Turnstile Widget Placement */}
+                    {/* ২. Turnstile Widget - ENV এবং Auto-refresh সহ */}
                     <div className="flex justify-start">
                       <Turnstile
-                        sitekey="YOUR_CLOUDFLARE_SITE_KEY"
+                        sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
                         onVerify={(token) => setTurnstileToken(token)}
-                        theme="auto" // আপনার ডার্ক মোড সাপোর্ট করবে
+                        theme="auto"
+                        refresh-expired="auto"      // টোকেন শেষ হয়ে গেলে নিজে নিজে নতুন টোকেন নেবে
+                onExpire={() => setTurnstileToken(null)} // এক্সপায়ার হলে টোকেন স্টেট খালি করে দেবে
+                onError={() => setTurnstileToken(null)}
                       />
                     </div>
 
