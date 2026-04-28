@@ -72,8 +72,6 @@ export async function GET(req: Request) {
       const delayMinutes = lead[`${currentStepKey}Delay`] || 1440; 
       const scheduledTimeMillis = roundedBaseTime.getTime() + (delayMinutes * 60000);
 
-      console.log(`Checking lead: ${lead.email}, Scheduled: ${new Date(scheduledTimeMillis)}, Now: ${now}`);
-      
       // টাইম গেটকিপার (নির্ধারিত সময়ের আগে পাঠাবে না)
       if (now.getTime() < scheduledTimeMillis) {
         continue;
