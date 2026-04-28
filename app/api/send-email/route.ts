@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Security check failed' }, { status: 403 });
     }
 
-    // ৩. ট্র্যাকিং আইডি জেনারেশন
+    // ৩. ট্র্যাকিং আইডি জেনারেশন (আপনার অরিজিনাল লজিক অপরিবর্তিত)
     const baseTrackingId = trackingId || Buffer.from(`${email}-${Date.now()}`).toString('base64').substring(0, 12);
     const stepTrackingId = `${baseTrackingId}_step1`;
     const uniqueMessageId = `<${Date.now()}.${baseTrackingId}@mail.trackflowpro.com>`;
@@ -45,9 +45,22 @@ export async function POST(req: Request) {
         tags: [stepTrackingId], 
         htmlContent: `
           <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-              ${message}
-              <div style="display:none; visibility:hidden; font-size:1px;">${stepTrackingId}</div>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              
+              <div style="margin-bottom: 30px; font-size: 15px;">
+                ${message}
+              </div>
+
+              <div style="margin-top: 40px; border-top: 1px solid #eeeeee; padding-top: 20px;">
+                <span style="font-size: 16px; font-weight: bold; color: #222;">Shahjalal Khan</span><br>
+                <span style="font-size: 14px; color: #666;">Google Ads & Web Analytics Specialist</span><br>
+                <a href="https://trackflowpro.com" style="font-size: 14px; color: #007bff; text-decoration: none;">trackflowpro.com</a>
+                
+                <p style="margin-top: 20px; font-size: 10px; color: #bbbbbb; letter-spacing: 0.5px; font-family: monospace;">
+                  REF: ${stepTrackingId.toUpperCase()} | SECURE_TRACK_VERIFIED
+                </p>
+              </div>
+
             </body>
           </html>
         `,
