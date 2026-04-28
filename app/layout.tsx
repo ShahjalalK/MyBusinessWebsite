@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import { Metadata } from 'next'
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/HeroSection/ThemeProvider";
@@ -7,13 +7,19 @@ import LiveNotificationMap from "./components/HeroSection/liveTracking";
 import Script from "next/script";
 import ServerTrack from "./components/ServerTrack";
 
+export const metadata: Metadata = {
+  title: 'TrackFlow Pro',
+  description: 'Advanced Tracking Solutions',
+  icons: {
+    icon: '/icon.png',
+  },
+}
+
+
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: "TrackFlow Pro - Digital Marketing Agency",
-  description: "Expert in GA4 Server-Side Tracking & Google Ads",
-};
+
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

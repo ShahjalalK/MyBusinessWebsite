@@ -7,10 +7,10 @@ export async function POST(request: Request) {
     const { 
       name, email, service, message, 
       clientId, sessionId, pageTitle, pageLocation,
-      captchaToken // ১. ফ্রন্টএন্ড থেকে পাঠানো টোকেন ধরলাম
+      captchaToken 
     } = body;
 
-    // ২. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন চেক
+    // ১. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন
     if (!captchaToken) {
       return NextResponse.json({ error: "Security check is missing" }, { status: 400 });
     }
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const secretKey = process.env.TURNSTILE_SECRET_KEY;
     const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, // হেডার পরিবর্তন
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           secret: secretKey || "",
           response: captchaToken,
@@ -31,21 +31,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Security check failed. Please try again." }, { status: 403 });
     }
 
-    // ৩. ইমেল পাঠানোর কনফিগারেশন
+    // ২. Brevo SMTP কনফিগারেশন (Updated)
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
+      host: process.env.SMTP_HOST, // smtp-relay.brevo.com
+      port: Number(process.env.SMTP_PORT), // 587
       secure: false, 
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      // Brevo-র জন্য TLS নিশ্চিত করা জরুরি
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      }
     });
 
-    await transporter.sendMail({
-      from: `"TrackFlow Inquiry" <${process.env.EMAIL_USER}>`,
-      to: "shahjalal@trackflowpro.com",
-      replyTo: email,
+    // ৩. ইমেইল পাঠানো
+    const info = await transporter.sendMail({
+      // "from" হিসেবে ভেরিফাইড ইমেইলটি ব্যবহার করা হয়েছে
+      from: `"TrackFlow Inquiry" <shahjalal@trackflowpro.com>`, 
+      to: "shahjalalk.web@gmail.com",
+      replyTo: email, // ইউজার যাতে রিপ্লাই দিলে কাস্টমারের কাছে যায়
       subject: `New Project: ${service} - from ${name}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -56,12 +63,15 @@ export async function POST(request: Request) {
           <p><strong>Service:</strong> ${service}</p>
           <p><strong>Message:</strong> ${message}</p>
           <hr />
+          <p style="font-size: 11px; color: #999;">Client ID: ${clientId || 'N/A'}</p>
           <p style="font-size: 12px; color: #666;">Source: Contact Page Form</p>
         </div>
       `,
     });
 
-    // ৪. GA4 সার্ভার-সাইড ট্র্যাকিং (Lead Event)
+    console.log("Message sent: %s", info.messageId);
+
+    // ৪. GA4 সার্ভার-সাইড ট্র্যাকিং (বাকি অংশ ঠিক আছে)
     const measurementId = process.env.GA4_MEASUREMENT_ID;
     const apiSecret = process.env.GA4_API_SECRET;
 
@@ -83,7 +93,6 @@ export async function POST(request: Request) {
               user_agent: userAgent,
               name: name, 
               service_type: service,
-              engagement_time_msec: "100"
             },
           }],
         }),
