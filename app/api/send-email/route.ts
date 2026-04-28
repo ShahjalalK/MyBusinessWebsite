@@ -50,6 +50,8 @@ export async function POST(req: Request) {
               ${message}
 
               <br />
+              Best,
+              --
               <div>
                 <span style="font-size: 16px; font-weight: bold; color: #222;">Shahjalal Khan</span><br>
                 <span style="font-size: 14px; color: #666;">Founder Of TrackFlowPro</span><br>

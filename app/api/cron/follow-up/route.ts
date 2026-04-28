@@ -285,7 +285,7 @@ export async function GET(req: Request) {
                 </div>
 
                 <br />
-                
+                Best,
                   <span style="font-size: 16px; font-weight: bold; color: #222;">Shahjalal Khan</span><br>
                   <span style="font-size: 14px; color: #666;">Founder Of TrackFlowPro</span><br>
                   <a href="https://trackflowpro.com" style="font-size: 14px; color: #007bff; text-decoration: none;">www.trackflowpro.com</a>
