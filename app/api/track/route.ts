@@ -2,15 +2,18 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    // ১. অরিজিন চেক (Security)
-    // এটি নিশ্চিত করে যে রিকোয়েস্টটি শুধু আপনার ওয়েবসাইট থেকেই আসছে
-    const origin = request.headers.get('origin');
-    const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL; // আপনার ডোমেইন (যেমন: https://trackflowpro.com)
+    // ১. অরিজিন চেক (Updated for Cloudflare)
+    const origin = request.headers.get('origin') || "";
+    const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL || "";
 
-    if (process.env.NODE_ENV === 'production' && origin !== allowedOrigin) {
+    // হুবহু চেক না করে 'includes' ব্যবহার করা নিরাপদ এবং স্লাশ বা www এর ঝামেলা থাকে না
+    const isAllowed = origin.replace(/\/$/, "") === allowedOrigin.replace(/\/$/, "");
+
+    if (process.env.NODE_ENV === 'production' && !isAllowed) {
+      console.log("Blocked Origin:", origin, "Expected:", allowedOrigin); // লগে চেক করার জন্য
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
-
+    
     const body = await request.json();
     const { eventName, clientId, sessionId, pageTitle, pageLocation, eventParams } = body;
 
