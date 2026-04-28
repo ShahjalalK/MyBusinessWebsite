@@ -279,9 +279,21 @@ export async function GET(req: Request) {
           tags: [currentStepTag], 
           htmlContent: `
             <html>
-              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                ${finalVariant.content.replace(/{name}/g, lead.name || 'there').replace(/{company}/g, lead.company_name || '')}
-                <div style="display:none; visibility:hidden; font-size:1px;">${currentStepTag}</div>
+              <body style="font-family: Arial, sans-serif;">
+                <div>
+                  ${finalVariant.content.replace(/{name}/g, lead.name || 'there').replace(/{company}/g, lead.company_name || '')}
+                </div>
+
+                <br />
+                
+                  <span style="font-size: 16px; font-weight: bold; color: #222;">Shahjalal Khan</span><br>
+                  <span style="font-size: 14px; color: #666;">Founder Of TrackFlowPro</span><br>
+                  <a href="https://trackflowpro.com" style="font-size: 14px; color: #007bff; text-decoration: none;">www.trackflowpro.com</a>
+                  
+                  <p style="margin-top: 20px; font-size: 10px; color: #bbbbbb; letter-spacing: 0.5px; font-family: monospace;">
+                    REF: ${currentStepTag.toUpperCase()} | SECURE_TRACK_VERIFIED
+                  </p>
+                </div>
               </body>
             </html>
           `,
