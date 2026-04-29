@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   icons: {
     icon: '/icon.png',
   },
+  verification: {
+    other: {
+      'facebook-domain-verification': ['8mo0hos8jalxa1f08pc0mgnws10c7u'],
+    },
+  },
 }
 
 
