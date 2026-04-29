@@ -24,7 +24,7 @@ export default function ServerTrack() {
         pageTitle: document.title,
         pageLocation: window.location.href,
         // ৩. টেস্ট করার সময় নিচের লাইনটি আনকমেন্ট করুন
-        testEventCode: "TEST85792" // ফেসবুক থেকে পাওয়া কোডটি এখানে দিন
+        test_event_code: "TEST85792" // ফেসবুক থেকে পাওয়া কোডটি এখানে দিন
         
       })
     });
