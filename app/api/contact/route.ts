@@ -142,22 +142,25 @@ export async function POST(request: Request) {
       }]
     };
 
-    const gaPayload = { 
-      client_id: clientId || '123456789.123456789', 
-      events: [{ 
-        name: 'generate_lead', 
-        params: { 
-          session_id: sessionId, 
-          page_title: pageTitle, 
-          service_type: service,
-          country: geoData.country_name,
-          city: geoData.city,
-          debug_mode: 1 
-        } 
-      }] 
-    };
+    // ১. gaPayload এ engagement_time_msec যোগ করুন যাতে রিয়েলটাইমে Active দেখায়
+const gaPayload = { 
+  client_id: clientId || '123456789.123456789', 
+  events: [{ 
+    name: 'generate_lead', 
+    params: { 
+      session_id: sessionId, 
+      page_title: pageTitle, 
+      service_type: service,
+      country: geoData.country_name,
+      city: geoData.city,
+      engagement_time_msec: "100", // এটি যোগ না করলে রিয়েলটাইমে ইউজার কাউন্ট হয় না
+      debug_mode: 1 
+    } 
+  }] 
+};
 
-    const gaUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
+// ২. gaUrl এ validation_hit=true যোগ করুন (অপশনাল, শুধু ডিবাগিং এর জন্য ভালো)
+const gaUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
 
     const [fbRes, gaRes] = await Promise.all([
       fetch(`https://graph.facebook.com/v19.0/${process.env.FB_PIXEL_ID}/events?access_token=${process.env.FB_ACCESS_TOKEN}`, { 
