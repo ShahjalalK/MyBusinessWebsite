@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(fbPayload) 
       }),
-      fetch(GA4_URL, { 
+        fetch(GA4_URL, { 
         method: 'POST', 
         body: JSON.stringify({
           client_id: clientId || 'anonymous_user',
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
               page_location: pageLocation,  
               ip_override: userIp, 
               user_agent: userAgent, 
+              engagement_time_msec: "1", // এটি যোগ করলে ইউজারকে 'Active' দেখাবে
               ...eventParams 
             },
           }],
