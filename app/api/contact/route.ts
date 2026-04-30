@@ -18,12 +18,13 @@ export async function POST(request: Request) {
       captchaToken 
     } = body;
 
-    // মেটাডাটা সংগ্রহ
-    const pageLocation = request.headers.get('referer') || 'https://trackflowpro.com';
-    const userIp = request.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1';
+    // ১. নিখুঁত আইপি সংগ্রহ (Vercel/Cloudflare Friendly)
+    const forwarded = request.headers.get('x-forwarded-for');
+    const userIp = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || '';
+    const pageLocation = request.headers.get('referer') || 'https://trackflowpro.com';
 
-    // ১. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন
+    // ২. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন
     const secretKey = process.env.TURNSTILE_SECRET_KEY;
     const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
         method: 'POST',
@@ -36,14 +37,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Security check failed." }, { status: 403 });
     }
 
-    // ২. আইপি থেকে জিও লোকেশন বের করা
+    // ৩. আইপি থেকে জিও লোকেশন বের করা (Updated Logic)
     let geoData = { city: 'Unknown', country_name: 'Unknown', org: 'Unknown', region: 'Unknown' };
+    
     try {
-      const geoRes = await fetch(`https://ipapi.co/${userIp}/json/`);
-      if (geoRes.ok) geoData = await geoRes.json();
-    } catch (e) { console.warn("⚠️ Geo lookup failed"); }
+      if (userIp && userIp !== '127.0.0.1' && userIp !== '::1') {
+        // ip-api.com ব্যবহার করা হয়েছে কারণ এটি ভার্সেল সার্ভার থেকে অনেক সময় বেশি স্ট্যাবল
+        const geoRes = await fetch(`http://ip-api.com/json/${userIp}`);
+        if (geoRes.ok) {
+          const data = await geoRes.json();
+          if (data.status === 'success') {
+            geoData = {
+              city: data.city || 'Unknown',
+              country_name: data.country || 'Unknown',
+              org: data.isp || 'Unknown',
+              region: data.regionName || 'Unknown'
+            };
+          }
+        }
+      }
+    } catch (e) { 
+      console.warn("⚠️ Geo lookup failed:", e); 
+    }
 
-    // ৩. প্রফেশনাল ইমেইল পাঠানো (সুন্দর ডিজাইন সহ)
+    // ৪. প্রফেশনাল ইমেইল পাঠানো
     try {
         const transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
@@ -85,9 +102,8 @@ export async function POST(request: Request) {
         console.log("✅ Beautiful Email Sent");
     } catch (e) { console.error("❌ Email Failed:", e); }
 
-    // ৪. ট্র্যাকিং লজিক (FB & GA4)
+    // ৫. ট্র্যাকিং লজিক (FB & GA4)
 
-    // ফেসবুক পেলোড
     const fbPayload = {
       data: [{
         event_name: 'Lead',
@@ -108,11 +124,9 @@ export async function POST(request: Request) {
           currency: 'USD',
           value: 0.00
         }
-      }],
-      // test_event_code: "TEST85792" // টেস্ট শেষে এটি সরিয়ে দিবেন
+      }]
     };
 
-    // GA4 পেলোড
     const gaPayload = { 
       client_id: clientId || '123456789.123456789', 
       events: [{ 
@@ -121,26 +135,21 @@ export async function POST(request: Request) {
           session_id: sessionId, 
           page_title: pageTitle, 
           service_type: service,
-          location: geoData.country_name,
-          // debug_mode: 1 
+          country: geoData.country_name,
+          city: geoData.city,
+          debug_mode: 1 // DebugView তে দেখার জন্য ১ রাখা হয়েছে
         } 
       }] 
     };
 
-    // প্রোডাকশন ইউআরএল (সরাসরি ডেটা পাঠানোর জন্য)
-    const gaProductionUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
+    const gaUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
 
-    // একসাথে ফেসবুক এবং গুগল অ্যানালিটিক্সে ডেটা পাঠানো
+    // রিকোয়েস্ট পাঠানো
     const [fbRes, gaRes] = await Promise.all([
       fetch(`https://graph.facebook.com/v19.0/${process.env.FB_PIXEL_ID}/events?access_token=${process.env.FB_ACCESS_TOKEN}`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(fbPayload) 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fbPayload) 
       }),
-      fetch(gaProductionUrl, { 
-        method: 'POST', 
-        body: JSON.stringify(gaPayload) 
-      })
+      fetch(gaUrl, { method: 'POST', body: JSON.stringify(gaPayload) })
     ]);
 
     console.log(`📡 FB Status: ${fbRes.status} | GA4 Status: ${gaRes.status}`);
