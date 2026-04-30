@@ -2,151 +2,117 @@
 
 import React from "react"
 import { motion } from "framer-motion"
-import { ArrowUpRight, ArrowRight, TrendingUp, ShieldCheck } from "lucide-react"
+import { ArrowUpRight, TrendingUp, ShieldCheck, Mail, BarChart3 } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 const fadeInUp = {
-  initial: { opacity: 0, y: 40 },
+  initial: { opacity: 0, y: 20 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true },
-  transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
-}
-
-const staggerContainer = {
-  initial: {},
-  whileInView: { transition: { staggerChildren: 0.2 } },
+  transition: { duration: 0.6, ease: "easeOut" },
 }
 
 export default function CaseStudy() {
   const services = [
     {
-      title: "Advanced Tracking & Attribution Setup",
-      desc: "We help businesses set up Meta Pixel, Conversions API, GA4, and server-side tracking to improve data accuracy and make smarter marketing decisions.",
-      tags: ["Meta CAPI", "GA4", "Server-Side Tracking"],
-      imgText: "Tracking & Attribution System",
-      results: "Better Data Visibility",
-      link: "/services/tracking-attribution",
+      title: "Advanced Tracking & Attribution",
+      desc: "Restore 100% data accuracy using Server-Side GTM and Meta Conversions API to bypass ad-blockers.",
+      tag: "Tracking",
+      results: "100% Accuracy",
+      link: "/case-studies/server-side-tracking-expert-solution",
+      icon: <TrendingUp className="w-5 h-5 text-blue-600" />,
+      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.png", 
     },
     {
-      title: "Google Ads Audit & Growth Strategy",
-      desc: "We analyze campaign structure, wasted ad spend, conversion tracking, and targeting opportunities to build a clearer path for profitable growth.",
-      tags: ["Google Ads Audit", "PMax Strategy", "ROAS Optimization"],
-      imgText: "Google Ads Performance Review",
-      results: "Smarter Ad Decisions",
+      title: "Google Ads Growth Strategy",
+      desc: "Optimizing search and PMax campaigns to reduce wasted spend and maximize conversion value.",
+      tag: "Google Ads",
+      results: "Lower CPA",
       link: "/services/google-ads-audit",
+      icon: <BarChart3 className="w-5 h-5 text-blue-600" />,
+      image: "/screenshots/google-ads-results.png",
+    },
+    {
+      title: "Clickable Email Signatures",
+      desc: "Custom-coded interactive branding assets designed to drive traffic from every outgoing email.",
+      tag: "Branding",
+      results: "Brand Growth",
+      link: "/case-study/clickable-email-signature-branding",
+      icon: <Mail className="w-5 h-5 text-blue-600" />,
+      image: "/screenshots/signature-mockup.png",
     },
   ]
 
   return (
-    <section className="py-24 bg-slate-50 dark:bg-slate-950/50 overflow-hidden">
+    <section className="py-24 bg-white dark:bg-slate-950">
       <div className="container mx-auto px-6">
-        {/* Header Section */}
-        <motion.div
-          className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8"
-          initial={{ opacity: 0, y: -20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-        >
-          <div className="max-w-2xl">
-            <span className="text-blue-600 dark:text-blue-400 font-bold tracking-[0.2em] uppercase text-xs mb-4 block">
-              Our Expertise
-            </span>
+        <div className="mb-16">
+          <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">
+            Featured <span className="text-blue-600">Case Studies</span>
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl">
+            A showcase of technical solutions and growth strategies implemented for global clients.
+          </p>
+        </div>
 
-            <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white mb-6 tracking-tighter leading-[0.9]">
-              Growth <span className="text-blue-600">Solutions.</span>
-            </h2>
-
-            <p className="text-slate-600 dark:text-slate-400 text-lg md:text-xl leading-relaxed">
-              We help brands build stronger tracking, cleaner analytics, and
-              smarter advertising systems — so every marketing decision is backed
-              by reliable data.
-            </p>
-          </div>
-
-          <Link
-            href="/services"
-            className="group px-8 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full text-slate-900 dark:text-white font-bold flex items-center gap-2 shadow-sm hover:shadow-md transition-all"
-          >
-            View All Services
-            <ArrowUpRight className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
-          </Link>
-        </motion.div>
-
-        {/* Services Grid */}
-        <motion.div
-          className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16"
-          variants={staggerContainer}
-          initial="initial"
-          whileInView="whileInView"
-          viewport={{ once: true }}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {services.map((item, index) => (
             <motion.div
               key={index}
               variants={fadeInUp}
-              className="group relative flex flex-col"
+              initial="initial"
+              whileInView="whileInView"
+              className="relative group" // Parent container
             >
-              <Link
-                href={item.link}
-                className="absolute inset-0 z-30"
-                aria-label={item.title}
-              />
-
-              {/* Visual Card with Highlight Badge */}
-              <div className="relative h-[400px] w-full overflow-hidden rounded-[2.5rem] mb-8 bg-slate-200 dark:bg-slate-800 shadow-2xl shadow-blue-500/5 transition-transform duration-500 group-hover:-translate-y-2">
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent opacity-60 group-hover:opacity-90 transition-opacity duration-500 z-10" />
-
-                <div className="w-full h-full flex items-center justify-center p-12 bg-white dark:bg-slate-900">
-                  <div className="w-full h-full border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col items-center justify-center relative overflow-hidden bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-sm transition-colors group-hover:border-blue-500/50">
-                    <TrendingUp className="w-12 h-12 text-blue-600/20 mb-4" />
-
-                    <span className="text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.2em] text-[10px] text-center">
-                      {item.imgText}
-                    </span>
+              {/* কার্ডের পুরো এরিয়া ক্লিকযোগ্য করার জন্য Link এখন সবার উপরে */}
+              <Link 
+                href={item.link} 
+                className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 relative z-10"
+              >
+                {/* Image Section */}
+                <div className="relative h-56 w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+                  <Image 
+                    src={item.image}
+                    alt={item.title}
+                    fill
+                    className="object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity duration-500"
+                  />
+                  <div className="absolute top-4 left-4 z-20">
+                    <div className="px-3 py-1 rounded-lg bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 shadow-sm text-[10px] font-bold uppercase tracking-widest text-blue-600">
+                      {item.tag}
+                    </div>
                   </div>
                 </div>
 
-                {/* Highlight Badge */}
-                <div className="absolute bottom-8 left-8 z-20">
-                  <div className="bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" />
-                    <p className="text-sm font-black tracking-tight">
-                      {item.results}
-                    </p>
+                {/* Content Section */}
+                <div className="p-8 flex flex-col flex-grow">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                      {item.icon}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span className="text-[11px] font-bold uppercase">{item.results}</span>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-blue-600 transition-colors">
+                    {item.title}
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6">
+                    {item.desc}
+                  </p>
+
+                  <div className="mt-auto flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">
+                    Learn More 
+                    <ArrowUpRight className="w-4 h-4 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </div>
                 </div>
-              </div>
-
-              {/* Content Area */}
-              <div className="px-2">
-                <div className="flex flex-wrap items-center gap-3 mb-6">
-                  {item.tags.map((tag, i) => (
-                    <span
-                      key={i}
-                      className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 px-4 py-1.5 rounded-full uppercase"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-4 group-hover:text-blue-600 transition-colors leading-[1.1] tracking-tighter">
-                  {item.title}
-                </h3>
-
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-base mb-8 line-clamp-2 h-[3rem]">
-                  {item.desc}
-                </p>
-
-                <div className="inline-flex items-center gap-3 text-blue-600 dark:text-blue-400 font-black text-xs uppercase tracking-[0.2em]">
-                  Explore This Service
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
-                </div>
-              </div>
+              </Link>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   )

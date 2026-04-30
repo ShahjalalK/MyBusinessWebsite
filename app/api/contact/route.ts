@@ -154,7 +154,7 @@ const gaPayload = {
       country: geoData.country_name,
       city: geoData.city,
       engagement_time_msec: "100", // এটি যোগ না করলে রিয়েলটাইমে ইউজার কাউন্ট হয় না
-      debug_mode: 1 
+      // debug_mode: 1 
     } 
   }] 
 };
