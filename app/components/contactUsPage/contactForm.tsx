@@ -1,7 +1,7 @@
 "use client"
 import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Send, User, Mail, ChevronDown, MessageSquare, Sparkles, ArrowRight, CheckCircle2, Loader2, ShieldCheck, Lock, Sparkle } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { User, Mail, ChevronDown, MessageSquare, ArrowRight, CheckCircle2, Loader2, ShieldCheck, Sparkle, Globe } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import Turnstile from 'react-turnstile' 
 
@@ -11,6 +11,7 @@ export default function ContactForm() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    website: '', // নতুন ঐচ্ছিক ফিল্ড
     service: 'Google Ads Audit & Strategy',
     message: ''
   });
@@ -27,7 +28,6 @@ export default function ContactForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ১. ক্যাপচা চেক
     if (!turnstileToken) {
       toast.error("Please complete the security check.");
       return;
@@ -55,7 +55,7 @@ export default function ContactForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          captchaToken: turnstileToken, // টোকেন পাঠানো হচ্ছে
+          captchaToken: turnstileToken,
           clientId,
           sessionId,
           pageTitle: document.title,
@@ -65,8 +65,8 @@ export default function ContactForm() {
 
       if (response.ok) {
         toast.success('Strategy request sent! I\'ll contact you shortly.');
-        setFormData({ name: '', email: '', service: 'Google Ads Audit & Strategy', message: '' });
-        setTurnstileToken(null); // রিসেট
+        setFormData({ name: '', email: '', website: '', service: 'Google Ads Audit & Strategy', message: '' });
+        setTurnstileToken(null);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to send");
@@ -90,12 +90,7 @@ export default function ContactForm() {
             
             {/* Left Column Content */}
             <div className="lg:col-span-5 lg:sticky lg:top-24">
-              <motion.div 
-                initial={{ opacity: 0, x: -30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="space-y-8"
-              >
+              <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-8">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
                    <ShieldCheck size={14} /> Available for New Projects
                 </div>
@@ -125,36 +120,31 @@ export default function ContactForm() {
 
             {/* Right Column - Form */}
             <div className="lg:col-span-7">
-              <motion.div 
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="relative"
-              >
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-[2.5rem] blur opacity-20 transition duration-1000"></div>
+              <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="relative">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-[2.5rem] blur opacity-20"></div>
 
                 <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 md:p-14 rounded-[2.5rem] shadow-2xl">
                   
                   <form onSubmit={handleSubmit} className="space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Name */}
                       <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Client Name</label>
                         <div className="relative">
                           <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                          <input 
-                            type="text" required value={formData.name} placeholder="Alex Johnson"
+                          <input type="text" required value={formData.name} placeholder="Alex Johnson"
                             className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
                             onChange={(e) => setFormData({...formData, name: e.target.value})}
                           />
                         </div>
                       </div>
 
+                      {/* Email */}
                       <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Work Email</label>
                         <div className="relative">
                           <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                          <input 
-                            type="email" required value={formData.email} placeholder="alex@company.com"
+                          <input type="email" required value={formData.email} placeholder="alex@company.com"
                             className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
                             onChange={(e) => setFormData({...formData, email: e.target.value})}
                           />
@@ -162,11 +152,23 @@ export default function ContactForm() {
                       </div>
                     </div>
 
+                    {/* Website Link (Optional) */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Website URL (Optional)</label>
+                      <div className="relative">
+                        <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        <input type="url" value={formData.website} placeholder="https://www.yourbusiness.com"
+                          className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white"
+                          onChange={(e) => setFormData({...formData, website: e.target.value})}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Expertise Selection */}
                     <div className="space-y-3">
                       <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Required Expertise</label>
                       <div className="relative group/select">
-                        <select 
-                          value={formData.service}
+                        <select value={formData.service}
                           className="w-full pl-6 pr-12 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white appearance-none cursor-pointer"
                           onChange={(e) => setFormData({...formData, service: e.target.value})}
                         >
@@ -180,27 +182,27 @@ export default function ContactForm() {
                       </div>
                     </div>
 
+                    {/* Message */}
                     <div className="space-y-3">
                       <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Brief Proposal</label>
                       <div className="relative">
                         <MessageSquare className="absolute left-4 top-5 text-slate-300" size={18} />
-                        <textarea 
-                          required rows={4} value={formData.message} placeholder="Tell me about your tracking setup..."
+                        <textarea required rows={4} value={formData.message} placeholder="Tell me about your tracking setup..."
                           className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500 outline-none transition-all font-bold text-slate-900 dark:text-white resize-none"
                           onChange={(e) => setFormData({...formData, message: e.target.value})}
                         ></textarea>
                       </div>
                     </div>
 
-                    {/* ২. Turnstile Widget - ENV এবং Auto-refresh সহ */}
+                    {/* Turnstile */}
                     <div className="flex justify-start">
                       <Turnstile
                         sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
                         onVerify={(token) => setTurnstileToken(token)}
                         theme="auto"
-                        refresh-expired="auto"      // টোকেন শেষ হয়ে গেলে নিজে নিজে নতুন টোকেন নেবে
-                onExpire={() => setTurnstileToken(null)} // এক্সপায়ার হলে টোকেন স্টেট খালি করে দেবে
-                onError={() => setTurnstileToken(null)}
+                        refresh-expired="auto"
+                        onExpire={() => setTurnstileToken(null)}
+                        onError={() => setTurnstileToken(null)}
                       />
                     </div>
 
