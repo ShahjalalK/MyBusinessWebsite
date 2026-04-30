@@ -9,22 +9,30 @@ function hashData(data: string) {
 }
 
 export async function POST(request: Request) {
-  console.log("--- New Form Submission Started ---");
+  console.log("--- New Form Submission with File Started ---");
   try {
-    const body = await request.json();
-    const { 
-      name, email, website, service, message, 
-      clientId, sessionId, pageTitle, 
-      captchaToken 
-    } = body;
+    // ১. FormData থেকে ডাটা রিসিভ করা
+    const data = await request.formData();
+    const name = data.get('name') as string;
+    const email = data.get('email') as string;
+    const website = data.get('website') as string;
+    const service = data.get('service') as string;
+    const message = data.get('message') as string;
+    const captchaToken = data.get('captchaToken') as string;
+    const clientId = data.get('clientId') as string;
+    const sessionId = data.get('sessionId') as string;
+    const pageTitle = data.get('pageTitle') as string;
+    
+    // ফাইল রিসিভ করা
+    const file = data.get('file') as File | null;
 
-    // ১. নিখুঁত আইপি সংগ্রহ (Vercel/Cloudflare Friendly)
+    // ২. নিখুঁত আইপি সংগ্রহ (Vercel/Cloudflare Friendly)
     const forwarded = request.headers.get('x-forwarded-for');
     const userIp = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || '';
     const pageLocation = request.headers.get('referer') || 'https://trackflowpro.com';
 
-    // ২. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন
+    // ৩. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন
     const secretKey = process.env.TURNSTILE_SECRET_KEY;
     const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
         method: 'POST',
@@ -37,30 +45,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Security check failed." }, { status: 403 });
     }
 
-    // ৩. আইপি থেকে জিও লোকেশন বের করা (Updated Logic)
+    // ৪. আইপি থেকে জিও লোকেশন
     let geoData = { city: 'Unknown', country_name: 'Unknown', org: 'Unknown', region: 'Unknown' };
-    
     try {
       if (userIp && userIp !== '127.0.0.1' && userIp !== '::1') {
-        // ip-api.com ব্যবহার করা হয়েছে কারণ এটি ভার্সেল সার্ভার থেকে অনেক সময় বেশি স্ট্যাবল
         const geoRes = await fetch(`http://ip-api.com/json/${userIp}`);
         if (geoRes.ok) {
-          const data = await geoRes.json();
-          if (data.status === 'success') {
+          const resJson = await geoRes.json();
+          if (resJson.status === 'success') {
             geoData = {
-              city: data.city || 'Unknown',
-              country_name: data.country || 'Unknown',
-              org: data.isp || 'Unknown',
-              region: data.regionName || 'Unknown'
+              city: resJson.city || 'Unknown',
+              country_name: resJson.country || 'Unknown',
+              org: resJson.isp || 'Unknown',
+              region: resJson.regionName || 'Unknown'
             };
           }
         }
       }
-    } catch (e) { 
-      console.warn("⚠️ Geo lookup failed:", e); 
-    }
+    } catch (e) { console.warn("⚠️ Geo lookup failed:", e); }
 
-    // ৪. প্রফেশনাল ইমেইল পাঠানো
+    // ৫. ইমেইল সেটআপ এবং ফাইল এটাচমেন্ট
     try {
         const transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
@@ -70,11 +74,22 @@ export async function POST(request: Request) {
           tls: { rejectUnauthorized: false }
         });
 
+        // ফাইলটিকে বাফারে রূপান্তর (যদি ফাইল থাকে)
+        let attachments: any[] = [];
+        if (file) {
+          const buffer = Buffer.from(await file.arrayBuffer());
+          attachments.push({
+            filename: file.name,
+            content: buffer,
+          });
+        }
+
         await transporter.sendMail({
           from: `"TrackFlow Lead" <shahjalal@trackflowpro.com>`, 
           to: "shahjalalk.web@gmail.com",
           replyTo: email,
           subject: `🔥 ${service} Inquiry from ${name}`,
+          attachments: attachments, // ফাইল এটাচমেন্ট যোগ করা হলো
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
               <div style="background-color: #041f60; padding: 20px; text-align: center; color: white;">
@@ -86,6 +101,7 @@ export async function POST(request: Request) {
                   <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Email:</strong></td><td>${email}</td></tr>
                   <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Website:</strong></td><td>${website || 'N/A'}</td></tr>
                   <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Service:</strong></td><td>${service}</td></tr>
+                  <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Attached:</strong></td><td>${file ? file.name : 'No file'}</td></tr>
                 </table>
                 <div style="margin-top: 20px; padding: 15px; background-color: #f9fafb; border-radius: 5px;">
                   <strong>Message:</strong><br/>
@@ -99,11 +115,10 @@ export async function POST(request: Request) {
             </div>
           `
         });
-        console.log("✅ Beautiful Email Sent");
+        console.log("✅ Beautiful Email with Attachment Sent");
     } catch (e) { console.error("❌ Email Failed:", e); }
 
-    // ৫. ট্র্যাকিং লজিক (FB & GA4)
-
+    // ৬. ট্র্যাকিং লজিক (FB & GA4) - আগের মতোই থাকবে
     const fbPayload = {
       data: [{
         event_name: 'Lead',
@@ -137,14 +152,13 @@ export async function POST(request: Request) {
           service_type: service,
           country: geoData.country_name,
           city: geoData.city,
-          debug_mode: 1 // DebugView তে দেখার জন্য ১ রাখা হয়েছে
+          debug_mode: 1 
         } 
       }] 
     };
 
     const gaUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
 
-    // রিকোয়েস্ট পাঠানো
     const [fbRes, gaRes] = await Promise.all([
       fetch(`https://graph.facebook.com/v19.0/${process.env.FB_PIXEL_ID}/events?access_token=${process.env.FB_ACCESS_TOKEN}`, { 
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fbPayload) 
