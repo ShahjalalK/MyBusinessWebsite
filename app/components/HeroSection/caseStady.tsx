@@ -29,18 +29,18 @@ export default function CaseStudy() {
       desc: "Optimizing search and PMax campaigns to reduce wasted spend and maximize conversion value.",
       tag: "Google Ads",
       results: "Lower CPA",
-      link: "/services/google-ads-audit",
+      link: "/case-studies/server-side-tracking-expert-solution",
       icon: <BarChart3 className="w-5 h-5 text-blue-600" />,
-      image: "/screenshots/google-ads-results.png",
+      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.png",
     },
     {
       title: "Clickable Email Signatures",
       desc: "Custom-coded interactive branding assets designed to drive traffic from every outgoing email.",
       tag: "Branding",
       results: "Brand Growth",
-      link: "/case-study/clickable-email-signature-branding",
+      link: "/case-studies/server-side-tracking-expert-solution",
       icon: <Mail className="w-5 h-5 text-blue-600" />,
-      image: "/screenshots/signature-mockup.png",
+      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.png",
     },
   ]
 
@@ -75,6 +75,7 @@ export default function CaseStudy() {
                   <Image 
                     src={item.image}
                     alt={item.title}
+                    priority
                     fill
                     className="object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity duration-500"
                   />

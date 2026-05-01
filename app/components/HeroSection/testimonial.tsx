@@ -12,28 +12,28 @@ import 'swiper/css/pagination';
 
 const reviews = [
   {
-    name: "John Smith",
-    role: "E-commerce Owner, USA",
+    name: "Kaitlinan",
+    role: "Business Owner, USA",
     initials: "JS", // ছবির Fallback হিসেবে ইনিশিয়াল থাকবে
     image: "/testimonials/kaitlinanth11.jpg", // ছবিগুলো public/testimonials ফোল্ডারে রাখুন
     text: "This is the 3rd time I have worked with him and everytime he has delivered an exceptional product."
   },
   {
-    name: "Mark A.",
-    role: "Real Estate Agent, Canada",
+    name: "Anna David",
+    role: "Author, Canada",
     initials: "MA",
     image: "/testimonials/anna-david.webp", 
     text: "We love working with him! He is so kind and goes above and beyond when it comes to making us happy!"
   },
   {
     name: "Patricia Winter",
-    role: "Marketing Director, Australia",
+    role: "Marketing Director, Switzerland",
     initials: "SK",
     image: "/testimonials/patriciawinter.webp", 
     text: "Again excellent work, thank you very much ! I am very satisfied."
   },
   {
-    name: "David L.",
+    name: "Rodhar Risre",
     role: "SaaS Founder, Germany",
     initials: "DL",
     // ইমেজ ফোল্ডারে ছবিটি না থাকলে Fallback কাজ করবে
