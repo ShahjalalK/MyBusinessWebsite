@@ -56,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ScrollToTop />
           {children}
           <LiveNotificationMap />
+          
         </ThemeProvider>
       </body>
     </html>

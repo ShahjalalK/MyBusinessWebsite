@@ -20,7 +20,8 @@ export default function SingleBlogAuthorBox({ post }: AuthorBoxProps) {
             <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-blue-600 p-1">
                {/* এখানে আপনার নিজের ছবি দিন */}
               <Image 
-                src="/team/ceo.jpg" 
+                src="/team/founder.webp" 
+                fill
                 alt="Shahjalal Khan" 
                 className="w-full h-full object-cover rounded-full"
               />
