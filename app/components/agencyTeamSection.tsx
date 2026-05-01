@@ -9,7 +9,7 @@ const team = [
     name: "Shahjalal Khan",
     role: "Founding Tracking Architect",
     desc: "Expert in GTM Server-Side architecture and advanced data recovery for global e-commerce scaling.",
-    image: "/team/ceo.jpg",
+    image: "/team/founder.webp",
     linkedin: "https://linkedin.com/in/your-profile", 
     skill: "Server Side Tagging"
   },

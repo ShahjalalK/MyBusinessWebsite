@@ -15,30 +15,30 @@ const reviews = [
     name: "John Smith",
     role: "E-commerce Owner, USA",
     initials: "JS", // ছবির Fallback হিসেবে ইনিশিয়াল থাকবে
-    image: "/testimonials/john.jpg", // ছবিগুলো public/testimonials ফোল্ডারে রাখুন
-    text: "Shahjalal is a tracking wizard! He fixed our iOS data loss issues using Server-Side Tracking. Our ROAS improved almost immediately."
+    image: "/testimonials/kaitlinanth11.jpg", // ছবিগুলো public/testimonials ফোল্ডারে রাখুন
+    text: "This is the 3rd time I have worked with him and everytime he has delivered an exceptional product."
   },
   {
     name: "Mark A.",
     role: "Real Estate Agent, Canada",
     initials: "MA",
-    image: "/testimonials/mark.jpg", 
-    text: "He managed our Google Ads with great precision. The level of detail in his conversion tracking setup is something I haven't seen before."
+    image: "/testimonials/anna-david.webp", 
+    text: "We love working with him! He is so kind and goes above and beyond when it comes to making us happy!"
   },
   {
-    name: "Sarah K.",
+    name: "Patricia Winter",
     role: "Marketing Director, Australia",
     initials: "SK",
-    image: "/testimonials/sarah.jpg", 
-    text: "Professional, fast, and very knowledgeable. He helped us migrate to Server-Side GTM without any downtime. Highly recommended!"
+    image: "/testimonials/patriciawinter.webp", 
+    text: "Again excellent work, thank you very much ! I am very satisfied."
   },
   {
     name: "David L.",
     role: "SaaS Founder, Germany",
     initials: "DL",
     // ইমেজ ফোল্ডারে ছবিটি না থাকলে Fallback কাজ করবে
-    image: "/testimonials/david.jpg", 
-    text: "The server-side implementation was flawless. We can now track 100% of our conversions even with ad-blockers."
+    image: "/testimonials/rodharrisre.webp", 
+    text: "Very professional. I highly recommend him."
   },
 ];
 
