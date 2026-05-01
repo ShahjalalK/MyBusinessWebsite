@@ -53,7 +53,7 @@ export default function CTASection() {
           {/* Action Buttons */}
           <div className="flex flex-col md:flex-row items-center justify-center gap-6">
             {/* Primary CTA: Targeting Audit Seekers */}
-            <MotionLink href="/free-audit"
+            <MotionLink href="/book-audit"
               whileHover={{ y: -5, boxShadow: "0 20px 40px -10px rgba(0,0,0,0.3)" }}
               whileTap={{ scale: 0.95 }}
               className="group flex items-center gap-3 bg-white text-blue-600 font-black py-5 px-10 rounded-2xl transition-all uppercase tracking-wider text-xs shadow-xl shadow-blue-900/20"
@@ -62,7 +62,7 @@ export default function CTASection() {
             </MotionLink>
 
             {/* Secondary CTA: Booking a Call */}
-            <MotionLink href="https://calendly.com/your-username" 
+            <MotionLink href="/book-audit" 
               target="_blank"
               whileHover={{ y: -5 }}
               whileTap={{ scale: 0.95 }}

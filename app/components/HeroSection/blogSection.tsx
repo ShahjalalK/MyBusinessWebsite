@@ -14,11 +14,8 @@ const fadeInUp = {
 }
 
 export default function BlogSection() {
-  // Zustand স্টোর থেকে সরাসরি ডাটা কানেক্ট করা হচ্ছে
-  const posts = useBlogStore((state) => state.posts);
-
-  // হোম পেজে আমরা সাধারণত লেটেস্ট ৩টি ব্লগ দেখাই
-  const featuredPosts = posts.slice(0, 3);
+  const posts = useBlogStore((state) => state.posts);  // Fetch posts from store
+  const featuredPosts = posts.slice(0, 3);  // Show latest 3 blog posts
 
   return (
     <section className="py-24 bg-white dark:bg-slate-950 transition-colors duration-300 overflow-hidden">
@@ -63,33 +60,25 @@ export default function BlogSection() {
               transition={{ delay: index * 0.1 }}
               className="group relative flex flex-col h-full"
             >
-              {/* Image Container */}
-              <div className="relative h-80 mb-8 overflow-hidden rounded-[3rem] bg-slate-100 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-blue-500/5 transition-transform duration-500 group-hover:-translate-y-2">
+              {/* Image Container with Link (Clicking image will open blog post) */}
+              <Link href={`/blog/${post.id}`} className="relative group cursor-pointer mb-8 overflow-hidden rounded-[2rem] bg-slate-100 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl transition-transform duration-500">
                 <Image 
                   src={post.image} 
                   alt={post.title} 
-                  layout="fill"
-                  objectFit="cover"
-                  className="transition-transform duration-1000 group-hover:scale-110 group-hover:rotate-1"
+                  width={500} 
+                  height={300}
+                  layout="intrinsic"
+                  className="object-cover transition-transform duration-1000 group-hover:scale-110 group-hover:rotate-1"
                 />
-                
                 {/* Hover Gradient Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10" />
-
-                {/* Arrow Overlay */}
-                <div className="absolute bottom-8 right-8 z-20 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-                  <div className="w-14 h-14 bg-white text-blue-600 rounded-3xl flex items-center justify-center shadow-2xl">
-                    <ArrowUpRight size={28} strokeWidth={3} />
-                  </div>
-                </div>
-
                 {/* Category Badge */}
                 <div className="absolute top-8 left-8 z-20">
                   <div className="px-5 py-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl text-[10px] font-black uppercase tracking-widest text-blue-600 border border-white/20 shadow-lg">
                     {post.category}
                   </div>
                 </div>
-              </div>
+              </Link>
 
               {/* Content Area */}
               <div className="px-4 flex flex-col flex-grow">
@@ -102,9 +91,12 @@ export default function BlogSection() {
                   </span>
                 </div>
                 
-                <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-[1.1] group-hover:text-blue-600 transition-colors tracking-tighter mb-4">
-                  {post.title}
-                </h3>
+                {/* Title Section (Clickable) */}
+                <Link href={`/blog/${post.id}`}>
+                  <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-[1.1] group-hover:text-blue-600 transition-colors tracking-tighter mb-4 cursor-pointer">
+                    {post.title}
+                  </h3>
+                </Link>
                 
                 <p className="text-slate-500 dark:text-slate-400 font-medium line-clamp-2 text-sm leading-relaxed mb-6">
                   {post.description}
