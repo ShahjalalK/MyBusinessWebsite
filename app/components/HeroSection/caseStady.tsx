@@ -45,7 +45,7 @@ export default function CaseStudy() {
   ]
 
   return (
-    <section className="py-24 bg-white dark:bg-slate-950">
+    <section  id='case-studies' className="py-24 bg-white dark:bg-slate-950">
       <div className="container mx-auto px-6">
         <div className="mb-16">
           <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">

@@ -8,7 +8,7 @@ const MotionLink = motion(Link);
 
 export default function CTASection() {
   return (
-    <section id='case-studies' className="relative py-24 bg-blue-600 overflow-hidden rounded-[3rem] mx-4 md:mx-10 mb-20 shadow-2xl shadow-blue-500/20">
+    <section className="relative py-24 bg-blue-600 overflow-hidden rounded-[3rem] mx-4 md:mx-10 mb-20 shadow-2xl shadow-blue-500/20">
       
       {/* --- Dynamic Background Elements --- */}
       <div className="absolute top-0 left-0 w-[40%] h-[100%] bg-white/5 -skew-x-12 -translate-x-1/2" />
