@@ -46,7 +46,7 @@ export default function ContactBookCallSection() {
               <motion.a 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                href="https://calendly.com/your-username" // এখানে আপনার Calendly লিঙ্ক দিন
+                href="/book-audit" // এখানে আপনার Calendly লিঙ্ক দিন
                 target="_blank"
                 className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-lg text-center shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-3"
               >

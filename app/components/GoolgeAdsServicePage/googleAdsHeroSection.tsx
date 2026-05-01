@@ -71,7 +71,7 @@ export default function GoogleAdsHero() {
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
             >
               {/* Primary Action: Audit Keyword Focus */}
-              <Link href="/booking" className="w-full sm:w-auto px-8 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-lg shadow-2xl shadow-blue-500/30 transition-all flex items-center justify-center gap-2 group">
+              <Link href="/book-audit" className="w-full sm:w-auto px-8 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-lg shadow-2xl shadow-blue-500/30 transition-all flex items-center justify-center gap-2 group">
                 Free Google Ads Audit <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <button className="w-full sm:w-auto px-8 py-5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl font-black text-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">

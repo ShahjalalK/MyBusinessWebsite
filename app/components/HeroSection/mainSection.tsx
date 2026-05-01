@@ -5,6 +5,9 @@ import { motion } from 'framer-motion'
 import { ArrowRight, CheckCircle2, Play, BarChart3, ShieldCheck, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
+// ১. MotionLink কে ফাংশনের বাইরে নিয়ে আসা হয়েছে
+const MotionLink = motion(Link);
+
 const SalesCounter = ({ target = 0 }) => {
   const [count, setCount] = useState(0);
 
@@ -12,7 +15,8 @@ const SalesCounter = ({ target = 0 }) => {
     let start = 0;
     const end = parseInt(target.toString());
     const duration = 2000;
-    const increment = end / (duration / 16);
+    const totalFrames = duration / 16;
+    const increment = end / totalFrames;
 
     const timer = setInterval(() => {
       start += increment;
@@ -30,7 +34,7 @@ const SalesCounter = ({ target = 0 }) => {
 };
 
 export default function MainSection() {
-  const MotionLink = motion(Link);
+  // ২. ফাংশনের ভেতর থেকে MotionLink ডিক্লেয়ারেশন মুছে ফেলা হয়েছে
 
   return (
     <main className="relative min-h-screen flex items-center bg-[#fcfdfe] dark:bg-slate-950 overflow-hidden font-sans">
@@ -41,7 +45,6 @@ export default function MainSection() {
       <div className="container mx-auto px-6 relative z-10 py-12">
         <div className="flex flex-wrap items-center justify-center lg:justify-between -mx-4">
           
-          {/* ১. লেফট কন্টেন্ট - এসইও অপ্টিমাইজড */}
           <div className="w-full lg:w-[52%] px-4 mb-12 lg:mb-0">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
@@ -51,21 +54,18 @@ export default function MainSection() {
               <div className="inline-flex items-center gap-2 py-1.5 px-4 mb-6 bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-full">
                 <span className="flex h-2 w-2 rounded-full bg-[#4285F4] animate-pulse" />
                 <span className="text-[10px] font-bold tracking-[0.15em] text-slate-600 dark:text-slate-400 uppercase">
-                   Certified Google Ads & GA4 Expert
+                    Certified Google Ads & GA4 Expert
                 </span>
               </div>
 
-              {/* H1: মেইন কীওয়ার্ড "GA4 Server Side Tracking" যুক্ত করা হয়েছে */}
               <h1 className="text-5xl md:text-6xl xl:text-7xl font-black text-slate-900 dark:text-white mb-6 leading-[1.1] tracking-tight">
                 Advanced <span className="text-[#4285F4]">GA4 Server Side</span> Tracking Expert.
               </h1>
               
-              {/* P: "client side vs server side" এবং "lost data" কীওয়ার্ড যুক্ত করা হয়েছে */}
               <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-lg leading-relaxed">
                 Stop losing 30%+ data to iOS 14 updates. We bridge the gap between <span className="font-bold text-slate-900 dark:text-slate-200">client side vs server side tracking</span> to boost your Ad ROAS and precision.
               </p>
 
-              {/* সার্ভিসের লিস্টে মেইন কীওয়ার্ডগুলো সেট করা হয়েছে */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-2 mb-10 max-w-md">
                 {[
                   "GA4 Server-Side Setup",
@@ -83,8 +83,7 @@ export default function MainSection() {
               </div>
 
               <div className="flex flex-wrap gap-4">
-                {/* Button: "Google Ads Audit Service" এর 0% KD কীওয়ার্ডকে টার্গেট করা হয়েছে */}
-                <MotionLink href="/contact"
+                <MotionLink href="/contact" // আপনার রিকোয়েস্ট অনুযায়ী /contact এ পাঠানো হয়েছে
                   whileHover={{ y: -3 }}
                   whileTap={{ scale: 0.98 }}
                   className="bg-[#4285F4] hover:bg-[#3367d6] text-white font-black py-4 px-7 rounded-xl shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all text-sm"
@@ -92,16 +91,17 @@ export default function MainSection() {
                   Get Free Google Ads Audit <ArrowRight className="w-4 h-4" />
                 </MotionLink>
                 
-                <MotionLink href="/portfolio"
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-black py-4 px-7 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 text-sm"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" /> View Case Studies
-                </MotionLink>
-              </div>
-            </motion.div>
+                <MotionLink href="#case-studies" // রিকোয়েস্ট অনুযায়ী আইডিতে পাঠানো হয়েছে
+                    whileHover={{ y: -3 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-black py-4 px-7 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 text-sm"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" /> View Case Studies
+                  </MotionLink>
+            </div>
+          </motion.div>
           </div>
 
-          {/* ২. রাইট সাইড (আগের মতোই থাকবে, এটি ভিজ্যুয়াল রিপ্রেজেন্টেশন) */}
           <div className="w-full lg:w-[45%] px-4 flex justify-center lg:justify-end">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -165,9 +165,9 @@ export default function MainSection() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-[#f8f9fa] dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-50 dark:border-white/5 text-center shadow-sm">
                     <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Recovered Revenue</p>
-                    <p className="text-md font-black text-slate-900 dark:text-white">
+                    <div className="text-md font-black text-slate-900 dark:text-white">
                       <SalesCounter target={24500} />
-                    </p>
+                    </div>
                   </div>
                   <div className="bg-[#f8f9fa] dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-50 dark:border-white/5 text-center shadow-sm">
                     <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Data Loss Fix</p>

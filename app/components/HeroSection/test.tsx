@@ -65,7 +65,7 @@ export default function MainSection() {
                   Get A Free Audit <ArrowRight className="w-5 h-5" />
                 </MotionLink>
                 
-                <MotionLink href="/portfolio"
+                <MotionLink href="#case-studies"
                   className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold py-4 px-8 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2"
                 >
                   <Play className="w-4 h-4 fill-current" /> View Case Studies
