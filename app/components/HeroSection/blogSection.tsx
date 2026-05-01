@@ -4,9 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowUpRight, Clock, BookOpen, User } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useBlogStore,  } from '@/app/store/useBlogStore'
-
-
+import { useBlogStore } from '@/app/store/useBlogStore'
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -65,16 +63,14 @@ export default function BlogSection() {
               transition={{ delay: index * 0.1 }}
               className="group relative flex flex-col h-full"
             >
-              {/* ক্লিকেবল লিঙ্ক - পুরো এরিয়া কভার করবে */}
-              <Link href={`/blog/${post.id}`} className="absolute inset-0 z-30" aria-label={post.title} />
-
               {/* Image Container */}
               <div className="relative h-80 mb-8 overflow-hidden rounded-[3rem] bg-slate-100 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-blue-500/5 transition-transform duration-500 group-hover:-translate-y-2">
                 <Image 
                   src={post.image} 
                   alt={post.title} 
-                  fill 
-                  className="object-cover transition-transform duration-1000 group-hover:scale-110 group-hover:rotate-1"
+                  layout="fill"
+                  objectFit="cover"
+                  className="transition-transform duration-1000 group-hover:scale-110 group-hover:rotate-1"
                 />
                 
                 {/* Hover Gradient Overlay */}
