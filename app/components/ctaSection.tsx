@@ -63,7 +63,7 @@ export default function CTASection() {
 
             {/* Secondary CTA: Booking a Call */}
             <MotionLink href="/book-audit" 
-              target="_blank"
+              
               whileHover={{ y: -5 }}
               whileTap={{ scale: 0.95 }}
               className="group flex items-center gap-3 bg-blue-700/40 text-white border border-white/20 font-black py-5 px-10 rounded-2xl hover:bg-blue-700/60 transition-all uppercase tracking-wider text-xs"
