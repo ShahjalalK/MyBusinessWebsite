@@ -2,10 +2,18 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, CheckCircle2, Play, BarChart3, ShieldCheck, TrendingUp } from 'lucide-react'
+import { 
+  ArrowRight, 
+  CheckCircle2, 
+  BarChart3, 
+  ShieldCheck, 
+  TrendingUp, 
+  MessageSquare, 
+  SearchCode 
+} from 'lucide-react'
 import Link from 'next/link'
 
-// ১. MotionLink কে ফাংশনের বাইরে নিয়ে আসা হয়েছে
+// ১. MotionLink initialization
 const MotionLink = motion(Link);
 
 const SalesCounter = ({ target = 0 }) => {
@@ -34,8 +42,6 @@ const SalesCounter = ({ target = 0 }) => {
 };
 
 export default function MainSection() {
-  // ২. ফাংশনের ভেতর থেকে MotionLink ডিক্লেয়ারেশন মুছে ফেলা হয়েছে
-
   return (
     <main className="relative min-h-screen flex items-center bg-[#fcfdfe] dark:bg-slate-950 overflow-hidden font-sans">
       
@@ -54,7 +60,7 @@ export default function MainSection() {
               <div className="inline-flex items-center gap-2 py-1.5 px-4 mb-6 bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-full">
                 <span className="flex h-2 w-2 rounded-full bg-[#4285F4] animate-pulse" />
                 <span className="text-[10px] font-bold tracking-[0.15em] text-slate-600 dark:text-slate-400 uppercase">
-                    Certified Google Ads & GA4 Expert
+                    Google Marketing Platform & GA4 Specialist
                 </span>
               </div>
 
@@ -63,15 +69,15 @@ export default function MainSection() {
               </h1>
               
               <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-lg leading-relaxed">
-                Stop losing 30%+ data to iOS 14 updates. We bridge the gap between <span className="font-bold text-slate-900 dark:text-slate-200">client side vs server side tracking</span> to boost your Ad ROAS and precision.
+                Stop losing 30%+ data to iOS 14 updates. We bridge the gap between <span className="font-bold text-slate-900 dark:text-slate-200">client vs server side tracking</span> to maximize your Ad ROAS and conversion accuracy.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-2 mb-10 max-w-md">
                 {[
                   "GA4 Server-Side Setup",
                   "Facebook CAPI Expert",
-                  "Google Ads Audit Service",
-                  "Clickable Email Signature"
+                  "Conversion Tracking Audit",
+                  "GTM & Data Layer Fix"
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300 font-bold text-[13px]">
                     <div className="bg-blue-50 dark:bg-blue-900/30 p-1 rounded-md">
@@ -82,24 +88,28 @@ export default function MainSection() {
                 ))}
               </div>
 
+              {/* Updated Buttons Section */}
               <div className="flex flex-wrap gap-4">
-                <MotionLink href="/contact" // আপনার রিকোয়েস্ট অনুযায়ী /contact এ পাঠানো হয়েছে
-                  whileHover={{ y: -3 }}
+                <MotionLink href="/book-audit" 
+                  whileHover={{ y: -3, scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="bg-[#4285F4] hover:bg-[#3367d6] text-white font-black py-4 px-7 rounded-xl shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all text-sm"
+                  className="bg-[#4285F4] hover:bg-[#3367d6] text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-blue-500/25 flex items-center gap-3 transition-all text-sm group"
                 >
-                  Get Free Google Ads Audit <ArrowRight className="w-4 h-4" />
+                  <SearchCode className="w-5 h-5 opacity-90 group-hover:rotate-12 transition-transform" />
+                  Get Free Tracking Audit 
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </MotionLink>
                 
-                <MotionLink href="#case-studies" // রিকোয়েস্ট অনুযায়ী আইডিতে পাঠানো হয়েছে
-                    whileHover={{ y: -3 }}
+                <MotionLink href="/contact"
+                    whileHover={{ y: -3, scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-black py-4 px-7 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 text-sm"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold py-4 px-8 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center gap-3 text-sm shadow-sm"
                   >
-                    <Play className="w-3.5 h-3.5 fill-current" /> View Case Studies
+                    <MessageSquare className="w-4 h-4 text-[#4285F4]" />
+                    Consult With Expert
                   </MotionLink>
-            </div>
-          </motion.div>
+              </div>
+            </motion.div>
           </div>
 
           <div className="w-full lg:w-[45%] px-4 flex justify-center lg:justify-end">
@@ -114,7 +124,7 @@ export default function MainSection() {
                 <div className="flex justify-between items-center mb-8 px-1">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 bg-[#4285F4] rounded-lg flex items-center justify-center shadow-md">
-                       <BarChart3 className="w-4 h-4 text-white" />
+                        <BarChart3 className="w-4 h-4 text-white" />
                     </div>
                     <div>
                       <h4 className="text-slate-400 text-[9px] font-black uppercase tracking-tighter leading-none mb-1">Tracking Accuracy</h4>
@@ -125,7 +135,7 @@ export default function MainSection() {
                     <p className="text-[#34a853] text-[13px] font-black flex items-center justify-end gap-0.5">
                       <TrendingUp className="w-3 h-3" /> +100%
                     </p>
-                    <p className="text-slate-400 text-[8px] font-bold uppercase tracking-tighter">Verified</p>
+                    <p className="text-slate-400 text-[8px] font-bold uppercase tracking-tighter">Verified Result</p>
                   </div>
                 </div>
 
@@ -170,7 +180,7 @@ export default function MainSection() {
                     </div>
                   </div>
                   <div className="bg-[#f8f9fa] dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-50 dark:border-white/5 text-center shadow-sm">
-                    <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Data Loss Fix</p>
+                    <p className="text-slate-400 text-[8px] font-black uppercase mb-1">Data Precision</p>
                     <p className="text-md font-black text-[#4285F4]">99.9%</p>
                   </div>
                 </div>
