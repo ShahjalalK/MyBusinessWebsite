@@ -10,6 +10,13 @@ import ServerTrack from "./components/ServerTrack";
 export const metadata: Metadata = {
   title: 'TrackFlow Pro',
   description: 'Advanced Tracking Solutions',
+  other: {
+    rel: 'preconnect',
+    url: [
+      'https://trackflowprow.firebaseapp.com',
+      'https://www.googleapis.com'
+    ],
+  },
   icons: {
     icon: '/icon.png',
   },
@@ -17,6 +24,7 @@ export const metadata: Metadata = {
     other: {
       'facebook-domain-verification': ['8mo0hos8jalxa1f08pc0mgnws10c7u'],
     },
+    
   },
 }
 
@@ -30,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
+        
         {/* Google Tag Initializer */}
         <Script id="gtag-init" strategy="afterInteractive">
           {`
