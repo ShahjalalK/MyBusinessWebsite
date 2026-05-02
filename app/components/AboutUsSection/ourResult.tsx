@@ -1,67 +1,87 @@
 "use client"
 import React from 'react'
 import { motion } from 'framer-motion'
-import { TrendingUp, Users, Database, Globe2, ArrowUpRight } from 'lucide-react'
+import { TrendingUp, Users, Database, Globe2, ArrowUpRight, ShieldCheck, BarChart3, Zap } from 'lucide-react'
 
 const stats = [
   {
-    label: "Tracking Accuracy",
+    label: "Data Precision",
     value: "98%+",
-    desc: "Average data precision restored for clients by bypassing iOS restrictions through GA4 Server-Side setup.",
+    desc: "Restoring tracking accuracy by implementing advanced GA4 Server-Side setups to recover signals lost to browser restrictions.",
     icon: <Database className="w-6 h-6 text-blue-600" />,
   },
   {
-    label: "Ad Spend Managed",
+    label: "Ad Capital Managed",
     value: "$2.5M+",
-    desc: "Experienced in optimizing large-scale Google Ads campaigns to ensure every dollar drives maximum ROI.",
+    desc: "Strategic management and optimization of large-scale Google Ads budgets, ensuring sustainable growth and high ROI.",
     icon: <TrendingUp className="w-6 h-6 text-emerald-600" />,
   },
   {
     label: "Global Reach",
     value: "50+",
-    desc: "Delivering bulletproof tracking and marketing solutions to agencies across the USA, UK, and Australia.",
+    desc: "Deploying high-performance measurement infrastructures for businesses and agencies across the USA, UK, and Australia.",
     icon: <Globe2 className="w-6 h-6 text-indigo-600" />,
   },
   {
-    label: "Reported Conversion Lift",
+    label: "Attribution Lift",
     value: "35%+",
-    desc: "Observed increase in trackable conversions after implementing Facebook CAPI and GTM Server-Side tagging.",
+    desc: "Increased visibility into the customer journey by integrating Facebook CAPI and server-side event deduplication.",
     icon: <Users className="w-6 h-6 text-cyan-600" />,
   }
 ]
 
 export default function OurResults() {
   return (
-    <section className="py-24 bg-slate-900 text-white overflow-hidden relative">
-      {/* Background Glows */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] -mr-64 -mt-64" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] -ml-64 -mb-64" />
+    <section className="py-24 bg-[#020617] text-white overflow-hidden relative">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] -mr-64 -mt-64" />
+      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-600/5 rounded-full blur-[120px] -ml-64 -mb-64" />
 
       <div className="container mx-auto px-6 relative z-10">
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
-          <div className="max-w-2xl">
-            <motion.span 
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-4 inline-block"
+        {/* Header Section */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-20 gap-10">
+          <div className="max-w-3xl">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="flex items-center gap-2 mb-4"
             >
-              Our Impact in Numbers
-            </motion.span>
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter leading-tight">
-              Data-Driven Growth. <br />
-              <span className="text-slate-400 italic">Proven by Performance.</span>
+              <Zap size={16} className="text-blue-500 fill-blue-500" />
+              <span className="text-blue-500 font-bold uppercase tracking-[0.3em] text-[10px]">
+                Performance Metrics
+              </span>
+            </motion.div>
+            
+            <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.95] mb-6">
+              Precision Tracking. <br />
+              <span className="text-slate-500 italic font-light">Profitable Results.</span>
             </h2>
+            
+            <p className="text-slate-400 font-medium max-w-xl text-lg leading-relaxed">
+              We specialize in building bulletproof measurement infrastructures that translate complex data into actionable business growth.
+            </p>
           </div>
-          <div className="md:text-right">
-             <p className="text-slate-400 font-medium max-w-xs mb-6 text-sm">
-                We don't just set up tags; we build measurement infrastructures that help you make better business decisions.
-             </p>
-             <button className="flex items-center gap-2 text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 transition-all px-6 py-4 rounded-xl group">
-                See Case Studies <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="flex flex-col gap-6"
+          >
+             <div className="bg-slate-800/30 border border-slate-700/50 p-6 rounded-2xl backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <ShieldCheck className="text-emerald-500" size={20} />
+                  <span className="text-sm font-bold uppercase tracking-wider">Privacy Compliant</span>
+                </div>
+                <p className="text-xs text-slate-500">All setups follow GDPR & CCPA best practices.</p>
+             </div>
+             
+             <button className="flex items-center justify-center gap-3 text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white transition-all px-8 py-5 rounded-2xl group shadow-lg shadow-blue-600/20 active:scale-95">
+                Explore Case Studies <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
              </button>
-          </div>
+          </motion.div>
         </div>
 
         {/* Stats Grid */}
@@ -73,40 +93,47 @@ export default function OurResults() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.1 }}
-              whileHover={{ y: -10 }}
-              className="p-8 rounded-[2.5rem] bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/50 hover:bg-slate-800 transition-all group"
+              whileHover={{ y: -12, backgroundColor: "rgba(30, 41, 59, 0.6)" }}
+              className="p-10 rounded-[3rem] bg-slate-800/30 border border-slate-800 hover:border-blue-500/30 transition-all duration-500 group relative overflow-hidden"
             >
-              <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center mb-8 border border-slate-700 group-hover:scale-110 group-hover:border-blue-500/50 transition-all">
+              {/* Decorative Icon Background */}
+              <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                <BarChart3 size={120} />
+              </div>
+
+              <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mb-10 border border-slate-700 group-hover:border-blue-500/50 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] transition-all">
                 {stat.icon}
               </div>
               
-              <div className="mb-4">
-                <h4 className="text-5xl font-black text-white mb-2 tracking-tighter group-hover:text-blue-500 transition-colors">
+              <div className="mb-6">
+                <h4 className="text-6xl font-black text-white mb-2 tracking-tighter group-hover:text-blue-500 transition-colors">
                   {stat.value}
                 </h4>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">
+                <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-blue-500/80">
                   {stat.label}
                 </p>
               </div>
 
-              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+              <p className="text-sm text-slate-400 leading-relaxed font-medium">
                 {stat.desc}
               </p>
             </motion.div>
           ))}
         </div>
 
-        {/* Achievement Badges */}
+        {/* Trust Badges */}
         <motion.div 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-24 pt-10 border-t border-slate-800/50 flex flex-wrap justify-center gap-10 md:gap-20 opacity-40 grayscale hover:grayscale-0 transition-all duration-700"
+          viewport={{ once: true }}
+          transition={{ delay: 0.6 }}
+          className="mt-28 pt-12 border-t border-slate-800/50 flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-30 hover:opacity-100 transition-opacity duration-1000"
         >
-          <span className="text-sm font-black tracking-[0.2em]">GOOGLE ADS CERTIFIED</span>
-          <span className="text-sm font-black tracking-[0.2em]">META PARTNER</span>
-          <span className="text-sm font-black tracking-[0.2em]">GTM EXPERT</span>
-          <span className="text-sm font-black tracking-[0.2em]">GA4 SPECIALIST</span>
+          {["GOOGLE ADS CERTIFIED", "GTM SERVER-SIDE", "GA4 ARCHITECT", "CONVERSIONS API"].map((badge, i) => (
+            <span key={i} className="text-[10px] md:text-xs font-black tracking-[0.3em] hover:text-blue-500 cursor-default transition-colors">
+              {badge}
+            </span>
+          ))}
         </motion.div>
 
       </div>

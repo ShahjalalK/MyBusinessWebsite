@@ -2,6 +2,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { Target, Lightbulb, Rocket, Users2, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
 
 export default function AboutPage() {
   return (
@@ -89,9 +90,9 @@ export default function AboutPage() {
                   <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed font-medium">
                     We help businesses **hire a google ads expert** infrastructure that bypasses iOS tracking restrictions. Our mission is to ensure your marketing decisions are based on 100% accurate conversion data.
                   </p>
-                  <button className="flex items-center gap-3 font-black text-sm uppercase tracking-widest text-blue-600 group">
+                  <Link href="/book-audit" className="flex items-center gap-3 font-black text-sm uppercase tracking-widest text-blue-600 group">
                     Get Your Free Ads Audit <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
-                  </button>
+                  </Link>
                </div>
             </div>
 
