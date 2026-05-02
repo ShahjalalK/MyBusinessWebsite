@@ -3,6 +3,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { FaLinkedinIn } from 'react-icons/fa' // React Icons theke LinkedIn use korchi
 import { ShieldCheck, Zap, BarChart3 } from 'lucide-react' // Bakigulo Lucide thakbe
+import Link from 'next/link'
 
 const team = [
   {
@@ -100,14 +101,14 @@ export default function AgencyTeamSection() {
                         />
                       </div>
                       {/* Social Icon Optimization with React Icons */}
-                      <a 
+                      <Link 
                         href={member.linkedin} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="absolute -bottom-2 -right-2 w-9 h-9 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#0077B5] shadow-lg border border-slate-100 dark:border-slate-700 transition-all hover:scale-110"
                       >
                         <FaLinkedinIn className="text-lg" />
-                      </a>
+                      </Link>
                     </div>
                     <span className="py-1 px-3 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase text-slate-500 tracking-tighter">
                       {member.skill}
