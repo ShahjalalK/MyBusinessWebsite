@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 export default function EmailSignatureHero() {
   return (
-    <section className="relative min-h-screen flex items-center bg-white dark:bg-[#020617] overflow-hidden pt-28 pb-16">
+    <section className="relative min-h-screen flex items-center bg-white dark:bg-[#020617] overflow-hidden pt-16 pb-20 lg:pt-20 lg:pb-32">
       
       {/* Background Glows */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
@@ -59,10 +59,10 @@ export default function EmailSignatureHero() {
                   Order Custom Design <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
 
-                <Link href="/samples" 
+                <Link href="/real-state-agent-signature.html" download="real-state-agent-signature.html"
                   className="group border-2 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold py-4 px-8 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  View Live Samples
+                  Download Ready Sample
                 </Link>
               </div>
             </motion.div>
@@ -118,7 +118,7 @@ export default function EmailSignatureHero() {
                       
                       {/* Signature Details */}
                       <div className="text-center md:text-left">
-                        <h4 className="text-xl font-bold text-slate-900 dark:text-white">Shahjalal Jalal</h4>
+                        <h4 className="text-xl font-bold text-slate-900 dark:text-white">Shahjalal Khan</h4>
                         <p className="text-blue-600 font-semibold text-sm mb-4">Tracking & Analytics Specialist</p>
                         
                         <div className="grid grid-cols-1 gap-1 text-[13px] text-slate-500 dark:text-slate-400 mb-4">
