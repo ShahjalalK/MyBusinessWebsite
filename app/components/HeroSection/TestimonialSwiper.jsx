@@ -79,24 +79,41 @@ export default function TestimonialSwiper() {
       </Swiper>
 
       <style jsx global>{`
-        .testimonial-swiper .swiper-button-next, 
-        .testimonial-swiper .swiper-button-prev {
-          width: 40px;
-          height: 40px;
-          background: white;
-          border-radius: 50%;
-          color: #333;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .testimonial-swiper .swiper-button-next:after, 
-        .testimonial-swiper .swiper-button-prev:after {
-          font-size: 18px;
-          font-weight: bold;
-        }
-        .testimonial-swiper .swiper-pagination-bullet-active {
-          background: #2563eb !important;
-        }
-      `}</style>
+  .testimonial-swiper .swiper-button-next, 
+  .testimonial-swiper .swiper-button-prev {
+    width: 40px !important;
+    height: 40px !important;
+    background: white !important;
+    border-radius: 50% !important;
+    color: #333 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    /* আইকনটিকে মাঝখানে রাখার জন্য নিচের ৩ লাইন যোগ করা হয়েছে */
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* আইকনের আসল সাইজ ঠিক করার জন্য */
+  .testimonial-swiper .swiper-button-next:after, 
+  .testimonial-swiper .swiper-button-prev:after {
+    font-size: 16px !important; /* সাইজ কিছুটা কমিয়ে আনা হয়েছে */
+    font-weight: bold;
+    /* যাতে আইকনটি বাটনের বাইরে না যায় বা চ্যাপ্টা না হয় */
+    display: block;
+  }
+
+  /* মোবাইল স্ক্রিনে বাটনগুলো সরিয়ে দিতে চাইলে বা ছোট করতে চাইলে */
+  @media (max-width: 640px) {
+    .testimonial-swiper .swiper-button-next, 
+    .testimonial-swiper .swiper-button-prev {
+      display: none !important; /* মোবাইলে শুধু স্লাইড বা ডট রাখাই ভালো */
+    }
+  }
+
+  .testimonial-swiper .swiper-pagination-bullet-active {
+    background: #2563eb !important;
+  }
+`}</style>
     </>
   );
 }
