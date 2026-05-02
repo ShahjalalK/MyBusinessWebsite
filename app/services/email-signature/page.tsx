@@ -21,6 +21,7 @@ import VideoGuideSection from '@/app/components/EmailSignatureServicePage/emailS
 
 import { Metadata } from 'next'
 import TestimonialSection from '@/app/components/HeroSection/testimonial'
+import EmailSignaturePricingSection from '@/app/components/EmailSignatureServicePage/emailSignaturePricing'
 
 // SEO Meta Data
 export const metadata: Metadata = {
@@ -86,6 +87,8 @@ export default function EmailSignature({}: Props) {
         <EmailSignatureBenefitSection />
 
         <EmailSignatureServicesBreakdown />
+
+        <EmailSignaturePricingSection />
 
         <EmailSignatureWhoItsFor />
 
