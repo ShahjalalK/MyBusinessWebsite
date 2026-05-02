@@ -4,21 +4,19 @@ import "./globals.css";
 import { ThemeProvider } from "./components/HeroSection/ThemeProvider";
 import Script from "next/script";
 import ServerTrack from "./components/ServerTrack";
-import ClientWrapper from "./ClientWrapper"; // নতুন ফাইলটি ইম্পোর্ট করুন
+import ScrollToTop from "./components/scrollToTop";
+import LiveNotificationMap from "./components/HeroSection/liveTracking";
 
 export const metadata: Metadata = {
   title: 'TrackFlow Pro | Advanced Tracking Solutions',
-  description: 'Boost your business with Server-Side Tracking, GA4, and Google Ads expert solutions by Shahjalal.',
+  description: 'Expert Google Ads and Server-Side Tracking Solutions.',
   icons: { icon: '/icon.png' },
-  verification: {
-    other: { 'facebook-domain-verification': ['8mo0hos8jalxa1f08pc0mgnws10c7u'] },
-  },
 }
 
 const geistSans = Geist({ 
   variable: "--font-geist-sans", 
   subsets: ["latin"],
-  display: 'swap', 
+  display: 'swap', // এটি অবশ্যই রাখবেন
 });
 
 const geistMono = Geist_Mono({ 
@@ -31,34 +29,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <head>
-        <link rel="dns-prefetch" href="https://www.clarity.ms" />
-        <link rel="dns-prefetch" href="https://www.google-analytics.com" />
-
-        <Script id="gtag-init" strategy="lazyOnload">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-          `}
-        </Script>
-
-        <Script id="clarity-setup" strategy="lazyOnload">
-          {`
-            (function(c,l,a,r,i,t,y){
-                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-            })(window, document, "clarity", "script", "wd3r4mftjy");
-          `}
-        </Script>
+        {/* ট্র্যাকিং স্ক্রিপ্টগুলো head এর একদম শেষে রাখুন এবং strategy="afterInteractive" দিন */}
+        <Script 
+          src="https://www.clarity.ms/tag/wd3r4mftjy"
+          strategy="afterInteractive" 
+        />
       </head>
-      <body className="min-h-screen bg-white transition-colors duration-500">
+      <body className="min-h-screen bg-white">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <ServerTrack />
           {children}
-          
-          {/* সব ভারি কম্পোনেন্ট এখন এখান থেকে স্মুথলি লোড হবে */}
-          <ClientWrapper />
+          <ScrollToTop />
+          <LiveNotificationMap />
         </ThemeProvider>
       </body>
     </html>

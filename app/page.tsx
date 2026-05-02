@@ -75,8 +75,8 @@ export default function Home() {
 
     <AgencyTeamSection />
 
-    <BlogSection />
-    <TestimonialSection />
+    {/* <BlogSection />
+    <TestimonialSection /> */}
 
     <CTASection />
 
