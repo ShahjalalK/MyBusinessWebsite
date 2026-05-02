@@ -1,36 +1,14 @@
 "use client"
 import React from 'react'
-import { motion } from 'framer-motion'
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay, Navigation, Pagination } from 'swiper/modules';
-import Image from 'next/image'; // Next.js Image Component ব্যবহার করা হয়েছে
-import Link from 'next/link';
+import dynamic from 'next/dynamic'
+import Link from 'next/link'
 
-// CSS Imports
-import 'swiper/css';
-import 'swiper/css/pagination';
-import 'swiper/css/navigation';
-
-const reviews = [
-  {
-    name: "Kaitlinan",
-    role: "9 months ago",
-    image: "/testimonials/kaitlinanth11.webp", 
-    text: "This is the 3rd time I have worked with him and everytime he has delivered an exceptional product..."
-  },
-  {
-    name: "Anna David",
-    role: "1 year ago",
-    image: "/testimonials/anna-david.webp", 
-    text: "We love working with him! He is so kind and goes above and beyond when it comes to making us happy!"
-  },
-  {
-    name: "Patricia Winter",
-    role: "2 months ago",
-    image: "/testimonials/patriciawinter.webp", 
-    text: "Again excellent work, thank you very much! I am very satisfied with the GA4 server-side tracking setup."
-  }
-];
+// Swiper কে Dynamic Import করছি এবং SSR (Server Side Rendering) অফ করে দিচ্ছি। 
+// এতে পেজ লোড হওয়ার সময় এটি বাধা দেবে না।
+const DynamicSwiper = dynamic(() => import('./TestimonialSwiper'), {
+  ssr: false,
+  loading: () => <div className="h-[300px] w-full bg-slate-100 dark:bg-slate-800 animate-pulse rounded-2xl" />
+});
 
 export default function TestimonialSection() {
   return (
@@ -38,7 +16,7 @@ export default function TestimonialSection() {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           
-          {/* Left Side: Review Summary */}
+          {/* Left Side: Review Summary (এটি স্ট্যাটিক, তাই দ্রুত লোড হবে) */}
           <div className="lg:col-span-4">
             <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-center">
               <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2 leading-tight">
@@ -68,83 +46,12 @@ export default function TestimonialSection() {
             </div>
           </div>
 
-          {/* Right Side: Swiper Slider */}
-          <div className="lg:col-span-8 relative">
-            <Swiper
-              modules={[Autoplay, Pagination, Navigation]}
-              spaceBetween={20}
-              slidesPerView={1}
-              breakpoints={{
-                640: { slidesPerView: 2 },
-              }}
-              autoplay={{ delay: 4000, disableOnInteraction: false }}
-              pagination={{ clickable: true }}
-              navigation={true}
-              // Accessibility Fix: 
-              a11y={{
-                prevSlideMessage: 'Previous slide',
-                nextSlideMessage: 'Next slide',
-              }}
-              className="testimonial-swiper !pb-14"
-            >
-              {reviews.map((item, index) => (
-                <SwiperSlide key={index}>
-                  <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-100 dark:border-slate-800 h-full flex flex-col shadow-sm hover:border-blue-500/30 transition-colors">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-3">
-                        {/* Optimized Image Component */}
-                        <div className="relative w-12 h-12">
-                           <Image 
-                             src={item.image} 
-                             alt={item.name} 
-                             fill 
-                             sizes="48px"
-                             className="rounded-full object-cover border-2 border-blue-50 dark:border-slate-700" 
-                           />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.name}</h4>
-                          <p className="text-slate-400 text-xs">{item.role}</p>
-                        </div>
-                      </div>
-                      <div className="text-green-500 font-black text-xl italic" aria-hidden="true">fi</div>
-                    </div>
-                    
-                    <div className="flex text-yellow-400 mb-4 text-sm" aria-label="5 star rating">
-                      {[...Array(5)].map((_, i) => <span key={i}>★</span>)}
-                    </div>
-
-                    <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed flex-grow">
-                      {item.text}
-                    </p>
-                  </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
+          {/* Right Side: Lazy Loaded Swiper Slider */}
+          <div className="lg:col-span-8 relative min-h-[300px]">
+            <DynamicSwiper />
           </div>
         </div>
       </div>
-
-      <style jsx global>{`
-        .testimonial-swiper .swiper-button-next, 
-        .testimonial-swiper .swiper-button-prev {
-          width: 40px;
-          height: 40px;
-          background: white;
-          border-radius: 50%;
-          color: #333;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        /* Accessibility fixes for swiper buttons */
-        .testimonial-swiper .swiper-button-next:after, 
-        .testimonial-swiper .swiper-button-prev:after {
-          font-size: 18px;
-          font-weight: bold;
-        }
-        .testimonial-swiper .swiper-pagination-bullet-active {
-          background: #2563eb !important;
-        }
-      `}</style>
     </section>
   )
 }
