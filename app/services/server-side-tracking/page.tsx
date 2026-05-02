@@ -12,10 +12,10 @@ import ServerUniqueAdvantage from '../../components/ServerSideTrackingPage/serve
 import ServerProcessSection from '../../components/ServerSideTrackingPage/serverOurProcess'
 import ServerResultsSection from '../../components/ServerSideTrackingPage/serverResult'
 import ServerFAQSection from '../../components/ServerSideTrackingPage/serverFaq'
-import TestimonialSwiper from '../../components/HeroSection/testimonial'
 
 
 import { Metadata } from 'next'
+import TestimonialSection from '../../components/HeroSection/testimonial'
 
 export const metadata: Metadata = {
   title: 'Advanced GTM Server-Side Tracking & Facebook CAPI Setup | TrackFlowPro',
@@ -87,7 +87,7 @@ export default function ServerSideTracking({}: Props) {
 
     <ServerFAQSection />
 
-    <TestimonialSwiper />
+    <TestimonialSection />
    
     <CTASection />
 

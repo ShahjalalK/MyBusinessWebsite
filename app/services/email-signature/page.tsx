@@ -13,13 +13,14 @@ import EmailSignatureProofExperience from '../../components/EmailSignatureServic
 import EmailSignatureProcessSection from '../../components/EmailSignatureServicePage/emailSignatureProcess'
 import EmailSignatureFAQSection from '../../components/EmailSignatureServicePage/emailSignatureFaq'
 import EmailSignatureUniqueAdvantage from '../../components/EmailSignatureServicePage/EmailSignatureUnique'
-import EmailSignatureTestimonialSection from '../../components/EmailSignatureServicePage/emailSigantureTestimonail'
+
 
 import EmailSignatureInteractiveGmailPreview from '../../components/EmailSignatureServicePage/EmailSignatureGenerator'
 import EmailSignatureFinalCTA from '../../components/EmailSignatureServicePage/emailSignatureCTA'
 import VideoGuideSection from '@/app/components/EmailSignatureServicePage/emailSignatureVideo'
 
 import { Metadata } from 'next'
+import TestimonialSection from '@/app/components/HeroSection/testimonial'
 
 // SEO Meta Data
 export const metadata: Metadata = {
@@ -59,7 +60,7 @@ export const metadata: Metadata = {
     images: ['https://yourdomain.com/og-email-signature.jpg'],
   },
   alternates: {
-    canonical: 'https://yourdomain.com/email-signature',
+    canonical: 'https://www.trackflowpro.com//email-signature',
   },
 }
 
@@ -96,7 +97,7 @@ export default function EmailSignature({}: Props) {
 
         <EmailSignatureUniqueAdvantage />
 
-        <EmailSignatureTestimonialSection />
+       <TestimonialSection />
 
         <EmailSignatureFinalCTA />
 

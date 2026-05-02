@@ -7,14 +7,15 @@ import GoogleAdsSolutionSection from '../../components/GoolgeAdsServicePage/goog
 import GoogleAdsBenefitsSection from '../../components/GoolgeAdsServicePage/GoogleAdsBenifeteSection'
 import GoogleAdsServicesBreakdown from '../../components/GoolgeAdsServicePage/googleAdsServiceBrokeDown'
 import GoogleAdsUniqueAdvantage from '../../components/GoolgeAdsServicePage/GoogleAdsUniqeAdvantage'
-import ResultsProof from '../../components/HeroSection/results'
+
 import OurProcess from '../../components/AboutUsSection/ourProcess'
-import TestimonialSwiper from '../../components/HeroSection/testimonial'
+
 import CTASection from '../../components/ctaSection'
 import GoogleAdsFAQSection from '../../components/GoolgeAdsServicePage/googleAdsFaqSection'
 
 
 import { Metadata } from 'next'
+import TestimonialSection from '../../components/HeroSection/testimonial'
 
 export const metadata: Metadata = {
   title: 'Certified Google Ads Specialist | Account Audit & Management | TrackFlowPro',
@@ -75,10 +76,10 @@ export default function GoogleAdsExpert({}: Props) {
         <OurProcess />
 
         {/* <ResultsProof /> */}
-
-        <TestimonialSwiper />
+        
 
         <GoogleAdsFAQSection />
+        <TestimonialSection />
 
         <CTASection />
 

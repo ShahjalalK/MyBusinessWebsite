@@ -13,6 +13,7 @@ import CapiProofSection from '../../components/FacebookCapiPage/capiProf'
 import CapiFAQSection from '../../components/FacebookCapiPage/capiFaq'
 import CapiFinalCTA from '../../components/FacebookCapiPage/capiCta'
 import CapiWinningStrategy from '../../components/FacebookCapiPage/fapiWarning'
+import TestimonialSection from '@/app/components/HeroSection/testimonial'
 
 
 export const metadata = {
@@ -51,6 +52,7 @@ export default function FacebookCapi({}: Props) {
     <CapiProcessSection />
     <CapiProofSection />
     <CapiFAQSection />
+    <TestimonialSection />
     <CapiFinalCTA />
     
     <Footer />

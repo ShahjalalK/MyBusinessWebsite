@@ -3,7 +3,6 @@ import HeroGoogleAds from "./components/HeroSection/heroGoogleAds";
 import Achivement from "./components/HeroSection/achivement";
 import Warkingproces from "./components/HeroSection/warkingproces";
 import CaseStady from "./components/HeroSection/caseStady";
-import Testimonial from "./components/HeroSection/testimonial";
 import Footer from "./components/footer";
 import Navbar from "./components/navbar";
 import MainSection from "./components/HeroSection/mainSection";
@@ -14,6 +13,7 @@ import ResultsProof from "./components/HeroSection/results";
 import ServiceDetails from "./components/HeroSection/serviceDetails";
 import AgencyTeamSection from "./components/agencyTeamSection";
 import BlogSection from "./components/HeroSection/blogSection";
+import TestimonialSection from "./components/HeroSection/testimonial";
 
 
 export const metadata = {
@@ -76,7 +76,7 @@ export default function Home() {
     <AgencyTeamSection />
 
     <BlogSection />
-    <Testimonial />
+    <TestimonialSection />
 
     <CTASection />
 
