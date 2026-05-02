@@ -105,12 +105,18 @@ export default function OurProcess() {
             <p className="text-slate-500 dark:text-slate-400 text-sm font-bold italic">
               Stop guessing and start measuring with 100% data accuracy.
             </p>
-            <div className="inline-flex items-center gap-4 px-8 py-4 rounded-[2rem] bg-slate-900 dark:bg-blue-600 text-white shadow-2xl shadow-blue-500/20 hover:scale-105 transition-transform cursor-pointer">
-              <span className="text-sm font-black uppercase tracking-widest">Get My Google Ads Audit</span>
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            
+            {/* Link কম্পোনেন্ট দিয়ে বাটনটিকে র‍্যাপ (wrap) করা হয়েছে */}
+            <Link href="/book-audit">
+              <div className="inline-flex items-center gap-4 px-8 py-4 rounded-[2rem] bg-slate-900 dark:bg-blue-600 text-white shadow-2xl shadow-blue-500/20 hover:scale-105 transition-transform cursor-pointer group">
+                <span className="text-sm font-black uppercase tracking-widest">
+                  Get My Google Ads Audit
+                </span>
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
                   <Rocket className="w-4 h-4 text-white" />
+                </div>
               </div>
-            </div>
+            </Link>
           </div>
         </motion.div>
 

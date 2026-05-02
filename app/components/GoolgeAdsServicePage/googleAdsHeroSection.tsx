@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import { motion, animate } from 'framer-motion'
-import { ArrowRight, Zap, TrendingUp, DollarSign, ShieldCheck, BarChart3, MessageSquare } from 'lucide-react'
+import { ArrowRight, Zap, TrendingUp, DollarSign, ShieldCheck, BarChart3, MessageSquare, Send } from 'lucide-react'
 import Link from 'next/link';
 
 // ১. স্মুথ নাম্বার কাউন্টার কম্পোনেন্ট
@@ -71,9 +71,9 @@ export default function GoogleAdsHero() {
               <Link href="/book-audit" className="w-full sm:w-auto px-8 py-4.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-xl shadow-blue-500/25 transition-all flex items-center justify-center gap-3 group">
                 Book My Free Audit <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </Link>
-              <Link href="/contact" className="w-full sm:w-auto px-8 py-4.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-xl font-bold text-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-sm">
-  <MessageSquare size={18} className="text-blue-600" /> 
-  Contact Us Directly
+              <Link href="/quote" className="w-full sm:w-auto px-8 py-4.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-xl font-bold text-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-sm">
+  <Send size={18} className="text-blue-600" /> 
+  Get Custom Quote
 </Link>
             </motion.div>
           </div>
