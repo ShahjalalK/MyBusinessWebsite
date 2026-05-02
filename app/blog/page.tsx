@@ -1,45 +1,32 @@
-"use client"
-import React, { useState } from 'react'
-import { blogPosts } from '../components/BlogMainPage/blogData';
-import BlogHero from '../components/BlogMainPage/blogHero';
-import BlogCategories from '../components/BlogMainPage/BlogCategory';
-import BlogGrid from '../components/BlogMainPage/blogGrid';
-import Navbar from '../components/navbar';
-import Footer from '../components/footer';
-import FeaturedPost from '../components/BlogMainPage/blogFeatured';
-import NewsletterSignup from '../components/BlogMainPage/blogNewsletter';
-import BlogCTA from '../components/BlogMainPage/blogCta';
+import { Metadata } from 'next';
+import BlogPageContent from '../components/BlogMainPage/blogPageContent';
 
-
+export const metadata: Metadata = {
+  // আপনার রিসার্চ ফাইল অনুযায়ী হাই-সিপিসি কিওয়ার্ড ফোকাস করা হয়েছে
+  title: 'Insights & Strategies from Google Ads Experts | TrackFlow Pro Blog',
+  description: 'Master the art of conversion tracking and ad optimization. Read our latest articles on GTM Server-Side tracking, GA4 audits, and scaling Google Ads ROI.',
+  keywords: [
+    'google ads expert tips', 
+    'gtm server side tracking blog', 
+    'hire google ads expert insights', //
+    'conversion optimization strategies',
+    'web analytics for ecommerce',
+    'GA4 audit guide'
+  ],
+  openGraph: {
+    title: 'TrackFlow Pro Blog | Data-Driven Marketing & Tracking Insights',
+    description: 'Transforming dark data into profitable growth with expert tracking and ads strategies.',
+    url: 'https://trackflowpro.com/blog',
+    siteName: 'TrackFlow Pro',
+    images: [{ url: '/blog-og-image.jpg' }],
+    locale: 'en_US',
+    type: 'website',
+  },
+  alternates: {
+    canonical: 'https://trackflowpro.com/blog',
+  },
+};
 
 export default function BlogPage() {
-  const [activeTab, setActiveTab] = useState("All Posts");
-
-  // ফিল্টারিং লজিক: যদি "All Posts" থাকে তবে সব দেখাবে, নাহলে ক্যাটাগরি মিললে দেখাবে
-  const filteredPosts = activeTab === "All Posts" 
-    ? blogPosts 
-    : blogPosts.filter(post => post.category === activeTab);
-
-  return (
-    <>
-    <Navbar />
-    <BlogHero />
-      
-      {/* ক্যাটাগরি কম্পোনেন্টে স্টেট পাঠানো হচ্ছে */}
-      <BlogCategories/>
-
-      {/* গ্রিড কম্পোনেন্টে ফিল্টার করা ডাটা পাঠানো হচ্ছে */}
-      <BlogGrid />
-
-      <FeaturedPost />
-
-      <NewsletterSignup />
-
-      <BlogCTA />
-
-
-      
-    <Footer />
-    </>
-  )
+  return <BlogPageContent />;
 }

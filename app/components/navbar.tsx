@@ -85,6 +85,7 @@ export default function Navbar() {
           </div>
 
           <NavLink href="/blog" onClick={() => handleNavClick('Blog')}>Blog</NavLink>
+           <NavLink href="/about" onClick={() => handleNavClick('Jobs')}>About Us</NavLink>
           <NavLink href="/join-the-team" onClick={() => handleNavClick('Jobs')}>Join the Team</NavLink>
 
           {isAdmin && (
@@ -139,6 +140,7 @@ export default function Navbar() {
               <div className="flex flex-col gap-4">
                
                 <MobileNavLink href="/blog" onClick={() => setIsOpen(false)}>Blog</MobileNavLink>
+                <MobileNavLink href="/about" onClick={() => setIsOpen(false)}>About Us</MobileNavLink>
                 <MobileNavLink href="/join-the-team" onClick={() => setIsOpen(false)}>Join the Team</MobileNavLink>
                 
                 {/* Mobile Tracking Lab */}

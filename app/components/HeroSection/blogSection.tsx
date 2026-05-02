@@ -66,7 +66,7 @@ export default function BlogSection() {
               <Link href={`/blog/${post.id}`} className="block relative aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800/50">
                 <Image 
                   src={post.image} 
-                  alt={post.title} 
+                  alt={post.altText || post.title} 
                   fill
                   className="object-contain p-2 transition-transform duration-700 group-hover:scale-105" 
                   // object-contain দিলে ছবি কাটবে না, p-2 দিলে চারদিকে সামান্য গ্যাপ থাকবে যা দেখতে সুন্দর লাগে

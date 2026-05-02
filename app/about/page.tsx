@@ -14,32 +14,41 @@ import AboutCTA from '../components/AboutUsSection/aboutCta'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'About TrackFlowPro | Global Leaders in Web Analytics & Data Tracking',
-  description: 'TrackFlowPro is a premier data tracking agency founded by Shahjalal Khan. We help Shopify & SaaS brands scale with GTM Server-Side, Facebook CAPI, and GA4 precision.',
+  // টাইটেলে 'Global Leaders' এর সাথে আপনার মেইন কিওয়ার্ড ব্যালেন্স করা হয়েছে
+  title: 'About TrackFlowPro | Experts in Web Analytics & High-ROI Data Tracking',
+  
+  description: 'TrackFlowPro is a premier data tracking agency founded by Shahjalal. We empower Shopify & SaaS brands to scale using GTM Server-Side, Facebook CAPI, and GA4 precision for maximum ROI.',
+  
   keywords: [
-    'TrackFlowPro team',
-    'web analytics agency',
-    'server side tracking company',
-    'Shahjalal Khan founder',
-    'conversion tracking agency',
-    'ecommerce data experts',
-    'USA UK tracking agency'
+    'TrackFlowPro agency',
+    'hire google ads expert',           // KD 5% - আপনার রিসার্চ ফাইলের মেইন কিওয়ার্ড
+    'web analytics company',
+    'server side tracking experts',
+    'Shahjalal web analyst',
+    'conversion tracking solutions',
+    'ecommerce data optimization'
   ],
+  
   openGraph: {
-    title: 'TrackFlowPro - Precision-Driven Data Tracking Agency',
-    description: 'Transforming dark data into profitable growth for global businesses. Founded by tracking expert Shahjalal Khan.',
+    title: 'TrackFlowPro | Precision-Driven Data Tracking & Analytics Agency',
+    description: 'Bypass data loss and drive profitable growth. Founded by tracking specialist Shahjalal, we provide global businesses with 100% data accuracy.',
     url: 'https://trackflowpro.com/about',
     siteName: 'TrackFlowPro',
     images: [
       {
-        url: '/agency-about-banner.jpg', // এখানে এজেন্সির লোগো বা টিমের ব্যানার দিতে পারেন
+        url: '/agency-about-banner.jpg', 
         width: 1200,
         height: 630,
-        alt: 'TrackFlowPro - Data Tracking Agency',
+        alt: 'TrackFlowPro - Expert Data Tracking Agency',
       },
     ],
     locale: 'en_US',
     type: 'website',
+  },
+  
+  // ক্যানোনিকাল লিঙ্ক
+  alternates: {
+    canonical: 'https://trackflowpro.com/about',
   },
 }
 

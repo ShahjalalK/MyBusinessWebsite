@@ -23,31 +23,30 @@ import TestimonialSection from '@/app/components/HeroSection/testimonial'
 import EmailSignaturePricingSection from '@/app/components/EmailSignatureServicePage/emailSignaturePricing'
 
 // SEO Meta Data
-export const metadata: Metadata = {
-  title: 'Professional Clickable HTML Email Signatures | Mobile-Responsive Design',
-  description: 'Elevate your professional branding with hand-coded, clickable HTML email signatures. 100% responsive, spam-safe, and compatible with Outlook, Gmail, and Apple Mail.',
+export const metadata = {
+  title: 'Custom Clickable HTML Email Signatures | Responsive Design | TrackFlow Pro',
+  description: 'Professional, hand-coded, and clickable HTML email signatures. 100% mobile-responsive and compatible with Gmail, Outlook, and Apple Mail. Enhance your branding today.',
   keywords: [
-    'professional email signature',
-    'clickable HTML signature',
-    'HTML email branding',
-    'Outlook email signature',
-    'Gmail signature design',
+    'clickable HTML email signature',
+    'professional email signature design',
     'responsive email signature',
-    'HIPAA compliant email signature',
-    'hand-coded email signature'
+    'Outlook email signature expert',
+    'Gmail signature setup',
+    'hand-coded HTML signature',
+    'email branding specialist'
   ],
-  authors: [{ name: 'Shahjalal Khan' }],
+  authors: [{ name: 'Shahjalal' }], // আপনার ডাকনাম 'Jalal' বা 'Shahjalal' ব্যবহার করা হয়েছে
   openGraph: {
-    title: 'Transform Your Emails with Clickable HTML Signatures',
-    description: 'Get a premium, mobile-friendly email signature that works flawlessly on every device. Perfect for Real Estate Agents & Professionals.',
-    url: 'https://yourdomain.com/email-signature', // আপনার সঠিক লিঙ্কটি দিন
-    siteName: 'TrackFlowPro',
+    title: 'Professional Clickable HTML Email Signatures by TrackFlow Pro',
+    description: 'Get a premium, mobile-friendly email signature that works flawlessly across all platforms. Perfect for real estate agents and business professionals.',
+    url: 'https://www.trackflowpro.com/email-signature', 
+    siteName: 'TrackFlow Pro',
     images: [
       {
-        url: 'https://yourdomain.com/og-email-signature.jpg', // আপনার প্রফেশনাল ইমেজ লিঙ্ক
+        url: 'https://www.trackflowpro.com/og-email-signature.jpg', 
         width: 1200,
         height: 630,
-        alt: 'Professional Email Signature Preview',
+        alt: 'Professional HTML Email Signature Preview',
       },
     ],
     locale: 'en_US',
@@ -55,12 +54,12 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Custom HTML Email Signatures | Verified Global Expert',
-    description: 'Hand-coded email signatures with clickable icons and links. Zero formatting issues on Outlook & Mobile.',
-    images: ['https://yourdomain.com/og-email-signature.jpg'],
+    title: 'Custom HTML Email Signatures | Verified Expert Design',
+    description: 'Hand-coded email signatures with clickable icons and professional formatting for Outlook & Mobile.',
+    images: ['https://www.trackflowpro.com/og-email-signature.jpg'],
   },
   alternates: {
-    canonical: 'https://www.trackflowpro.com//email-signature',
+    canonical: 'https://www.trackflowpro.com/email-signature', // অতিরিক্ত স্ল্যাশ (/) মুছে ফেলা হয়েছে
   },
 }
 

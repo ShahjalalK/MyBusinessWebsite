@@ -6,6 +6,7 @@ import { FaArrowRight, FaCalendarAlt, FaClock, FaSearch } from "react-icons/fa"
 import Link from "next/link"
 import { useBlogStore } from "@/app/store/useBlogStore"
 import { blogPosts } from "./blogData"
+import Image from "next/image"
 
 export default function BlogGrid() {
   const activeCategory = useBlogStore((state) => state.activeCategory)
@@ -64,9 +65,9 @@ export default function BlogGrid() {
                         isFeatured ? "aspect-[16/7] md:aspect-[16/7]" : "aspect-[16/10]"
                       }`}
                     >
-                      <img
+                      <Image
                         src={post.image}
-                        alt={post.title}
+                        alt={post.altText || post.title}
                         loading={idx < 3 ? "eager" : "lazy"}
                         className="h-full w-full object-contain p-2 transition-transform duration-700 group-hover:scale-[1.03]"
                       />

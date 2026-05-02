@@ -1,40 +1,43 @@
 // ১. কন্টেন্টের টাইপ ডিফাইন করা
+// ১. কন্টেন্টের টাইপ ডিফাইন করা
 export interface BlogContent {
   type: 'paragraph' | 'heading' | 'image' | 'list' | 'code';
   text?: string;
   url?: string;
-  caption?: string;
+  caption?: string; // ইমেজের নিচে দেখানোর জন্য
+  alt?: string;     // কন্টেন্টের ভেতরের ইমেজের জন্য এসইও আল্ট
   items?: string[];
   language?: string;
 }
 
-// ২. ব্লগের মেইন ইন্টারফেস (ctaType যোগ করা হয়েছে)
+// ২. ব্লগের মেইন ইন্টারফেস
 export interface BlogPost {
   id: string;
   title: string;
   description: string;
   image: string;
+  altText: string; // ফিচারেড ইমেজের জন্য মেইন এসইও কি-ওয়ার্ড আল্ট
   category: "Facebook CAPI" | "Server-side Tracking" | "Google Ads" | "Web Analytics" | "Email Marketing";
   date: string;
   readTime: string;
   content: BlogContent[];
   ctaType: "tracking" | "signature" | "ads";
-  isFeatured?: boolean; // নতুন যোগ করা হয়েছে
+  isFeatured?: boolean;
 }
-
 // ৩. ব্লগ ডাটা লিস্ট
 export const blogPosts: BlogPost[] = [
   
   {
-  "id": "hire-google-ads-expert-2026-guide",
-  "title": "Hire Google Ads Expert in 2026: 7 Checks Before You Spend Your Ad Budget",
-  "description": "Want to hire a Google Ads expert? Learn the 7 essential checks to choose the right specialist, protect your budget, and increase ROI in 2026.",
-  "image": "/blog/ppc-expert-checklist-for-2026-campaign.webp",
-  "category": "Google Ads",
-  "date": "May 1, 2026",
-  "readTime": "10 min read",
-  "ctaType": "ads",
-  "isFeatured": false,
+    "id": "hire-google-ads-expert-2026-guide",
+    "title": "Hire Google Ads Expert in 2026: 7 Checks Before You Spend Your Ad Budget",
+    "description": "Learn the 7 essential checks to choose the right Google Ads specialist, protect your budget, and increase ROI with proper conversion tracking and audits.",
+    "image": "/blog/ppc-expert-checklist-for-2026-campaign.webp",
+    "altText": "Hire Google Ads Expert for conversion tracking and ROI optimization", // High CPC Keyword Focus
+    "category": "Google Ads",
+    "date": "May 1, 2026",
+    "readTime": "10 min read",
+    "ctaType": "ads",
+    "isFeatured": true,
   "content": [
     {
       "type": "paragraph",
@@ -142,16 +145,17 @@ export const blogPosts: BlogPost[] = [
     }
   ]
 },
- {
-  "id": "server-side-tracking-service",
-  "title": "Server-Side Tracking Service: Maximizing Data Accuracy and Privacy Compliance for Your Business",
-  "description": "Learn how server-side tracking services can help businesses improve data accuracy, ensure privacy compliance, and drive better performance in digital marketing. Discover how TrackFlowPro can help.",
-  "image": "/blog/server-side-tracking-service.webp",
-  "category": "Server-side Tracking",
-  "date": "May 1, 2026",
-  "readTime": "9 min read",
-  "ctaType": "tracking",
-  "isFeatured": false,
+{
+    "id": "server-side-tracking-service",
+    "title": "Server-Side Tracking Service: Maximizing Data Accuracy for Better ROI",
+    "description": "Improve your marketing data with a professional server-side tracking service. Bypass ad blockers and ensure privacy compliance with TrackFlowPro.",
+    "image": "/blog/server-side-tracking-service.webp",
+    "altText": "Professional server side tracking service for GA4 and Facebook CAPI",
+    "category": "Server-side Tracking",
+    "date": "May 1, 2026",
+    "readTime": "9 min read",
+    "ctaType": "tracking",
+    "isFeatured": false,
   "content": [
     {
       "type": "paragraph",
@@ -254,18 +258,17 @@ export const blogPosts: BlogPost[] = [
   ]
 },
 
- 
-
 {
-  "id": "professional-email-signature-for-real-estate-agents",
-  "title": "Professional Email Signature for Real Estate Agents: Turn Every Email into More Client Calls",
-  "description": "Learn how a professional email signature for real estate agents can build trust, make contact saving easier, increase calls, and turn everyday emails into client opportunities.",
-  "image": "/blog/real-estate-agents-email-signature.gif",
-  "category": "Email Marketing",
-  "date": "May 1, 2026",
-  "readTime": "9 min read",
-  "ctaType": "signature",
-  "isFeatured": false,
+    "id": "professional-email-signature-for-real-estate-agents",
+    "title": "Professional Email Signature for Real Estate Agents: Convert Emails into Calls",
+    "description": "Stand out with a professional clickable email signature for real estate. Build trust and make it easier for clients to save your contact information.",
+    "image": "/blog/real-estate-agents-email-signature.gif",
+    "altText": "Professional clickable email signature for real estate agents with call buttons",
+    "category": "Email Marketing",
+    "date": "May 1, 2026",
+    "readTime": "9 min read",
+    "ctaType": "signature",
+    "isFeatured": false,
   "content": [
     {
       "type": "paragraph",

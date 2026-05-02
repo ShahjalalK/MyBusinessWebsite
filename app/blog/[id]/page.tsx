@@ -2,7 +2,6 @@ import React from 'react'
 import Navbar from '@/app/components/navbar'
 import Footer from '@/app/components/footer'
 import SingleBlogHeader from '@/app/components/SingaleBlogPage/singleBlogHeader'
-
 import { notFound } from 'next/navigation'
 import { blogPosts } from '@/app/components/BlogMainPage/blogData'
 import SingleBlogAuthorBox from '@/app/components/SingaleBlogPage/SingleBlogAuthorBox'
@@ -16,19 +15,23 @@ type Props = {
   params: Promise<{ id: string }>
 }
 
-/** * ১. Dynamic Metadata Function 
- * এটি গুগলে আপনার ব্লগের টাইটেল এবং ডেসক্রিপশন দেখাবে
+/** 
+ * ১. Dynamic Metadata Function 
+ * এখানে আমরা post.altText থাকলে সেটি আল্ট ট্যাগ হিসেবে ব্যবহার করছি
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const post = blogPosts.find((p) => p.id === id);
 
   if (!post) {
-    return { title: "Blog Not Found | Shahjalal" };
+    return { title: "Post Not Found | TrackFlow Pro" };
   }
 
+  // এসইও আল্ট টেক্সট অথবা পোস্ট টাইটেল ডিফাইন করা
+  const imageAlt = post.altText || post.title;
+
   return {
-    title: `${post.title} | Shahjalal - Tracking Expert`,
+    title: `${post.title} | TrackFlow Pro`,
     description: post.description,
     openGraph: {
       title: post.title,
@@ -38,17 +41,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           url: post.image,
           width: 1200,
           height: 630,
-          alt: post.title,
+          alt: imageAlt, // এসইও ফ্রেন্ডলি আল্ট টেক্সট
         },
       ],
       type: 'article',
       publishedTime: post.date,
+      authors: ['Shahjalal'],
     },
     twitter: {
       card: 'summary_large_image',
       title: post.title,
       description: post.description,
       images: [post.image],
+    },
+    alternates: {
+      canonical: `https://www.trackflowpro.com/blog/${post.id}`,
     },
   }
 }
@@ -59,45 +66,64 @@ export default async function SingleBlogPage({ params }: Props) {
 
   if (!post) notFound();
 
-  /** * ২. JSON-LD Schema 
-   * এটি গুগল বটকে আপনার কন্টেন্ট সম্পর্কে টেকনিক্যাল ডাটা দেয়
+  /** 
+   * ২. JSON-LD Schema 
+   * গুগল ইমেজ এবং রিচ স্নাইপেটের জন্য আল্ট টেক্সট সহ স্কিমা
    */
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
     "headline": post.title,
     "description": post.description,
-    "image": post.image,
+    "image": {
+      "@type": "ImageObject",
+      "url": post.image,
+      "caption": post.altText || post.title // গুগলের জন্য ছবির বর্ণনা
+    },
     "datePublished": post.date,
     "author": {
-      "@type": "Person",
-      "name": "Shahjalal",
-      "url": "https://www.trackflowpro.com/about" // আপনার ওয়েবসাইট অনুযায়ী পরিবর্তন করুন
+      "@type": "Organization", // ব্যক্তিগত প্রোফাইল থেকে এজেন্সি প্রোফাইলে শিফট করা হয়েছে
+      "name": "TrackFlow Pro",
+      "url": "https://www.trackflowpro.com/about"
     },
+    "publisher": {
+      "@type": "Organization",
+      "name": "TrackFlow Pro",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.trackflowpro.com/logo.png"
+      }
+    }
   };
 
   return (
     <>
-      {/* গুগল বটের জন্য স্ক্রিপ্ট */}
+      {/* Schema.org ডাটা */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       
       <Navbar />
-      <main>
-        <SingleBlogHeader post={post} />
-        <SingleBlogAuthorBox post={post} />
+      <main className="min-h-screen">
+        <article>
+          <SingleBlogHeader post={post} />
+          
+          <div className="container mx-auto px-6 grid lg:grid-cols-12 gap-12 mt-12">
+            {/* মেইন কন্টেন্ট এলাকা */}
+            <div className="lg:col-span-8">
+              <SingleBlogContent post={post} />
+              <SingleBlogAuthorBox post={post} />
+              <RelatedPosts currentPostId={post.id} category={post.category} />
+            </div>
 
-        <SingleBlogContent post={post} />
-
-      <RelatedPosts currentPostId={post.id} category={post.category} />
-
-        <ServiceLinks />
-
-        <BlogCTA type={post.ctaType as any} />
-
-        
+            {/* সাইডবার বা অতিরিক্ত লিঙ্ক */}
+            <aside className="lg:col-span-4 space-y-8">
+              <ServiceLinks />
+              <BlogCTA type={post.ctaType as any} />
+            </aside>
+          </div>
+        </article>
       </main>
       <Footer />
     </>

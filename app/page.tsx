@@ -17,33 +17,39 @@ import TestimonialSection from "./components/HeroSection/testimonial";
 
 
 export const metadata = {
-  title: "Hire Google Ads Expert | GTM Server-Side Tracking Specialist",
-  description: "Looking to hire a Google Ads expert? We provide expert GTM Server-Side tracking, GA4 audit, and Meta Conversions API (CAPI) setup to maximize your ROI.",
+  // টাইটেলের শুরুতে মেইন কিওয়ার্ড রাখা এসইও-র জন্য সেরা
+  title: "Hire Google Ads Expert | GTM Server-Side & CAPI Specialist",
+  description: "Boost your ROAS! Hire a Google Ads expert for professional GA4 audits, GTM Server-Side tracking, and Meta Conversions API (CAPI) setup. Get a free audit today.",
   keywords: [
-    "hire google ads expert",
-    "gtm server side tracking",
+    "hire google ads expert", // KD 5% - High Priority
     "google ads specialist",
-    "ga4 server side tracking",
+    "gtm server side tracking",
     "meta conversions api",
-    "facebook capi",
-    "google ads audit service",
-    "personalized email signature"
+    "facebook capi expert",
+    "ga4 audit service",
+    "conversion tracking specialist"
   ],
   openGraph: {
-    title: "TrackFlow Pro | Precision Tracking & Ads Optimization",
-    description: "Bypass iOS 14+ restrictions with GTM Server-Side Tracking. Get a professional Google Ads Audit today.",
-    url: "https://trackflowpro.com", // আপনার অরিজিনাল ইউআরএল দিন
+    title: "TrackFlow Pro | Expert Google Ads & Precision Tracking",
+    description: "Fix your tracking issues and scale your ads. Specialized in GTM Server-Side and Facebook CAPI for maximum data accuracy.",
+    url: "https://trackflowpro.com", 
     siteName: "TrackFlow Pro",
     images: [
       {
-        url: "/og-image.png", // আপনার সাইটের একটি প্রিভিউ ইমেজ লিঙ্ক
+        url: "/og-image.png", 
         width: 1200,
         height: 630,
+        alt: "TrackFlow Pro - Google Ads & Tracking Excellence",
       },
     ],
     locale: "en_US",
     type: "website",
   },
+  // রোবটদের জন্য ইন্সট্রাকশন যোগ করা ভালো
+  robots: {
+    index: true,
+    follow: true,
+  }
 };
 
 export default function Home() {

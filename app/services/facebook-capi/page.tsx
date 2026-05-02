@@ -17,23 +17,51 @@ import TestimonialSection from '@/app/components/HeroSection/testimonial'
 
 
 export const metadata = {
-  title: 'Facebook CAPI & GTM Server Side Tracking Expert | Setup & Audit',
-  description: 'Bypass iOS 14+ updates with professional Facebook CAPI and GTM server side tracking. Get a deep Google Ads account audit to scale your ROAS today.',
+  // আপনার রিসার্চ ফাইল অনুযায়ী 'hire google ads expert' কিওয়ার্ডটিকে বেশি গুরুত্ব দেওয়া হয়েছে
+  title: 'Hire Google Ads Expert | Facebook CAPI & GTM Server-Side Specialist',
+  
+  description: 'Scale your ROAS by bypassing iOS 14+ restrictions. Hire a Google Ads expert for professional Facebook CAPI setup, GTM server-side tracking, and deep account audits.',
+  
   keywords: [
-    'facebook capi', 
-    'gtm server side tracking', 
-    'google ads account audit', 
-    'hire google ads expert', 
-    'ga4 server side tracking',
-    'conversion api setup'
+    'hire google ads expert',      // KD 5% (Primary Keyword)
+    'facebook capi expert',        // Service focus
+    'gtm server side tracking',    // Technical expertise
+    'google ads account audit',    // Offer focus
+    'ga4 server side tracking',    // Platform focus
+    'conversion api setup',        // Specific task
+    'hiring google ads specialist' // Intent-based variation
   ],
+  
   openGraph: {
-    title: 'Expert Facebook CAPI & Server Side Tagging GTM Setup',
-    description: 'Recover your lost data and fix tracking leaks with a proven 4-step framework.',
-    images: ['/your-og-image.jpg'], // আপনার একটি প্রফেশনাল থাম্বনেইল ইমেজের লিঙ্ক দিবেন
+    title: 'TrackFlow Pro | Expert Facebook CAPI & GTM Server-Side Setup',
+    description: 'Stop losing data. Recover tracking accuracy and scale your campaigns with our proven server-side framework.',
+    url: 'https://trackflowpro.com', 
+    siteName: 'TrackFlow Pro',
+    images: [
+      {
+        url: '/og-image.png', // আপনার একটি প্রফেশনাল ড্যাশবোর্ড বা কাজের ছবির লিঙ্ক দিন
+        width: 1200,
+        height: 630,
+        alt: 'TrackFlow Pro - Digital Tracking Excellence',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
   },
-}
-
+  
+  // সার্চ ইঞ্জিনের জন্য অতিরিক্ত নিরাপত্তা
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+};
 
 type Props = {}
 

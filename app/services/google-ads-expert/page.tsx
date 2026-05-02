@@ -18,28 +18,29 @@ import { Metadata } from 'next'
 import TestimonialSection from '../../components/HeroSection/testimonial'
 
 export const metadata: Metadata = {
-  title: 'Certified Google Ads Specialist | Account Audit & Management | TrackFlowPro',
-  description: 'Scale your revenue with high-ROI Google Ads campaigns. We offer expert account audits, management, and tracking to help you get more sales and lower CPA.',
+  // 'Certified' এর বদলে 'Hire' এবং 'Expert' ব্যবহার করা হয়েছে যা আপনার রিসার্চ ফাইলের সাথে মিলে যায়
+  title: 'Hire Google Ads Expert | Account Audit & High-ROI Management | TrackFlowPro',
+  description: 'Maximize your revenue with data-driven Google Ads campaigns. We provide expert account audits and management to scale sales and lower your CPA effectively.',
   keywords: [
-    'hire google ads expert',
+    'hire google ads expert', // KD 5%
+    'hiring google ads specialist', // Transactional Intent
     'google ads account audit',
-    'hiring google ads specialist',
-    'google ads management agency',
     'ecommerce google ads specialist',
+    'google ads management services',
     'google ads audit checklist',
     'pcc management services'
   ],
   openGraph: {
-    title: 'Data-Driven Google Ads Management | Get More Sales & High ROAS',
-    description: 'Stop wasting budget on clicks that don’t convert. Our certified experts optimize your Google Ads for maximum profit.',
-    url: 'https://trackflowpro.com/services/google-ads', // আপনার আসল URL দিন
+    title: 'Data-Driven Google Ads Management | Scale Your Sales & ROAS',
+    description: 'Stop wasting budget on clicks that don’t convert. Our experts optimize your Google Ads for maximum profit and 100% tracking accuracy.',
+    url: 'https://trackflowpro.com/services/google-ads', 
     siteName: 'TrackFlowPro',
     images: [
       {
-        url: '/google-ads-og-banner.jpg', // একটি প্রফেশনাল ব্যানার পাথ দিন
+        url: '/google-ads-og-banner.jpg', 
         width: 1200,
         height: 630,
-        alt: 'Google Ads Management and Performance Audit',
+        alt: 'Google Ads Management and Performance Audit - TrackFlowPro',
       },
     ],
     locale: 'en_US',
@@ -47,8 +48,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Certified Google Ads Expert | Boost Your ROI Today',
-    description: 'Get a professional Google Ads audit and see why 90% of accounts are wasting budget.',
+    title: 'Hire Google Ads Expert | Boost Your ROI & Sales Today',
+    description: 'Get a professional Google Ads audit and fix budget leaks. Expert management for high-growth businesses.',
     images: ['/google-ads-og-banner.jpg'], 
   },
 }

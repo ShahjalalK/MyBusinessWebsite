@@ -11,29 +11,38 @@ import ContactFinalContactStep from '../components/contactUsPage/contactCta'
 
 // SEO Meta Tags
 export const metadata: Metadata = {
-  title: 'Contact Google Ads Expert & GTM Specialist | Hire Shahjalal Khan',
-  description: 'Looking to hire a Google Ads expert or GTM specialist? Contact Shahjalal Khan for a free technical audit on GA4, Server-Side Tracking, and Google Ads strategy.',
+  // টাইটেলের শুরুতে আপনার প্রধান কিওয়ার্ড এবং আপনার নাম রাখা হয়েছে
+  title: 'Contact Google Ads Expert | Hire Shahjalal for Tracking & Strategy',
+  
+  description: 'Ready to scale? Contact Shahjalal for a professional Google Ads audit, GTM Server-Side tracking setup, and GA4 strategy. Get expert solutions for your business today.',
+  
   keywords: [
-    'hire google ads expert',
-    'google ads audit service',
-    'gtm server side tracking specialist',
-    'GA4 conversion API setup',
-    'hiring google ads specialist',
-    'Shahjalal Khan contact'
+    'hire google ads expert',           // KD 5%
+    'google ads audit service',        // Service focus
+    'hiring google ads specialist',    // Intent focus
+    'gtm server side tracking expert',
+    'Shahjalal Khan contact',          // Personal branding
+    'GA4 conversion API setup'
   ],
+  
   openGraph: {
-    title: 'Hire a Google Ads & Tracking Expert | Shahjalal Khan',
-    description: 'Get a complimentary audit for your tracking setup and Google Ads strategy. Expert solutions for GA4, GTM, and CAPI.',
+    title: 'Hire Shahjalal | Expert Google Ads & Tracking Solutions',
+    description: 'Book a free technical audit for your Google Ads and tracking setup. Let’s fix your data loss and scale your ROAS.',
     type: 'website',
-    url: 'https://www.trackflowpro.com/contact', // আপনার অরিজিনাল ইউআরএল দিন
+    url: 'https://www.trackflowpro.com/contact', 
     images: [
       {
-        url: 'https://yourdomain.com/og-contact.jpg', // একটি সুন্দর ইমেজ লিংক দিন
+        url: 'https://www.trackflowpro.com/og-contact.jpg', 
         width: 1200,
         height: 630,
-        alt: 'Contact Shahjalal Khan - Google Ads Specialist',
+        alt: 'Contact Shahjalal - Google Ads & GTM Specialist',
       },
     ],
+  },
+  
+  // কন্টাক্ট পেজের জন্য ইনডেক্সিং এবং ক্যানোনিকাল ট্যাগ নিশ্চিত করা
+  alternates: {
+    canonical: 'https://www.trackflowpro.com/contact',
   },
 }
 
