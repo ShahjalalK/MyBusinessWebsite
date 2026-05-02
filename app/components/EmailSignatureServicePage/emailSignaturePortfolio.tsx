@@ -8,7 +8,7 @@ const portfolioImages = [
   {
     category: "Real Estate Specialist",
     client: "Luxury Properties NY",
-    image: "/email-signature/signature1.png",
+    image: "/email-signature/signature1.webp",
     description: "High-impact signature designed for top-tier real estate brokers.",
     to: "client-lead@realestate.com",
     subject: "Property Viewing Schedule"
@@ -16,7 +16,7 @@ const portfolioImages = [
   {
     category: "E-commerce Agency",
     client: "Velocity Brands",
-    image: "/email-signature/signature2.png",
+    image: "/email-signature/signature2.webp",
     description: "Modern, clickable signature focusing on brand authority.",
     to: "marketing@velocity.io",
     subject: "Monthly Campaign Strategy"
@@ -24,7 +24,7 @@ const portfolioImages = [
   {
     category: "Legal & Medical",
     client: "HealthCare Solutions",
-    image: "/email-signature/signature3.png",
+    image: "/email-signature/signature3.webp",
     description: "Professional design featuring HIPAA compliance statements.",
     to: "records@hospital.org",
     subject: "Confidential Patient Report"
@@ -32,7 +32,7 @@ const portfolioImages = [
   {
     category: "SaaS & Tech",
     client: "CloudPulse Systems",
-    image: "/email-signature/signature4.png",
+    image: "/email-signature/signature4.webp",
     description: "Sleek HTML signature with integrated booking links.",
     to: "investors@techcorp.com",
     subject: "Q4 Growth Summary"

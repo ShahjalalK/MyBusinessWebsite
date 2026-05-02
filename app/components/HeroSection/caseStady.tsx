@@ -22,7 +22,7 @@ export default function CaseStudy() {
       results: "100% Accuracy",
       link: "/case-studies/server-side-tracking-expert-solution",
       icon: <TrendingUp className="w-5 h-5 text-blue-600" />,
-      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.png", 
+      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.webp", 
     },
     {
       title: "Google Ads Growth Strategy",
@@ -31,7 +31,7 @@ export default function CaseStudy() {
       results: "Lower CPA",
       link: "/case-studies/server-side-tracking-expert-solution",
       icon: <BarChart3 className="w-5 h-5 text-blue-600" />,
-      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.png",
+      image: "/case-stady/facebook-conversions-api-server-side-tracking-proof.webp",
     },
     {
       title: "Clickable Email Signatures",

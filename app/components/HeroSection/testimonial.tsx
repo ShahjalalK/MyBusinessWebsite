@@ -14,7 +14,7 @@ const reviews = [
     name: "Kaitlinan",
     role: "9 months ago",
     platform: "fiverr",
-    image: "/testimonials/kaitlinanth11.jpg", 
+    image: "/testimonials/kaitlinanth11.webp", 
     text: "This is the 3rd time I have worked with him and everytime he has delivered an exceptional product. Writing a book is a daunting task and a massive process. All along the way he was there for me..."
   },
   {

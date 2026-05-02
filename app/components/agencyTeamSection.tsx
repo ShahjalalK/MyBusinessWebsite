@@ -17,7 +17,7 @@ const team = [
     name: "Shamim Hossain",
     role: "Google Ads Specialist",
     desc: "Optimizing High-ROI Google Ads campaigns with a focus on Search, PMax, and precise conversion audits.",
-    image: "/team/samim.png",
+    image: "/team/samim.webp",
     linkedin: "#",
     skill: "Ads Audit"
   },
@@ -25,7 +25,7 @@ const team = [
     name: "Ebrahim Khan",
     role: "Meta CAPI Specialist",
     desc: "Bypassing iOS signal loss through Meta Conversions API integrations and server-to-server data syncing.",
-    image: "/team/kazol.png",
+    image: "/team/kazol.webp",
     linkedin: "#",
     skill: "Conversion API"
   },
@@ -33,7 +33,7 @@ const team = [
     name: "Sazzad Hossen",
     role: "GA4 Audit Expert",
     desc: "Identifying tracking gaps and ensuring 100% data accuracy through professional GA4 infrastructure audits.",
-    image: "/team/sany.jpg",
+    image: "/team/sany.webp",
     linkedin: "#",
     skill: "GA4 Specialist"
   }
