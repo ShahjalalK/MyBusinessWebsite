@@ -36,14 +36,14 @@ export default function AboutCTA() {
             </h2>
             
             <p className="text-xl text-slate-500 dark:text-slate-400 font-medium mb-10 leading-relaxed max-w-2xl">
-              ডিপ-ডাইভ <span className="text-slate-900 dark:text-white font-bold">Google Ads audits</span> থেকে শুরু করে অ্যাডভান্সড <span className="text-slate-900 dark:text-white font-bold">Server-Side tracking</span> ডেপ্লয়মেন্ট—আমরা আপনার বিজনেসের জন্য সেই টেকনিক্যাল ইনফ্রাস্ট্রাকচার প্রদান করি যা দীর্ঘমেয়াদী গ্রোথ নিশ্চিত করে।
+              From performing deep-dive <span className="text-slate-900 dark:text-white font-bold">Google Ads audits</span> to deploying advanced <span className="text-slate-900 dark:text-white font-bold">Server-Side tracking</span>—we provide the technical infrastructure your business needs to drive sustainable growth.
             </p>
 
-            {/* Service Tags Optimized for Agency */}
+            {/* Service Tags Optimized for USA Market */}
             <div className="flex flex-wrap justify-center lg:justify-start gap-3 mb-12">
               {[
                 { icon: <TrendingUp size={14} />, label: "Ads Management" },
-                { icon: <ShieldCheck size={14} />, label: "GTM & CAPI Agency" },
+                { icon: <ShieldCheck size={14} />, label: "Tracking & CAPI" },
                 { icon: <Mail size={14} />, label: "Email Solutions" }
               ].map((tag, i) => (
                 <span key={i} className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest transition-colors hover:border-blue-500/50">

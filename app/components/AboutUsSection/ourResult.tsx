@@ -2,6 +2,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { TrendingUp, Users, Database, Globe2, ArrowUpRight, ShieldCheck, BarChart3, Zap } from 'lucide-react'
+import Link from 'next/link'
 
 const stats = [
   {
@@ -78,9 +79,9 @@ export default function OurResults() {
                 <p className="text-xs text-slate-500">Industry-leading setups following GDPR & CCPA frameworks.</p>
              </div>
              
-             <button className="flex items-center justify-center gap-3 text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white transition-all px-8 py-5 rounded-2xl group shadow-lg shadow-blue-600/20 active:scale-95">
+             <Link href="/contact" className="flex items-center justify-center gap-3 text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white transition-all px-8 py-5 rounded-2xl group shadow-lg shadow-blue-600/20 active:scale-95">
                 Work With Us <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-             </button>
+             </Link>
           </motion.div>
         </div>
 
