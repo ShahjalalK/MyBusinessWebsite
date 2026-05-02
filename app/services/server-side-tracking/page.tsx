@@ -83,7 +83,7 @@ export default function ServerSideTracking({}: Props) {
 
     
 
-    <ServerResultsSection />
+    {/* <ServerResultsSection /> */}
 
     <ServerFAQSection />
 
