@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import { motion, animate } from 'framer-motion'
-import { ArrowRight, Zap, TrendingUp, DollarSign, ShieldCheck, BarChart3 } from 'lucide-react'
+import { ArrowRight, Zap, TrendingUp, DollarSign, ShieldCheck, BarChart3, MessageSquare } from 'lucide-react'
 import Link from 'next/link';
 
 // ১. স্মুথ নাম্বার কাউন্টার কম্পোনেন্ট
