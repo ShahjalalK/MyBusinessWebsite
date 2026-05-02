@@ -1,6 +1,5 @@
 import React from 'react'
 import Navbar from '../../components/navbar'
-import CTASection from '../../components/ctaSection'
 import Footer from '../../components/footer'
 import EmailSignatureHero from '../../components/EmailSignatureServicePage/emailSignatureHero'
 import EmailSignaturePortfolioSection from '../../components/EmailSignatureServicePage/emailSignaturePortfolio'
@@ -70,44 +69,36 @@ type Props = {}
 export default function EmailSignature({}: Props) {
   return (
     <>
-    <Navbar />
-    
-        <EmailSignatureHero />
+   <Navbar />
+      <EmailSignatureHero />
+      <EmailSignaturePortfolioSection />
+      <VideoGuideSection />
+      <EmailSignatureInteractiveGmailPreview />
+      
+      <EmailSignatureProblemSection />
+      <EmailSignatureSolution />
+      <EmailSignatureBenefitSection />
+      
+      {/* ১. আগে সার্ভিস ব্রেকডাউন দেখান (আপনি কী কী দিচ্ছেন) */}
+      <EmailSignatureServicesBreakdown />
+      
+      {/* ২. কাজ শেষ হওয়ার ধাপগুলো দেখান (ক্লায়েন্ট বুঝবে সে কীভাবে পাবে) */}
+      <EmailSignatureProcessSection />
+      
+      {/* ৩. এবার প্রাইজ দেখান (এটিই সঠিক সময় কারণ ক্লায়েন্ট এখন মানসিকভাবে প্রস্তুত) */}
+      <EmailSignaturePricingSection />
 
-        <EmailSignaturePortfolioSection />
-
-        <VideoGuideSection />
-
-        <EmailSignatureInteractiveGmailPreview />
-
-        <EmailSignatureProblemSection />
-
-        <EmailSignatureSolution />
-
-        <EmailSignatureBenefitSection />
-
-        <EmailSignatureServicesBreakdown />
-
-        <EmailSignaturePricingSection />
-
-        <EmailSignatureWhoItsFor />
-
-        <EmailSignatureProofExperience />
-
-        <EmailSignatureProcessSection />
-
-        <EmailSignatureFAQSection />
-
-        <EmailSignatureUniqueAdvantage />
-
-       <TestimonialSection />
-
-        <EmailSignatureFinalCTA />
-
-        
-    
-
-    <Footer />
+      <EmailSignatureWhoItsFor />
+      <EmailSignatureProofExperience />
+      
+      {/* ৪. প্রাইসিং দেখার পর যদি মনে কোনো খটকা থাকে, তা FAQ মিটিয়ে দেবে */}
+      <EmailSignatureFAQSection />
+      
+      <EmailSignatureUniqueAdvantage />
+      <TestimonialSection />
+      <EmailSignatureFinalCTA />
+      
+      <Footer />
     
     </>
   )
