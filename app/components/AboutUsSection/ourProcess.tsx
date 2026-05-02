@@ -8,25 +8,25 @@ const steps = [
   {
     number: "01",
     title: "Deep Google Ads Audit",
-    desc: "We perform a professional google ads account audit to detect data leakage and conversion gaps that drain your budget and lower your quality score.",
+    desc: "We perform a professional Google Ads account audit to identify data gaps and conversion inefficiencies that impact your quality score and budget.",
     icon: <Search className="w-6 h-6" />,
   },
   {
     number: "02",
     title: "Server-Side Blueprint",
-    desc: "Our team designs a custom server side tagging gtm architecture and GA4 blueprint to bypass iOS signal loss and browser tracking blocks.",
+    desc: "Our team designs a custom Server-Side GTM architecture and GA4 blueprint to improve data collection across modern browser environments.",
     icon: <PenTool className="w-6 h-6" />,
   },
   {
     number: "03",
     title: "Precision Integration",
-    desc: "Deployment of your measurement infrastructure using professional GTM containers and cloud hosting with 100% data accuracy for better AI learning.",
+    desc: "Deployment of your measurement infrastructure using professional GTM containers to ensure high-fidelity data for better AI-driven campaign learning.",
     icon: <Activity className="w-6 h-6" />,
   },
   {
     number: "04",
-    title: "Scaling & ROAS Growth",
-    desc: "With bulletproof data, we help you hire a google ads expert level management to optimize campaigns, lower CPA, and maximize your total ROAS.",
+    title: "Scaling & ROI Growth",
+    desc: "With reliable data signals, we provide expert-level management to optimize campaigns, lower CPA, and drive sustainable ROI growth.",
     icon: <Rocket className="w-6 h-6" />,
   }
 ]
@@ -47,13 +47,13 @@ export default function OurProcess() {
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 mb-6"
           >
             <CheckCircle2 className="w-3 h-3 text-blue-600" />
-            <span className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest text-[9px]">Our Proven Workflow</span>
+            <span className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest text-[9px]">Our Strategic Workflow</span>
           </motion.div>
           <h2 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-6 leading-tight">
-            A Measurement Framework <br /> Built for <span className="text-blue-600">Global Scaling.</span>
+            A Measurement Framework <br /> Built for <span className="text-blue-600">Growth & Scale.</span>
           </h2>
           <p className="text-lg text-slate-600 dark:text-slate-400 font-medium">
-            From technical auditing to complex server-to-server deployments, we provide the infrastructure needed to dominate Google Search and Shopping.
+            From technical auditing to advanced server-to-server deployments, we provide the infrastructure needed to enhance your digital presence.
           </p>
         </div>
 
@@ -95,7 +95,7 @@ export default function OurProcess() {
           </div>
         </div>
 
-        {/* Bottom Interactive Note: Targeted Audit Keyword */}
+        {/* Bottom Interactive Note */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -104,16 +104,15 @@ export default function OurProcess() {
         >
           <div className="inline-flex flex-col items-center gap-6">
             <p className="text-slate-500 dark:text-slate-400 text-sm font-bold italic">
-              Stop guessing and start measuring with 100% data accuracy.
+              Scale your business with high-fidelity tracking and data integrity.
             </p>
             
-            {/* Link কম্পোনেন্ট দিয়ে বাটনটিকে র‍্যাপ (wrap) করা হয়েছে */}
             <Link 
                 href="/book-audit" 
                 className="inline-flex items-center gap-4 px-8 py-4 rounded-[2rem] bg-slate-900 dark:bg-blue-600 text-white shadow-2xl shadow-blue-500/20 hover:scale-105 transition-transform cursor-pointer group"
               >
                 <span className="text-sm font-black uppercase tracking-widest">
-                  Get My Google Ads Audit
+                  Request a Technical Audit
                 </span>
                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
                   <Rocket className="w-4 h-4 text-white" />

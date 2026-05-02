@@ -6,29 +6,29 @@ import { ShieldCheck, Zap, BarChart4, Headphones, CheckCircle2 } from 'lucide-re
 const reasons = [
   {
     title: "Server-Side Expertise",
-    desc: "In a cookieless world, we deploy GTM Server-Side and Meta CAPI to ensure your data is 100% compliant and accurate.",
+    desc: "In a cookieless world, we deploy GTM Server-Side and Meta CAPI to ensure your data infrastructure is robust, privacy-first, and highly reliable.",
     icon: <ShieldCheck className="w-6 h-6 text-blue-600" />,
   },
   {
-    title: "ROI-First Marketing",
-    desc: "We don't just set up tags; we audit your Google Ads to identify ROI bottlenecks and maximize your conversion lift.",
+    title: "ROI-Focused Tracking",
+    desc: "We don't just set up tags; we audit your tracking to identify measurement bottlenecks and help maximize your campaign's performance lift.",
     icon: <BarChart4 className="w-6 h-6 text-indigo-600" />,
   },
   {
     title: "Rapid Deployment",
-    desc: "Our technical framework allows us to implement complex tracking architectures in record time with zero measurement gaps.",
+    desc: "Our technical framework allows us to implement complex tracking architectures efficiently, ensuring minimal measurement downtime.",
     icon: <Zap className="w-6 h-6 text-amber-500" />,
   },
   {
-    title: "Specialist Support",
-    desc: "You get direct access to a dedicated Google Ads Specialist. No middlemen—just experts solving your technical problems.",
+    title: "Direct Support",
+    desc: "Get direct access to your dedicated tracking specialist. No middlemen—just experts solving your technical measurement problems.",
     icon: <Headphones className="w-6 h-6 text-cyan-600" />,
   }
 ]
 
 export default function WhyChooseUs() {
   return (
-    <section className="py-24 bg-slate-50 dark:bg-slate-950/40 overflow-hidden relative">
+    <section className="py-24 bg-slate-50 dark:bg-slate-950 overflow-hidden relative">
       {/* Decorative background element */}
       <div className="absolute top-0 right-0 w-1/2 h-full bg-blue-50/30 dark:bg-blue-900/5 -skew-x-12 translate-x-1/4 -z-0" />
 
@@ -46,19 +46,19 @@ export default function WhyChooseUs() {
                 The Professional Advantage
               </motion.span>
               <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter mb-8 leading-[1.1]">
-                Why Top Agencies <span className="text-blue-600 underline underline-offset-8 decoration-2">Hire Us</span> For Data.
+                Why Strategic Agencies <span className="text-blue-600 underline underline-offset-8 decoration-2">Partner With Us</span>.
               </h2>
               <p className="text-lg text-slate-600 dark:text-slate-400 mb-10 leading-relaxed font-medium">
-                Scaling Google Ads requires facts, not guesses. We provide the server-to-server infrastructure that lets your marketing team focus on winning, while we handle the tracking.
+                Scaling Google Ads requires reliable data, not guesses. We provide the server-to-server infrastructure that lets your team focus on strategy while we handle the technical tracking.
               </p>
 
               {/* Quick Checklist */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
-                  "100% Data Ownership", 
-                  "iOS 14+ Signal Recovery", 
+                  "Data Control & Privacy", 
+                  "Advanced Signal Accuracy", 
                   "Full GA4 Audit Service",
-                  "Facebook CAPI Integration"
+                  "Facebook CAPI Mastery"
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="bg-blue-600 rounded-full p-1 shadow-lg shadow-blue-500/30">

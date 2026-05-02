@@ -40,7 +40,7 @@ export default function AboutPage() {
               transition={{ delay: 0.2 }}
               className="text-lg md:text-xl text-slate-600 dark:text-slate-400 leading-relaxed mb-14 max-w-3xl mx-auto font-medium"
             >
-              TrackFlow Pro is a data-intelligence agency led by a certified <span className="text-slate-900 dark:text-white font-bold">Google Ads expert</span>. We specialize in GTM Server-Side Tracking, Meta Conversions API (CAPI), and comprehensive audits to help brands scale with maximum data transparency.
+              TrackFlow Pro is a data-intelligence agency led by a Specialist <span className="text-slate-900 dark:text-white font-bold">Google Ads expert</span>. We specialize in GTM Server-Side Tracking, Meta Conversions API (CAPI), and comprehensive audits to help brands scale with maximum data transparency.
             </motion.p>
 
             {/* Specialized Skill Badges */}

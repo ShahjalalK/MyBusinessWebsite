@@ -27,7 +27,7 @@ export default function AboutCTA() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 mb-8"
             >
               <Sparkles className="w-4 h-4 text-blue-600" />
-              <span className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-[0.2em] text-[10px]">Ready to dominate?</span>
+              <span className="text-blue-600 dark:text-blue-400 font-black uppercase tracking-[0.2em] text-[10px]">Partner with an expert agency</span>
             </motion.div>
 
             <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white mb-8 tracking-tighter leading-[1.05]">
@@ -36,15 +36,15 @@ export default function AboutCTA() {
             </h2>
             
             <p className="text-xl text-slate-500 dark:text-slate-400 font-medium mb-10 leading-relaxed max-w-2xl">
-              From performing deep-dive <span className="text-slate-900 dark:text-white font-bold">Google Ads audits</span> to deploying bulletproof <span className="text-slate-900 dark:text-white font-bold">Server-Side tracking</span>—I provide the technical infrastructure your business needs to win in Q2 2026.
+              ডিপ-ডাইভ <span className="text-slate-900 dark:text-white font-bold">Google Ads audits</span> থেকে শুরু করে অ্যাডভান্সড <span className="text-slate-900 dark:text-white font-bold">Server-Side tracking</span> ডেপ্লয়মেন্ট—আমরা আপনার বিজনেসের জন্য সেই টেকনিক্যাল ইনফ্রাস্ট্রাকচার প্রদান করি যা দীর্ঘমেয়াদী গ্রোথ নিশ্চিত করে।
             </p>
 
-            {/* Service Tags Optimized with Research Keywords */}
+            {/* Service Tags Optimized for Agency */}
             <div className="flex flex-wrap justify-center lg:justify-start gap-3 mb-12">
               {[
-                { icon: <TrendingUp size={14} />, label: "Ads Optimization" },
-                { icon: <ShieldCheck size={14} />, label: "CAPI & GTM Setup" },
-                { icon: <Mail size={14} />, label: "Branded Signatures" }
+                { icon: <TrendingUp size={14} />, label: "Ads Management" },
+                { icon: <ShieldCheck size={14} />, label: "GTM & CAPI Agency" },
+                { icon: <Mail size={14} />, label: "Email Solutions" }
               ].map((tag, i) => (
                 <span key={i} className="flex items-center gap-2 px-5 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest transition-colors hover:border-blue-500/50">
                   {tag.icon} {tag.label}
@@ -54,35 +54,35 @@ export default function AboutCTA() {
 
             <div className="flex flex-col sm:flex-row items-center gap-5">
               <Link href="/book-audit" className="w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-6 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black transition-all shadow-2xl shadow-blue-500/40 hover:scale-105 active:scale-95 group">
-                Free Strategy Audit <Calendar size={22} className="group-hover:rotate-12 transition-transform" />
+                Book a Technical Audit <Calendar size={22} className="group-hover:rotate-12 transition-transform" />
               </Link>
               
               <Link href="/contact" className="w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-6 border-2 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-2xl font-black hover:bg-slate-50 dark:hover:bg-slate-800 transition-all hover:border-blue-500/50">
-                Direct Inquiry <ArrowRight size={22} />
+                Contact Our Team <ArrowRight size={22} />
               </Link>
             </div>
           </div>
 
-          {/* Right Side: High-Trust Metrics */}
+          {/* Right Side: Agency Trust Metrics */}
           <div className="w-full lg:w-80 space-y-6">
             <motion.div 
               whileHover={{ x: 10 }}
               className="p-8 bg-blue-50 dark:bg-blue-900/20 rounded-[2.5rem] border border-blue-100 dark:border-blue-800 transition-all"
             >
-              <div className="text-5xl font-black text-blue-600 mb-2 tracking-tighter">98%</div>
-              <div className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] leading-tight">Tracking Precision <br />Recovered</div>
+              <div className="text-5xl font-black text-blue-600 mb-2 tracking-tighter">High</div>
+              <div className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] leading-tight">Data Integrity <br />& Tracking</div>
             </motion.div>
             
             <motion.div 
               whileHover={{ x: 10 }}
               className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 transition-all"
             >
-              <div className="text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tighter">24hr</div>
-              <div className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] leading-tight">Audit Report <br />Turnaround</div>
+              <div className="text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tighter">Fast</div>
+              <div className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] leading-tight">Agency Support <br />Turnaround</div>
             </motion.div>
 
             <p className="text-[10px] text-center font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em]">
-              Trusted by 50+ Global Brands
+              Trusted by 50+ Global Clients
             </p>
           </div>
 

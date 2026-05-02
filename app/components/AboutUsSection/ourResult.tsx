@@ -5,27 +5,27 @@ import { TrendingUp, Users, Database, Globe2, ArrowUpRight, ShieldCheck, BarChar
 
 const stats = [
   {
-    label: "Data Precision",
-    value: "98%+",
-    desc: "Restoring tracking accuracy by implementing advanced GA4 Server-Side setups to recover signals lost to browser restrictions.",
+    label: "Data Integrity",
+    value: "High-Precision",
+    desc: "Implementing advanced GA4 Server-Side setups designed to restore tracking accuracy and recover missing signals.",
     icon: <Database className="w-6 h-6 text-blue-600" />,
   },
   {
-    label: "Ad Capital Managed",
-    value: "$2.5M+",
-    desc: "Strategic management and optimization of large-scale Google Ads budgets, ensuring sustainable growth and high ROI.",
+    label: "Ads Strategy",
+    value: "ROI Focused",
+    desc: "Expert management of Google Ads campaigns with a focus on high-intent keywords and budget optimization.",
     icon: <TrendingUp className="w-6 h-6 text-emerald-600" />,
   },
   {
-    label: "Global Reach",
-    value: "50+",
-    desc: "Deploying high-performance measurement infrastructures for businesses and agencies across the USA, UK, and Australia.",
+    label: "Global Standards",
+    value: "Market Ready",
+    desc: "Deployment of high-performance measurement infrastructures optimized for businesses in the USA, UK, and Australia.",
     icon: <Globe2 className="w-6 h-6 text-indigo-600" />,
   },
   {
-    label: "Attribution Lift",
-    value: "35%+",
-    desc: "Increased visibility into the customer journey by integrating Facebook CAPI and server-side event deduplication.",
+    label: "Attribution",
+    value: "Advanced CAPI",
+    desc: "Enhanced visibility into the customer journey through seamless Meta Conversions API and GTM integration.",
     icon: <Users className="w-6 h-6 text-cyan-600" />,
   }
 ]
@@ -50,17 +50,17 @@ export default function OurResults() {
             >
               <Zap size={16} className="text-blue-500 fill-blue-500" />
               <span className="text-blue-500 font-bold uppercase tracking-[0.3em] text-[10px]">
-                Performance Metrics
+                Performance Excellence
               </span>
             </motion.div>
             
             <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.95] mb-6">
-              Precision Tracking. <br />
-              <span className="text-slate-500 italic font-light">Profitable Results.</span>
+              Strategic Tracking. <br />
+              <span className="text-slate-500 italic font-light">Growth Solutions.</span>
             </h2>
             
             <p className="text-slate-400 font-medium max-w-xl text-lg leading-relaxed">
-              We specialize in building bulletproof measurement infrastructures that translate complex data into actionable business growth.
+              We specialize in building resilient measurement infrastructures that turn complex data into sustainable business success.
             </p>
           </div>
 
@@ -75,11 +75,11 @@ export default function OurResults() {
                   <ShieldCheck className="text-emerald-500" size={20} />
                   <span className="text-sm font-bold uppercase tracking-wider">Privacy Compliant</span>
                 </div>
-                <p className="text-xs text-slate-500">All setups follow GDPR & CCPA best practices.</p>
+                <p className="text-xs text-slate-500">Industry-leading setups following GDPR & CCPA frameworks.</p>
              </div>
              
              <button className="flex items-center justify-center gap-3 text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white transition-all px-8 py-5 rounded-2xl group shadow-lg shadow-blue-600/20 active:scale-95">
-                Explore Case Studies <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                Work With Us <ArrowUpRight className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
              </button>
           </motion.div>
         </div>
@@ -96,7 +96,6 @@ export default function OurResults() {
               whileHover={{ y: -12, backgroundColor: "rgba(30, 41, 59, 0.6)" }}
               className="p-10 rounded-[3rem] bg-slate-800/30 border border-slate-800 hover:border-blue-500/30 transition-all duration-500 group relative overflow-hidden"
             >
-              {/* Decorative Icon Background */}
               <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
                 <BarChart3 size={120} />
               </div>
@@ -106,7 +105,7 @@ export default function OurResults() {
               </div>
               
               <div className="mb-6">
-                <h4 className="text-6xl font-black text-white mb-2 tracking-tighter group-hover:text-blue-500 transition-colors">
+                <h4 className="text-4xl font-black text-white mb-2 tracking-tighter group-hover:text-blue-500 transition-colors leading-tight">
                   {stat.value}
                 </h4>
                 <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-blue-500/80">
@@ -129,13 +128,12 @@ export default function OurResults() {
           transition={{ delay: 0.6 }}
           className="mt-28 pt-12 border-t border-slate-800/50 flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-30 hover:opacity-100 transition-opacity duration-1000"
         >
-          {["GOOGLE ADS CERTIFIED", "GTM SERVER-SIDE", "GA4 ARCHITECT", "CONVERSIONS API"].map((badge, i) => (
+          {["ADS SPECIALIST", "GTM SERVER-SIDE", "GA4 EXPERTISE", "CONVERSIONS API"].map((badge, i) => (
             <span key={i} className="text-[10px] md:text-xs font-black tracking-[0.3em] hover:text-blue-500 cursor-default transition-colors">
               {badge}
             </span>
           ))}
         </motion.div>
-
       </div>
     </section>
   )

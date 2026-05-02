@@ -5,21 +5,21 @@ import { Monitor, BarChart, Mail, CheckCircle2 } from 'lucide-react'
 
 const coreExpertise = [
   {
-    title: "Server-Side Tracking", // SEO Keyword: Server-Side Tracking
-    desc: "We specialize in GA4 Server-Side tracking setups that recover up to 40% of data lost to ad-blockers and iOS privacy restrictions.",
+    title: "Server-Side Tracking", 
+    desc: "We implement advanced GA4 Server-Side tracking to restore data accuracy affected by browser limitations and ad-blocking technologies.",
     features: ["GTM Server-Side", "GA4 Configuration", "Meta Conversions API"],
     icon: <Monitor className="w-6 h-6 text-blue-600" />
   },
   {
-    title: "Google Ads Specialist", // SEO Keyword: Google Ads Specialist
-    desc: "When you hire a Google Ads expert from us, we focus on high-intent keywords and professional ads audits to scale your ROI.",
+    title: "Google Ads Specialist", 
+    desc: "Collaborate with a Google Ads expert to optimize high-intent keywords and professional audits that focus on scaling your ROI.",
     features: ["Audit & Strategy", "Search & PMax", "Audience Scaling"],
     icon: <BarChart className="w-6 h-6 text-indigo-600" />
   },
   {
-    title: "Brand Identity", // Focus: Email Signature Service
-    desc: "We design professional, clickable HTML email signatures and personalized brand assets that boost your authority.",
-    features: ["Interactive Design", "HIPAA Compliant", "CTA Integrated"],
+    title: "Brand Identity", 
+    desc: "Elevate your professional outreach with clickable HTML email signatures and brand assets designed to increase your authority.",
+    features: ["Interactive Design", "Professional Styling", "CTA Integrated"],
     icon: <Mail className="w-6 h-6 text-cyan-600" />
   }
 ]
@@ -37,7 +37,7 @@ export default function WhatWeDo() {
             </h3>
           </div>
           <p className="text-slate-500 dark:text-slate-400 font-medium max-w-sm text-left md:text-right">
-            Stop losing data. We provide the specialized **tracking infrastructure** and **Ads strategy** needed to drive actual revenue.
+            Ensure data integrity. We provide the **measurement infrastructure** and **Ads strategy** needed to drive sustainable revenue.
           </p>
         </div>
 

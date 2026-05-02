@@ -14,10 +14,10 @@ import {
 
 const tools = [
   { name: "Google Ads", icon: <SiGoogleads className="text-[#4285F4]" />, desc: "Expert Scaling" },
-  { name: "GA4", icon: <SiGoogleanalytics className="text-[#E37400]" />, desc: "Server Side Tracking" }, // Keyword: ga4 server side tracking
-  { name: "GTM SST", icon: <SiGoogletagmanager className="text-[#246FDB]" />, desc: "Server Side Tagging" }, // Keyword: server side tagging gtm
+  { name: "GA4", icon: <SiGoogleanalytics className="text-[#E37400]" />, desc: "Server Side Tracking" }, 
+  { name: "GTM SST", icon: <SiGoogletagmanager className="text-[#246FDB]" />, desc: "Server Side Tagging" }, 
   { name: "Shopify", icon: <SiShopify className="text-[#95BF47]" />, desc: "CAPI Integration" },
-  { name: "Meta CAPI", icon: <SiMeta className="text-[#0668E1]" />, desc: "Conversion API" }, // Keyword: conversion api
+  { name: "Meta CAPI", icon: <SiMeta className="text-[#0668E1]" />, desc: "Conversion API" }, 
   { name: "WordPress", icon: <SiWordpress className="text-[#21759B]" />, desc: "SST Setup" },
   { name: "Next.js", icon: <SiNextdotjs className="text-black dark:text-white" />, desc: "Data Intelligence" },
   { name: "Docker", icon: <SiDocker className="text-[#2496ED]" />, desc: "SST Hosting" },
@@ -25,7 +25,7 @@ const tools = [
 
 export default function OurExpertise() {
   return (
-    <section className="py-24 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-slate-800">
+    <section className="py-24 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800">
       <div className="container mx-auto px-6">
         <div className="flex flex-col items-center text-center mb-16">
           <motion.span 
@@ -39,7 +39,7 @@ export default function OurExpertise() {
             Optimized for <span className="text-blue-600">Performance & Privacy.</span>
           </h2>
           <p className="text-slate-500 dark:text-slate-400 max-w-2xl font-medium leading-relaxed">
-            As a specialized **Google Ads specialist** agency, we utilize industry-leading tools to ensure your **Server Side Tagging** is bulletproof and iOS-resistant.
+            As a specialized **Google Ads specialist** agency, we utilize industry-leading tools to build a resilient **Server Side Tagging** infrastructure that thrives in a privacy-first ecosystem.
           </p>
         </div>
 
@@ -52,7 +52,7 @@ export default function OurExpertise() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.05 }}
-              className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-8 rounded-[2rem] flex flex-col items-center group transition-all"
+              className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-[2rem] flex flex-col items-center group transition-all"
             >
               <div className="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">
                 {tool.icon}
@@ -67,7 +67,7 @@ export default function OurExpertise() {
           ))}
         </div>
 
-        {/* Bottom Trust Note - SEO Keyword Integrated */}
+        {/* Bottom Trust Note - Updated for Safety */}
         <motion.div 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -75,7 +75,7 @@ export default function OurExpertise() {
           className="mt-16 p-6 bg-blue-600/5 dark:bg-blue-600/10 rounded-2xl border border-blue-600/10 text-center"
         >
           <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-            Professional Certification: <span className="text-blue-600">Hire a Google Ads Expert with GA4 & Meta CAPI Mastery</span>
+            Strategic Expertise: <span className="text-blue-600 uppercase tracking-tight">Hire a Google Ads Expert with GA4 & Meta CAPI Specialization</span>
           </p>
         </motion.div>
       </div>
