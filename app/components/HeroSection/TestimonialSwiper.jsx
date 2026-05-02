@@ -12,7 +12,7 @@ import 'swiper/css/navigation';
 
 const reviews = [
   {
-    name: "Kaitlinan",
+    name: "Kaitlin",
     role: "9 months ago",
     image: "/testimonials/kaitlinanth11.webp", 
     text: "This is the 3rd time I have worked with him and everytime he has delivered an exceptional product..."
