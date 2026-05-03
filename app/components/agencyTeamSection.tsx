@@ -11,7 +11,7 @@ const team = [
     role: "Founding Tracking Architect",
     desc: "Expert in GTM Server-Side architecture and advanced data recovery for global e-commerce scaling.",
     image: "/team/founder.webp",
-    linkedin: "https://linkedin.com/in/your-profile", 
+    linkedin: "https://www.linkedin.com/in/shahjalal-khan/", 
     skill: "Server Side Tagging"
   },
   {
@@ -19,7 +19,7 @@ const team = [
     role: "Google Ads Specialist",
     desc: "Optimizing High-ROI Google Ads campaigns with a focus on Search, PMax, and precise conversion audits.",
     image: "/team/samim.webp",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/shahjalal-khan/",
     skill: "Ads Audit"
   },
   {
@@ -27,7 +27,7 @@ const team = [
     role: "Meta CAPI Specialist",
     desc: "Bypassing iOS signal loss through Meta Conversions API integrations and server-to-server data syncing.",
     image: "/team/kazol.webp",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/shahjalal-khan/",
     skill: "Conversion API"
   },
   {
@@ -35,7 +35,7 @@ const team = [
     role: "GA4 Audit Expert",
     desc: "Identifying tracking gaps and ensuring 100% data accuracy through professional GA4 infrastructure audits.",
     image: "/team/sany.webp",
-    linkedin: "#",
+    linkedin: "https://www.linkedin.com/in/shahjalal-khan/",
     skill: "GA4 Specialist"
   }
 ]
