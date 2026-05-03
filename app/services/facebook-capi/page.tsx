@@ -17,19 +17,18 @@ import TestimonialSection from '@/app/components/HeroSection/testimonial'
 
 
 export const metadata = {
-  // আপনার রিসার্চ ফাইল অনুযায়ী 'hire google ads expert' কিওয়ার্ডটিকে বেশি গুরুত্ব দেওয়া হয়েছে
+  // টাইটেল এবং ডেসক্রিপশন আপনার কিওয়ার্ড রিসার্চ অনুযায়ী অপ্টিমাইজড
   title: 'Hire Google Ads Expert | Facebook CAPI & GTM Server-Side Specialist',
-  
   description: 'Scale your ROAS by bypassing iOS 14+ restrictions. Hire a Google Ads expert for professional Facebook CAPI setup, GTM server-side tracking, and deep account audits.',
   
   keywords: [
     'hire google ads expert',      // KD 5% (Primary Keyword)
-    'facebook capi expert',        // Service focus
-    'gtm server side tracking',    // Technical expertise
-    'google ads account audit',    // Offer focus
-    'ga4 server side tracking',    // Platform focus
-    'conversion api setup',        // Specific task
-    'hiring google ads specialist' // Intent-based variation
+    'facebook capi expert',        
+    'gtm server side tracking',    
+    'google ads account audit',    
+    'ga4 server side tracking',    
+    'conversion api setup',        
+    'hiring google ads specialist' 
   ],
   
   openGraph: {
@@ -39,17 +38,24 @@ export const metadata = {
     siteName: 'TrackFlow Pro',
     images: [
       {
-        url: '/og-image.png', // আপনার একটি প্রফেশনাল ড্যাশবোর্ড বা কাজের ছবির লিঙ্ক দিন
+        // ইমেজ পাথ আপনার ফোল্ডার স্ট্রাকচার অনুযায়ী সেট করা হয়েছে
+        url: 'https://www.trackflowpro.com/meta/google-ads-and-server-side-tracking-expert.webp', 
         width: 1200,
         height: 630,
-        alt: 'TrackFlow Pro - Digital Tracking Excellence',
+        alt: 'TrackFlow Pro - Google Ads & Advanced Tracking Solutions Showcase',
       },
     ],
     locale: 'en_US',
     type: 'website',
   },
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'TrackFlow Pro | Expert Google Ads & Tracking Specialist',
+    description: 'Bypass iOS tracking restrictions with advanced Server-Side CAPI setup.',
+    images: ['/meta/google-ads-and-server-side-tracking-expert.webp'],
+  },
   
-  // সার্চ ইঞ্জিনের জন্য অতিরিক্ত নিরাপত্তা
   robots: {
     index: true,
     follow: true,

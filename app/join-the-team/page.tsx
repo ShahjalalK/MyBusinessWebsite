@@ -6,32 +6,62 @@ import { Briefcase, Mail, Target, Zap, Search } from 'lucide-react'
 
 import { Metadata } from 'next'
 
-export const metadata: Metadata = {
-  title: 'Careers | Join the TrackFlowPro Team',
-  description: 'Join TrackFlowPro and build your career in digital marketing, GA4 tracking, and server-side solutions. Explore remote opportunities and grow with a data-driven agency.',
+export const metadata = {
+  // টাইটলে কিউর্ড এবং অ্যাকশন ভার্ব (Join/Build) রাখা হয়েছে
+  title: 'Careers | Join the TrackFlow Pro Team | Remote Marketing Jobs',
+  description: 'Join TrackFlow Pro and build your career in digital marketing, GA4 tracking, and server-side solutions. Explore remote opportunities and grow with a data-driven agency.',
+  
+  keywords: [
+    'TrackFlow Pro careers',
+    'remote digital marketing jobs',
+    'GA4 tracking specialist jobs',
+    'google ads expert career',
+    'server side tracking specialist vacancy',
+    'technical marketing jobs remote',
+    'join trackflow pro agency'
+  ],
+
   openGraph: {
-    title: 'Careers | Join the TrackFlowPro Team',
-    description: 'Looking for a career in technical tracking and digital marketing? Join TrackFlowPro and work on innovative data solutions.',
+    title: 'Careers | Join the TrackFlow Pro Team',
+    description: 'Looking for a career in technical tracking and digital marketing? Join TrackFlow Pro and work on innovative data solutions.',
     url: 'https://trackflowpro.com/careers',
-    siteName: 'TrackFlowPro',
+    siteName: 'TrackFlow Pro',
     images: [
       {
-        url: 'https://trackflowpro.com/og-careers.jpg', // আপনার একটি ব্র্যান্ডেড ছবি এখানে দিতে পারেন
+        // আপনার ফোল্ডার পাথ অনুযায়ী আপডেট করা হয়েছে
+        url: '/meta/join-trackflowpro-team-digital-marketing-careers.webp', 
         width: 1200,
         height: 630,
-        alt: 'TrackFlowPro Careers',
+        alt: 'Join the TrackFlow Pro Team - Career Opportunities in Digital Marketing',
       },
     ],
     locale: 'en_US',
     type: 'website',
   },
+
   twitter: {
     card: 'summary_large_image',
-    title: 'Careers | Join the TrackFlowPro Team',
-    description: 'Work with TrackFlowPro on high-level tracking and marketing projects. Submit your resume for future openings.',
-    images: ['https://trackflowpro.com/og-careers.jpg'],
+    title: 'Careers | Build Your Future with TrackFlow Pro',
+    description: 'Work on high-level tracking and marketing projects. Explore our remote career opportunities.',
+    images: ['/meta/join-trackflowpro-team-digital-marketing-careers.webp'],
   },
-}
+
+  alternates: {
+    canonical: 'https://trackflowpro.com/careers',
+  },
+
+  // এসইও এবং ইন্ডেক্সিং এর জন্য প্রয়োজনীয় অংশ
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+};
 
 export default function CareersPage() {
   return (

@@ -10,41 +10,62 @@ import ContactFAQShort from '../components/contactUsPage/contactFaq'
 import ContactFinalContactStep from '../components/contactUsPage/contactCta'
 
 // SEO Meta Tags
-export const metadata: Metadata = {
-  // টাইটেলের শুরুতে আপনার প্রধান কিওয়ার্ড এবং আপনার নাম রাখা হয়েছে
+export const metadata = {
+  // টাইটেলে সরাসরি অ্যাকশন (Hire/Contact) এবং আপনার নাম রাখা হয়েছে
   title: 'Contact Google Ads Expert | Hire Shahjalal for Tracking & Strategy',
-  
   description: 'Ready to scale? Contact Shahjalal for a professional Google Ads audit, GTM Server-Side tracking setup, and GA4 strategy. Get expert solutions for your business today.',
   
   keywords: [
-    'hire google ads expert',           // KD 5%
-    'google ads audit service',        // Service focus
-    'hiring google ads specialist',    // Intent focus
+    'hire google ads expert',           // Primary Keyword
+    'google ads audit service',        
+    'hiring google ads specialist',    
     'gtm server side tracking expert',
-    'Shahjalal Khan contact',          // Personal branding
-    'GA4 conversion API setup'
+    'Shahjalal contact',               
+    'GA4 conversion API setup',
+    'trackflow pro contact'
   ],
   
   openGraph: {
     title: 'Hire Shahjalal | Expert Google Ads & Tracking Solutions',
     description: 'Book a free technical audit for your Google Ads and tracking setup. Let’s fix your data loss and scale your ROAS.',
-    type: 'website',
     url: 'https://www.trackflowpro.com/contact', 
+    siteName: 'TrackFlow Pro',
     images: [
       {
-        url: 'https://www.trackflowpro.com/og-contact.jpg', 
+        // আপনার ফোল্ডার পাথ অনুযায়ী আপডেট করা হয়েছে
+        url: '/meta/contact-shahjalal-google-ads-tracking-expert.webp', 
         width: 1200,
         height: 630,
-        alt: 'Contact Shahjalal - Google Ads & GTM Specialist',
+        alt: 'Contact Shahjalal - Google Ads & GTM Specialist at TrackFlow Pro',
       },
     ],
+    locale: 'en_US',
+    type: 'website',
+  },
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Contact Shahjalal | Google Ads & Tracking Specialist',
+    description: 'Let’s scale your business with precision tracking and data-driven ads.',
+    images: ['/meta/contact-shahjalal-google-ads-tracking-expert.webp'],
   },
   
-  // কন্টাক্ট পেজের জন্য ইনডেক্সিং এবং ক্যানোনিকাল ট্যাগ নিশ্চিত করা
   alternates: {
     canonical: 'https://www.trackflowpro.com/contact',
   },
-}
+
+  // আপনার রিকোয়েস্ট অনুযায়ী ইনডেক্সিং অপশনগুলো যোগ করা হয়েছে
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+};
 
 type Props = {}
 

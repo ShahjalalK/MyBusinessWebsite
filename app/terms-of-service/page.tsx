@@ -6,16 +6,58 @@ import { Scale, CheckCircle, AlertCircle, HelpCircle, ShieldCheck } from 'lucide
 import Link from 'next/link'
 
 // ১. SEO Meta Tags: প্রফেশনাল সার্ভিসের জন্য অপ্টিমাইজড
-export const metadata: Metadata = {
-  title: 'Terms of Service | TrackFlowPro',
-  description: 'Read the terms and conditions for using TrackFlowPro services. We provide professional Google Ads, GA4, and Server-Side Tracking solutions with technical precision.',
+export const metadata = {
+  title: 'Terms of Service | TrackFlow Pro',
+  description: 'Read the terms and conditions for using TrackFlow Pro services. We provide professional Google Ads, GA4, and Server-Side Tracking solutions with technical precision.',
+  
+  keywords: [
+    'Terms of Service', 
+    'TrackFlow Pro terms', 
+    'service agreement', 
+    'digital marketing contract', 
+    'tracking service terms'
+  ],
+
   openGraph: {
-    title: 'Terms of Service | TrackFlowPro',
-    description: 'The legal agreement and service terms for TrackFlowPro clients.',
+    title: 'Terms of Service | TrackFlow Pro',
+    description: 'The legal agreement and service terms for TrackFlow Pro clients.',
     url: 'https://trackflowpro.com/terms-of-service',
+    siteName: 'TrackFlow Pro',
+    images: [
+      {
+        url: '/meta/trackflowpro-terms-of-service.webp', 
+        width: 1200,
+        height: 630,
+        alt: 'TrackFlow Pro Terms of Service and Service Agreement',
+      },
+    ],
+    locale: 'en_US',
     type: 'website',
   },
-}
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Terms of Service | TrackFlow Pro',
+    description: 'Read our service terms for Google Ads and Advanced Tracking solutions.',
+    images: ['/meta/trackflowpro-terms-of-service.webp'],
+  },
+
+  alternates: {
+    canonical: 'https://trackflowpro.com/terms-of-service',
+  },
+
+  // ইনডেক্সিং এবং সার্চ রেজাল্ট নিশ্চিত করা (Trust Factor এর জন্য জরুরি)
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+};
 
 export default function TermsOfService() {
   const lastUpdated = "April 27, 2026";

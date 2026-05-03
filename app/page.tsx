@@ -36,7 +36,7 @@ export const metadata = {
     siteName: "TrackFlow Pro",
     images: [
       {
-        url: "/meta/trackflowpro-advanced-tracking-solutions.webp", 
+        url: "https://www.trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp", 
         width: 1200,
         height: 630,
         alt: "TrackFlow Pro - Google Ads & Tracking Excellence",
