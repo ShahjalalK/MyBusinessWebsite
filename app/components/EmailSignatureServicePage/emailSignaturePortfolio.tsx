@@ -108,7 +108,7 @@ export default function GlobalSignaturePortfolio() {
                 <div className="p-8 min-h-[420px] flex flex-col justify-start">
                   
                   {/* Real Email Content */}
-                  <div className="mb-6">
+                  <div className="mb-3">
                     <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium mb-4">
                       Hi there,
                     </p>
@@ -121,14 +121,14 @@ export default function GlobalSignaturePortfolio() {
                   </div>
                     --
                   {/* HTML Signature Screenshot */}
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-6 relative group/sig">
+                  <div className="border-slate-100 dark:border-slate-800 pt-2 relative group/sig">
                     <div className="absolute -top-4 left-0 bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-md tracking-widest opacity-0 group-hover/sig:opacity-100 transition-opacity uppercase">
                       Premium HTML Setup
                     </div>
                     <img 
                       src={item.image} 
                       alt={`${item.category} Sample`} 
-                      className="w-full max-w-[370px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
+                      className="w-full max-w-[400px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
                       loading="lazy"
                     />
                   </div>
