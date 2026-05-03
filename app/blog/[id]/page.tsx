@@ -126,7 +126,14 @@ export default async function SingleBlogPage({ params }: Props) {
               </section>
              
 
-              {/* ৫. অথর বক্স */}
+             
+              
+            </div>
+          </div>
+        </article>
+      </main>
+
+       {/* ৫. অথর বক্স */}
               <section>
                 <SingleBlogAuthorBox post={post} />
               </section>
@@ -140,11 +147,6 @@ export default async function SingleBlogPage({ params }: Props) {
               <section>
                 <BlogCTA type={post.ctaType as any} />
               </section>
-              
-            </div>
-          </div>
-        </article>
-      </main>
       <Footer />
     </>
   );
