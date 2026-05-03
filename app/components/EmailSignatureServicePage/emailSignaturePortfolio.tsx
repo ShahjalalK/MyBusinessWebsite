@@ -18,7 +18,7 @@ const portfolioImages = [
   {
     category: "Google Ads Agency",
     client: "Global Marketing Firm",
-    image: "/email-signature/corporate-email-branding-identity-trackflowpro.webp",
+    image: "/email-signature/hire-google-ads-expert-custom-email-signature.webp",
     description: "Conversion-optimized signature featuring tracking-ready social icons and verified brand identity.",
     to: "strategy@marketing-agency.io",
     subject: "Q3 Campaign Performance Audit",
@@ -128,7 +128,7 @@ export default function GlobalSignaturePortfolio() {
                     <img 
                       src={item.image} 
                       alt={`${item.category} Sample`} 
-                      className="w-full max-w-[350px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
+                      className="w-full max-w-[370px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
                       loading="lazy"
                     />
                   </div>
@@ -146,10 +146,7 @@ export default function GlobalSignaturePortfolio() {
                 </div>
               </div>
 
-              {/* Verified Badge below card */}
-              <div className="mt-4 flex items-center gap-2 bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black border border-emerald-500/20 w-fit">
-                <ShieldCheck size={12} /> {item.category} - VERIFIED SETUP
-              </div>
+             
             </motion.div>
           ))}
         </div>

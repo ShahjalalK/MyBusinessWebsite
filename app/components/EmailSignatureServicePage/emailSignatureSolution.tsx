@@ -142,23 +142,7 @@ export default function EmailSignatureSolution() {
           <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 blur-[120px] -mr-48 -mt-48 rounded-full" />
         </motion.div>
 
-        {/* Final Trust Badge */}
-        <div className="mt-20 text-center">
-           <motion.div 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            className="inline-flex items-center gap-4 px-8 py-4 bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl border border-slate-100 dark:border-slate-800"
-           >
-              <div className="flex -space-x-2">
-                {[1,2,3].map(i => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200" />
-                ))}
-              </div>
-              <p className="text-slate-600 dark:text-slate-300 text-[13px] font-black tracking-tight">
-                Trusted by 500+ professionals worldwide.
-              </p>
-           </motion.div>
-        </div>
+        
 
       </div>
     </section>
