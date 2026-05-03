@@ -97,55 +97,55 @@ export default async function SingleBlogPage({ params }: Props) {
   };
 
   return (
-    <>
-      {/* Schema.org ডাটা */}
+   <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       
       <Navbar />
-      <main className="min-h-screen bg-slate-50/30 pb-20"> {/* হালকা ব্যাকগ্রাউন্ড দিলে রিডাবিলিটি বাড়ে */}
+      <main className="min-h-screen bg-white pb-20">
         <article>
           <SingleBlogHeader post={post} />
           
-          {/* এই সেকশনটি কন্টেন্টকে মাঝখানে এবং সুন্দরভাবে গুছিয়ে রাখবে */}
-          <div className="container mx-auto px-4 sm:px-6 lg:max-w-7xl mt-16">
-            <div className="flex flex-col lg:flex-row gap-12">
+          {/* কন্টেন্টকে মাঝখানে রাখার জন্য max-w-4xl ব্যবহার করা হয়েছে */}
+          <div className="container mx-auto px-4 sm:px-6 max-w-4xl mt-12">
+            
+            {/* ১. মেইন ব্লগ কন্টেন্ট */}
+            <div className="prose prose-lg max-w-none">
+               <SingleBlogContent post={post} />
+            </div>
+            
+            {/* ২. কন্টেন্টের শেষে বর্ডার দিয়ে বাকি সেকশন শুরু */}
+            <div className="mt-16 pt-12 border-t border-slate-100 space-y-20">
               
-              {/* মেইন কন্টেন্ট এলাকা (বাম দিকে) */}
-              <div className="w-full lg:w-2/3">
-                <div className="bg-white rounded-3xl p-6 md:p-10 shadow-sm border border-slate-100">
-                   <SingleBlogContent post={post} />
-                </div>
-                
-                <div className="mt-12">
-                  <SingleBlogAuthorBox post={post} />
-                </div>
-                
-                <div className="mt-16">
-                  <RelatedPosts currentPostId={post.id} category={post.category} />
-                </div>
-              </div>
+              {/* ৩. সার্ভিস লিঙ্কস (এখন এটি পুরো চওড়া জায়গায় থাকবে, তাই ভাঙবে না) */}
+              <section>
+                <h3 className="text-2xl font-bold text-slate-900 mb-8 text-center">Explore My Services</h3>
+                <ServiceLinks />
+              </section>
+             
 
-              {/* সাইডবার (ডান দিকে) */}
-              <aside className="w-full lg:w-1/3 space-y-8">
-                <div className="sticky top-24"> {/* স্ক্রল করলে সাইডবার আটকে থাকবে, যা দেখতে প্রিমিয়াম লাগে */}
-                  <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
-                     <h3 className="text-xl font-bold text-slate-900 mb-6">Explore My Services</h3>
-                     <ServiceLinks />
-                  </div>
-                  <div className="mt-8">
-                     <BlogCTA type={post.ctaType as any} />
-                  </div>
-                </div>
-              </aside>
+              {/* ৫. অথর বক্স */}
+              <section>
+                <SingleBlogAuthorBox post={post} />
+              </section>
 
+              {/* ৬. রিলেটেড পোস্টস */}
+              <section>
+                <RelatedPosts currentPostId={post.id} category={post.category} />
+              </section>
+
+               {/* ৪. ব্লগ CTA */}
+              <section>
+                <BlogCTA type={post.ctaType as any} />
+              </section>
+              
             </div>
           </div>
         </article>
       </main>
       <Footer />
     </>
-  )
+  );
 }
