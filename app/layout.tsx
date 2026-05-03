@@ -34,6 +34,9 @@ export const metadata: Metadata = {
       },
     ],
   },
+  verification: {
+    google: '2hK1a1eaZwMvCF26pMFqTghSSo3OI6YSDYSQZ_-JuH4',
+  },
 }
 const geistSans = Geist({ 
   variable: "--font-geist-sans", 

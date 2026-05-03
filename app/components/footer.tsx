@@ -2,31 +2,29 @@
 import { Mail, MapPin, Send, Loader2 } from 'lucide-react'
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { BsTwitter, BsLinkedin, BsFacebook } from 'react-icons/bs'
+import { BsLinkedin } from 'react-icons/bs'
 import Link from 'next/link'
 import Turnstile from 'react-turnstile' 
+
+const MotionLink = motion(Link);
 
 export default function Footer() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null); 
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  const MotionLink = motion(Link);
-
-  const 
-
-  // --- GA4 Tracking Function for Subscribe ---
-  const trackSubscription = async (email: string) => {
+  
+  const trackSubscription = async (emailAddress: string) => {
     try {
-      const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
-      const sessionId = document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1];
+      const gaCookie = typeof document !== 'undefined' ? document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1] : null;
+      const sessionId = typeof document !== 'undefined' ? document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1] : null;
 
       await fetch('/api/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_name: "generate_lead",
-          email: email,
+          email: emailAddress,
           service: "Newsletter",
           clientId: gaCookie || "anonymous",
           sessionId: sessionId || "none",
@@ -41,7 +39,6 @@ export default function Footer() {
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // ৩. ক্যাপচা ভেরিফিকেশন চেক
     if (!turnstileToken) {
       alert("Please complete the security check!");
       return;
@@ -50,7 +47,6 @@ export default function Footer() {
     setLoading(true);
 
     try {
-      // ৪. Brevo এবং Turnstile Token সার্ভারে পাঠানো
       const response = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,7 +60,7 @@ export default function Footer() {
         await trackSubscription(email);
         alert("Success! You're now subscribed to TrackFlow Pro updates.");
         setEmail("");
-        setTurnstileToken(null); // রিসেট টোকেন
+        setTurnstileToken(null);
       } else {
         alert("Subscription failed. Please check the email and try again.");
       }
@@ -97,9 +93,7 @@ export default function Footer() {
             </p>
             <div className="flex gap-4">
               {[
-                // { icon: <BsFacebook />, link: "#" },
                 { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-khan/" },
-                // { icon: <BsTwitter />, link: "#" }
               ].map((social, i) => (
                 <MotionLink
                   key={i}
@@ -141,15 +135,13 @@ export default function Footer() {
                 </button>
               </div>
 
-              {/* ৫. Turnstile Widget - ENV variable used */}
               <div className="flex justify-start overflow-hidden rounded-lg">
                 <Turnstile
                   sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} 
                   onVerify={(token) => setTurnstileToken(token)}
                   theme="dark"
-                  refresh-expired="auto"      // টোকেন শেষ হয়ে গেলে নিজে নিজে নতুন টোকেন নেবে
-                onExpire={() => setTurnstileToken(null)} // এক্সপায়ার হলে টোকেন স্টেট খালি করে দেবে
-                onError={() => setTurnstileToken(null)}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => setTurnstileToken(null)}
                 />
               </div>
             </form>
@@ -184,7 +176,6 @@ export default function Footer() {
               </li>
             </ul>
           </div>
-
         </div>
 
         {/* Bottom Bar */}
