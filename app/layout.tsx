@@ -10,32 +10,31 @@ import LiveNotificationMap from "./components/HeroSection/liveTracking";
 export const metadata: Metadata = {
   title: 'TrackFlow Pro | Advanced Tracking Solutions',
   description: 'Expert Google Ads and Server-Side Tracking Solutions.',
-icons: {
+  icons: {
     icon: [
-      { url: '/favicon-16x16.webp', sizes: '16x16', type: 'image/webp' },
-      { url: '/favicon-32x32.webp', sizes: '32x32', type: 'image/webp' },
-      { url: '/favicon.ico', sizes: 'any' }, // ব্রাউজার ব্যাকআপের জন্য
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: 'any' },
     ],
     apple: [
-      { url: '/apple-touch-icon.webp', sizes: '180x180', type: 'image/webp' },
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
     ],
     other: [
       {
-        rel: 'android-chrome-192x192',
-        url: '/android-chrome-192x192.webp',
+        rel: 'icon', // এখানে 'rel' হিসেবে 'icon' ব্যবহার করা বেশি নিরাপদ
+        url: '/android-chrome-192x192.png',
         sizes: '192x192',
-        type: 'image/webp',
+        type: 'image/png',
       },
       {
-        rel: 'android-chrome-512x512',
-        url: '/android-chrome-512x512.webp',
+        rel: 'icon',
+        url: '/android-chrome-512x512.png',
         sizes: '512x512',
-        type: 'image/webp',
+        type: 'image/png',
       },
     ],
   },
 }
-
 const geistSans = Geist({ 
   variable: "--font-geist-sans", 
   subsets: ["latin"],
