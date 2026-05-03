@@ -120,24 +120,23 @@ export default async function SingleBlogPage({ params }: Props) {
             <div className="mt-16 pt-12 border-t border-slate-100 space-y-20">
               
              
-             
+             {/* ৫. অথর বক্স */}
+              <section>
+                <SingleBlogAuthorBox post={post} />
+              </section>
 
              
               
             </div>
           </div>
         </article>
-      </main>
 
-       {/* ৬. রিলেটেড পোস্টস */}
+        {/* ৬. রিলেটেড পোস্টস */}
               <section>
                 <RelatedPosts currentPostId={post.id} category={post.category} />
               </section>
 
-       {/* ৫. অথর বক্স */}
-              <section>
-                <SingleBlogAuthorBox post={post} />
-              </section>
+       
 
              
 
@@ -151,6 +150,9 @@ export default async function SingleBlogPage({ params }: Props) {
               <section>
                 <BlogCTA type={post.ctaType as any} />
               </section>
+      </main>
+
+       
       <Footer />
     </>
   );
