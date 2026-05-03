@@ -5,14 +5,26 @@ import { FaLinkedinIn } from 'react-icons/fa' // React Icons theke LinkedIn use 
 import { ShieldCheck, Zap, BarChart3 } from 'lucide-react' // Bakigulo Lucide thakbe
 import Link from 'next/link'
 
-const team = [
+interface TeamMember {
+  name: string;
+  role: string;
+  desc: string;
+  image: string;
+  linkedin: string;
+  skill: string;
+  linkedinActive?: boolean; // প্রশ্নবোধক চিহ্ন মানে এটি অপশনাল
+}
+
+// এখন আপনি team অ্যারেতে এই টাইপটি ব্যবহার করতে পারেন
+const team: TeamMember[] = [
   {
     name: "Shahjalal Khan",
     role: "Founding Tracking Architect",
     desc: "Expert in GTM Server-Side architecture and advanced data recovery for global e-commerce scaling.",
     image: "/team/founder.webp",
     linkedin: "https://www.linkedin.com/in/shahjalal-khan/", 
-    skill: "Server Side Tagging"
+    skill: "Server Side Tagging",
+    linkedinActive: true
   },
   {
     name: "Shamim Hossain",
@@ -21,6 +33,7 @@ const team = [
     image: "/team/samim.webp",
     linkedin: "https://www.linkedin.com/in/shahjalal-khan/",
     skill: "Ads Audit"
+    // এখানে linkedinActive নেই, তাই এরর দেবে না
   },
   {
     name: "Ebrahim Khan",
@@ -38,9 +51,9 @@ const team = [
     linkedin: "https://www.linkedin.com/in/shahjalal-khan/",
     skill: "GA4 Specialist"
   }
-]
-
+];
 export default function AgencyTeamSection() {
+  
   return (
     <section className="py-24 bg-white dark:bg-slate-950 overflow-hidden relative">
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] -z-0" />
@@ -100,15 +113,18 @@ export default function AgencyTeamSection() {
                           className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 scale-110 group-hover:scale-100"
                         />
                       </div>
-                      {/* Social Icon Optimization with React Icons */}
-                      <Link 
-                        href={member.linkedin} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="absolute -bottom-2 -right-2 w-9 h-9 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#0077B5] shadow-lg border border-slate-100 dark:border-slate-700 transition-all hover:scale-110"
-                      >
-                        <FaLinkedinIn className="text-lg" />
-                      </Link>
+                      {/* Social Icon Optimization - member.linkedinActive ব্যবহার করুন */}
+                        {member.linkedinActive && member.linkedin && (
+                          <Link
+                            href={member.linkedin}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute -bottom-2 -right-2 w-9 h-9 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-[#0077B5] shadow-lg border border-slate-100 dark:border-slate-700 transition-all hover:scale-110 z-20"
+                          >
+                            <FaLinkedinIn className="text-lg" />
+                          </Link>
+                        )}
+                      
                     </div>
                     <span className="py-1 px-3 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase text-slate-500 tracking-tighter">
                       {member.skill}
