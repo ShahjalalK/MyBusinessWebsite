@@ -129,15 +129,17 @@ export default async function SingleBlogPage({ params }: Props) {
         </article>
       </main>
 
+       {/* ৬. রিলেটেড পোস্টস */}
+              <section>
+                <RelatedPosts currentPostId={post.id} category={post.category} />
+              </section>
+
        {/* ৫. অথর বক্স */}
               <section>
                 <SingleBlogAuthorBox post={post} />
               </section>
 
-              {/* ৬. রিলেটেড পোস্টস */}
-              <section>
-                <RelatedPosts currentPostId={post.id} category={post.category} />
-              </section>
+             
 
                {/* ৩. সার্ভিস লিঙ্কস (এখন এটি পুরো চওড়া জায়গায় থাকবে, তাই ভাঙবে না) */}
               <section>
