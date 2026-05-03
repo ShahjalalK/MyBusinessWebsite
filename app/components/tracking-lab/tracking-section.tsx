@@ -257,7 +257,7 @@ export default function TrackingLabClient() {
                   <h4 className="text-lg font-black">Expert Console</h4>
                 </div>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mb-8 leading-relaxed">
-                  Struggling with <span className="font-bold text-slate-900 dark:text-slate-200">Ad-Blockers</span> or <span className="font-bold text-slate-900 dark:text-slate-200">CAPI errors</span>? I build custom infrastructure to rescue your marketing ROI.
+                  Struggling with <span className="font-bold text-slate-900 dark:text-slate-200">Ad-Blockers</span> or <span className="font-bold text-slate-900 dark:text-slate-200">CAPI errors</span>? We build custom infrastructure to rescue your marketing ROI.
                 </p>
                 <Link href="/contact" className="flex items-center justify-center gap-2 w-full py-5 bg-slate-900 dark:bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl">
                   Connect Now <ArrowRight size={14} />
