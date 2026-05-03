@@ -11,6 +11,10 @@ export default function Footer() {
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null); 
 
+  const MotionLink = motion(Link);
+
+  const 
+
   // --- GA4 Tracking Function for Subscribe ---
   const trackSubscription = async (email: string) => {
     try {
@@ -93,11 +97,11 @@ export default function Footer() {
             </p>
             <div className="flex gap-4">
               {[
-                { icon: <BsFacebook />, link: "#" },
-                { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-it/" },
-                { icon: <BsTwitter />, link: "#" }
+                // { icon: <BsFacebook />, link: "#" },
+                { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-khan/" },
+                // { icon: <BsTwitter />, link: "#" }
               ].map((social, i) => (
-                <motion.a 
+                <MotionLink
                   key={i}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -106,7 +110,7 @@ export default function Footer() {
                   className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 transition-all hover:border-blue-500/50"
                 >
                   {social.icon}
-                </motion.a>
+                </MotionLink>
               ))}
             </div>
           </div>
