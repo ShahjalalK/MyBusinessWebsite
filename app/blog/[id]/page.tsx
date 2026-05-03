@@ -119,11 +119,7 @@ export default async function SingleBlogPage({ params }: Props) {
             {/* ২. কন্টেন্টের শেষে বর্ডার দিয়ে বাকি সেকশন শুরু */}
             <div className="mt-16 pt-12 border-t border-slate-100 space-y-20">
               
-              {/* ৩. সার্ভিস লিঙ্কস (এখন এটি পুরো চওড়া জায়গায় থাকবে, তাই ভাঙবে না) */}
-              <section>
-                <h3 className="text-2xl font-bold text-slate-900 mb-8 text-center">Explore My Services</h3>
-                <ServiceLinks />
-              </section>
+             
              
 
              
@@ -141,6 +137,12 @@ export default async function SingleBlogPage({ params }: Props) {
               {/* ৬. রিলেটেড পোস্টস */}
               <section>
                 <RelatedPosts currentPostId={post.id} category={post.category} />
+              </section>
+
+               {/* ৩. সার্ভিস লিঙ্কস (এখন এটি পুরো চওড়া জায়গায় থাকবে, তাই ভাঙবে না) */}
+              <section>
+                <h3 className="text-2xl font-bold text-slate-900 mb-8 text-center">Explore My Services</h3>
+                <ServiceLinks />
               </section>
 
                {/* ৪. ব্লগ CTA */}
