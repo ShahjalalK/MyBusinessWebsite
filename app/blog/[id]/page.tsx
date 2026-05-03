@@ -105,23 +105,43 @@ export default async function SingleBlogPage({ params }: Props) {
       />
       
       <Navbar />
-      <main className="min-h-screen">
+      <main className="min-h-screen bg-slate-50/30 pb-20"> {/* হালকা ব্যাকগ্রাউন্ড দিলে রিডাবিলিটি বাড়ে */}
         <article>
           <SingleBlogHeader post={post} />
           
-          <div className="container mx-auto px-6 grid lg:grid-cols-12 gap-12 mt-12">
-            {/* মেইন কন্টেন্ট এলাকা */}
-            <div className="lg:col-span-8">
-              <SingleBlogContent post={post} />
-              <SingleBlogAuthorBox post={post} />
-              <RelatedPosts currentPostId={post.id} category={post.category} />
-            </div>
+          {/* এই সেকশনটি কন্টেন্টকে মাঝখানে এবং সুন্দরভাবে গুছিয়ে রাখবে */}
+          <div className="container mx-auto px-4 sm:px-6 lg:max-w-7xl mt-16">
+            <div className="flex flex-col lg:flex-row gap-12">
+              
+              {/* মেইন কন্টেন্ট এলাকা (বাম দিকে) */}
+              <div className="w-full lg:w-2/3">
+                <div className="bg-white rounded-3xl p-6 md:p-10 shadow-sm border border-slate-100">
+                   <SingleBlogContent post={post} />
+                </div>
+                
+                <div className="mt-12">
+                  <SingleBlogAuthorBox post={post} />
+                </div>
+                
+                <div className="mt-16">
+                  <RelatedPosts currentPostId={post.id} category={post.category} />
+                </div>
+              </div>
 
-            {/* সাইডবার বা অতিরিক্ত লিঙ্ক */}
-            <aside className="lg:col-span-4 space-y-8">
-              <ServiceLinks />
-              <BlogCTA type={post.ctaType as any} />
-            </aside>
+              {/* সাইডবার (ডান দিকে) */}
+              <aside className="w-full lg:w-1/3 space-y-8">
+                <div className="sticky top-24"> {/* স্ক্রল করলে সাইডবার আটকে থাকবে, যা দেখতে প্রিমিয়াম লাগে */}
+                  <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+                     <h3 className="text-xl font-bold text-slate-900 mb-6">Explore My Services</h3>
+                     <ServiceLinks />
+                  </div>
+                  <div className="mt-8">
+                     <BlogCTA type={post.ctaType as any} />
+                  </div>
+                </div>
+              </aside>
+
+            </div>
           </div>
         </article>
       </main>
