@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     other: [
       {
         rel: 'icon', // এখানে 'rel' হিসেবে 'icon' ব্যবহার করা বেশি নিরাপদ
-        url: '/android-chrome-192x192.png',
+        url: '/favicon2.ico',
         sizes: '192x192',
         type: 'image/png',
       },
