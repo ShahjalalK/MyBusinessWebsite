@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { BlogPost } from '../BlogMainPage/blogData';
 import { FaFacebookF, FaLinkedinIn, FaTwitter, FaLink, FaCheck } from 'react-icons/fa';
+import Link from 'next/link';
 
 interface SingleBlogContentProps {
   post: BlogPost;
@@ -117,13 +118,13 @@ export default function SingleBlogContent({ post }: SingleBlogContentProps) {
              <p className="text-slate-500 dark:text-slate-400 mb-6 font-medium">Share this guide with your network to help others optimize their tracking!</p>
              <div className="flex justify-center gap-3">
                 {shareLinks.map((link) => (
-                  <a
+                  <Link target="_blank"
                     key={link.name}
                     href={link.url}
                     className="px-6 py-3 rounded-xl bg-white dark:bg-slate-900 shadow-sm flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition-all hover:scale-105 active:scale-95"
                   >
                     {link.icon} {link.name}
-                  </a>
+                  </Link>
                 ))}
              </div>
           </div>
