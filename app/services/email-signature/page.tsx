@@ -35,7 +35,7 @@ export const metadata = {
     'hand-coded HTML signature',
     'email branding specialist'
   ],
-  authors: [{ name: 'Shahjalal' }], // আপনার ডাকনাম 'Jalal' বা 'Shahjalal' ব্যবহার করা হয়েছে
+  authors: [{ name: 'Shahjalal' }], 
   openGraph: {
     title: 'Professional Clickable HTML Email Signatures by TrackFlow Pro',
     description: 'Get a premium, mobile-friendly email signature that works flawlessly across all platforms. Perfect for real estate agents and business professionals.',
@@ -43,10 +43,11 @@ export const metadata = {
     siteName: 'TrackFlow Pro',
     images: [
       {
-        url: 'https://www.trackflowpro.com/og-email-signature.jpg', 
+        // ইমেজ পাথ public/meta ফোল্ডার থেকে নেওয়া হয়েছে
+        url: '/meta/professional-html-email-signature-service.webp', 
         width: 1200,
         height: 630,
-        alt: 'Professional HTML Email Signature Preview',
+        alt: 'Professional HTML Email Signature Showcase by TrackFlow Pro',
       },
     ],
     locale: 'en_US',
@@ -56,11 +57,22 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Custom HTML Email Signatures | Verified Expert Design',
     description: 'Hand-coded email signatures with clickable icons and professional formatting for Outlook & Mobile.',
-    images: ['https://www.trackflowpro.com/og-email-signature.jpg'],
+    images: ['/meta/professional-html-email-signature-service.webp'],
+  },
+  robots: {
+    index: true,   // গুগল এই পেজটি ইনডেক্স করবে
+    follow: true,  // লিঙ্কগুলো ফলো করবে
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large', // সার্চে ইমেজ বড় করে দেখাবে
+      'max-snippet': -1,
+    },
   },
   alternates: {
-    canonical: 'https://www.trackflowpro.com/email-signature', // অতিরিক্ত স্ল্যাশ (/) মুছে ফেলা হয়েছে
+    canonical: 'https://www.trackflowpro.com/email-signature', 
   },
+  
 }
 
 type Props = {}

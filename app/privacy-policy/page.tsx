@@ -5,17 +5,60 @@ import Footer from '@/app/components/footer'
 import { ShieldCheck, Eye, FileText, Lock } from 'lucide-react'
 
 // ১. SEO Meta Tags: আপনার ব্র্যান্ডের প্রফেশনালিজম এবং ট্রাস্ট বাড়ানোর জন্য
-export const metadata: Metadata = {
-  title: 'Privacy Policy | TrackFlowPro',
-  description: 'At TrackFlowPro, we prioritize your data security. Learn how we handle information regarding Google Ads, GA4, and Server-Side Tracking to ensure privacy and compliance.',
-  keywords: ['Privacy Policy', 'Data Security', 'TrackFlowPro', 'Server-Side Tracking Privacy', 'Google Ads Data Protection'],
+export const metadata = {
+  title: 'Privacy Policy | Data Security & Compliance | TrackFlow Pro',
+  description: 'At TrackFlow Pro, we prioritize your data security. Learn how we handle information regarding Google Ads, GA4, and Server-Side Tracking to ensure privacy and compliance.',
+  
+  keywords: [
+    'Privacy Policy', 
+    'Data Security', 
+    'TrackFlow Pro', 
+    'Server-Side Tracking Privacy', 
+    'Google Ads Data Protection',
+    'GDPR compliance tracking',
+    'data privacy for analytics'
+  ],
+
   openGraph: {
-    title: 'Privacy Policy | TrackFlowPro',
-    description: 'Our commitment to protecting your personal and business data.',
+    title: 'Privacy Policy | TrackFlow Pro - Committed to Data Protection',
+    description: 'Our commitment to protecting your personal and business data. Read how we ensure compliance with global data standards.',
     url: 'https://trackflowpro.com/privacy-policy',
+    siteName: 'TrackFlow Pro',
+    images: [
+      {
+        url: '/meta/trackflowpro-privacy-policy-and-data-security.webp', 
+        width: 1200,
+        height: 630,
+        alt: 'TrackFlow Pro Privacy Policy and Data Security Commitment',
+      },
+    ],
+    locale: 'en_US',
     type: 'website',
   },
-}
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Privacy Policy | TrackFlow Pro',
+    description: 'Learn how we protect your data while providing advanced tracking solutions.',
+    images: ['/meta/trackflowpro-privacy-policy-and-data-security.webp'],
+  },
+
+  alternates: {
+    canonical: 'https://trackflowpro.com/privacy-policy',
+  },
+
+  // প্রাইভেসি পলিসি পেজটি অবশ্যই ইনডেক্স করা উচিত
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+};
 
 export default function PrivacyPolicy() {
   const lastUpdated = "April 27, 2026";

@@ -36,7 +36,7 @@ export const metadata = {
     siteName: "TrackFlow Pro",
     images: [
       {
-        url: "/og-image.png", 
+        url: "/meta/trackflowpro-advanced-tracking-solutions.webp", 
         width: 1200,
         height: 630,
         alt: "TrackFlow Pro - Google Ads & Tracking Excellence",
@@ -44,6 +44,12 @@ export const metadata = {
     ],
     locale: "en_US",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image", // এটি বড় ছবি দেখানোর জন্য জরুরি
+    title: "TrackFlow Pro | Expert Google Ads & Precision Tracking",
+    description: "Specialized in GTM Server-Side and Facebook CAPI for maximum data accuracy.",
+    images: ["/trackflowpro-advanced-tracking-solutions.webp"], // একই ইমেজের পাথ দিন
   },
   // রোবটদের জন্য ইন্সট্রাকশন যোগ করা ভালো
   robots: {
