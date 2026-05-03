@@ -22,7 +22,7 @@ export default function BlogPageContent() {
   return (
     <>
       <Navbar />
-      <Navbar />
+     
       <BlogHero />
       
       {/* এখন আর কোনো প্রপস পাঠাতে হবে না, এরর চলে যাবে */}
