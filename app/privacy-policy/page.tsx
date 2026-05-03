@@ -26,7 +26,7 @@ export const metadata = {
     siteName: 'TrackFlow Pro',
     images: [
       {
-        url: '/meta/trackflowpro-privacy-policy-and-data-security.webp', 
+        url: 'https://trackflowpro.com/meta/trackflowpro-privacy-policy-and-data-security.webp', 
         width: 1200,
         height: 630,
         alt: 'TrackFlow Pro Privacy Policy and Data Security Commitment',

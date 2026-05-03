@@ -23,7 +23,7 @@ export const metadata = {
     siteName: 'TrackFlow Pro',
     images: [
       {
-        url: '/meta/free-google-ads-audit-and-tracking-strategy-session.webp', 
+        url: 'https://trackflowpro.com/meta/free-google-ads-audit-and-tracking-strategy-session.webp', 
         width: 1200,
         height: 630,
         alt: 'Free Google Ads and Tracking Strategy Audit Session - TrackFlow Pro',

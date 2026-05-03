@@ -44,7 +44,7 @@ export const metadata = {
     images: [
       {
         // ইমেজ পাথ public/meta ফোল্ডার থেকে নেওয়া হয়েছে
-        url: '/meta/professional-html-email-signature-service.webp', 
+        url: 'https://trackflowpro.com/meta/professional-html-email-signature-service.webp', 
         width: 1200,
         height: 630,
         alt: 'Professional HTML Email Signature Showcase by TrackFlow Pro',

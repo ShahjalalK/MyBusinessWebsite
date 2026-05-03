@@ -29,7 +29,7 @@ export const metadata = {
     images: [
       {
         // আপনার ফোল্ডার পাথ অনুযায়ী আপডেট করা হয়েছে
-        url: '/meta/join-trackflowpro-team-digital-marketing-careers.webp', 
+        url: 'https://trackflowpro.com/meta/join-trackflowpro-team-digital-marketing-careers.webp', 
         width: 1200,
         height: 630,
         alt: 'Join the TrackFlow Pro Team - Career Opportunities in Digital Marketing',

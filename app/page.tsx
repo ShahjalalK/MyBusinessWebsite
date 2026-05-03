@@ -52,10 +52,21 @@ export const metadata = {
     images: ["/trackflowpro-advanced-tracking-solutions.webp"], // একই ইমেজের পাথ দিন
   },
   // রোবটদের জন্য ইন্সট্রাকশন যোগ করা ভালো
+   alternates: {
+    canonical: 'https://www.trackflowpro.com',
+  },
+
+  // ইনডেক্সিং এবং সার্চ প্রিভিউ অপশন
   robots: {
     index: true,
     follow: true,
-  }
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
 };
 
 export default function Home() {

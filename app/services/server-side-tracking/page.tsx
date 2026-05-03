@@ -61,14 +61,15 @@ export const metadata = {
     canonical: 'https://www.trackflowpro.com/server-side-tracking',
   },
 
+  // ইনডেক্সিং এবং সার্চ প্রিভিউ অপশন
   robots: {
     index: true,
     follow: true,
-    // 'nocache' এর বদলে ইন্ডাস্ট্রি স্ট্যান্ডার্ড 'googleBot' অপশনগুলো রাখা হয়েছে
     googleBot: {
       index: true,
       follow: true,
       'max-image-preview': 'large',
+      'max-snippet': -1,
     },
   },
 };

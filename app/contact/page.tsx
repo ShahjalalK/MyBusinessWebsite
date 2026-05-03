@@ -33,7 +33,7 @@ export const metadata = {
     images: [
       {
         // আপনার ফোল্ডার পাথ অনুযায়ী আপডেট করা হয়েছে
-        url: '/meta/contact-shahjalal-google-ads-tracking-expert.webp', 
+        url: 'https://trackflowpro.com/meta/contact-shahjalal-google-ads-tracking-expert.webp', 
         width: 1200,
         height: 630,
         alt: 'Contact Shahjalal - Google Ads & GTM Specialist at TrackFlow Pro',

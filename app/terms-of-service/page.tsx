@@ -39,7 +39,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Terms of Service | TrackFlow Pro',
     description: 'Read our service terms for Google Ads and Advanced Tracking solutions.',
-    images: ['/meta/trackflowpro-terms-of-service.webp'],
+    images: ['https://trackflowpro.com/meta/trackflowpro-terms-of-service.webp'],
   },
 
   alternates: {

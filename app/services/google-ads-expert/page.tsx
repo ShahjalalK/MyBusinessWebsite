@@ -40,7 +40,7 @@ export const metadata = {
     images: [
       {
         // আপনার ফোল্ডার পাথ অনুযায়ী আপডেট করা হয়েছে
-        url: '/meta/hire-google-ads-expert-account-audit.webp', 
+        url: 'https://trackflowpro.com/meta/hire-google-ads-expert-account-audit.webp', 
         width: 1200,
         height: 630,
         alt: 'Google Ads Management and Performance Audit - TrackFlow Pro',
@@ -59,6 +59,18 @@ export const metadata = {
 
   alternates: {
     canonical: 'https://trackflowpro.com/services/google-ads',
+  },
+    
+  // ইনডেক্সিং এবং সার্চ প্রিভিউ অপশন
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 
