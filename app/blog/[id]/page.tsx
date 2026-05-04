@@ -126,8 +126,8 @@ export default async function SingleBlogPage({ params }: Props) {
       <div className="container mx-auto px-6 max-w-6xl mt-24 space-y-32 pb-24">
         
         {/* ১. রিলেটেড পোস্টস */}
-        <section className="bg-slate-50/50 py-16 rounded-3xl px-4">
-           <div className="max-w-5xl mx-auto">
+        <section className="bg-slate-50/50 py-16 rounded-b-xl px-4">
+           <div className="max-w-7xl mx-auto">
               <RelatedPosts currentPostId={post.id} category={post.category} />
            </div>
         </section>

@@ -54,7 +54,7 @@ export default function RelatedPosts({ currentPostId, category }: RelatedPostsPr
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: idx * 0.1 }}
-              className="group bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden hover:shadow-xl transition-all duration-500"
+              className="group bg-white dark:bg-slate-900 rounded-1rem] border border-slate-100 dark:border-slate-800 overflow-hidden hover:shadow-xl transition-all duration-500"
             >
               <div className="relative h-48 overflow-hidden">
                 <img 
