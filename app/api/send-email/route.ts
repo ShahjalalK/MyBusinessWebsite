@@ -48,19 +48,34 @@ export async function POST(req: Request) {
             <body style="font-family: Arial, sans-serif;">
               
               ${message}
-
               <br />
-              Best,
+              <br>
+              Best Regards,
+              <br>
               --
-              <div>
-                <span style="font-size: 16px; font-weight: bold; color: #222;">Shahjalal Khan</span><br>
+              <br>
+   <table>
+ <tr>
+    <td style="padding-right: 5px; border-right: 2px solid #ddd;"><img src="https://cdn.jsdelivr.net/gh/ShahjalalK/mayparsonal-signature@master/shahjalal-khan.webp" width="100" height="100" 
+                    style="object-fit:cover; border: 2px solid #ebebeb; display: block; text-decoration: none; outline: none; border-radius: 50%;" 
+                    alt="Shahjalal Khan" title="Shahjalal"></td>
+    <td style="padding-left: 5px;">
+        <span style="font-size: 16px; font-weight: bold; text-transform: uppercase; color: #222;">Shahjalal Khan</span><br>
                 <span style="font-size: 14px; color: #666;">Founder Of TrackFlowPro</span><br>
-                <a href="https://trackflowpro.com" style="font-size: 14px; color: #007bff; text-decoration: none;">www.trackflowpro.com</a>
-                
-                <p style="padding-top: 20px; font-size: 10px; color: #bbbbbb; letter-spacing: 0.5px; font-family: monospace;">
+               <div style="font-size: 10px; color : transparent !important">.</div>
+                <div style="font-size: 14px; vertical-align: middle;">
+                    <img src="https://cdn.jsdelivr.net/gh/ShahjalalK/mayparsonal-signature@master/web2.webp" alt="W" width="16">
+                    
+                    <a href="https://trackflowpro.com" target="_blank" style=" color: #0056b3; text-decoration: none;"><i>www.trackflowpro.com</i></a>
+                </div>
+                <div style="font-size: 10px; color : transparent !important">.</div>
+                <div style="font-size: 10px; color: #bbbbbb; letter-spacing: 0.5px; font-family: monospace;">
                   REF: ${stepTrackingId.toUpperCase()} | SECURE_TRACK_VERIFIED
-                </p>
-              </div>
+                </div>
+    </td>
+ </tr>
+   </table>
+              
 
             </body>
           </html>
