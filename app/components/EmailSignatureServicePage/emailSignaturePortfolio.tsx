@@ -122,16 +122,17 @@ export default function GlobalSignaturePortfolio() {
                     --
                   {/* HTML Signature Screenshot */}
                   <div className="border-slate-100 dark:border-slate-800 pt-2 relative group/sig">
-                    <div className="absolute -top-4 left-0 bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-md tracking-widest opacity-0 group-hover/sig:opacity-100 transition-opacity uppercase">
-                      Premium HTML Setup
-                    </div>
-                    <img 
-                      src={item.image} 
-                      alt={`${item.category} Sample`} 
-                      className="w-full max-w-full  lg:max-w-[400px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
-                      loading="lazy"
-                    />
+                  <div className="absolute -top-4 left-0 bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-md tracking-widest opacity-0 group-hover/sig:opacity-100 transition-opacity uppercase">
+                    Premium HTML Setup
                   </div>
+                  <img 
+                    src={item.image} 
+                    alt={`${item.category} Sample`} 
+                    
+                    className="w-full h-auto lg:max-w-[400px] object-cover group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
+                    loading="lazy"
+                  />
+                </div>
                 </div>
 
                 {/* Bottom Bar */}
