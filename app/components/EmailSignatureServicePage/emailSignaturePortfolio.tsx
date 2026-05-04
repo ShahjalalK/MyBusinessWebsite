@@ -128,7 +128,7 @@ export default function GlobalSignaturePortfolio() {
                     <img 
                       src={item.image} 
                       alt={`${item.category} Sample`} 
-                      className="w-full max-w-[400px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
+                      className="w-full max-w-full  lg:max-w-[400px] h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500 rounded-md"
                       loading="lazy"
                     />
                   </div>
