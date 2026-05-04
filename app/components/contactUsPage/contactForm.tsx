@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { User, Mail, ChevronDown, MessageSquare, ArrowRight, CheckCircle2, Loader2, ShieldCheck, Sparkle, Globe, Paperclip, X, FileText } from 'lucide-react'
+import { User, Mail, ChevronDown, MessageSquare, ArrowRight, Loader2, ShieldCheck, Sparkle, Globe, Paperclip, X, FileText } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import Turnstile from 'react-turnstile'
 
@@ -30,12 +30,10 @@ export default function ContactForm() {
     "Data Tech Consulting"
   ];
 
-  // ফাইল হ্যান্ডেল এবং প্রিভিউ লজিক
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    // ২ মেগাবাইট লিমিট চেক
     if (selectedFile.size > 2 * 1024 * 1024) {
       toast.error("File is too large! Please upload under 2MB.");
       return;
@@ -43,12 +41,11 @@ export default function ContactForm() {
 
     setFile(selectedFile);
 
-    // প্রিভিউ জেনারেট করা
     if (selectedFile.type.startsWith('image/')) {
       const url = URL.createObjectURL(selectedFile);
       setPreviewUrl(url);
     } else {
-      setPreviewUrl('pdf'); // পিডিএফ-এর জন্য ফ্ল্যাগ
+      setPreviewUrl('pdf');
     }
   };
 
@@ -67,7 +64,6 @@ export default function ContactForm() {
 
     setLoading(true);
 
-    // FormData ব্যবহার করছি কারণ ফাইল পাঠাতে হবে
     const data = new FormData();
     data.append('name', formData.name);
     data.append('email', formData.email);
@@ -80,14 +76,22 @@ export default function ContactForm() {
       data.append('file', file);
     }
 
-    // আপনার এনালিটিক্স ডাটা যোগ করা
-    const gaCookie = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
-    if (gaCookie) data.append('clientId', gaCookie);
+    // --- ট্র্যাকিং ডাটা সংগ্রহ এবং সংযুক্তি ---
+    // ১. Google Analytics Client ID সংগ্রহ
+    const gaCookie = typeof document !== 'undefined' ? document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1] : null;
+    
+    // ২. GA4 Session ID সংগ্রহ (আপনার Measurement ID অনুযায়ী কুকি নাম ভিন্ন হতে পারে, তাই একটি ফলব্যাক রাখা হয়েছে)
+    const sidCookie = typeof document !== 'undefined' ? document.cookie.match(/_ga_[A-Z0-9]+=(?:GS1\.\d\.)?([\d.]+)/)?.[1] : null;
+
+    data.append('clientId', gaCookie || "");
+    data.append('sessionId', sidCookie || Date.now().toString()); // কুকি না থাকলে টাইমস্ট্যাম্প ব্যাকআপ
+    data.append('pageTitle', typeof document !== 'undefined' ? document.title : "Contact Page");
+    // --------------------------------------
 
     try {
       const response = await fetch('/api/contact', {
         method: 'POST',
-        body: data, // JSON.stringify এর বদলে সরাসরি FormData
+        body: data, 
       });
 
       if (response.ok) {
@@ -95,6 +99,7 @@ export default function ContactForm() {
         setFormData({ name: '', email: '', website: '', service: 'Google Ads Audit & Strategy', message: '' });
         removeFile();
         setTurnstileToken(null);
+        // টার্নস্টাইল রিসেট করার জন্য উইন্ডো রিলোড বা স্পেসিফিক মেথড ব্যবহার করা যায়, আপাতত সাকসেস মেসেজই যথেষ্ট।
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to send");
@@ -208,7 +213,6 @@ export default function ContactForm() {
                         </button>
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
                         
-                        {/* Preview UI */}
                         <AnimatePresence>
                           {previewUrl && (
                             <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="relative group">
@@ -229,7 +233,11 @@ export default function ContactForm() {
                     </div>
 
                     <div className="flex justify-start">
-                      <Turnstile sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} onVerify={(token) => setTurnstileToken(token)} theme="auto" />
+                      <Turnstile 
+                        sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} 
+                        onVerify={(token) => setTurnstileToken(token)} 
+                        theme="auto" 
+                      />
                     </div>
 
                     <motion.button disabled={loading} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} type="submit"

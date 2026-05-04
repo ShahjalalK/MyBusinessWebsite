@@ -9,44 +9,56 @@ function hashData(data: string) {
 }
 
 export async function POST(request: Request) {
-  console.log("--- New Form Submission with File Started ---");
+  console.log("--- New Form Submission Started ---");
+  
   try {
     // ১. FormData থেকে ডাটা রিসিভ করা
     const data = await request.formData();
-    const name = data.get('name') as string;
-    const email = data.get('email') as string;
-    const website = data.get('website') as string;
-    const service = data.get('service') as string;
-    const message = data.get('message') as string;
-    const captchaToken = data.get('captchaToken') as string;
-    const clientId = data.get('clientId') as string;
-    const sessionId = data.get('sessionId') as string;
-    const pageTitle = data.get('pageTitle') as string;
     
-    // ফাইল রিসিভ করা
+    // ডাটাগুলোকে সেফলি স্ট্রিং এ কনভার্ট করা
+    const name = (data.get('name') as string) || "Unknown";
+    const email = (data.get('email') as string) || "";
+    const website = (data.get('website') as string) || "N/A";
+    const service = (data.get('service') as string) || "General Inquiry";
+    const message = (data.get('message') as string) || "";
+    const captchaToken = (data.get('captchaToken') as string) || "";
+    const clientId = (data.get('clientId') as string) || "";
+    const sessionId = (data.get('sessionId') as string) || "";
+    const pageTitle = (data.get('pageTitle') as string) || "Contact Page";
+    
+    // ফাইল রিসিভ করা (যদি থাকে)
     const file = data.get('file') as File | null;
 
-    // ২. নিখুঁত আইপি সংগ্রহ (Vercel/Cloudflare Friendly)
+    // ২. ক্লায়েন্ট ইনফো সংগ্রহ (Vercel/Cloudflare Friendly)
     const forwarded = request.headers.get('x-forwarded-for');
     const userIp = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || '';
     const pageLocation = request.headers.get('referer') || 'https://trackflowpro.com';
 
     // ৩. ক্লাউডফ্লেয়ার টার্নস্টাইল ভেরিফিকেশন
+    if (!captchaToken) {
+        return NextResponse.json({ error: "Security token missing." }, { status: 400 });
+    }
+
     const secretKey = process.env.TURNSTILE_SECRET_KEY;
     const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ secret: secretKey || "", response: captchaToken }),
+        body: new URLSearchParams({ 
+            secret: secretKey || "", 
+            response: captchaToken,
+            remoteip: userIp 
+        }),
     });
+    
     const verificationData = await verifyResponse.json();
     if (!verificationData.success) {
-      console.error("❌ Captcha Failed");
+      console.error("❌ Captcha Failed:", verificationData);
       return NextResponse.json({ error: "Security check failed." }, { status: 403 });
     }
 
-    // ৪. আইপি থেকে জিও লোকেশন
-    let geoData = { city: 'Unknown', country_name: 'Unknown', org: 'Unknown', region: 'Unknown' };
+    // ৪. আইপি থেকে জিও লোকেশন (ip-api.com ব্যবহার করে)
+    let geoData = { city: 'Unknown', country: 'Unknown', isp: 'Unknown', region: 'Unknown', countryCode: 'US' };
     try {
       if (userIp && userIp !== '127.0.0.1' && userIp !== '::1') {
         const geoRes = await fetch(`http://ip-api.com/json/${userIp}`);
@@ -55,9 +67,10 @@ export async function POST(request: Request) {
           if (resJson.status === 'success') {
             geoData = {
               city: resJson.city || 'Unknown',
-              country_name: resJson.country || 'Unknown',
-              org: resJson.isp || 'Unknown',
-              region: resJson.regionName || 'Unknown'
+              country: resJson.country || 'Unknown',
+              isp: resJson.isp || 'Unknown',
+              region: resJson.regionName || 'Unknown',
+              countryCode: resJson.countryCode || 'US'
             };
           }
         }
@@ -65,60 +78,61 @@ export async function POST(request: Request) {
     } catch (e) { console.warn("⚠️ Geo lookup failed:", e); }
 
     // ৫. ইমেইল সেটআপ এবং ফাইল এটাচমেন্ট
-    try {
-        const transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT),
-          secure: false, 
-          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-          tls: { rejectUnauthorized: false }
-        });
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: Number(process.env.SMTP_PORT) === 465, 
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    });
 
-        // ফাইলটিকে বাফারে রূপান্তর (যদি ফাইল থাকে)
-        let attachments: any[] = [];
-        if (file) {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          attachments.push({
-            filename: file.name,
-            content: buffer,
-          });
-        }
+    let attachments: any[] = [];
+    if (file && file.size > 0) {
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      attachments.push({
+        filename: file.name,
+        content: buffer,
+      });
+    }
 
-        await transporter.sendMail({
-          from: `"TrackFlow Lead" <shahjalal@trackflowpro.com>`, 
-          to: "shahjalalk.web@gmail.com",
-          replyTo: email,
-          subject: `🔥 ${service} Inquiry from ${name}`,
-          attachments: attachments, // ফাইল এটাচমেন্ট যোগ করা হলো
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
-              <div style="background-color: #041f60; padding: 20px; text-align: center; color: white;">
-                <h2 style="margin: 0;">New Strategy Inquiry</h2>
-              </div>
-              <div style="padding: 20px; background-color: #ffffff;">
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Name:</strong></td><td>${name}</td></tr>
-                  <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Email:</strong></td><td>${email}</td></tr>
-                  <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Website:</strong></td><td>${website || 'N/A'}</td></tr>
-                  <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Service:</strong></td><td>${service}</td></tr>
-                  <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Attached:</strong></td><td>${file ? file.name : 'No file'}</td></tr>
-                </table>
-                <div style="margin-top: 20px; padding: 15px; background-color: #f9fafb; border-radius: 5px;">
-                  <strong>Message:</strong><br/>
-                  <p style="color: #4b5563;">${message}</p>
-                </div>
-                <div style="margin-top: 20px; font-size: 12px; color: #9ca3af;">
-                  <p>📍 Location: ${geoData.city}, ${geoData.country_name} | IP: ${userIp}</p>
-                  <p>📱 Browser: ${userAgent}</p>
-                </div>
-              </div>
+    // ইমেইল পাঠানো (এটিকে আমরা await করবো যাতে সাকসেস কনফার্ম হওয়া যায়)
+    await transporter.sendMail({
+      from: `"TrackFlow Lead" <${process.env.EMAIL_USER}>`, 
+      to: "shahjalalk.web@gmail.com",
+      replyTo: email,
+      subject: `🔥 ${service} Inquiry from ${name}`,
+      attachments: attachments,
+      html: `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+          <div style="background-color: #041f60; padding: 30px; text-align: center; color: white;">
+            <h2 style="margin: 0; font-size: 24px;">New Strategy Inquiry</h2>
+            <p style="opacity: 0.8; margin-top: 5px;">TrackFlow Pro Analytics Service</p>
+          </div>
+          <div style="padding: 30px; background-color: #ffffff;">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+              <tr><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Name:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b;">${name}</td></tr>
+              <tr><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Email:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b;">${email}</td></tr>
+              <tr><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Website:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b;">${website}</td></tr>
+              <tr><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Service:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b;">${service}</td></tr>
+              <tr><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>File Attached:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b;">${file ? file.name : 'None'}</td></tr>
+            </table>
+            <div style="padding: 20px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #041f60;">
+              <strong style="color: #041f60; display: block; margin-bottom: 8px;">Message:</strong>
+              <p style="color: #334155; margin: 0; line-height: 1.6;">${message}</p>
             </div>
-          `
-        });
-        console.log("✅ Beautiful Email with Attachment Sent");
-    } catch (e) { console.error("❌ Email Failed:", e); }
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8;">
+              <p style="margin: 2px 0;">📍 Location: ${geoData.city}, ${geoData.country} (${geoData.countryCode})</p>
+              <p style="margin: 2px 0;">🌐 IP Address: ${userIp}</p>
+              <p style="margin: 2px 0;">💻 Device: ${userAgent}</p>
+            </div>
+          </div>
+        </div>
+      `
+    });
 
-    // ৬. ট্র্যাকিং লজিক (FB & GA4) - আগের মতোই থাকবে
+    // ৬. ট্র্যাকিং লজিক (FB CAPI & GA4 Measurement Protocol)
+
+    // Facebook CAPI Payload
     const fbPayload = {
       data: [{
         event_name: 'Lead',
@@ -131,7 +145,7 @@ export async function POST(request: Request) {
           em: [hashData(email)],
           fn: [hashData(name)],
           ct: [hashData(geoData.city)],
-          country: [hashData(geoData.country_name)],
+          country: [hashData(geoData.countryCode.toLowerCase())], // ISO 2 letter code
         },
         custom_data: {
           content_category: 'Service Inquiry',
@@ -142,36 +156,35 @@ export async function POST(request: Request) {
       }]
     };
 
-    // ১. gaPayload এ engagement_time_msec যোগ করুন যাতে রিয়েলটাইমে Active দেখায়
-const gaPayload = { 
-  client_id: clientId || '123456789.123456789', 
-  events: [{ 
-    name: 'generate_lead', 
-    params: { 
-      session_id: sessionId, 
-      page_title: pageTitle, 
-      service_type: service,
-      country: geoData.country_name,
-      city: geoData.city,
-      engagement_time_msec: "100", // এটি যোগ না করলে রিয়েলটাইমে ইউজার কাউন্ট হয় না
-      // debug_mode: 1 
-    } 
-  }] 
-};
+    // GA4 Measurement Protocol Payload
+    const gaPayload = { 
+      client_id: clientId || '55555.66666', 
+      events: [{ 
+        name: 'generate_lead', 
+        params: { 
+          session_id: sessionId, 
+          page_title: pageTitle, 
+          service_type: service,
+          country: geoData.country,
+          city: geoData.city,
+          engagement_time_msec: "100", 
+        } 
+      }] 
+    };
 
-// ২. gaUrl এ validation_hit=true যোগ করুন (অপশনাল, শুধু ডিবাগিং এর জন্য ভালো)
-const gaUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
+    const gaUrl = `https://www.google-analytics.com/mp/collect?measurement_id=${process.env.GA4_MEASUREMENT_ID}&api_secret=${process.env.GA4_API_SECRET}`;
 
-    const [fbRes, gaRes] = await Promise.all([
+    // প্যারালাল ট্র্যাকিং কল
+    const [fbRes, gaRes] = await Promise.allSettled([
       fetch(`https://graph.facebook.com/v19.0/${process.env.FB_PIXEL_ID}/events?access_token=${process.env.FB_ACCESS_TOKEN}`, { 
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fbPayload) 
       }),
       fetch(gaUrl, { method: 'POST', body: JSON.stringify(gaPayload) })
     ]);
 
-    console.log(`📡 FB Status: ${fbRes.status} | GA4 Status: ${gaRes.status}`);
+    console.log(`📡 Tracking Complete | GA4 URL used: ${process.env.GA4_MEASUREMENT_ID}`);
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({ success: true, message: "Lead processed successfully" }, { status: 200 });
 
   } catch (error: any) {
     console.error("🔥 Server Error:", error.message);
