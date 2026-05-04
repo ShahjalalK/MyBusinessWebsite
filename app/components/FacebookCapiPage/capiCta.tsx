@@ -59,7 +59,7 @@ export default function CapiFinalCTA() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-6">
               <Link 
-                href="https://calendly.com/your-link" // আপনার ক্যালেন্ডলি লিঙ্ক এখানে দিন
+                href="/book-audit" // আপনার ক্যালেন্ডলি লিঙ্ক এখানে দিন
                 className="group relative bg-white text-[#041f60] px-12 py-6 rounded-[2rem] font-black text-xl hover:shadow-[0_20px_50px_rgba(255,255,255,0.2)] hover:-translate-y-1 transition-all duration-300 flex items-center gap-4 w-full sm:w-auto justify-center overflow-hidden"
               >
                 <FaCalendarCheck className="text-blue-600 group-hover:scale-110 transition-transform" /> 
