@@ -6,26 +6,31 @@ export default function ServerTrack() {
   const pathname = usePathname()
 
   useEffect(() => {
-    // ১. কুকি থেকে আইডি খোঁজা
+    // ১. কুকি থেকে আসল GA আইডি খোঁজা (এটি ইউজারকে চিনতে সাহায্য করবে)
     let gaClientId = document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1];
     
     if (!gaClientId) {
-      gaClientId = 'gen.' + Math.random().toString(36).substring(2, 15);
+      gaClientId = Math.floor(Math.random() * 1000000000) + '.' + Math.floor(Date.now() / 1000);
     }
 
-    // ২. এপিআই রিকোয়েস্ট
-    fetch('/api/track', { // নিশ্চিত হয়ে নিন আপনার এপিআই রুট ফাইলের নাম 'track' কি না
+    // ২. সেশন আইডি sessionStorage-এ রাখা (যাতে ব্রাউজার ট্যাব খোলা পর্যন্ত আইডি একই থাকে)
+    let gaSessionId = sessionStorage.getItem('ga_session_id');
+    if (!gaSessionId) {
+      gaSessionId = Date.now().toString();
+      sessionStorage.setItem('ga_session_id', gaSessionId);
+    }
+
+    // ৩. সার্ভার-সাইড API-তে ডেটা পাঠানো (Adblocker এটি সহজে ধরতে পারবে না)
+    fetch('/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         eventName: 'page_view',
         clientId: gaClientId,
-        sessionId: Date.now().toString(),
+        sessionId: gaSessionId,
         pageTitle: document.title,
         pageLocation: window.location.href,
-        // ৩. টেস্ট করার সময় নিচের লাইনটি আনকমেন্ট করুন
-        testEventCode: "TEST85792" // ফেসবুক থেকে পাওয়া কোডটি এখানে দিন
-        
+        // প্রোডাকশনে যাওয়ার সময় testEventCode অবশ্যই রিমুভ করবেন
       })
     });
   }, [pathname]);
