@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from 'react';
-import { auth } from '../lib/firebase'; // তোমার ফায়ারবেস পাথ অনুযায়ী ঠিক করে নিও
+import { auth } from '../../lib/firebase'; // তোমার ফায়ারবেস পাথ অনুযায়ী ঠিক করে নিও
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 

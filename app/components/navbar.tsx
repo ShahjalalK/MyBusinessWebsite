@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { Menu, X, ArrowRight, ChevronDown, Rocket, ShieldCheck, Mail, Activity, LayoutDashboard, Send, Clock, UserCheck, Lock, Sparkles, BookOpen, Briefcase } from 'lucide-react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { auth } from '../lib/firebase' 
+import { auth } from '../../lib/firebase' 
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);

@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react'
-import { db } from '../../../lib/firebase'
+import { db } from '../../../../lib/firebase'
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { Mail, Clock, CheckCircle2, Trash2, X, LayoutDashboard } from 'lucide-react'
 import AdminGuard from '@/app/components/AdminGuard'

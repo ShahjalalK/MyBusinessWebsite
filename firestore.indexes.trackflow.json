@@ -1,0 +1,101 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "outreach_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "stopAutomation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nextFollowupStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nextFollowupAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreach_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scheduledAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreach_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "email_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreach_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "outreach_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cleanupSkippedUntil",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contact_memory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cooldownUntil",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "contact_memory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "memoryExpiresAt",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

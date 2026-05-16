@@ -1,5 +1,5 @@
 "use client"
-import { auth } from '../lib/firebase';
+import { auth } from '../../lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';

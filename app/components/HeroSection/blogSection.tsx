@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowUpRight, Clock, BookOpen, User } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useBlogStore } from '@/app/store/useBlogStore'
+import { useBlogStore } from '@/app/stores/useBlogStore'
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
