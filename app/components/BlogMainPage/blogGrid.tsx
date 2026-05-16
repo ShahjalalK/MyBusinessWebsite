@@ -4,7 +4,7 @@ import React from "react"
 import { motion } from "framer-motion"
 import { FaArrowRight, FaCalendarAlt, FaClock, FaSearch } from "react-icons/fa"
 import Link from "next/link"
-import { useBlogStore } from "@/app/store/useBlogStore"
+import { useBlogStore } from "@/app/stores/useBlogStore"
 import { blogPosts } from "./blogData"
 import Image from "next/image"
 

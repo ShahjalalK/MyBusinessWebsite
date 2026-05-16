@@ -2,7 +2,7 @@
 import React from 'react'
 import { motion, Variants } from 'framer-motion'
 import { FaSearch, FaChartLine, FaBullseye, FaCode, FaEnvelope, FaFingerprint } from 'react-icons/fa'
-import { useBlogStore } from '@/app/store/useBlogStore';
+import { useBlogStore } from '@/app/stores/useBlogStore';
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },

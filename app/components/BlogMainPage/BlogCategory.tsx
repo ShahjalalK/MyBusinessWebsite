@@ -1,7 +1,7 @@
 "use client"
 import React from 'react'
 import { motion } from 'framer-motion'
-import { useBlogStore } from '@/app/store/useBlogStore';
+import { useBlogStore } from '@/app/stores/useBlogStore';
 
 
 const categories = ["All Posts", "Facebook CAPI", "Server-side Tracking", "Google Ads", "Web Analytics", "Email Marketing"];
