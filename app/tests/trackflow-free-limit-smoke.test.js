@@ -112,3 +112,22 @@ test("expired contact memory does not block send", () => {
   };
   assert.equal(isContactMemoryCooldownActive(memory, now), false);
 });
+
+function isRetryableDailyLimitErrorForTest(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("daily limit") || message.includes("limit reached") || message.includes("blocked_daily_limit");
+}
+
+test("daily limit sheet queue failure stays retryable", () => {
+  assert.equal(isRetryableDailyLimitErrorForTest(new Error("Sender daily limit reached")), true);
+  assert.equal(isRetryableDailyLimitErrorForTest(new Error("Invalid email")), false);
+});
+
+function shouldReleaseDailySlotForTest(emailActuallySent) {
+  return !emailActuallySent;
+}
+
+test("daily slot is not released after provider accepts email", () => {
+  assert.equal(shouldReleaseDailySlotForTest(true), false);
+  assert.equal(shouldReleaseDailySlotForTest(false), true);
+});

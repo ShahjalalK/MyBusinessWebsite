@@ -99,7 +99,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     status: "All",
   },
 
-  fetchLatestLeads: async (options = {}) => {
+  fetchLatestLeads: async (options: LeadFetchOptions = {}) => {
     const state = get();
     const { force = false } = options;
     const filters = normalizeFetchFilters(state, options);
@@ -108,7 +108,9 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       filters.month === state.filters.month &&
       filters.status === state.filters.status;
 
-    if (!force && sameFilters && state.hasLoadedOnce && state.leads.length > 0) {
+    // Cache empty results too. Otherwise an empty tab/filter repeatedly calls the API
+    // and wastes Firestore reads on every tab switch or re-render.
+    if (!force && sameFilters && state.hasLoadedOnce) {
       return;
     }
 
@@ -149,7 +151,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     }
   },
 
-  refreshLeads: async (options = {}) => {
+  refreshLeads: async (options: Omit<LeadFetchOptions, "force"> = {}) => {
     await get().fetchLatestLeads({ ...options, force: true });
   },
 
@@ -179,13 +181,31 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
 
       const moreRows = Array.isArray(data.rows) ? data.rows : [];
 
-      set({
-        leads: [...state.leads, ...moreRows],
-        nextCursor: data.nextCursor || null,
-        hasMore: Boolean(data.hasMore),
-        loadingMore: false,
-        lastFetchedAt: Date.now(),
-        error: "",
+      set((current) => {
+        const stillSameFilters =
+          current.filters.view === state.filters.view &&
+          current.filters.month === state.filters.month &&
+          current.filters.status === state.filters.status;
+
+        // If the user changed filters while the request was in flight, ignore this old page.
+        if (!stillSameFilters) {
+          return {
+            loadingMore: false,
+            error: "",
+          };
+        }
+
+        const existingIds = new Set(current.leads.map((lead) => lead.id));
+        const uniqueMoreRows = moreRows.filter((lead: CachedLead) => lead?.id && !existingIds.has(lead.id));
+
+        return {
+          leads: [...current.leads, ...uniqueMoreRows],
+          nextCursor: data.nextCursor || null,
+          hasMore: Boolean(data.hasMore),
+          loadingMore: false,
+          lastFetchedAt: Date.now(),
+          error: "",
+        };
       });
     } catch (error: any) {
       console.error("Lead cache pagination error:", error);

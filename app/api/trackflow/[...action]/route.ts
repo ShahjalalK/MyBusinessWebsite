@@ -788,7 +788,23 @@ async function releaseDailySlot(kind: "initial" | "followup", senderEmail?: stri
   const id = senderEmail ? `${key}_${emailDocId(normalizeEmail(senderEmail))}` : key;
   const ref = adminDb.collection("daily_sending_stats").doc(id);
   const field = kind === "followup" ? "followupSent" : "initialSent";
-  await ref.set({ [field]: admin.firestore.FieldValue.increment(-1), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+
+  // Keep quota counters from going negative if a retry/error path calls release twice.
+  await adminDb.runTransaction(async (tx: any) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists ? snap.data() || {} : {};
+    const current = Math.max(0, Number(data[field] || 0));
+    tx.set(
+      ref,
+      {
+        dateKey: key,
+        senderEmail: senderEmail || "global",
+        [field]: Math.max(0, current - 1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  });
 }
 
 async function writeCronStatus(cronName: string, payload: Record<string, any>) {
@@ -811,6 +827,64 @@ async function writeCronStatus(cronName: string, payload: Record<string, any>) {
   } catch (error) {
     console.warn("Cron status update failed:", error);
   }
+}
+
+type CronLock = {
+  acquired: boolean;
+  ref: FirestoreDocRef;
+  runId: string;
+  lockedBy?: string;
+  lockedAt?: string;
+};
+
+async function acquireCronLock(lockName: string, maxAgeMinutes = 20): Promise<CronLock> {
+  const ref = adminDb.collection("system_locks").doc(`cron_${lockName}`);
+  const runId = randomUUID();
+  const nowMs = Date.now();
+  const nowTs = admin.firestore.Timestamp.fromMillis(nowMs);
+
+  return await adminDb.runTransaction(async (tx: any) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists ? snap.data() || {} : {};
+    const lockedAtMs = toMillis(data.lockedAt);
+    const isActive = Boolean(data.runId) && lockedAtMs && nowMs - lockedAtMs < maxAgeMinutes * 60_000;
+
+    if (isActive) {
+      return {
+        acquired: false,
+        ref,
+        runId,
+        lockedBy: data.runId || "unknown",
+        lockedAt: new Date(lockedAtMs).toISOString(),
+      };
+    }
+
+    tx.set(
+      ref,
+      {
+        runId,
+        lockName,
+        lockedAt: nowTs,
+        expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + maxAgeMinutes * 60_000),
+        updatedAt: nowTs,
+      },
+      { merge: true }
+    );
+
+    return { acquired: true, ref, runId };
+  });
+}
+
+async function releaseCronLock(lock: CronLock) {
+  if (!lock?.acquired) return;
+
+  await adminDb.runTransaction(async (tx: any) => {
+    const snap = await tx.get(lock.ref);
+    const data = snap.exists ? snap.data() || {} : {};
+    if (data.runId === lock.runId) {
+      tx.delete(lock.ref);
+    }
+  });
 }
 
 /** POST /api/trackflow/send-email */
@@ -972,6 +1046,8 @@ async function sendInitialFromBody(rawBody: any) {
     return json({ success: false, error: "Sender daily limit reached", quota }, 429);
   }
 
+  let emailActuallySent = false;
+
   try {
     const personalizedInitialMessage = personalizeTemplate(message, {
       name: baseLead.name,
@@ -996,6 +1072,7 @@ async function sendInitialFromBody(rawBody: any) {
       tag,
       customMessageId,
     });
+    emailActuallySent = true;
 
     const sentAt = admin.firestore.Timestamp.now();
     await leadRef.update({
@@ -1027,8 +1104,24 @@ async function sendInitialFromBody(rawBody: any) {
 
     return json({ success: true, leadId: leadRef.id, messageId: data.messageId, trackingId });
   } catch (error: any) {
-    await releaseDailySlot("initial", sender.email);
-    await leadRef.update({ status: "failed", error: String(error?.message || error) });
+    const message = String(error?.message || error);
+
+    // If Brevo already accepted the email, do NOT release the daily slot.
+    // Otherwise the app may send more emails than the configured daily limit.
+    if (!emailActuallySent) {
+      await releaseDailySlot("initial", sender.email).catch(() => {});
+      await leadRef.update({ status: "failed", error: message }).catch(() => {});
+    } else {
+      await leadRef
+        .update({
+          status: "processing_initial",
+          error: `Email was accepted by Brevo, but Firestore post-send update failed: ${message}`,
+          postSendUpdateFailed: true,
+          postSendUpdateFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        .catch(() => {});
+    }
+
     throw error;
   }
 }
@@ -1072,128 +1165,176 @@ async function handleCancelInitial(req: Request) {
 async function handleCronScheduledInitials(req: Request) {
   requireCronSecret(req);
 
-  const now = admin.firestore.Timestamp.now();
-  const snap = await adminDb
-    .collection("outreach_leads")
-    .where("status", "==", "scheduled")
-    .where("scheduledAt", "<=", now)
-    .limit(20)
-    .get();
+  const cronLock = await acquireCronLock("scheduled_initials", 10);
+  if (!cronLock.acquired) {
+    const skippedPayload = {
+      success: true,
+      skipped: true,
+      locked: true,
+      message: "Scheduled initials cron is already running. Skipping this overlapping run.",
+      lockedBy: cronLock.lockedBy || "unknown",
+      lockedAt: cronLock.lockedAt || "",
+    };
 
-  const runId = randomUUID();
-  const sent: string[] = [];
-  const skipped: any[] = [];
-
-  for (const docSnap of snap.docs) {
-    const leadRef = docSnap.ref;
-
-    const locked = await adminDb.runTransaction(async (tx : any) => {
-      const fresh = await tx.get(leadRef);
-      if (!fresh.exists) return null;
-      const lead = fresh.data() as LeadData;
-      if (lead.status !== "scheduled" || lead.stopAutomation) return null;
-      tx.update(leadRef, {
-        status: "processing_initial",
-        automationLock: { runId, lockedAt: admin.firestore.Timestamp.now() },
-      });
-      return { id: fresh.id, ...lead };
+    await writeCronStatus("scheduledInitials", {
+      success: true,
+      locked: true,
+      skipped: true,
+      reason: "scheduled_initials_cron_already_running",
+      lockedBy: skippedPayload.lockedBy,
+      lockedAt: skippedPayload.lockedAt,
     });
 
-    if (!locked) continue;
-
-    const lead = locked as LeadData;
-    const emailLower = lead.emailLower || normalizeEmail(lead.email || "");
-    const sender = getSenderFromLead(lead);
-    const tag = `${lead.trackingId || lead.id}_step1`;
-    const customMessageId = `<${Date.now()}.${lead.trackingId || lead.id}@mail.trackflowpro.com>`;
-
-    try {
-      const suppressed = await isSuppressed(emailLower);
-      if (suppressed) {
-        await leadRef.update({
-          status: "blocked_suppressed",
-          stopAutomation: true,
-          nextFollowupStatus: "blocked",
-          nextFollowupReason: `suppressed:${suppressed.reason || "blocked"}`,
-          nextFollowupAt: admin.firestore.FieldValue.delete(),
-          nextFollowupStep: admin.firestore.FieldValue.delete(),
-          error: `Suppressed: ${suppressed.reason || "blocked"}`,
-          automationLock: admin.firestore.FieldValue.delete(),
-        });
-        skipped.push({ email: emailLower, reason: "suppressed" });
-        continue;
-      }
-
-      const quota = await reserveDailySlot(sender.dailyLimit, "initial", sender.email);
-      if (!quota.ok) {
-        await leadRef.update({
-          status: "scheduled",
-          automationLock: admin.firestore.FieldValue.delete(),
-          error: "Sender daily limit reached; will retry on next cron.",
-        });
-        skipped.push({ email: emailLower, reason: "daily_limit" });
-        continue;
-      }
-
-      const data = await sendViaBrevo({
-        sender,
-        toEmail: emailLower,
-        toName: lead.name || "",
-        subject: lead.subject || "Quick note",
-        htmlContent: buildEmailHtml(personalizeTemplate(lead.message || "", lead), emailLower, tag, {
-          includeSignature: lead.include_signature !== false,
-          reportUrl: lead.reportUrl || lead.report_url || "",
-          reportButtonText: lead.reportButtonText || lead.report_button_text || "View short audit note",
-          sender,
-          signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "full", "full"),
-          includeReportLink: true,
-        }),
-        tag,
-        customMessageId,
-      });
-
-      const sentAt = admin.firestore.Timestamp.now();
-      await leadRef.update({
-        status: "sent",
-        sentAt,
-        lastFollowUp: sentAt,
-        lastSentAt: sentAt,
-        nextFollowupStatus: "waiting_for_first_open_or_click",
-        nextFollowupReason: "initial_sent_waiting_for_engagement",
-        nextFollowupAt: admin.firestore.FieldValue.delete(),
-        nextFollowupStep: admin.firestore.FieldValue.delete(),
-        retryCount: 0,
-        lastFollowupError: admin.firestore.FieldValue.delete(),
-        originalMessageId: data.messageId || "",
-        brevoMessageId: data.messageId || "",
-        automationLock: admin.firestore.FieldValue.delete(),
-        sent_messages: admin.firestore.FieldValue.arrayUnion({
-          step: 1,
-          kind: "initial",
-          subject: lead.subject || "Quick note",
-          trackingTag: tag,
-          messageId: data.messageId || "",
-          includeSignature: lead.include_signature !== false,
-          reportUrl: lead.reportUrl || "",
-          sentAt,
-        }),
-      });
-
-      await addEmailEvent(leadRef.id, "sent", { emailLower, step: 1, trackingTag: tag, messageId: data.messageId || "" });
-      sent.push(emailLower);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    } catch (error: any) {
-      await releaseDailySlot("initial", sender.email).catch(() => {});
-      await leadRef.update({
-        status: "scheduled",
-        automationLock: admin.firestore.FieldValue.delete(),
-        error: String(error?.message || error),
-      });
-      skipped.push({ email: emailLower, reason: "send_error" });
-    }
+    return json(skippedPayload);
   }
 
-  return json({ success: true, found: snap.size, sentCount: sent.length, sent, skipped });
+  try {
+    const now = admin.firestore.Timestamp.now();
+    const snap = await adminDb
+      .collection("outreach_leads")
+      .where("status", "==", "scheduled")
+      .where("scheduledAt", "<=", now)
+      .limit(20)
+      .get();
+
+    const runId = randomUUID();
+    const sent: string[] = [];
+    const skipped: any[] = [];
+
+    for (const docSnap of snap.docs) {
+      const leadRef = docSnap.ref;
+
+      const locked = await adminDb.runTransaction(async (tx : any) => {
+        const fresh = await tx.get(leadRef);
+        if (!fresh.exists) return null;
+        const lead = fresh.data() as LeadData;
+        if (lead.status !== "scheduled" || lead.stopAutomation) return null;
+        tx.update(leadRef, {
+          status: "processing_initial",
+          automationLock: { runId, lockedAt: admin.firestore.Timestamp.now() },
+        });
+        return { id: fresh.id, ...lead };
+      });
+
+      if (!locked) continue;
+
+      const lead = locked as LeadData;
+      const emailLower = lead.emailLower || normalizeEmail(lead.email || "");
+      const sender = getSenderFromLead(lead);
+      const tag = `${lead.trackingId || lead.id}_step1`;
+      const customMessageId = `<${Date.now()}.${lead.trackingId || lead.id}@mail.trackflowpro.com>`;
+      let emailActuallySent = false;
+
+      try {
+        const suppressed = await isSuppressed(emailLower);
+        if (suppressed) {
+          await leadRef.update({
+            status: "blocked_suppressed",
+            stopAutomation: true,
+            nextFollowupStatus: "blocked",
+            nextFollowupReason: `suppressed:${suppressed.reason || "blocked"}`,
+            nextFollowupAt: admin.firestore.FieldValue.delete(),
+            nextFollowupStep: admin.firestore.FieldValue.delete(),
+            error: `Suppressed: ${suppressed.reason || "blocked"}`,
+            automationLock: admin.firestore.FieldValue.delete(),
+          });
+          skipped.push({ email: emailLower, reason: "suppressed" });
+          continue;
+        }
+
+        const quota = await reserveDailySlot(sender.dailyLimit, "initial", sender.email);
+        if (!quota.ok) {
+          await leadRef.update({
+            status: "scheduled",
+            automationLock: admin.firestore.FieldValue.delete(),
+            error: "Sender daily limit reached; will retry on next cron.",
+          });
+          skipped.push({ email: emailLower, reason: "daily_limit" });
+          continue;
+        }
+
+        const data = await sendViaBrevo({
+          sender,
+          toEmail: emailLower,
+          toName: lead.name || "",
+          subject: lead.subject || "Quick note",
+          htmlContent: buildEmailHtml(personalizeTemplate(lead.message || "", lead), emailLower, tag, {
+            includeSignature: lead.include_signature !== false,
+            reportUrl: lead.reportUrl || lead.report_url || "",
+            reportButtonText: lead.reportButtonText || lead.report_button_text || "View short audit note",
+            sender,
+            signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "full", "full"),
+            includeReportLink: true,
+          }),
+          tag,
+          customMessageId,
+        });
+        emailActuallySent = true;
+
+        const sentAt = admin.firestore.Timestamp.now();
+        await leadRef.update({
+          status: "sent",
+          sentAt,
+          lastFollowUp: sentAt,
+          lastSentAt: sentAt,
+          nextFollowupStatus: "waiting_for_first_open_or_click",
+          nextFollowupReason: "initial_sent_waiting_for_engagement",
+          nextFollowupAt: admin.firestore.FieldValue.delete(),
+          nextFollowupStep: admin.firestore.FieldValue.delete(),
+          retryCount: 0,
+          lastFollowupError: admin.firestore.FieldValue.delete(),
+          originalMessageId: data.messageId || "",
+          brevoMessageId: data.messageId || "",
+          automationLock: admin.firestore.FieldValue.delete(),
+          sent_messages: admin.firestore.FieldValue.arrayUnion({
+            step: 1,
+            kind: "initial",
+            subject: lead.subject || "Quick note",
+            trackingTag: tag,
+            messageId: data.messageId || "",
+            includeSignature: lead.include_signature !== false,
+            reportUrl: lead.reportUrl || "",
+            sentAt,
+          }),
+        });
+
+        await addEmailEvent(leadRef.id, "sent", { emailLower, step: 1, trackingTag: tag, messageId: data.messageId || "" });
+        sent.push(emailLower);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error: any) {
+        const message = String(error?.message || error);
+
+        // Release quota only when the email was not accepted by Brevo.
+        // If Brevo accepted it and Firestore update failed, keep the slot used to avoid limit overrun.
+        if (!emailActuallySent) {
+          await releaseDailySlot("initial", sender.email).catch(() => {});
+          await leadRef
+            .update({
+              status: "scheduled",
+              automationLock: admin.firestore.FieldValue.delete(),
+              error: message,
+            })
+            .catch(() => {});
+        } else {
+          await leadRef
+            .update({
+              status: "processing_initial",
+              automationLock: admin.firestore.FieldValue.delete(),
+              error: `Email was accepted by Brevo, but Firestore post-send update failed: ${message}`,
+              postSendUpdateFailed: true,
+              postSendUpdateFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+            .catch(() => {});
+        }
+
+        skipped.push({ email: emailLower, reason: emailActuallySent ? "post_send_update_failed" : "send_error" });
+      }
+    }
+
+    return json({ success: true, found: snap.size, sentCount: sent.length, sent, skipped });
+  } finally {
+    await releaseCronLock(cronLock).catch((error: any) => console.warn("Scheduled initials cron lock release failed:", error));
+  }
 }
 
 
@@ -1653,6 +1794,30 @@ async function handleFollowupSummary(req: Request) {
 async function handleCronFollowups(req: Request) {
   requireCronSecret(req);
 
+  const cronLock = await acquireCronLock("followups", 20);
+  if (!cronLock.acquired) {
+    const skippedPayload = {
+      success: true,
+      skipped: true,
+      locked: true,
+      message: "Follow-up cron is already running. Skipping this overlapping run.",
+      lockedBy: cronLock.lockedBy || "unknown",
+      lockedAt: cronLock.lockedAt || "",
+    };
+
+    await writeCronStatus("followups", {
+      success: true,
+      locked: true,
+      skipped: true,
+      reason: "followups_cron_already_running",
+      lockedBy: skippedPayload.lockedBy,
+      lockedAt: skippedPayload.lockedAt,
+    });
+
+    return json(skippedPayload);
+  }
+
+  try {
   const recoveredLocks = await releaseStaleAutomationLocks(200).catch(() => []);
 
   const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
@@ -1819,6 +1984,7 @@ async function handleCronFollowups(req: Request) {
 
     const lockedLead = lockResult.lead as LeadData;
     const lockedDecision = lockResult.decision as FollowupDecision;
+    let emailActuallySent = false;
 
     try {
       const variants = lockedDecision.validVariants || [];
@@ -1850,6 +2016,7 @@ async function handleCronFollowups(req: Request) {
         tag,
         customMessageId,
       });
+      emailActuallySent = true;
 
       const sentAt = admin.firestore.Timestamp.now();
       const nextFollowupNumber = Number(lockedDecision.nextFollowupNumber || 0);
@@ -1898,22 +2065,44 @@ async function handleCronFollowups(req: Request) {
       sent.push(emailLower);
       await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error: any) {
-      await releaseDailySlot("followup", sender.email).catch(() => {});
+      const message = String(error?.message || error);
+
+      // Release quota only when the email was not accepted by Brevo.
+      // If Brevo accepted it and Firestore update failed, keep the daily count used.
+      if (!emailActuallySent) {
+        await releaseDailySlot("followup", sender.email).catch(() => {});
+      }
+
       const retryCount = Number(lockedLead.retryCount || 0) + 1;
-      const canRetry = retryCount < MAX_FOLLOWUP_RETRIES;
+      const canRetry = !emailActuallySent && retryCount < MAX_FOLLOWUP_RETRIES;
       await docSnap.ref.update({
-        status: String(lockedLead.status || "sent").startsWith("processing_") ? "sent" : lockedLead.status || "sent",
-        nextFollowupStatus: canRetry ? "scheduled" : "failed_final",
-        nextFollowupReason: canRetry ? "send_error_retry_scheduled" : "send_error_retry_limit_reached",
+        status: emailActuallySent
+          ? "processing_followup"
+          : String(lockedLead.status || "sent").startsWith("processing_")
+            ? "sent"
+            : lockedLead.status || "sent",
+        nextFollowupStatus: emailActuallySent ? "processing" : canRetry ? "scheduled" : "failed_final",
+        nextFollowupReason: emailActuallySent
+          ? "post_send_update_failed_manual_review_needed"
+          : canRetry
+            ? "send_error_retry_scheduled"
+            : "send_error_retry_limit_reached",
         nextFollowupAt: canRetry
           ? admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 60_000)
           : admin.firestore.FieldValue.delete(),
         retryCount,
-        lastFollowupError: String(error?.message || error),
+        lastFollowupError: message,
         automationLock: admin.firestore.FieldValue.delete(),
-        error: String(error?.message || error),
+        error: emailActuallySent ? `Email was accepted by Brevo, but Firestore post-send update failed: ${message}` : message,
+        postSendUpdateFailed: emailActuallySent || admin.firestore.FieldValue.delete(),
+        postSendUpdateFailedAt: emailActuallySent ? admin.firestore.FieldValue.serverTimestamp() : admin.firestore.FieldValue.delete(),
       });
-      skipped.push({ email: emailLower, reason: "send_error", retryCount, error: String(error?.message || error) });
+      skipped.push({
+        email: emailLower,
+        reason: emailActuallySent ? "post_send_update_failed" : "send_error",
+        retryCount,
+        error: message,
+      });
     }
   }
 
@@ -1933,6 +2122,9 @@ async function handleCronFollowups(req: Request) {
     sent,
     skipped,
   });
+  } finally {
+    await releaseCronLock(cronLock).catch((error: any) => console.warn("Follow-up cron lock release failed:", error));
+  }
 }
 
 /** POST /api/trackflow/webhooks/brevo */
@@ -3018,6 +3210,11 @@ function isSheetProcessingLockStale(row: AnyRecord): boolean {
   return sheetLockAgeMs(row['Queue Locked At']) > SHEET_PROCESSING_LOCK_MAX_AGE_MINUTES * 60_000;
 }
 
+function isRetryableDailyLimitError(error: any): boolean {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("daily limit") || message.includes("limit reached") || message.includes("blocked_daily_limit");
+}
+
 async function updateSingleSheetRow(sheets: any, spreadsheetId: string, rowNumber: number, rowObj: AnyRecord) {
   await sheets.spreadsheets.values.update({
     spreadsheetId,
@@ -3888,156 +4085,198 @@ async function handleCronSheetQueuedSends(req: Request) {
    */
   requireCronSecret(req);
 
-  const startedAtMs = Date.now();
-  const url = new URL(req.url);
-  const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 10), 25));
-  const defaultSender = getDefaultSender();
-  if (!defaultSender) throw new ApiError("No default sender configured", 500);
+  const cronLock = await acquireCronLock("sheet_queued_sends", 10);
+  if (!cronLock.acquired) {
+    const skippedPayload = {
+      success: true,
+      skipped: true,
+      locked: true,
+      message: "Sheet queued sends cron is already running. Skipping this overlapping run.",
+      lockedBy: cronLock.lockedBy || "unknown",
+      lockedAt: cronLock.lockedAt || "",
+    };
 
-  const { sheets, spreadsheetId } = await getSheetsClient();
-  await ensureHeaderRow(sheets, spreadsheetId);
-
-  const rows = await loadRows(sheets, spreadsheetId);
-  const candidates: Array<{ rowNumber: number; obj: AnyRecord }> = rows
-    .map((row: any[], index: number): { rowNumber: number; obj: AnyRecord } => {
-      const rowNumber = index + 2;
-      return { rowNumber, obj: rowToObject(row, rowNumber) };
-    })
-    .filter((item: { rowNumber: number; obj: AnyRecord }) => {
-      const status = clean(item.obj["Send Status"]).toLowerCase();
-      if (status === "queued") return true;
-      if (status === "processing") return isSheetProcessingLockStale(item.obj);
-      return false;
-    })
-    .slice(0, max);
-
-  const sent: any[] = [];
-  const failed: any[] = [];
-  const skipped: any[] = [];
-
-  for (const { rowNumber, obj } of candidates) {
-    const previousStatus = clean(obj["Send Status"]).toLowerCase();
-    const attempts = Number(obj["Attempt Count"] || 0) + 1;
-    const senderId = clean(obj["Sender ID"]) || defaultSender.id;
-    const finalEmail = clean(obj["Final Email"]);
-    const lockId = randomUUID();
-    const attemptId = randomUUID();
-    const lockedAt = sheetLockTimestamp();
-
-    if (previousStatus === "processing" && !isSheetProcessingLockStale(obj)) {
-      skipped.push({ rowNumber, email: finalEmail, reason: "fresh_processing_lock" });
-      continue;
-    }
-
-    if (!isValidEmail(finalEmail)) {
-      await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
-        ...obj,
-        "Send Status": "Failed",
-        "Attempt Count": String(attempts),
-        "Queue Lock ID": "",
-        "Queue Locked At": "",
-        "Queue Attempt ID": attemptId,
-        Notes: "Invalid email while processing queued send.",
-      });
-      failed.push({ rowNumber, email: finalEmail, error: "invalid_email" });
-      continue;
-    }
-
-    // Lock first, then re-read. This is not a perfect database transaction, but it is much safer than batch-lock-after-send.
-    await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
-      ...obj,
-      "Send Status": "Processing",
-      "Attempt Count": String(attempts),
-      "Queue Lock ID": lockId,
-      "Queue Locked At": lockedAt,
-      "Queue Attempt ID": attemptId,
-      Notes: `Cron locked row at ${nowDhaka()}. Previous status: ${previousStatus || "queued"}.`,
+    await writeCronStatus("sheetQueuedSends", {
+      success: true,
+      locked: true,
+      skipped: true,
+      reason: "sheet_queued_sends_cron_already_running",
+      lockedBy: skippedPayload.lockedBy,
+      lockedAt: skippedPayload.lockedAt,
     });
 
-    const freshObj = await readSingleSheetRow(sheets, spreadsheetId, rowNumber);
-    if (clean(freshObj["Queue Lock ID"]) !== lockId || clean(freshObj["Send Status"]).toLowerCase() !== "processing") {
-      skipped.push({ rowNumber, email: finalEmail, reason: "lock_not_owned" });
-      continue;
-    }
-
-    try {
-      const response = await sendInitialFromBody({
-        email: finalEmail,
-        subject: clean(freshObj["Email Subject"]) || `Quick question about ${clean(freshObj["Business Name"]) || "your website"}`,
-        message: clean(freshObj["Email Body"]) || `Hi there, I was reviewing ${clean(freshObj["Business Name"]) || "your company"} and noticed one tracking/lead measurement item may be worth checking. Would it be helpful if I shared the quick note I found?`,
-        selectedService: normalizeSheetServiceForSend(freshObj["Service Type"]),
-        senderId,
-        clientName: clean(freshObj["Decision Maker"]),
-        companyName: clean(freshObj["Business Name"]),
-        website: clean(freshObj["Website URL"]),
-        businessType: clean(freshObj["Lead Label"]) || clean(freshObj["Lead Status"]),
-        includeSignature: true,
-        signatureMode: "full",
-        reportUrl: clean(freshObj["Report URL"]),
-        reportButtonText: "View short audit note",
-        sheetRowNumber: rowNumber,
-        sheetWebsiteUrl: clean(freshObj["Website URL"]),
-        sheetFinalEmail: finalEmail,
-        source: "google_sheet_queue",
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || `send-email failed with status ${response.status}`);
-      }
-
-      await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
-        ...freshObj,
-        "Approval Status": "Approved",
-        "Send Status": data.scheduled ? "Scheduled" : "Sent",
-        "Firestore Lead ID": data.leadId || "",
-        "Tracking ID": data.trackingId || "",
-        "Reply Status": "No Reply",
-        "Open Count": "0",
-        "Click Count": "0",
-        "Attempt Count": String(attempts),
-        "Queue Lock ID": "",
-        "Queue Locked At": "",
-        "Queue Attempt ID": attemptId,
-        Notes: data.scheduled ? "Scheduled by sheet queue cron." : "Sent by sheet queue cron.",
-      });
-      sent.push({ rowNumber, email: finalEmail, leadId: data.leadId || "" });
-    } catch (error: any) {
-      await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
-        ...freshObj,
-        "Send Status": attempts >= 3 ? "Failed" : "Queued",
-        "Attempt Count": String(attempts),
-        "Queue Lock ID": "",
-        "Queue Locked At": "",
-        "Queue Attempt ID": attemptId,
-        Notes: `Queue send failed${attempts >= 3 ? " permanently" : "; will retry"}: ${String(error?.message || error).slice(0, 300)}`,
-      });
-      failed.push({ rowNumber, email: finalEmail, attempts, error: String(error?.message || error) });
-    }
+    return json(skippedPayload);
   }
 
-  const result = {
-    success: true,
-    checked: candidates.length,
-    sentCount: sent.length,
-    failedCount: failed.length,
-    skippedCount: skipped.length,
-    durationMs: Date.now() - startedAtMs,
-    sent,
-    failed,
-    skipped,
-  };
+  try {
+    const startedAtMs = Date.now();
+    const url = new URL(req.url);
+    const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 10), 25));
+    const defaultSender = getDefaultSender();
+    if (!defaultSender) throw new ApiError("No default sender configured", 500);
 
-  await writeCronStatus("sheetQueuedSends", {
-    success: true,
-    checked: result.checked,
-    sentCount: result.sentCount,
-    failedCount: result.failedCount,
-    skippedCount: result.skippedCount,
-    durationMs: result.durationMs,
-  });
+    const { sheets, spreadsheetId } = await getSheetsClient();
+    await ensureHeaderRow(sheets, spreadsheetId);
 
-  return json(result);
+    const rows = await loadRows(sheets, spreadsheetId);
+    const candidates: Array<{ rowNumber: number; obj: AnyRecord }> = rows
+      .map((row: any[], index: number): { rowNumber: number; obj: AnyRecord } => {
+        const rowNumber = index + 2;
+        return { rowNumber, obj: rowToObject(row, rowNumber) };
+      })
+      .filter((item: { rowNumber: number; obj: AnyRecord }) => {
+        const status = clean(item.obj["Send Status"]).toLowerCase();
+        if (status === "queued") return true;
+        if (status === "processing") return isSheetProcessingLockStale(item.obj);
+        return false;
+      })
+      .slice(0, max);
+
+    const sent: any[] = [];
+    const failed: any[] = [];
+    const skipped: any[] = [];
+
+    for (const { rowNumber, obj } of candidates) {
+      const previousStatus = clean(obj["Send Status"]).toLowerCase();
+      const previousAttempts = Number(obj["Attempt Count"] || 0);
+      const attempts = previousAttempts + 1;
+      const senderId = clean(obj["Sender ID"]) || defaultSender.id;
+      const finalEmail = clean(obj["Final Email"]);
+      const lockId = randomUUID();
+      const attemptId = randomUUID();
+      const lockedAt = sheetLockTimestamp();
+
+      if (previousStatus === "processing" && !isSheetProcessingLockStale(obj)) {
+        skipped.push({ rowNumber, email: finalEmail, reason: "fresh_processing_lock" });
+        continue;
+      }
+
+      if (!isValidEmail(finalEmail)) {
+        await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
+          ...obj,
+          "Send Status": "Failed",
+          "Attempt Count": String(attempts),
+          "Queue Lock ID": "",
+          "Queue Locked At": "",
+          "Queue Attempt ID": attemptId,
+          Notes: "Invalid email while processing queued send.",
+        });
+        failed.push({ rowNumber, email: finalEmail, error: "invalid_email" });
+        continue;
+      }
+
+      // Lock first, then re-read. This is not a perfect database transaction, but it is much safer than batch-lock-after-send.
+      await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
+        ...obj,
+        "Send Status": "Processing",
+        "Attempt Count": String(attempts),
+        "Queue Lock ID": lockId,
+        "Queue Locked At": lockedAt,
+        "Queue Attempt ID": attemptId,
+        Notes: `Cron locked row at ${nowDhaka()}. Previous status: ${previousStatus || "queued"}.`,
+      });
+
+      const freshObj = await readSingleSheetRow(sheets, spreadsheetId, rowNumber);
+      if (clean(freshObj["Queue Lock ID"]) !== lockId || clean(freshObj["Send Status"]).toLowerCase() !== "processing") {
+        skipped.push({ rowNumber, email: finalEmail, reason: "lock_not_owned" });
+        continue;
+      }
+
+      try {
+        const response = await sendInitialFromBody({
+          email: finalEmail,
+          subject: clean(freshObj["Email Subject"]) || `Quick question about ${clean(freshObj["Business Name"]) || "your website"}`,
+          message: clean(freshObj["Email Body"]) || `Hi there, I was reviewing ${clean(freshObj["Business Name"]) || "your company"} and noticed one tracking/lead measurement item may be worth checking. Would it be helpful if I shared the quick note I found?`,
+          selectedService: normalizeSheetServiceForSend(freshObj["Service Type"]),
+          senderId,
+          clientName: clean(freshObj["Decision Maker"]),
+          companyName: clean(freshObj["Business Name"]),
+          website: clean(freshObj["Website URL"]),
+          businessType: clean(freshObj["Lead Label"]) || clean(freshObj["Lead Status"]),
+          includeSignature: true,
+          signatureMode: "full",
+          reportUrl: clean(freshObj["Report URL"]),
+          reportButtonText: "View short audit note",
+          sheetRowNumber: rowNumber,
+          sheetWebsiteUrl: clean(freshObj["Website URL"]),
+          sheetFinalEmail: finalEmail,
+          source: "google_sheet_queue",
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || `send-email failed with status ${response.status}`);
+        }
+
+        await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
+          ...freshObj,
+          "Approval Status": "Approved",
+          "Send Status": data.scheduled ? "Scheduled" : "Sent",
+          "Firestore Lead ID": data.leadId || "",
+          "Tracking ID": data.trackingId || "",
+          "Reply Status": "No Reply",
+          "Open Count": "0",
+          "Click Count": "0",
+          "Attempt Count": String(attempts),
+          "Queue Lock ID": "",
+          "Queue Locked At": "",
+          "Queue Attempt ID": attemptId,
+          Notes: data.scheduled ? "Scheduled by sheet queue cron." : "Sent by sheet queue cron.",
+        });
+        sent.push({ rowNumber, email: finalEmail, leadId: data.leadId || "" });
+      } catch (error: any) {
+        const errorMessage = String(error?.message || error);
+        const retryBecauseDailyLimit = isRetryableDailyLimitError(error);
+        const finalAttempts = retryBecauseDailyLimit ? previousAttempts : attempts;
+        const finalStatus = retryBecauseDailyLimit ? "Queued" : attempts >= 3 ? "Failed" : "Queued";
+
+        await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, {
+          ...freshObj,
+          "Send Status": finalStatus,
+          "Attempt Count": String(finalAttempts),
+          "Queue Lock ID": "",
+          "Queue Locked At": "",
+          "Queue Attempt ID": attemptId,
+          Notes: retryBecauseDailyLimit
+            ? `Daily limit reached. Kept queued for next cron/day without increasing permanent attempts: ${errorMessage.slice(0, 220)}`
+            : `Queue send failed${attempts >= 3 ? " permanently" : "; will retry"}: ${errorMessage.slice(0, 300)}`,
+        });
+
+        failed.push({
+          rowNumber,
+          email: finalEmail,
+          attempts: finalAttempts,
+          retryBecauseDailyLimit,
+          error: errorMessage,
+        });
+      }
+    }
+
+    const result = {
+      success: true,
+      checked: candidates.length,
+      sentCount: sent.length,
+      failedCount: failed.length,
+      skippedCount: skipped.length,
+      durationMs: Date.now() - startedAtMs,
+      sent,
+      failed,
+      skipped,
+    };
+
+    await writeCronStatus("sheetQueuedSends", {
+      success: true,
+      checked: result.checked,
+      sentCount: result.sentCount,
+      failedCount: result.failedCount,
+      skippedCount: result.skippedCount,
+      durationMs: result.durationMs,
+    });
+
+    return json(result);
+  } finally {
+    await releaseCronLock(cronLock).catch((error: any) => console.warn("Sheet queued sends cron lock release failed:", error));
+  }
 }
 
 

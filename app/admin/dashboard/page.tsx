@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { type FormEvent, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { auth, db } from "../../../lib/firebase";
 import {
   collection,
@@ -67,6 +67,7 @@ import Navbar from "@/app/components/navbar";
 import Footer from "@/app/components/footer";
 import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, type SenderAccount } from "../../../lib/senders";
 import { useLeadStore, type LeadViewFilter } from "../../stores/useLeadStore";
+import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
 
 type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics";
 type TriggerMode = "no_reply_after_delay" | "open_required";
@@ -316,7 +317,7 @@ type ContactMemoryWarning = {
 
 type BulkLeadAction = "archive" | "restore" | "trash" | "delete_permanent";
 
-const SERVICE_LIST: { id: ServiceId; icon: React.ReactNode }[] = [
+const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
   { id: "Email Signature", icon: <MousePointer2 size={16} /> },
   { id: "Google Ads", icon: <Target size={16} /> },
   { id: "Server Side Tracking", icon: <Database size={16} /> },
@@ -779,24 +780,112 @@ export default function DashboardPage() {
   const leads = cachedLeads as Lead[];
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
-  const [sheetLeads, setSheetLeads] = useState<SheetLead[]>([]);
-  const [sheetLoading, setSheetLoading] = useState(false);
-  const [sheetStatus, setSheetStatus] = useState("");
-  const [selectedSheetRows, setSelectedSheetRows] = useState<number[]>([]);
-  const [sheetLeadFilter, setSheetLeadFilter] = useState("Qualified");
-  const [sheetApprovalFilter, setSheetApprovalFilter] = useState("All");
-  const [sheetSendFilter, setSheetSendFilter] = useState("Not Sent");
+  const {
+    // Lead screen UI state kept in Zustand so filter/selection state survives tab switches.
+    searchTerm,
+    setSearchTerm,
+    activeService,
+    setActiveService,
+    activeStep,
+    setActiveStep,
+    selectedMonth,
+    setSelectedMonth,
+    leadView,
+    setLeadView,
+    leadStatusFilter,
+    setLeadStatusFilter,
+    selectedLeadIds,
+    setSelectedLeadIds,
+    bulkActionLoading,
+    setBulkActionLoading,
+    bulkActionStatus,
+    setBulkActionStatus,
+    showAllLogs,
+    setShowAllLogs,
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeService, setActiveService] = useState<string>("All");
-  const [activeStep, setActiveStep] = useState<number | "All">("All");
-  const [selectedMonth, setSelectedMonth] = useState<string>("All");
-  const [leadView, setLeadView] = useState<LeadViewFilter>("active");
-  const [leadStatusFilter, setLeadStatusFilter] = useState<string>("All");
-  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
-  const [bulkActionLoading, setBulkActionLoading] = useState(false);
-  const [bulkActionStatus, setBulkActionStatus] = useState("");
-  const [showAllLogs, setShowAllLogs] = useState(false);
+    // Sheet cache state.
+    sheetLeads,
+    setSheetLeads,
+    sheetLoading,
+    setSheetLoading,
+    sheetStatus,
+    setSheetStatus,
+    selectedSheetRows,
+    setSelectedSheetRows,
+    sheetLeadFilter,
+    setSheetLeadFilter,
+    sheetApprovalFilter,
+    setSheetApprovalFilter,
+    sheetSendFilter,
+    setSheetSendFilter,
+    sheetLoadedAt,
+    setSheetLoadedAt,
+    sheetCacheKey,
+    setSheetCacheKey,
+    updateSheetRowInCache,
+    updateSheetRowsInCache,
+    invalidateSheetCache,
+
+    // Automation/follow-up state.
+    followupConfig,
+    setFollowupConfig,
+    followupLoading,
+    setFollowupLoading,
+    followupSaving,
+    setFollowupSaving,
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+    activeFollowupService,
+    setActiveFollowupService,
+    activeFollowupStep,
+    setActiveFollowupStep,
+    dailyFollowupLimit,
+    setDailyFollowupLimit,
+    followupBatchPerRun,
+    setFollowupBatchPerRun,
+    triggerMode,
+    setTriggerMode,
+    showVariantLeads,
+    setShowVariantLeads,
+    dryRunLoading,
+    setDryRunLoading,
+    dryRunRows,
+    setDryRunRows,
+    dryRunStatus,
+    setDryRunStatus,
+    postmasterLoading,
+    setPostmasterLoading,
+    postmasterHealth,
+    setPostmasterHealth,
+    postmasterStatus,
+    setPostmasterStatus,
+    followupConfigLoadedAt,
+    setFollowupConfigLoadedAt,
+
+    // Scheduled + system cache state.
+    scheduledEmails,
+    setScheduledEmails,
+    scheduledLoading,
+    setScheduledLoading,
+    scheduledStatus,
+    setScheduledStatus,
+    scheduledEdit,
+    setScheduledEdit,
+    scheduledSaving,
+    setScheduledSaving,
+    scheduledLoadedAt,
+    setScheduledLoadedAt,
+    followupSummary,
+    setFollowupSummary,
+    firebaseUsage,
+    setFirebaseUsage,
+    cleanupLoading,
+    setCleanupLoading,
+    leadCleanup,
+    setLeadCleanup,
+    selectedCleanupIds,
+    setSelectedCleanupIds,
+  } = useTrackflowDashboardStore();
 
   const [senderCounts, setSenderCounts] = useState<Record<string, number>>({});
   const [selectedSender, setSelectedSender] = useState("");
@@ -825,59 +914,6 @@ export default function DashboardPage() {
   const [draftReady, setDraftReady] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
 
-  const [followupConfig, setFollowupConfig] = useState<FollowupConfig>(() => makeDefaultConfig());
-  const [followupLoading, setFollowupLoading] = useState(false);
-  const [followupSaving, setFollowupSaving] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [activeFollowupService, setActiveFollowupService] = useState<ServiceId>("Email Signature");
-  const [activeFollowupStep, setActiveFollowupStep] = useState<StepId>("step1");
-  const [dailyFollowupLimit, setDailyFollowupLimit] = useState(50);
-  const [followupBatchPerRun, setFollowupBatchPerRun] = useState(5);
-  const [triggerMode, setTriggerMode] = useState<TriggerMode>("open_required");
-  const [showVariantLeads, setShowVariantLeads] = useState<string | null>(null);
-  const [dryRunLoading, setDryRunLoading] = useState(false);
-  const [dryRunRows, setDryRunRows] = useState<any[]>([]);
-  const [dryRunStatus, setDryRunStatus] = useState("");
-  const [postmasterLoading, setPostmasterLoading] = useState(false);
-  const [postmasterHealth, setPostmasterHealth] = useState<any>(null);
-  const [postmasterStatus, setPostmasterStatus] = useState("");
-
-  const [scheduledEmails, setScheduledEmails] = useState<Lead[]>([]);
-  const [scheduledLoading, setScheduledLoading] = useState(false);
-  const [scheduledStatus, setScheduledStatus] = useState("");
-  const [scheduledEdit, setScheduledEdit] = useState<ScheduledEditState | null>(null);
-  const [scheduledSaving, setScheduledSaving] = useState(false);
-  const [followupSummary, setFollowupSummary] = useState<FollowupSummaryState>({
-    loading: false,
-    error: "",
-    loadedAt: null,
-    sentToday: 0,
-    dailyLimit: 50,
-    batchPerRun: 5,
-    remainingToday: 50,
-    maxThisRun: 5,
-    dueNow: 0,
-    scheduled: 0,
-    waitingFirstOpen: 0,
-    waitingNewEngagement: 0,
-    templateBlocked: 0,
-    failedRetry: 0,
-    failedFinal: 0,
-    blocked: 0,
-  });
-  const [firebaseUsage, setFirebaseUsage] = useState<FirebaseUsageState>(() => emptyFirebaseUsageState());
-  const [cleanupLoading, setCleanupLoading] = useState(false);
-  const [leadCleanup, setLeadCleanup] = useState<CleanupState>({
-    loading: false,
-    actionLoading: false,
-    error: "",
-    status: "",
-    loadedAt: null,
-    bucket: "due",
-    rows: [],
-    policy: null,
-  });
-  const [selectedCleanupIds, setSelectedCleanupIds] = useState<string[]>([]);
   const monthOptions = useMemo(() => getRecentMonthOptions(18), []);
 
   const activeSender = ACTIVE_SENDERS.find((sender : any) => sender.id === selectedSender);
@@ -1149,7 +1185,9 @@ export default function DashboardPage() {
     fetchCounts().catch((err) => console.error("Sender count error:", err));
   }, [activeTab, sendStatus]);
 
-  const loadFollowupConfig = async () => {
+  const loadFollowupConfig = async (force = false) => {
+    if (!force && followupConfigLoadedAt) return;
+
     try {
       setFollowupLoading(true);
       const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
@@ -1166,6 +1204,8 @@ export default function DashboardPage() {
         setFollowupBatchPerRun(5);
         setTriggerMode("open_required");
       }
+
+      setFollowupConfigLoadedAt(Date.now());
     } catch (err) {
       console.error("Follow-up config load error:", err);
     } finally {
@@ -1174,14 +1214,20 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadFollowupConfig();
+    loadFollowupConfig(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
-  const loadScheduledEmails = async () => {
+  const loadScheduledEmails = async (force = false) => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setScheduledStatus("Please login again to load scheduled emails.");
+      return;
+    }
+
+    if (!force && scheduledLoadedAt && scheduledEmails.length >= 0) {
+      setScheduledStatus(`Cached ${scheduledEmails.length} scheduled email(s). Use refresh if needed.`);
       return;
     }
 
@@ -1196,6 +1242,7 @@ export default function DashboardPage() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Scheduled email load failed");
       setScheduledEmails(Array.isArray(data.rows) ? data.rows : []);
+      setScheduledLoadedAt(Date.now());
       setScheduledStatus(`Loaded ${data.count || 0} scheduled email(s).`);
     } catch (error: any) {
       console.error("Scheduled emails load error:", error);
@@ -1208,7 +1255,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === "scheduled") {
-      loadScheduledEmails();
+      loadScheduledEmails(false);
     }
   }, [activeTab, sendStatus]);
 
@@ -1271,7 +1318,7 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || "Scheduled email update failed");
       setScheduledEdit(null);
       setScheduledStatus("Scheduled email updated successfully.");
-      await loadScheduledEmails();
+      await loadScheduledEmails(true);
     } catch (error: any) {
       console.error("Scheduled email update error:", error);
       window.alert(error.message || "Scheduled email update failed.");
@@ -1296,7 +1343,7 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || "Cancel failed");
       setScheduledStatus("Scheduled email cancelled.");
       setScheduledEdit(null);
-      await loadScheduledEmails();
+      await loadScheduledEmails(true);
     } catch (error: any) {
       console.error("Scheduled email cancel error:", error);
       window.alert(error.message || "Scheduled email cancel failed.");
@@ -1325,7 +1372,7 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || "Send-soon update failed");
       setScheduledStatus("Email moved to immediate send queue. Scheduled-initials cron will send it on the next run.");
       setScheduledEdit(null);
-      await loadScheduledEmails();
+      await loadScheduledEmails(true);
     } catch (error: any) {
       console.error("Scheduled send-soon error:", error);
       window.alert(error.message || "Send-soon update failed.");
@@ -1334,7 +1381,9 @@ export default function DashboardPage() {
     }
   };
 
-  const loadFollowupSummary = async () => {
+  const loadFollowupSummary = async (force = false) => {
+    if (!force && followupSummary.loadedAt && Date.now() - followupSummary.loadedAt < 60_000) return;
+
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setFollowupSummary((current) => ({ ...current, error: "Please login again.", loading: false }));
@@ -1380,11 +1429,16 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadFollowupSummary().catch((error) => console.error("Follow-up summary load error:", error));
-  }, [dailyFollowupLimit, followupBatchPerRun]);
+    if (activeTab === "overview" || activeTab === "automation") {
+      loadFollowupSummary(false).catch((error) => console.error("Follow-up summary load error:", error));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
 
-  const loadFirebaseUsage = async () => {
+  const loadFirebaseUsage = async (force = false) => {
+    if (!force && firebaseUsage.loadedAt && Date.now() - firebaseUsage.loadedAt < 60_000) return;
+
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setFirebaseUsage((current) => ({ ...current, error: "Please login again.", loading: false }));
@@ -1466,7 +1520,7 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || "Cleanup failed");
       window.alert(data.message || "Cleanup completed.");
       await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
-      await loadFirebaseUsage();
+      await loadFirebaseUsage(true);
     } catch (error: any) {
       console.error("System cleanup error:", error);
       window.alert(error.message || "Cleanup failed.");
@@ -1530,7 +1584,7 @@ export default function DashboardPage() {
       setSelectedLeadIds([]);
       setSelectedLead((current) => (current && ids.includes(current.id) ? null : current));
       setBulkActionStatus(data.message || "Lead action completed.");
-      await loadFirebaseUsage();
+      await loadFirebaseUsage(true);
     } catch (error: any) {
       console.error("Lead bulk action error:", error);
       setBulkActionStatus(`Action failed: ${error.message || "Unknown error"}`);
@@ -1542,7 +1596,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === "overview" || activeTab === "analytics") {
-      loadFirebaseUsage().catch((error) => console.error("Firebase usage load error:", error));
+      loadFirebaseUsage(false).catch((error) => console.error("Firebase usage load error:", error));
     }
   }, [activeTab]);
 
@@ -1692,9 +1746,9 @@ export default function DashboardPage() {
     return [...leads].filter((lead) => leadScore(lead) > 0).sort((a, b) => leadScore(b) - leadScore(a)).slice(0, 8);
   }, [leads]);
 
-  const currentStepData = followupConfig[activeFollowupService]?.[activeFollowupStep] || makeDefaultStep();
-  const currentVariants = currentStepData.variants || [];
-  const validCurrentVariants = currentVariants.filter((variant) => stripHtml(variant.content));
+  const currentStepData: StepConfig = followupConfig[activeFollowupService]?.[activeFollowupStep] || makeDefaultStep();
+  const currentVariants: Variant[] = currentStepData.variants || [];
+  const validCurrentVariants = currentVariants.filter((variant: Variant) => stripHtml(variant.content));
   const days = Math.max(1, Math.floor((currentStepData.delay || 1440) / 1440));
 
   const currentFollowupLeads = useMemo(() => {
@@ -1702,7 +1756,7 @@ export default function DashboardPage() {
   }, [leads, activeFollowupService, activeFollowupStep, triggerMode]);
 
   const updateCurrentStep = (newStepData: StepConfig) => {
-    setFollowupConfig((prev) => ({
+    setFollowupConfig((prev: FollowupConfig) => ({
       ...prev,
       [activeFollowupService]: {
         ...(prev[activeFollowupService] || {}),
@@ -1862,7 +1916,7 @@ export default function DashboardPage() {
     return true;
   };
 
-  const handleSendEmail = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSendEmail = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const currentMessage = syncEditorMessage();
@@ -1912,7 +1966,7 @@ export default function DashboardPage() {
       if (data.success) {
         setSendStatus(scheduledAtISO ? "Success! Email Scheduled." : "Success! Outreach Launched.");
         await refreshLeads();
-        await loadFollowupSummary();
+        await loadFollowupSummary(true);
         resetOutreachForm();
       } else if (data.warningOnly && data.code === "cooldown_active") {
         setContactMemoryWarning(data.contactMemory || null);
@@ -1959,8 +2013,10 @@ export default function DashboardPage() {
     return "Cold Email";
   };
 
-  const loadCleanupCandidates = async (bucket: CleanupBucket = leadCleanup.bucket) => {
-    setLeadCleanup((prev) => ({ ...prev, loading: true, error: "", status: "Loading cleanup candidates...", bucket }));
+  const loadCleanupCandidates = async (bucket: CleanupBucket = leadCleanup.bucket as CleanupBucket, force = false) => {
+    if (!force && leadCleanup.loadedAt && leadCleanup.bucket === bucket && Date.now() - leadCleanup.loadedAt < 60_000) return;
+
+    setLeadCleanup((prev: CleanupState) => ({ ...prev, loading: true, error: "", status: "Loading cleanup candidates...", bucket }));
     setSelectedCleanupIds([]);
 
     try {
@@ -1972,7 +2028,7 @@ export default function DashboardPage() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Cleanup candidates load failed");
 
-      setLeadCleanup((prev) => ({
+      setLeadCleanup((prev: CleanupState) => ({
         ...prev,
         loading: false,
         error: "",
@@ -1984,7 +2040,7 @@ export default function DashboardPage() {
       }));
     } catch (error: any) {
       console.error("Cleanup candidates error:", error);
-      setLeadCleanup((prev) => ({
+      setLeadCleanup((prev: CleanupState) => ({
         ...prev,
         loading: false,
         error: error?.message || "Cleanup candidates load failed",
@@ -1995,13 +2051,13 @@ export default function DashboardPage() {
   };
 
   const toggleCleanupCandidate = (leadId: string) => {
-    setSelectedCleanupIds((prev) =>
-      prev.includes(leadId) ? prev.filter((id) => id !== leadId) : [...prev, leadId]
+    setSelectedCleanupIds((prev: string[]) =>
+      prev.includes(leadId) ? prev.filter((id: string) => id !== leadId) : [...prev, leadId]
     );
   };
 
   const runManualCleanupRefresh = async () => {
-    setLeadCleanup((prev) => ({ ...prev, actionLoading: true, status: "Running manual cleanup check..." }));
+    setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: true, status: "Running manual cleanup check..." }));
     try {
       const response = await fetch("/api/trackflow/cleanup/manual-run", {
         method: "POST",
@@ -2010,11 +2066,11 @@ export default function DashboardPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Manual cleanup check failed");
-      await loadCleanupCandidates(leadCleanup.bucket);
+      await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
     } catch (error: any) {
       window.alert(error?.message || "Manual cleanup check failed.");
     } finally {
-      setLeadCleanup((prev) => ({ ...prev, actionLoading: false }));
+      setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: false }));
     }
   };
 
@@ -2031,7 +2087,7 @@ export default function DashboardPage() {
 
     if (!window.confirm(message)) return;
 
-    setLeadCleanup((prev) => ({ ...prev, actionLoading: true, status: "Deleting full data after saving footprint..." }));
+    setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: true, status: "Deleting full data after saving footprint..." }));
 
     try {
       const response = await fetch("/api/trackflow/cleanup/delete-full-keep-memory", {
@@ -2044,15 +2100,15 @@ export default function DashboardPage() {
 
       const ok = Array.isArray(data.results) ? data.results.filter((item: any) => item.ok).length : data.deletedCount || 0;
       const failed = Array.isArray(data.results) ? data.results.filter((item: any) => !item.ok).length : 0;
-      setLeadCleanup((prev) => ({ ...prev, status: `Deleted ${ok}. Failed/skipped ${failed}.` }));
+      setLeadCleanup((prev: CleanupState) => ({ ...prev, status: `Deleted ${ok}. Failed/skipped ${failed}.` }));
       setSelectedCleanupIds([]);
       await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
-      await loadCleanupCandidates(leadCleanup.bucket);
+      await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
     } catch (error: any) {
       console.error("Cleanup delete error:", error);
       window.alert(error?.message || "Cleanup delete failed.");
     } finally {
-      setLeadCleanup((prev) => ({ ...prev, actionLoading: false }));
+      setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: false }));
     }
   };
 
@@ -2062,7 +2118,7 @@ export default function DashboardPage() {
       return;
     }
 
-    setLeadCleanup((prev) => ({ ...prev, actionLoading: true, status: `Skipping selected for ${days} days...` }));
+    setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: true, status: `Skipping selected for ${days} days...` }));
 
     try {
       const response = await fetch("/api/trackflow/cleanup/skip", {
@@ -2073,11 +2129,11 @@ export default function DashboardPage() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Skip failed");
       setSelectedCleanupIds([]);
-      await loadCleanupCandidates(leadCleanup.bucket);
+      await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
     } catch (error: any) {
       window.alert(error?.message || "Skip failed.");
     } finally {
-      setLeadCleanup((prev) => ({ ...prev, actionLoading: false }));
+      setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: false }));
     }
   };
 
@@ -2089,7 +2145,7 @@ export default function DashboardPage() {
 
     if (!window.confirm("Protect selected lead(s) and stop automation?")) return;
 
-    setLeadCleanup((prev) => ({ ...prev, actionLoading: true, status: "Protecting selected leads..." }));
+    setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: true, status: "Protecting selected leads..." }));
 
     try {
       const response = await fetch("/api/trackflow/cleanup/protect", {
@@ -2100,15 +2156,21 @@ export default function DashboardPage() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Protect failed");
       setSelectedCleanupIds([]);
-      await loadCleanupCandidates(leadCleanup.bucket);
+      await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
     } catch (error: any) {
       window.alert(error?.message || "Protect failed.");
     } finally {
-      setLeadCleanup((prev) => ({ ...prev, actionLoading: false }));
+      setLeadCleanup((prev: CleanupState) => ({ ...prev, actionLoading: false }));
     }
   };
 
-  const loadSheetLeads = async () => {
+  const loadSheetLeads = async (force = false) => {
+    const cacheKey = `${sheetLeadFilter}|${sheetApprovalFilter}|${sheetSendFilter}`;
+    if (!force && sheetLoadedAt && sheetCacheKey === cacheKey) {
+      setSheetStatus(`Cached ${sheetLeads.length} Sheet lead(s). Use refresh to reload.`);
+      return;
+    }
+
     setSheetLoading(true);
     setSheetStatus("Loading Google Sheet leads...");
 
@@ -2144,6 +2206,8 @@ export default function DashboardPage() {
 
       setSheetLeads(Array.isArray(data.leads) ? data.leads : []);
       setSelectedSheetRows([]);
+      setSheetLoadedAt(Date.now());
+      setSheetCacheKey(cacheKey);
       setSheetStatus(`Loaded ${data.count || 0} Sheet lead(s).`);
     } catch (error: any) {
       console.error("Sheet lead load error:", error);
@@ -2155,14 +2219,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === "sheet") {
-      loadSheetLeads();
+      loadSheetLeads(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, sheetLeadFilter, sheetApprovalFilter, sheetSendFilter]);
 
   useEffect(() => {
     if (activeTab === "cleanup") {
-      loadCleanupCandidates(leadCleanup.bucket);
+      loadCleanupCandidates(leadCleanup.bucket, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, leadCleanup.bucket]);
@@ -2191,6 +2255,8 @@ export default function DashboardPage() {
       throw new Error(data.error || data.message || `Sheet update failed. Status: ${response.status}`);
     }
 
+    updateSheetRowInCache(rowNumber, updates);
+    invalidateSheetCache();
     return data;
   };
 
@@ -2215,6 +2281,8 @@ export default function DashboardPage() {
       throw new Error(data.error || data.message || `Bulk Sheet update failed. Status: ${response.status}`);
     }
 
+    updateSheetRowsInCache(items);
+    invalidateSheetCache();
     return data;
   };
 
@@ -2242,8 +2310,8 @@ export default function DashboardPage() {
   };
 
   const toggleSheetRow = (rowNumber: number) => {
-    setSelectedSheetRows((prev) =>
-      prev.includes(rowNumber) ? prev.filter((item) => item !== rowNumber) : [...prev, rowNumber]
+    setSelectedSheetRows((prev: number[]) =>
+      prev.includes(rowNumber) ? prev.filter((item: number) => item !== rowNumber) : [...prev, rowNumber]
     );
   };
 
@@ -2398,7 +2466,7 @@ export default function DashboardPage() {
       await patchSheetLeadsBulk(items);
       setSheetStatus(`Queued ${items.length} lead(s). Cron /api/trackflow/cron/sheet-queued-sends will send them.`);
       setSelectedSheetRows([]);
-      await loadSheetLeads();
+      await loadSheetLeads(true);
     } catch (error: any) {
       console.error("Sheet queue error:", error);
       setSheetStatus(`Queue failed: ${error.message || "Unknown error"}`);
@@ -2434,7 +2502,7 @@ export default function DashboardPage() {
       }
 
       setSheetStatus(`Tracking sync completed. Updated ${updated} row(s).`);
-      await loadSheetLeads();
+      await loadSheetLeads(true);
     } catch (error: any) {
       console.error("Sheet tracking sync error:", error);
       setSheetStatus(`Tracking sync failed: ${error.message || "Unknown error"}`);
@@ -2452,7 +2520,7 @@ export default function DashboardPage() {
     (!duplicateLead || allowDuplicateSend) &&
     (!contactMemoryWarning || allowCooldownOverride);
 
-  const handleMarkAsReplied = async (id: string, e?: React.MouseEvent) => {
+  const handleMarkAsReplied = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
 
     if (!window.confirm("Mark this lead as Replied and stop automation?")) return;
@@ -2474,22 +2542,22 @@ export default function DashboardPage() {
     }
   };
 
-  const handleArchiveLead = async (id: string, e?: React.MouseEvent) => {
+  const handleArchiveLead = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
     await applyLeadBulkAction("archive", [id]);
   };
 
-  const handleRestoreLead = async (id: string, e?: React.MouseEvent) => {
+  const handleRestoreLead = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
     await applyLeadBulkAction("restore", [id]);
   };
 
-  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+  const handleDelete = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
     await applyLeadBulkAction("trash", [id]);
   };
 
-  const handlePermanentDeleteLead = async (id: string, e?: React.MouseEvent) => {
+  const handlePermanentDeleteLead = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
     await applyLeadBulkAction("delete_permanent", [id]);
   };
@@ -2502,7 +2570,7 @@ export default function DashboardPage() {
   };
 
   const removeVariant = (variantId: string) => {
-    const nextVariants = currentVariants.filter((variant) => variant.id !== variantId);
+    const nextVariants = currentVariants.filter((variant: Variant) => variant.id !== variantId);
 
     updateCurrentStep({
       ...currentStepData,
@@ -2513,21 +2581,21 @@ export default function DashboardPage() {
   const updateVariantContent = (variantId: string, content: string) => {
     updateCurrentStep({
       ...currentStepData,
-      variants: currentVariants.map((variant) => (variant.id === variantId ? { ...variant, content } : variant)),
+      variants: currentVariants.map((variant: Variant) => (variant.id === variantId ? { ...variant, content } : variant)),
     });
   };
 
   const appendMergeTag = (variantId: string, tag: "{name}" | "{company}" | "{website}" | "{service}") => {
     updateCurrentStep({
       ...currentStepData,
-      variants: currentVariants.map((variant) =>
+      variants: currentVariants.map((variant: Variant) =>
         variant.id === variantId ? { ...variant, content: `${variant.content || ""} ${tag}` } : variant
       ),
     });
   };
 
   const saveFollowupSettings = async () => {
-    const currentStepVariants = currentVariants.filter((variant) => stripHtml(variant.content));
+    const currentStepVariants = currentVariants.filter((variant: Variant) => stripHtml(variant.content));
     if (currentStepVariants.length === 0) return window.alert("Please add content to at least one variant.");
 
     setFollowupSaving(true);
@@ -2562,6 +2630,7 @@ export default function DashboardPage() {
 
       setTriggerMode("open_required");
       setHasUnsavedChanges(false);
+      await loadFollowupSummary(true);
       window.alert("✅ Follow-up settings saved. Template-blocked follow-ups were requeued for the scheduler.");
     } catch (error) {
       console.error(error);
@@ -2572,7 +2641,7 @@ export default function DashboardPage() {
   };
 
   const renderTopTabs = () => {
-    const tabs: { id: MainTab; label: string; icon: React.ReactNode }[] = [
+    const tabs: { id: MainTab; label: string; icon: ReactNode }[] = [
       { id: "overview", label: "Overview", icon: <LayoutDashboard size={16} /> },
       { id: "sheet", label: "Sheet Leads", icon: <FileText size={16} /> },
       { id: "outreach", label: "Send Email", icon: <Send size={16} /> },
@@ -2601,7 +2670,7 @@ export default function DashboardPage() {
     );
   };
 
-  const renderStatCard = (label: string, value: number | string, icon: React.ReactNode, tone = "blue") => {
+  const renderStatCard = (label: string, value: number | string, icon: ReactNode, tone = "blue") => {
     const toneClass =
       tone === "green"
         ? "bg-green-50 text-green-600"
@@ -2642,7 +2711,7 @@ export default function DashboardPage() {
             </div>
             <button
               type="button"
-              onClick={loadFollowupSummary}
+              onClick={() => loadFollowupSummary(true)}
               disabled={followupSummary.loading}
               className="px-5 py-3 rounded-2xl bg-black text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2 justify-center"
             >
@@ -2683,7 +2752,7 @@ export default function DashboardPage() {
             </div>
             <button
               type="button"
-              onClick={loadFirebaseUsage}
+              onClick={() => loadFirebaseUsage(true)}
               disabled={firebaseUsage.loading}
               className="px-5 py-3 rounded-2xl bg-purple-600 text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2 justify-center"
             >
@@ -2853,7 +2922,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap gap-2">
               <select
                 value={sheetLeadFilter}
-                onChange={(e) => setSheetLeadFilter(e.target.value)}
+                onChange={(e: any) => setSheetLeadFilter(e.target.value)}
                 className="px-4 py-3 rounded-2xl border border-gray-100 text-xs font-black uppercase"
               >
                 <option value="Qualified">Hot + Good</option>
@@ -2866,7 +2935,7 @@ export default function DashboardPage() {
 
               <select
                 value={sheetApprovalFilter}
-                onChange={(e) => setSheetApprovalFilter(e.target.value)}
+                onChange={(e: any) => setSheetApprovalFilter(e.target.value)}
                 className="px-4 py-3 rounded-2xl border border-gray-100 text-xs font-black uppercase"
               >
                 <option value="All">All Approval</option>
@@ -2878,7 +2947,7 @@ export default function DashboardPage() {
 
               <select
                 value={sheetSendFilter}
-                onChange={(e) => setSheetSendFilter(e.target.value)}
+                onChange={(e: any) => setSheetSendFilter(e.target.value)}
                 className="px-4 py-3 rounded-2xl border border-gray-100 text-xs font-black uppercase"
               >
                 <option value="Not Sent">Not Sent</option>
@@ -2890,7 +2959,7 @@ export default function DashboardPage() {
 
               <button
                 type="button"
-                onClick={loadSheetLeads}
+                onClick={() => loadSheetLeads(true)}
                 disabled={sheetLoading}
                 className="px-4 py-3 rounded-2xl bg-gray-900 text-white text-xs font-black uppercase flex items-center gap-2 disabled:opacity-50"
               >
@@ -3024,7 +3093,7 @@ export default function DashboardPage() {
                               try {
                                 await queueSheetLead(lead);
                                 setSheetStatus(`Row ${rowNumber} queued. Cron will send it.`);
-                                await loadSheetLeads();
+                                await loadSheetLeads(true);
                               } catch (error: any) {
                                 window.alert(error.message || "Queue failed.");
                               } finally {
@@ -3124,14 +3193,14 @@ export default function DashboardPage() {
                     placeholder="Paste GitHub raw PDF / report link here"
                     className="md:col-span-3 w-full p-3 bg-white rounded-2xl outline-none border border-blue-100 focus:border-blue-500 text-xs font-bold"
                     value={reportUrl}
-                    onChange={(e) => setReportUrl(e.target.value)}
+                    onChange={(e: any) => setReportUrl(e.target.value)}
                   />
                   <input
                     type="text"
                     placeholder="Link text"
                     className="md:col-span-2 w-full p-3 bg-white rounded-2xl outline-none border border-blue-100 focus:border-blue-500 text-xs font-bold"
                     value={reportButtonText}
-                    onChange={(e) => setReportButtonText(e.target.value)}
+                    onChange={(e: any) => setReportButtonText(e.target.value)}
                   />
                 </div>
                 <p className="text-[9px] font-bold text-blue-400 mt-2">
@@ -3178,7 +3247,7 @@ export default function DashboardPage() {
                       <input
                         type="checkbox"
                         checked={allowDuplicateSend}
-                        onChange={(e) => setAllowDuplicateSend(e.target.checked)}
+                        onChange={(e: any) => setAllowDuplicateSend(e.target.checked)}
                         className="w-4 h-4"
                       />
                       <span className="text-[10px] font-black text-red-700 uppercase">
@@ -3211,7 +3280,7 @@ export default function DashboardPage() {
                       <input
                         type="checkbox"
                         checked={allowCooldownOverride}
-                        onChange={(e) => setAllowCooldownOverride(e.target.checked)}
+                        onChange={(e: any) => setAllowCooldownOverride(e.target.checked)}
                         className="w-4 h-4"
                       />
                       <span className="text-[10px] font-black text-amber-700 uppercase">
@@ -3286,14 +3355,14 @@ export default function DashboardPage() {
                   required
                   className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium"
                   value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
+                  onChange={(e: any) => setClientName(e.target.value)}
                 />
                 <input
                   type="text"
                   placeholder="Company Name"
                   className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium"
                   value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
+                  onChange={(e: any) => setCompanyName(e.target.value)}
                 />
               </div>
 
@@ -3307,7 +3376,7 @@ export default function DashboardPage() {
                       emailError ? "border-red-400 bg-red-50" : "border-transparent focus:border-blue-500"
                     }`}
                     value={email}
-                    onChange={(e) => {
+                    onChange={(e: any) => {
                       setEmail(e.target.value);
                       setEmailError("");
                     }}
@@ -3323,7 +3392,7 @@ export default function DashboardPage() {
                   placeholder="Website Link"
                   className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium"
                   value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
+                  onChange={(e: any) => setWebsite(e.target.value)}
                 />
               </div>
 
@@ -3331,7 +3400,7 @@ export default function DashboardPage() {
                 required
                 className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700"
                 value={selectedService}
-                onChange={(e) => handleServiceChange(e.target.value as ServiceId)}
+                onChange={(e: any) => handleServiceChange(e.target.value as ServiceId)}
               >
                 <option value="" disabled>Select Targeted Service</option>
                 {SERVICE_NAMES.map((service) => <option key={service} value={service}>{service}</option>)}
@@ -3343,7 +3412,7 @@ export default function DashboardPage() {
                 required
                 className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg"
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e: any) => setSubject(e.target.value)}
               />
 
               <div className="rounded-[30px] border border-gray-100 bg-[#fbfcff] p-3">
@@ -3421,7 +3490,7 @@ export default function DashboardPage() {
                     min={minDateTime}
                     className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100"
                     value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
+                    onChange={(e: any) => setScheduledTime(e.target.value)}
                   />
                 </div>
 
@@ -3519,7 +3588,7 @@ export default function DashboardPage() {
           </div>
           <button
             type="button"
-            onClick={loadScheduledEmails}
+            onClick={() => loadScheduledEmails(true)}
             disabled={scheduledLoading}
             className="px-5 py-3 rounded-2xl bg-black text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 disabled:bg-gray-300"
           >
@@ -3632,21 +3701,21 @@ export default function DashboardPage() {
 
                 <div className="p-6 space-y-4 pb-32">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Recipient email" value={scheduledEdit.email} onChange={(e) => setScheduledEdit({ ...scheduledEdit, email: e.target.value })} />
-                    <input className="p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm" type="datetime-local" min={minDateTime} value={scheduledEdit.scheduledTime} onChange={(e) => setScheduledEdit({ ...scheduledEdit, scheduledTime: e.target.value })} />
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Client name" value={scheduledEdit.clientName} onChange={(e) => setScheduledEdit({ ...scheduledEdit, clientName: e.target.value })} />
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Company name" value={scheduledEdit.companyName} onChange={(e) => setScheduledEdit({ ...scheduledEdit, companyName: e.target.value })} />
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Website" value={scheduledEdit.website} onChange={(e) => setScheduledEdit({ ...scheduledEdit, website: e.target.value })} />
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Business type" value={scheduledEdit.businessType} onChange={(e) => setScheduledEdit({ ...scheduledEdit, businessType: e.target.value })} />
-                    <select className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" value={scheduledEdit.selectedService} onChange={(e) => setScheduledEdit({ ...scheduledEdit, selectedService: e.target.value as ServiceId })}>
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Recipient email" value={scheduledEdit.email} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, email: e.target.value })} />
+                    <input className="p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm" type="datetime-local" min={minDateTime} value={scheduledEdit.scheduledTime} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, scheduledTime: e.target.value })} />
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Client name" value={scheduledEdit.clientName} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, clientName: e.target.value })} />
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Company name" value={scheduledEdit.companyName} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, companyName: e.target.value })} />
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Website" value={scheduledEdit.website} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, website: e.target.value })} />
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Business type" value={scheduledEdit.businessType} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, businessType: e.target.value })} />
+                    <select className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" value={scheduledEdit.selectedService} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, selectedService: e.target.value as ServiceId })}>
                       {SERVICE_NAMES.map((service) => <option key={service} value={service}>{service}</option>)}
                     </select>
-                    <select className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" value={scheduledEdit.selectedSender} onChange={(e) => setScheduledEdit({ ...scheduledEdit, selectedSender: e.target.value })}>
+                    <select className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" value={scheduledEdit.selectedSender} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, selectedSender: e.target.value })}>
                       {ACTIVE_SENDERS.map((sender: any) => <option key={sender.id} value={sender.id}>{sender.name} — {sender.email}</option>)}
                     </select>
                   </div>
 
-                  <input className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-lg" placeholder="Subject" value={scheduledEdit.subject} onChange={(e) => setScheduledEdit({ ...scheduledEdit, subject: e.target.value })} />
+                  <input className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-lg" placeholder="Subject" value={scheduledEdit.subject} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, subject: e.target.value })} />
 
                   <div className="rounded-[26px] border-2 border-gray-100 overflow-hidden bg-white">
                     <EditorProvider>
@@ -3658,12 +3727,12 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Report URL optional" value={scheduledEdit.reportUrl} onChange={(e) => setScheduledEdit({ ...scheduledEdit, reportUrl: e.target.value })} />
-                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Report button text" value={scheduledEdit.reportButtonText} onChange={(e) => setScheduledEdit({ ...scheduledEdit, reportButtonText: e.target.value })} />
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Report URL optional" value={scheduledEdit.reportUrl} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, reportUrl: e.target.value })} />
+                    <input className="p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm" placeholder="Report button text" value={scheduledEdit.reportButtonText} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, reportButtonText: e.target.value })} />
                   </div>
 
                   <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl cursor-pointer">
-                    <input type="checkbox" checked={scheduledEdit.includeSignature} onChange={(e) => setScheduledEdit({ ...scheduledEdit, includeSignature: e.target.checked })} className="w-4 h-4" />
+                    <input type="checkbox" checked={scheduledEdit.includeSignature} onChange={(e: any) => setScheduledEdit({ ...scheduledEdit, includeSignature: e.target.checked })} className="w-4 h-4" />
                     <span className="text-xs font-black text-gray-700 uppercase">Include signature</span>
                   </label>
 
@@ -3731,29 +3800,29 @@ export default function DashboardPage() {
 
         <div className="bg-white rounded-[28px] border border-gray-100 p-5 shadow-sm space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <select value={leadView} onChange={(e) => setLeadView(e.target.value as LeadViewFilter)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
+            <select value={leadView} onChange={(e: any) => setLeadView(e.target.value as LeadViewFilter)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
               <option value="active">Active</option>
               <option value="archived">Archived</option>
               <option value="trash">Trash</option>
               <option value="all">All</option>
             </select>
-            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
+            <select value={selectedMonth} onChange={(e: any) => setSelectedMonth(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
               <option value="All">All Months</option>
               {monthOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <select value={leadStatusFilter} onChange={(e) => setLeadStatusFilter(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
+            <select value={leadStatusFilter} onChange={(e: any) => setLeadStatusFilter(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
               <option value="All">All Status</option>
               {["scheduled", "sent", "opened", "clicked", "replied", "bounced", "spam", "unsubscribed", "cancelled", "finished"].map((status) => (
                 <option key={status} value={status}>{status}</option>
               ))}
             </select>
-            <select value={activeService} onChange={(e) => setActiveService(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
+            <select value={activeService} onChange={(e: any) => setActiveService(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
               <option value="All">All Services</option>
               {SERVICE_NAMES.map((service) => <option key={service} value={service}>{service}</option>)}
             </select>
-            <input type="text" placeholder="Search email/company..." className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Search email/company..." className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none" value={searchTerm} onChange={(e: any) => setSearchTerm(e.target.value)} />
           </div>
 
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-gray-50">
@@ -3782,12 +3851,12 @@ export default function DashboardPage() {
                     <input
                       type="checkbox"
                       checked={allLoadedSelected}
-                      onChange={(e) => {
+                      onChange={(e: any) => {
                         if (e.target.checked) {
                           setSelectedLeadIds(Array.from(new Set([...selectedLeadIds, ...filteredLeads.map((lead) => lead.id)])));
                         } else {
                           const filteredIds = new Set(filteredLeads.map((lead) => lead.id));
-                          setSelectedLeadIds(selectedLeadIds.filter((id) => !filteredIds.has(id)));
+                          setSelectedLeadIds(selectedLeadIds.filter((id: string) => !filteredIds.has(id)));
                         }
                       }}
                     />
@@ -3805,13 +3874,13 @@ export default function DashboardPage() {
                   const checked = selectedLeadIds.includes(lead.id);
                   return (
                     <tr key={lead.id} onClick={() => setSelectedLead(lead)} className="hover:bg-blue-50/20 cursor-pointer group transition-all">
-                      <td className="p-5" onClick={(e) => e.stopPropagation()}>
+                      <td className="p-5" onClick={(e: any) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={(e) => {
+                          onChange={(e: any) => {
                             if (e.target.checked) setSelectedLeadIds(Array.from(new Set([...selectedLeadIds, lead.id])));
-                            else setSelectedLeadIds(selectedLeadIds.filter((id) => id !== lead.id));
+                            else setSelectedLeadIds(selectedLeadIds.filter((id: string) => id !== lead.id));
                           }}
                         />
                       </td>
@@ -3848,21 +3917,21 @@ export default function DashboardPage() {
                       </td>
 
                       <td className="p-5 text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2" onClick={(e: any) => e.stopPropagation()}>
                           {lead.status !== "replied" && lead.deleted !== true && (
-                            <button onClick={(e) => handleMarkAsReplied(lead.id, e)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Mark as Replied"><CheckCircle size={16} /></button>
+                            <button onClick={(e: any) => handleMarkAsReplied(lead.id, e)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Mark as Replied"><CheckCircle size={16} /></button>
                           )}
                           {lead.archived !== true && lead.deleted !== true && (
-                            <button onClick={(e) => handleArchiveLead(lead.id, e)} className="p-3 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Archive lead"><Database size={16} /></button>
+                            <button onClick={(e: any) => handleArchiveLead(lead.id, e)} className="p-3 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Archive lead"><Database size={16} /></button>
                           )}
                           {(lead.archived === true || lead.deleted === true) && (
-                            <button onClick={(e) => handleRestoreLead(lead.id, e)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Restore lead"><RefreshCw size={16} /></button>
+                            <button onClick={(e: any) => handleRestoreLead(lead.id, e)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Restore lead"><RefreshCw size={16} /></button>
                           )}
                           {lead.deleted !== true && (
-                            <button onClick={(e) => handleDelete(lead.id, e)} className="p-3 text-gray-300 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all" title="Move to trash"><Trash2 size={16} /></button>
+                            <button onClick={(e: any) => handleDelete(lead.id, e)} className="p-3 text-gray-300 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all" title="Move to trash"><Trash2 size={16} /></button>
                           )}
                           {lead.deleted === true && (
-                            <button onClick={(e) => handlePermanentDeleteLead(lead.id, e)} className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Permanent delete"><X size={16} /></button>
+                            <button onClick={(e: any) => handlePermanentDeleteLead(lead.id, e)} className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Permanent delete"><X size={16} /></button>
                           )}
                         </div>
                       </td>
@@ -3914,7 +3983,7 @@ export default function DashboardPage() {
 
           <button
             type="button"
-            onClick={loadFollowupConfig}
+            onClick={() => loadFollowupConfig(true)}
             className="flex items-center gap-2 px-5 py-4 bg-white text-gray-500 rounded-[22px] font-black text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-all border border-gray-100"
           >
             {followupLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} REFRESH CONFIG
@@ -3946,7 +4015,7 @@ export default function DashboardPage() {
               type="number"
               min="1"
               value={days}
-              onChange={(e) =>
+              onChange={(e: any) =>
                 updateCurrentStep({
                   ...currentStepData,
                   delay: (parseInt(e.target.value, 10) || 1) * 1440,
@@ -3963,7 +4032,7 @@ export default function DashboardPage() {
               type="number"
               min="1"
               value={dailyFollowupLimit}
-              onChange={(e) => {
+              onChange={(e: any) => {
                 setDailyFollowupLimit(parseInt(e.target.value, 10) || 1);
                 setHasUnsavedChanges(true);
               }}
@@ -3979,7 +4048,7 @@ export default function DashboardPage() {
               min="1"
               max="20"
               value={followupBatchPerRun}
-              onChange={(e) => {
+              onChange={(e: any) => {
                 setFollowupBatchPerRun(Math.max(1, Math.min(parseInt(e.target.value, 10) || 1, 20)));
                 setHasUnsavedChanges(true);
               }}
@@ -3992,7 +4061,7 @@ export default function DashboardPage() {
             <ShieldCheck size={18} className="text-green-500" />
             <select
               value={triggerMode}
-              onChange={(e) => {
+              onChange={(e: any) => {
                 setTriggerMode(e.target.value as TriggerMode);
                 setHasUnsavedChanges(true);
               }}
@@ -4181,8 +4250,8 @@ export default function DashboardPage() {
 
   const renderCleanupManager = () => {
     const selectedCount = selectedCleanupIds.length;
-    const eligibleCount = leadCleanup.rows.filter((row) => row.eligible && !row.protectedLead).length;
-    const sheetLinkedCount = leadCleanup.rows.filter((row) => row.sheetLinked).length;
+    const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
+    const sheetLinkedCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.sheetLinked).length;
 
     return (
       <div className="space-y-6">
@@ -4208,7 +4277,7 @@ export default function DashboardPage() {
             </button>
             <button
               type="button"
-              onClick={() => loadCleanupCandidates(leadCleanup.bucket)}
+              onClick={() => loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true)}
               disabled={leadCleanup.loading || leadCleanup.actionLoading}
               className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-50 flex items-center gap-2"
             >
@@ -4232,8 +4301,8 @@ export default function DashboardPage() {
                   key={bucket.id}
                   type="button"
                   onClick={() => {
-                    setLeadCleanup((prev) => ({ ...prev, bucket: bucket.id }));
-                    loadCleanupCandidates(bucket.id);
+                    setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket: bucket.id }));
+                    loadCleanupCandidates(bucket.id, true);
                   }}
                   className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${
                     leadCleanup.bucket === bucket.id ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
@@ -4301,8 +4370,8 @@ export default function DashboardPage() {
                     <input
                       type="checkbox"
                       checked={leadCleanup.rows.length > 0 && leadCleanup.rows.every((row) => selectedCleanupIds.includes(row.leadId))}
-                      onChange={(e) => {
-                        setSelectedCleanupIds(e.target.checked ? leadCleanup.rows.map((row) => row.leadId) : []);
+                      onChange={(e: any) => {
+                        setSelectedCleanupIds(e.target.checked ? leadCleanup.rows.map((row: CleanupCandidate) => row.leadId) : []);
                       }}
                     />
                   </th>
@@ -4324,7 +4393,7 @@ export default function DashboardPage() {
                 )}
 
                 {!leadCleanup.loading &&
-                  leadCleanup.rows.map((row) => {
+                  leadCleanup.rows.map((row: CleanupCandidate) => {
                     const checked = selectedCleanupIds.includes(row.leadId);
                     return (
                       <tr key={row.leadId} className={checked ? "bg-blue-50/50" : "hover:bg-gray-50/50"}>
@@ -4424,7 +4493,7 @@ export default function DashboardPage() {
             <button
               type="button"
               data-no-track="true"
-              onClick={(event) => {
+              onClick={(event: any) => {
                 event.preventDefault();
                 event.stopPropagation();
                 loadPostmasterHealth();
