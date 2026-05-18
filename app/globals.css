@@ -1,17 +1,19 @@
-
-/* globals.css ফাইলের একদম উপরে এটি দিন */
-@import 'swiper/css';
-@import 'swiper/css/pagination';
-
 @import "tailwindcss";
+@import "swiper/css";
+@import "swiper/css/pagination";
 
-html {
-  scroll-behavior: smooth;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -21,35 +23,57 @@ html {
   --font-mono: var(--font-geist-mono);
 }
 
-
-/* app/globals.css */
-
 @layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--background);
+  }
+
   body {
-    @apply bg-white text-slate-900 transition-colors duration-300;
+    min-height: 100vh;
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    transition:
+      background-color 300ms ease,
+      color 300ms ease;
   }
-  
-  .dark body {
-    @apply bg-slate-950 text-slate-100;
+
+  html,
+  body {
+    overflow-x: hidden;
   }
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  a {
+    color: inherit;
+    text-decoration: none;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
 
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
 
+  ::selection {
+    background: rgba(37, 99, 235, 0.18);
+    color: #0f172a;
+  }
 
-html, body {
-  height: auto !important; /* height: 100% থাকলে অনেক সময় স্ক্রল টপে যায় না */
-  scroll-behavior: auto !important; /* smooth থাকলে অনেক সময় লজিক কাজ করার আগে স্ক্রল আটকে যায় */
+  .dark ::selection {
+    background: rgba(96, 165, 250, 0.22);
+    color: #ffffff;
+  }
 }

@@ -1,197 +1,353 @@
-"use client"
-import { Mail, MapPin, Send, Loader2 } from 'lucide-react'
-import React, { useState } from 'react'
-import { motion } from 'framer-motion'
-import { BsLinkedin } from 'react-icons/bs'
-import Link from 'next/link'
-import Turnstile from 'react-turnstile' 
+import type { ReactNode } from "react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  ExternalLink,
+  FileSearch,
+  Mail,
+  MapPin,
+  MessageCircle,
+  ShieldCheck,
+  Target,
+  Zap,
+} from "lucide-react";
+import { BsLinkedin } from "react-icons/bs";
 
-const MotionLink = motion(Link);
+const currentYear = new Date().getFullYear();
+
+const businessEmail = "shahjalal@trackflowpro.com";
+
+const whatsappUrl =
+  "https://api.whatsapp.com/send/?phone=%2B8801329532551&text=Hi%20Shahjalal%2C%20I%20need%20help%20with%20conversion%20tracking.&type=phone_number&app_absent=0";
+
+const services = [
+  {
+    label: "Google Ads Conversion Tracking",
+    href: "/services/google-ads-conversion-tracking",
+  },
+  {
+    label: "Server-Side Tracking",
+    href: "/services/server-side-tracking",
+  },
+  {
+    label: "GA4 & GTM Audit",
+    href: "/services/ga4-gtm-audit",
+  },
+  {
+    label: "Meta CAPI Setup",
+    href: "/services/meta-capi",
+  },
+  {
+    label: "Free Google Ads Audit",
+    href: "/free-tracking-audit",
+  },
+];
+
+const resources = [
+  {
+    label: "Blog",
+    href: "/blog",
+  },
+  {
+    label: "Google Ads Tracking Guide",
+    href: "/blog/how-to-set-up-google-ads-conversion-tracking",
+  },
+  {
+    label: "Google Ads Not Tracking",
+    href: "/blog/google-ads-conversions-not-tracking",
+  },
+  {
+    label: "Client-Side vs Server-Side Tracking",
+    href: "/blog/client-side-vs-server-side-tracking",
+  },
+  {
+    label: "Meta Pixel vs Conversions API",
+    href: "/blog/meta-pixel-vs-conversions-api",
+  },
+  {
+    label: "GTM Audit Checklist",
+    href: "/blog/google-tag-manager-audit-checklist",
+  },
+];
+
+const company = [
+  {
+    label: "About",
+    href: "/about",
+  },
+  {
+    label: "Contact",
+    href: "/contact",
+  },
+  {
+    label: "Privacy Policy",
+    href: "/privacy-policy",
+  },
+  {
+    label: "Terms of Service",
+    href: "/terms-of-service",
+  },
+];
+
+const trustPoints = [
+  "Public browser-visible evidence first",
+  "GA4, GTM, Google Ads & Meta CAPI focused",
+  "No login required for the initial review",
+];
 
 export default function Footer() {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-
-  
-  const trackSubscription = async (emailAddress: string) => {
-    try {
-      const gaCookie = typeof document !== 'undefined' ? document.cookie.match(/_ga=(?:GA1\.\d\.)?([\d.]+)/)?.[1] : null;
-      const sessionId = typeof document !== 'undefined' ? document.cookie.match(/_ga_Y0XEPCVC6L=GS1\.1\.([\d]+)/)?.[1] : null;
-
-      await fetch('/api/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_name: "generate_lead",
-          email: emailAddress,
-          service: "Newsletter",
-          clientId: gaCookie || "anonymous",
-          sessionId: sessionId || "none",
-          pageTitle: "Footer Newsletter"
-        }),
-      });
-    } catch (err) {
-      console.error("GA4 Footer Track Error:", err);
-    }
-  };
-
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!turnstileToken) {
-      alert("Please complete the security check!");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email, 
-          captchaToken: turnstileToken 
-        }),
-      });
-
-      if (response.ok) {
-        await trackSubscription(email);
-        alert("Success! You're now subscribed to TrackFlow Pro updates.");
-        setEmail("");
-        setTurnstileToken(null);
-      } else {
-        alert("Subscription failed. Please check the email and try again.");
-      }
-    } catch (error) {
-      console.error("Subscription Error:", error);
-      alert("Something went wrong! Please try again later.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
-    <footer className="bg-slate-950 text-slate-400 pt-24 pb-12">
-      <div className="container mx-auto px-6">
-        
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-20">
-          
-          {/* Brand Column */}
-          <div className="lg:col-span-4 space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <span className="text-white font-black text-xl">T</span>
+    <footer className="relative overflow-hidden border-t border-slate-200 bg-slate-950 text-slate-300 dark:border-slate-900">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-blue-600/15 blur-3xl" />
+        <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-indigo-600/10 blur-3xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <div className="mb-14 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-2xl shadow-blue-950/20 backdrop-blur">
+          <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-center lg:p-10">
+            <div>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Tracking Review
               </div>
-              <span className="text-2xl font-black text-white tracking-tighter">
-                TrackFlow<span className="text-blue-600">Pro</span>
-              </span>
+
+              <h2 className="max-w-3xl text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl lg:text-5xl">
+                Not sure if your Google Ads conversion tracking is accurate?
+              </h2>
+
+              <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-400 sm:text-lg">
+                Start with a tracking-first audit for Google Ads, GA4, GTM, Meta CAPI,
+                enhanced conversions, and server-side measurement issues.
+              </p>
             </div>
-            <p className="text-base leading-relaxed max-w-xs">
-              Advanced GTM Server-Side Tracking and Google Ads optimization for modern agencies.
-            </p>
-            <div className="flex gap-4">
-              {[
-                { icon: <BsLinkedin />, link: "https://www.linkedin.com/in/shahjalal-khan/" },
-              ].map((social, i) => (
-                <MotionLink
-                  key={i}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  whileHover={{ y: -5, color: '#2563eb' }}
-                  href={social.link} 
-                  className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 transition-all hover:border-blue-500/50"
-                >
-                  {social.icon}
-                </MotionLink>
-              ))}
+
+            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-stretch">
+              <Link
+                href="/free-tracking-audit"
+                data-track-event="free_audit_click"
+                data-track-location="footer_cta"
+                className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
+              >
+                Request Free Tracking Review
+                <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
+              </Link>
+
+              <Link
+                href="/contact"
+                data-track-event="contact_click"
+                data-track-location="footer_cta"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:border-blue-400/40 hover:bg-white/[0.06] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+              >
+                Contact Specialist
+              </Link>
             </div>
-          </div>
-
-          {/* Newsletter Section */}
-          <div className="lg:col-span-4 lg:px-6">
-            <h4 className="text-white font-black text-xs uppercase tracking-[0.3em] mb-6">Weekly Insights</h4>
-            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-              Join 500+ marketers. Get GA4 setup tips and tracking hacks directly in your inbox.
-            </p>
-            <form onSubmit={handleSubscribe} className="relative group space-y-4">
-              <div className="relative">
-                <input 
-                  type="email" 
-                  required
-                  disabled={loading}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email" 
-                  className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:border-blue-600 transition-all placeholder:text-slate-600 disabled:opacity-50"
-                />
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center justify-center group-hover:shadow-lg group-hover:shadow-blue-500/20 disabled:bg-slate-700"
-                >
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                </button>
-              </div>
-
-              <div className="flex justify-start overflow-hidden rounded-lg">
-                <Turnstile
-                  sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""} 
-                  onVerify={(token) => setTurnstileToken(token)}
-                  theme="dark"
-                  onExpire={() => setTurnstileToken(null)}
-                  onError={() => setTurnstileToken(null)}
-                />
-              </div>
-            </form>
-            <p className="text-[10px] text-slate-600 mt-4 italic font-medium uppercase tracking-widest">
-              * Secure & Private. No Spam.
-            </p>
-          </div>
-
-          {/* Contact Info Column */}
-          <div className="lg:col-span-4 space-y-8">
-            <h4 className="text-white font-black text-xs uppercase tracking-[0.3em] mb-6">Contact</h4>
-            <ul className="space-y-5">
-              <li className="flex items-center gap-4 group">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                  <Mail size={18} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Email Us</p>
-                  <a href="mailto:shahjalal@trackflowpro.com" className="text-sm font-bold text-white hover:text-blue-500 transition-colors">
-                    shahjalal@trackflowpro.com
-                  </a>
-                </div>
-              </li>
-              <li className="flex items-center gap-4 group">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                  <MapPin size={18} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Location</p>
-                  <p className="text-sm font-bold text-white">Kushtia, Bangladesh</p>
-                </div>
-              </li>
-            </ul>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="pt-10 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-6">
-          <p className="text-xs font-bold text-slate-600 tracking-widest uppercase">
-            Data Quality is our Priority.
-          </p>
-          <div className="flex flex-col items-center md:items-end gap-2 text-[10px] text-slate-500 uppercase tracking-widest font-black">
-            <p>© {new Date().getFullYear()} TrackFlow Pro. All Rights Reserved.</p>
-            <div className="flex gap-6 opacity-60">
-              <Link href="/privacy-policy" className="hover:text-blue-500">Privacy Policy</Link>
-              <Link href="/terms-of-service" className="hover:text-blue-500">Terms of Service</Link>
+        <div className="grid gap-12 lg:grid-cols-[1.1fr_1.9fr]">
+          <div className="space-y-8">
+            <Link href="/" className="inline-flex items-center gap-3" aria-label="TrackFlow Pro home">
+              <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
+                <span className="relative text-2xl font-black tracking-tight">T</span>
+              </span>
+
+              <span>
+                <span className="block text-2xl font-black tracking-[-0.04em] text-white">
+                  TrackFlow<span className="text-blue-400">Pro</span>
+                </span>
+                <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">
+                  Tracking & Attribution
+                </span>
+              </span>
+            </Link>
+
+            <p className="max-w-md text-sm font-medium leading-7 text-slate-400">
+              Specialist support for Google Ads conversion tracking, GA4/GTM audits,
+              Meta Conversions API, enhanced conversions, and server-side measurement.
+            </p>
+
+            <div className="space-y-3">
+              {trustPoints.map((point) => (
+                <div key={point} className="flex items-start gap-3 text-sm font-semibold text-slate-300">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>{point}</span>
+                </div>
+              ))}
             </div>
+
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
+                Direct contact
+              </p>
+
+              <p className="mt-3 text-sm font-medium leading-6 text-slate-400">
+                Prefer not to use the form? Email or WhatsApp directly about your tracking issue.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                <a
+                  href={`mailto:${businessEmail}?subject=Tracking%20Review%20Request`}
+                  data-track-event="direct_email_click"
+                  data-track-location="footer_direct_contact"
+                  className="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-blue-500/10"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <Mail className="h-4 w-4 shrink-0 text-blue-300" />
+                    <span className="truncate">{businessEmail}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-blue-300 transition-transform group-hover:translate-x-0.5" />
+                </a>
+
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-track-event="whatsapp_click"
+                  data-track-location="footer_direct_contact"
+                  className="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-emerald-400/40 hover:bg-emerald-500/10"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <MessageCircle className="h-4 w-4 shrink-0 text-emerald-300" />
+                    <span className="truncate">WhatsApp: +880 1329-532551</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-emerald-300 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="https://www.linkedin.com/in/shahjalal-khan/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-slate-300 transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-blue-300"
+                aria-label="LinkedIn profile"
+              >
+                <BsLinkedin className="h-5 w-5" />
+              </a>
+
+              <Link
+                href="/contact"
+                data-track-event="contact_click"
+                data-track-location="footer_social_row"
+                className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm font-black text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-white"
+              >
+                <Mail className="h-4 w-4" />
+                Contact
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <FooterColumn title="Services" links={services} featuredIcon={<Target className="h-4 w-4" />} />
+            <FooterColumn title="Resources" links={resources} featuredIcon={<BookIcon />} />
+            <FooterColumn title="Company" links={company} featuredIcon={<FileSearch className="h-4 w-4" />} />
+
+            <div>
+              <div className="mb-5 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">
+                <BarChart3 className="h-4 w-4" />
+                Focus
+              </div>
+
+              <div className="space-y-3">
+                <FocusPill icon={<Target className="h-4 w-4" />} label="Google Ads Tracking" />
+                <FocusPill icon={<ShieldCheck className="h-4 w-4" />} label="Server-Side Tracking" />
+                <FocusPill icon={<FileSearch className="h-4 w-4" />} label="GA4 & GTM Audit" />
+                <FocusPill icon={<Zap className="h-4 w-4" />} label="Meta CAPI" />
+              </div>
+
+              <div className="mt-7 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-black text-white">
+                  <MapPin className="h-4 w-4 text-blue-300" />
+                  Remote Specialist
+                </div>
+
+                <p className="text-sm font-medium leading-6 text-slate-400">
+                  Serving businesses remotely with tracking audits, implementation reviews,
+                  and measurement strategy.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-14 border-t border-white/10 pt-8">
+          <div className="flex flex-col gap-5 text-sm font-medium text-slate-500 md:flex-row md:items-center md:justify-between">
+            <p>© {currentYear} TrackFlow Pro. All rights reserved.</p>
+            <p className="max-w-3xl leading-6">
+              Audit notes are based on public browser-visible evidence first. Final confirmation may require access to GA4, GTM, Google Ads, Meta, CRM, or server-side logs.
+            </p>
           </div>
         </div>
       </div>
     </footer>
-  )
+  );
+}
+
+function FooterColumn({
+  title,
+  links,
+  featuredIcon,
+}: {
+  title: string;
+  links: Array<{ label: string; href: string }>;
+  featuredIcon: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-5 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">
+        {featuredIcon}
+        {title}
+      </div>
+
+      <ul className="space-y-3">
+        {links.map((link) => (
+          <li key={link.href}>
+            <Link
+              href={link.href}
+              className="group inline-flex items-center gap-2 text-sm font-bold leading-6 text-slate-400 transition hover:text-white"
+            >
+              <span>{link.label}</span>
+              <ExternalLink className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FocusPill({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-black text-slate-300">
+      <span className="text-blue-300">{icon}</span>
+      {label}
+    </div>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 5.5A2.5 2.5 0 0 1 7.5 8H19"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
