@@ -1,13 +1,8 @@
-import senderConfig from "./senders.config.json";
-
-type RawSenderConfig = {
-  mainInboxEmail?: string;
-  mainInboxName?: string;
-  brandName?: string;
-  brandWebsite?: string;
-  brandWebsiteLabel?: string;
-  senders?: Array<Partial<SenderAccount>>;
-};
+export const MAIN_INBOX_EMAIL = "shahjalal@trackflowpro.com";
+export const MAIN_INBOX_NAME = "Shahjalal Khan";
+export const BRAND_NAME = "TrackFlowPro";
+export const BRAND_WEBSITE = "https://trackflowpro.com";
+export const BRAND_WEBSITE_LABEL = "trackflowpro.com";
 
 export type SenderAccount = {
   id: string;
@@ -28,68 +23,60 @@ export type ApiSenderAccount = {
   dailyLimit: number;
 };
 
-const config = senderConfig as RawSenderConfig;
-
 /**
- * TrackFlowPro sender config
+ * TrackFlowPro verified sender allowlist.
  *
- * Source of truth:
- *   lib/senders.config.json
+ * Keep this file as the single source of truth for both:
+ * - frontend sender dropdown / preview
+ * - backend Brevo sender validation
  *
- * Why this is free-limit friendly:
- * - Sender emails are NOT stored in Firebase.
- * - Frontend dropdown and backend Brevo validation both read this local config.
- * - To add/remove sender emails, edit senders.config.json and redeploy/restart.
+ * No Firestore sender collection is required, so this does not add reads.
+ * After changing this file, redeploy the app so both frontend and API use the update.
  */
+export const SENDERS: SenderAccount[] = [
+  {
+    id: "shahjalal-mail",
+    name: "Shahjalal Khan",
+    email: "shahjalal@mail.trackflowpro.com",
+    replyToEmail: MAIN_INBOX_EMAIL,
+    replyToName: MAIN_INBOX_NAME,
+    limit: 50,
+    active: true,
+  },
+  {
+    id: "hello-mail",
+    name: "Shahjalal Khan",
+    email: "hello@mail.trackflowpro.com",
+    replyToEmail: MAIN_INBOX_EMAIL,
+    replyToName: MAIN_INBOX_NAME,
+    limit: 50,
+    active: true,
+  },
+  {
+    id: "support-mail",
+    name: "Shahjalal Khan",
+    email: "support@mail.trackflowpro.com",
+    replyToEmail: MAIN_INBOX_EMAIL,
+    replyToName: MAIN_INBOX_NAME,
+    limit: 50,
+    active: true,
+  },
+  {
+    id: "shahjalal-main",
+    name: "Shahjalal Khan",
+    email: "shahjalal@trackflowpro.com",
+    replyToEmail: MAIN_INBOX_EMAIL,
+    replyToName: MAIN_INBOX_NAME,
+    limit: 50,
+    active: true,
+  },
+];
 
-function clean(value: unknown, fallback = ""): string {
-  const text = String(value || "").trim();
-  return text || fallback;
-}
-
-export const MAIN_INBOX_EMAIL = clean(config.mainInboxEmail, "shahjalal@trackflowpro.com").toLowerCase();
-export const MAIN_INBOX_NAME = clean(config.mainInboxName, "Shahjalal Khan");
-export const BRAND_NAME = clean(config.brandName, "TrackFlowPro");
-export const BRAND_WEBSITE = clean(config.brandWebsite, "https://trackflowpro.com");
-export const BRAND_WEBSITE_LABEL = clean(config.brandWebsiteLabel, "trackflowpro.com");
+export const ACTIVE_SENDERS = SENDERS.filter((sender) => sender.active);
 
 export function normalizeSenderEmail(email: string): string {
   return String(email || "").trim().toLowerCase();
 }
-
-function normalizeSender(raw: Partial<SenderAccount>, index: number): SenderAccount | null {
-  const email = normalizeSenderEmail(String(raw.email || ""));
-  if (!email || !email.includes("@")) return null;
-
-  const id =
-    clean(raw.id, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, "-")
-      .replace(/^-+|-+$/g, "") ||
-    email
-      .split("@")[0]
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, "-") ||
-    `sender-${index + 1}`;
-
-  return {
-    id,
-    name: clean(raw.name, MAIN_INBOX_NAME),
-    email,
-    replyToEmail: normalizeSenderEmail(String(raw.replyToEmail || MAIN_INBOX_EMAIL || email)),
-    replyToName: clean(raw.replyToName, MAIN_INBOX_NAME),
-    limit: Math.max(1, Math.min(Number(raw.limit || 50), 500)),
-    active: raw.active !== false,
-  };
-}
-
-const rawSenders = Array.isArray(config.senders) ? config.senders : [];
-
-export const SENDERS: SenderAccount[] = rawSenders
-  .map((sender, index) => normalizeSender(sender, index))
-  .filter((sender): sender is SenderAccount => Boolean(sender));
-
-export const ACTIVE_SENDERS = SENDERS.filter((sender) => sender.active);
 
 export function getSenderById(senderId: string): SenderAccount | null {
   const id = String(senderId || "").trim();

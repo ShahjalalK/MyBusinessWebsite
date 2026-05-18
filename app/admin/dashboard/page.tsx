@@ -64,7 +64,6 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import AdminGuard from "@/app/components/AdminGuard";
 import Navbar from "@/app/components/navbar";
-import Footer from "@/app/components/footer";
 import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, type SenderAccount } from "../../../lib/senders";
 import { useLeadStore, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
@@ -4808,14 +4807,16 @@ export default function DashboardPage() {
   );
 
   if (loading) {
-    return <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase text-xs">Syncing Command Center...</div>;
+    return <div className="min-h-screen bg-[#FAFBFF] px-4 pt-28 text-center text-xs font-black uppercase text-blue-600 animate-pulse">
+        Syncing Command Center...
+      </div>
   }
 
   return (
     <>
       <Navbar />
       <AdminGuard>
-        <div data-no-track="true" className="max-w-7xl mx-auto p-4 lg:p-10 bg-[#FAFBFF] min-h-screen">
+        <div data-no-track="true" className="min-h-screen bg-[#FAFBFF] px-4 pb-4 pt-24 lg:px-10 lg:pb-10 lg:pt-28">
           <div className="flex flex-col xl:flex-row justify-between mb-8 gap-6 items-start xl:items-end">
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">TrackFlowPro Command Center</h1>
@@ -4871,8 +4872,9 @@ export default function DashboardPage() {
             }
           `}</style>
         </div>
+        
       </AdminGuard>
-      <Footer />
+     
     </>
   );
 }
