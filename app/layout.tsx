@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -88,7 +89,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="min-h-screen bg-background text-foreground transition-colors duration-300">
         <ThemeProvider>
-          <ServerTrack />
+           <Suspense fallback={null}>
+              <ServerTrack />
+            </Suspense>
+          
           {children}
         </ThemeProvider>
 

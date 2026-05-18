@@ -22,6 +22,16 @@ export type CachedLead = {
   click_count?: number;
   stopAutomation?: boolean;
   service?: string;
+  reportUrl?: string;
+  reportToken?: string;
+  reportReady?: boolean;
+  reportViewedAt?: any;
+  pdfFileId?: string;
+  pdfViewUrl?: string;
+  pdfDownloadUrl?: string;
+  pdfExpiresAt?: any;
+  pdfDownloadedAt?: any;
+  reportCtaClickedAt?: any;
   sender_email?: string;
   sender_name?: string;
   nextFollowupAt?: any;
@@ -40,6 +50,7 @@ type LeadFetchOptions = {
   view?: LeadViewFilter;
   month?: string;
   status?: string;
+  reportReadyOnly?: boolean;
 };
 
 type LeadStoreState = {

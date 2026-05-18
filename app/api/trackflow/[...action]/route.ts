@@ -113,6 +113,11 @@ type LeadData = {
   include_signature?: boolean;
   reportUrl?: string;
   reportButtonText?: string;
+  reportToken?: string;
+  pdfFileId?: string;
+  pdfViewUrl?: string;
+  pdfDownloadUrl?: string;
+  pdfExpiresAt?: any;
   sheetRowNumber?: number;
   sheetWebsiteUrl?: string;
   sheetFinalEmail?: string;
@@ -195,6 +200,11 @@ const SendInitialBodySchema = z
     allowDuplicateSend: z.boolean().optional(),
     allowCooldownOverride: z.boolean().optional(),
     trackingId: z.string().optional(),
+    reportToken: z.string().optional(),
+    pdfFileId: z.string().optional(),
+    pdfViewUrl: z.string().optional(),
+    pdfDownloadUrl: z.string().optional(),
+    pdfExpiresAt: z.any().optional(),
     sheetRowNumber: z.any().optional(),
     sheetWebsiteUrl: z.string().optional(),
     websiteUrl: z.string().optional(),
@@ -540,25 +550,177 @@ function sanitizeOptionalUrl(value: string): string {
   }
 }
 
-function buildReportLinkBlock(reportUrl?: string, buttonText = "View short audit note") {
-  const safeUrl = sanitizeOptionalUrl(reportUrl || "");
+function buildReportLinkBlock(reportUrl?: string, buttonText = "View private audit note") {
+  const safeUrl = sanitizePublicReportUrl(reportUrl || "");
   if (!safeUrl) return "";
 
-  const safeText = escapeHtml(buttonText || "View short audit note").slice(0, 80);
+  const safeText = escapeHtml(buttonText || "View private audit note").slice(0, 80);
 
-  // Outlook-safe: no button, no border-radius dependency, no complex CSS.
+  // Agency-style, Outlook-safe CTA. Keep it as a table so Brevo/Outlook render consistently.
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:14px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:18px 0 2px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
       <tr>
         <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:0;">
-          Short audit note:
-          <a href="${safeUrl}" target="_blank" style="color:#2563eb;text-decoration:underline;font-weight:bold;">
-            ${safeText}
-          </a>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+            <tr>
+              <td bgcolor="#0f172a" style="border-radius:6px;background:#0f172a;mso-padding-alt:10px 14px;">
+                <a href="${safeUrl}" target="_blank" style="display:inline-block;padding:10px 14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#ffffff;text-decoration:none;font-weight:bold;">
+                  ${safeText}
+                </a>
+              </td>
+            </tr>
+          </table>
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;margin-top:8px;">
+            Private TrackFlow Pro audit note · PDF opens from the secure report page.
+          </div>
         </td>
       </tr>
     </table>
   `;
+}
+
+function appBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL || BRAND_WEBSITE || "https://trackflowpro.com").replace(/\/+$/, "");
+}
+
+function normalizeReportToken(value: any): string {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 96);
+}
+
+function createReportToken(): string {
+  return randomUUID().replace(/-/g, "");
+}
+
+function buildPublicReportUrl(token: string): string {
+  return `${appBaseUrl()}/r/${encodeURIComponent(token)}`;
+}
+
+function isLocalOrUnsafeReportUrl(value: string): boolean {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return true;
+  if (raw.includes("localhost") || raw.includes("127.0.0.1") || raw.includes("0.0.0.0")) return true;
+  if (raw.includes("/audit/pdf/") || raw.includes(":8000/")) return true;
+  // Email/report URL must be the branded TrackFlow /r/{token} page, not a direct PDF/Drive link.
+  if (raw.includes("drive.google.com") || raw.includes("googleusercontent.com")) return true;
+  if (/\.pdf(?:$|[?#])/.test(raw)) return true;
+  return false;
+}
+
+function sanitizePublicReportUrl(value: any): string {
+  const url = sanitizeOptionalUrl(String(value || ""));
+  if (!url || isLocalOrUnsafeReportUrl(url)) return "";
+  return url;
+}
+
+function sanitizeLocalRedirectTarget(value: any): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "/contact";
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  const safe = sanitizeOptionalUrl(raw);
+  if (!safe) return "/contact";
+  try {
+    const url = new URL(safe);
+    const app = new URL(appBaseUrl());
+    if (url.hostname === app.hostname) return `${url.pathname}${url.search}${url.hash}`;
+  } catch {}
+  return "/contact";
+}
+
+function firstCleanString(...values: any[]): string {
+  for (const value of values) {
+    const text = cleanCell(value || "");
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeStringArray(value: any, maxItems = 8): string[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\n|\||;/g)
+      : [];
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const item of rawItems) {
+    const text = cleanCell(item || "");
+    if (!text || seen.has(text.toLowerCase())) continue;
+    seen.add(text.toLowerCase());
+    output.push(text);
+    if (output.length >= maxItems) break;
+  }
+  return output;
+}
+
+async function requireReportRegisterAccess(req: Request) {
+  const expected = process.env.REPORT_REGISTER_SECRET || "";
+  if (expected) {
+    const authHeader = req.headers.get("authorization") || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+    const secret = req.headers.get("x-report-register-secret") || bearer;
+    if (secret && safeEqual(secret, expected)) return { uid: "report-register-secret", email: "python-export" };
+  }
+  return await requireAdmin(req);
+}
+
+function getReportTimestamp(value: any, fallbackDays = 30) {
+  const parsed = timestampFromAny(value);
+  if (parsed) return parsed;
+  return admin.firestore.Timestamp.fromMillis(Date.now() + fallbackDays * 24 * 60 * 60 * 1000);
+}
+
+function normalizeReportPayload(body: AnyRecord = {}) {
+  const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
+  const pdfViewUrl = sanitizeOptionalUrl(body.pdfViewUrl || body.pdf_view_url || body.driveViewUrl || body.drive_view_url || body.pdfUrl || body.pdf_url || "");
+  const pdfDownloadUrl = sanitizeOptionalUrl(body.pdfDownloadUrl || body.pdf_download_url || body.driveDownloadUrl || body.drive_download_url || "");
+  const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token);
+  const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
+  const companyName = firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, domain);
+  const headline = firstCleanString(
+    body.headline,
+    body.clientMessageHeadline,
+    body.client_message_headline,
+    body.mainIssue,
+    body.main_issue,
+    "Private tracking audit note"
+  );
+  const mainFinding = firstCleanString(body.mainFinding, body.main_finding, body.mainIssue, body.main_issue, body.problemSummary, body.problem_summary);
+  const businessImpact = firstCleanString(body.businessImpact, body.business_impact, body.impact, body.messageAngle, body.message_angle);
+  const proofPoints = normalizeStringArray(body.proofPoints || body.proof_points || body.evidencePoints || body.evidence_points, 10);
+  const recommendations = normalizeStringArray(body.recommendations || body.fixRecommendations || body.fix_recommendations, 8);
+  const email = normalizeEmail(body.email || body.finalEmail || body.final_email || "");
+  const leadId = firstCleanString(body.leadId, body.firestoreLeadId, body.firestore_lead_id);
+  const sheetRowNumber = Number(body.sheetRowNumber || body.sheet_row_number || 0) || null;
+  const pdfExpiresAt = getReportTimestamp(body.pdfExpiresAt || body.pdf_expires_at || body.expiresAt || body.expires_at, 45);
+
+  return {
+    token,
+    reportUrl,
+    domain,
+    websiteUrl: firstCleanString(body.websiteUrl, body.website_url, body.website, domain ? `https://${domain}` : ""),
+    companyName,
+    email,
+    headline,
+    mainFinding,
+    businessImpact,
+    proofPoints,
+    recommendations,
+    pdfFileId: firstCleanString(body.pdfFileId, body.pdf_file_id, body.driveFileId, body.drive_file_id, body.googleDriveFileId),
+    pdfViewUrl,
+    pdfDownloadUrl,
+    pdfExpiresAt,
+    leadId,
+    sheetRowNumber,
+    source: firstCleanString(body.source, "python_drive_oauth_export"),
+    auditId: firstCleanString(body.auditId, body.audit_id, body.sourceAuditId, body.source_audit_id),
+    storageProvider: firstCleanString(body.storageProvider, body.storage_provider, "google_drive_oauth"),
+    contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
+    ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, "/contact"),
+    ctaText: firstCleanString(body.ctaText, body.cta_text, "Book a tracking review"),
+  };
 }
 
 type SignatureMode = "full" | "compact" | "none";
@@ -914,8 +1076,10 @@ async function sendInitialFromBody(rawBody: any) {
 
   const includeSignature = body.includeSignature !== false;
   const rawReportUrl = String(body.reportUrl || "").trim();
-  const reportUrl = sanitizeOptionalUrl(rawReportUrl);
-  if (rawReportUrl && !reportUrl) throw new ApiError("Invalid report URL", 400);
+  const reportUrl = rawReportUrl ? sanitizePublicReportUrl(rawReportUrl) : "";
+  if (rawReportUrl && !reportUrl) {
+    throw new ApiError("Invalid or unsafe report URL. Use the secure TrackFlow /r/{token} report URL, not localhost or a direct PDF/Drive URL.", 400);
+  }
   const reportButtonText = String(body.reportButtonText || "View short audit note").trim().slice(0, 80);
 
   const sender = getSenderFromBody(body);
@@ -1003,6 +1167,11 @@ async function sendInitialFromBody(rawBody: any) {
     signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
     reportUrl,
     reportButtonText,
+    reportToken: normalizeReportToken(body.reportToken || body.report_token || ""),
+    pdfFileId: String(body.pdfFileId || body.pdf_file_id || "").trim(),
+    pdfViewUrl: sanitizeOptionalUrl(body.pdfViewUrl || body.pdf_view_url || ""),
+    pdfDownloadUrl: sanitizeOptionalUrl(body.pdfDownloadUrl || body.pdf_download_url || ""),
+    pdfExpiresAt: body.pdfExpiresAt || body.pdf_expires_at || null,
     sheetRowNumber: Number(body.sheetRowNumber || 0) || null,
     sheetWebsiteUrl: String(body.sheetWebsiteUrl || body.websiteUrl || "").trim(),
     sheetFinalEmail: String(body.sheetFinalEmail || body.email || "").trim(),
@@ -2334,6 +2503,33 @@ async function handleBrevoWebhook(req: Request) {
     await docRef.update(updatePayload);
   }
 
+  const sheetRowNumber = Number(leadData.sheetRowNumber || 0);
+  if (sheetRowNumber > 1 && ["opened", "click", "hard_bounce", "soft_bounce", "spam", "unsubscribed", "delivered"].includes(event)) {
+    const sheetUpdates: AnyRecord = {};
+    if (event === "opened") {
+      sheetUpdates.openCount = String(Number(leadData.open_count || 0) + 1);
+      sheetUpdates.lastReportViewedAt = nowDhaka();
+    }
+    if (event === "click") {
+      sheetUpdates.clickCount = String(Number(leadData.click_count || 0) + 1);
+      sheetUpdates.lastReportViewedAt = nowDhaka();
+    }
+    if (event === "delivered") sheetUpdates.sendStatus = "Sent";
+    if (event === "hard_bounce" || event === "soft_bounce") {
+      sheetUpdates.sendStatus = "Bounced";
+      sheetUpdates.replyStatus = "Bounced";
+    }
+    if (event === "spam") {
+      sheetUpdates.sendStatus = "Spam";
+      sheetUpdates.replyStatus = "Spam";
+    }
+    if (event === "unsubscribed") {
+      sheetUpdates.sendStatus = "Unsubscribed";
+      sheetUpdates.replyStatus = "Unsubscribed";
+    }
+    if (Object.keys(sheetUpdates).length) await patchSheetRowSafely(sheetRowNumber, sheetUpdates);
+  }
+
   await addEmailEvent(leadDoc.id, event || "unknown", {
     emailLower: dbEmailLower || emailLower,
     trackingTag: receivedTag || "",
@@ -2512,7 +2708,18 @@ const HEADERS = [
   'Lead Label',
   'Main Issue',
   'Proof Points',
+  'Report Token',
   'Report URL',
+  'PDF File ID',
+  'PDF View URL',
+  'PDF Download URL',
+  'PDF Expires At',
+  'Report Page Viewed',
+  'PDF Downloaded',
+  'CTA Clicked',
+  'Last Report Viewed At',
+  'Last PDF Downloaded At',
+  'Last CTA Clicked At',
   'Email Subject',
   'Email Body',
   'Decision Maker',
@@ -2555,6 +2762,12 @@ const CONTROL_HEADERS = new Set<HeaderName>([
   'Firestore Lead ID',
   'Open Count',
   'Click Count',
+  'Report Page Viewed',
+  'PDF Downloaded',
+  'CTA Clicked',
+  'Last Report Viewed At',
+  'Last PDF Downloaded At',
+  'Last CTA Clicked At',
   'Reply Status',
   'Archive Status',
   'Notes',
@@ -2588,6 +2801,28 @@ const UPDATE_KEY_MAP: Record<string, HeaderName> = {
   leadLabel: 'Lead Label',
   mainIssue: 'Main Issue',
   proofPoints: 'Proof Points',
+  reportToken: 'Report Token',
+  report_token: 'Report Token',
+  pdfFileId: 'PDF File ID',
+  pdf_file_id: 'PDF File ID',
+  pdfViewUrl: 'PDF View URL',
+  pdf_view_url: 'PDF View URL',
+  pdfDownloadUrl: 'PDF Download URL',
+  pdf_download_url: 'PDF Download URL',
+  pdfExpiresAt: 'PDF Expires At',
+  pdf_expires_at: 'PDF Expires At',
+  reportPageViewed: 'Report Page Viewed',
+  report_page_viewed: 'Report Page Viewed',
+  pdfDownloaded: 'PDF Downloaded',
+  pdf_downloaded: 'PDF Downloaded',
+  ctaClicked: 'CTA Clicked',
+  cta_clicked: 'CTA Clicked',
+  lastReportViewedAt: 'Last Report Viewed At',
+  last_report_viewed_at: 'Last Report Viewed At',
+  lastPdfDownloadedAt: 'Last PDF Downloaded At',
+  last_pdf_downloaded_at: 'Last PDF Downloaded At',
+  lastCtaClickedAt: 'Last CTA Clicked At',
+  last_cta_clicked_at: 'Last CTA Clicked At',
   reportUrl: 'Report URL',
   reportURL: 'Report URL',
   emailSubject: 'Email Subject',
@@ -2634,7 +2869,18 @@ const COLUMN_WIDTHS: Partial<Record<HeaderName, number>> = {
   'Lead Label': 130,
   'Main Issue': 300,
   'Proof Points': 360,
-  'Report URL': 260,
+  'Report Token': 180,
+  'Report URL': 280,
+  'PDF File ID': 210,
+  'PDF View URL': 280,
+  'PDF Download URL': 280,
+  'PDF Expires At': 150,
+  'Report Page Viewed': 145,
+  'PDF Downloaded': 135,
+  'CTA Clicked': 125,
+  'Last Report Viewed At': 175,
+  'Last PDF Downloaded At': 185,
+  'Last CTA Clicked At': 175,
   'Email Subject': 260,
   'Email Body': 420,
   'Decision Maker': 190,
@@ -2948,15 +3194,100 @@ function getServiceType(audit?: AnyRecord, lead?: AnyRecord): string {
 
 function getReportUrl(audit?: AnyRecord, lead?: AnyRecord): string {
   const manual = getManualUpdate(audit, lead);
+  const candidates = [
+    manual?.report_url,
+    manual?.reportUrl,
+    lead?.reportUrl,
+    lead?.report_url,
+    audit?.report_url,
+    audit?.reportUrl,
+    audit?.exports?.report_url,
+    audit?.exports?.reportUrl,
+    audit?.nextjs_payload?.report_url,
+    audit?.nextjs_payload?.reportUrl,
+  ];
+  for (const candidate of candidates) {
+    const safe = sanitizePublicReportUrl(candidate);
+    if (safe) return cleanCell(safe);
+  }
+  return '';
+}
+
+function getReportToken(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
   return cleanCell(
-    manual?.report_url ||
-      manual?.pdf_url ||
-      lead?.reportUrl ||
-      lead?.report_url ||
-      audit?.evidence?.pdf_url ||
-      audit?.pdf_url ||
-      audit?.report_url ||
-      audit?.exports?.pdf_url ||
+    manual?.report_token ||
+      manual?.reportToken ||
+      lead?.reportToken ||
+      lead?.report_token ||
+      audit?.report_token ||
+      audit?.reportToken ||
+      audit?.exports?.report_token ||
+      audit?.exports?.reportToken ||
+      '',
+  );
+}
+
+function getPdfFileId(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    manual?.pdf_file_id ||
+      manual?.pdfFileId ||
+      lead?.pdfFileId ||
+      lead?.pdf_file_id ||
+      audit?.pdf_file_id ||
+      audit?.pdfFileId ||
+      audit?.exports?.pdf_file_id ||
+      audit?.exports?.pdfFileId ||
+      '',
+  );
+}
+
+function getPdfViewUrl(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    sanitizeOptionalUrl(
+      manual?.pdf_view_url ||
+        manual?.pdfViewUrl ||
+        lead?.pdfViewUrl ||
+        lead?.pdf_view_url ||
+        audit?.pdf_view_url ||
+        audit?.pdfViewUrl ||
+        audit?.exports?.pdf_view_url ||
+        audit?.exports?.pdfViewUrl ||
+        '',
+    ),
+  );
+}
+
+function getPdfDownloadUrl(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    sanitizeOptionalUrl(
+      manual?.pdf_download_url ||
+        manual?.pdfDownloadUrl ||
+        lead?.pdfDownloadUrl ||
+        lead?.pdf_download_url ||
+        audit?.pdf_download_url ||
+        audit?.pdfDownloadUrl ||
+        audit?.exports?.pdf_download_url ||
+        audit?.exports?.pdfDownloadUrl ||
+        '',
+    ),
+  );
+}
+
+function getPdfExpiresAt(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    manual?.pdf_expires_at ||
+      manual?.pdfExpiresAt ||
+      lead?.pdfExpiresAt ||
+      lead?.pdf_expires_at ||
+      audit?.pdf_expires_at ||
+      audit?.pdfExpiresAt ||
+      audit?.exports?.pdf_expires_at ||
+      audit?.exports?.pdfExpiresAt ||
       '',
   );
 }
@@ -3124,7 +3455,18 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
     'Lead Label': getLeadLabel(audit, lead),
     'Main Issue': getMainProblem(audit, lead),
     'Proof Points': cleanCell(getProofPoints(audit, lead).join(' | ')),
+    'Report Token': getReportToken(audit, lead),
     'Report URL': getReportUrl(audit, lead),
+    'PDF File ID': getPdfFileId(audit, lead),
+    'PDF View URL': getPdfViewUrl(audit, lead),
+    'PDF Download URL': getPdfDownloadUrl(audit, lead),
+    'PDF Expires At': getPdfExpiresAt(audit, lead),
+    'Report Page Viewed': getExistingOrDefault(existing, 'Report Page Viewed', 'No', lead?.reportPageViewed),
+    'PDF Downloaded': getExistingOrDefault(existing, 'PDF Downloaded', 'No', lead?.pdfDownloaded),
+    'CTA Clicked': getExistingOrDefault(existing, 'CTA Clicked', 'No', lead?.ctaClicked),
+    'Last Report Viewed At': getExistingOrDefault(existing, 'Last Report Viewed At', '', lead?.lastReportViewedAt),
+    'Last PDF Downloaded At': getExistingOrDefault(existing, 'Last PDF Downloaded At', '', lead?.lastPdfDownloadedAt),
+    'Last CTA Clicked At': getExistingOrDefault(existing, 'Last CTA Clicked At', '', lead?.lastCtaClickedAt),
     'Email Subject': getEmailSubject(audit, lead),
     'Email Body': getEmailBody(audit, lead),
     'Decision Maker': decisionMaker.name,
@@ -3701,6 +4043,230 @@ async function handleSheetLeadsPatch(req: Request) {
 }
 
 
+async function patchSheetRowSafely(rowNumber: number, updates: AnyRecord) {
+  if (!rowNumber || rowNumber <= 1) return;
+  try {
+    const { sheets, spreadsheetId } = await getSheetsClient();
+    await ensureHeaderRow(sheets, spreadsheetId);
+    const existing = await readSingleSheetRow(sheets, spreadsheetId, rowNumber);
+    if (!existing || !Object.keys(existing).length) return;
+    const normalized = normalizeUpdateObject(updates || {});
+    await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, { ...existing, ...normalized });
+  } catch (error) {
+    console.warn("Sheet patch skipped:", error);
+  }
+}
+
+async function handleReportRegister(req: Request) {
+  await requireReportRegisterAccess(req);
+  const rawBody = await readJson(req);
+  const body = rawBody?.report || rawBody;
+  const report = normalizeReportPayload(body || {});
+
+  if (!report.domain && !report.websiteUrl) {
+    throw new ApiError("domain or websiteUrl is required for report registration", 400);
+  }
+  if (!report.companyName) {
+    throw new ApiError("companyName or businessName is required for report registration", 400);
+  }
+  if (!report.pdfViewUrl && !report.pdfDownloadUrl) {
+    throw new ApiError("pdfViewUrl or pdfDownloadUrl is required", 400);
+  }
+  if (!report.reportUrl || isLocalOrUnsafeReportUrl(report.reportUrl)) {
+    throw new ApiError("A secure public reportUrl is required. Use NEXT_PUBLIC_APP_URL/r/{token}, not localhost or a direct PDF URL.", 400);
+  }
+
+  const reportRef = adminDb.collection("audit_reports").doc(report.token);
+  const existing = await reportRef.get();
+  const existingData = existing.exists ? existing.data() || {} : {};
+
+  const payload: AnyRecord = {
+    token: report.token,
+    reportUrl: report.reportUrl,
+    domain: report.domain,
+    websiteUrl: report.websiteUrl,
+    companyName: report.companyName,
+    email: report.email,
+    headline: report.headline,
+    mainFinding: report.mainFinding,
+    businessImpact: report.businessImpact,
+    proofPoints: report.proofPoints,
+    recommendations: report.recommendations,
+    pdfFileId: report.pdfFileId,
+    pdfViewUrl: report.pdfViewUrl,
+    pdfDownloadUrl: report.pdfDownloadUrl,
+    pdfExpiresAt: report.pdfExpiresAt,
+    leadId: report.leadId,
+    sheetRowNumber: report.sheetRowNumber,
+    source: report.source,
+    sourceAuditId: report.auditId,
+    storageProvider: report.storageProvider,
+    contactEmail: report.contactEmail,
+    ctaUrl: report.ctaUrl,
+    ctaText: report.ctaText,
+    active: body?.active === false ? false : true,
+    reportReady: true,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastRegisteredAt: admin.firestore.FieldValue.serverTimestamp(),
+    viewCount: Number(existingData.viewCount || 0),
+    downloadCount: Number(existingData.downloadCount || 0),
+    ctaClickCount: Number(existingData.ctaClickCount || 0),
+  };
+
+  if (!existing.exists) {
+    payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+
+  await reportRef.set(payload, { merge: true });
+
+  if (report.leadId) {
+    await adminDb.collection("outreach_leads").doc(report.leadId).set(
+      {
+        reportToken: report.token,
+        reportUrl: report.reportUrl,
+        pdfFileId: report.pdfFileId,
+        pdfViewUrl: report.pdfViewUrl,
+        pdfDownloadUrl: report.pdfDownloadUrl,
+        pdfExpiresAt: report.pdfExpiresAt,
+        reportReady: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        tracking_history: admin.firestore.FieldValue.arrayUnion({
+          event: "report_registered",
+          reportToken: report.token,
+          time: admin.firestore.Timestamp.now(),
+        }),
+      },
+      { merge: true },
+    );
+  }
+
+  let sheetUpdated = false;
+  if (Number(report.sheetRowNumber || 0) > 1) {
+    await patchSheetRowSafely(Number(report.sheetRowNumber), {
+      reportToken: report.token,
+      reportUrl: report.reportUrl,
+      pdfFileId: report.pdfFileId,
+      pdfViewUrl: report.pdfViewUrl,
+      pdfDownloadUrl: report.pdfDownloadUrl,
+      pdfExpiresAt: report.pdfExpiresAt,
+      reportPageViewed: "No",
+      pdfDownloaded: "No",
+      ctaClicked: "No",
+      notes: "Secure report registered and PDF uploaded.",
+    });
+    sheetUpdated = true;
+  }
+
+  return json({
+    success: true,
+    message: "Secure report registered successfully.",
+    token: report.token,
+    reportToken: report.token,
+    reportUrl: report.reportUrl,
+    pdfFileId: report.pdfFileId,
+    pdfViewUrl: report.pdfViewUrl,
+    pdfDownloadUrl: report.pdfDownloadUrl,
+    pdfExpiresAt: report.pdfExpiresAt,
+    leadId: report.leadId,
+    sheetRowNumber: report.sheetRowNumber,
+    sheetUpdated,
+    storageProvider: report.storageProvider,
+  });
+}
+
+async function getActiveReportByToken(tokenRaw: any) {
+  const token = normalizeReportToken(tokenRaw);
+  if (!token) throw new ApiError("Report token is required", 400);
+
+  const snap = await adminDb.collection("audit_reports").doc(token).get();
+  if (!snap.exists) throw new ApiError("Report not found", 404);
+  const report = snap.data() || {};
+
+  if (report.active === false) throw new ApiError("Report is no longer available", 410);
+  const expiresAtMs = toMillis(report.pdfExpiresAt || report.expiresAt);
+  if (expiresAtMs && Date.now() > expiresAtMs) throw new ApiError("Report has expired", 410);
+
+  return { token, ref: snap.ref, report };
+}
+
+async function handleReportDownload(req: Request) {
+  const url = new URL(req.url);
+  const { token, ref, report } = await getActiveReportByToken(url.searchParams.get("token"));
+
+  await ref.set(
+    {
+      downloadCount: admin.firestore.FieldValue.increment(1),
+      lastDownloadedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  if (report.leadId) {
+    await adminDb.collection("outreach_leads").doc(String(report.leadId)).set(
+      {
+        pdfDownloadedAt: admin.firestore.FieldValue.serverTimestamp(),
+        tracking_history: admin.firestore.FieldValue.arrayUnion({
+          event: "pdf_downloaded",
+          reportToken: token,
+          time: admin.firestore.Timestamp.now(),
+        }),
+      },
+      { merge: true },
+    );
+  }
+
+  if (Number(report.sheetRowNumber || 0) > 1) {
+    await patchSheetRowSafely(Number(report.sheetRowNumber), {
+      pdfDownloaded: "Yes",
+      lastPdfDownloadedAt: nowDhaka(),
+    });
+  }
+
+  const target = sanitizeOptionalUrl(report.pdfDownloadUrl || report.pdfViewUrl || "");
+  if (!target) throw new ApiError("PDF link is missing", 404);
+  return NextResponse.redirect(target);
+}
+
+async function handleReportCta(req: Request) {
+  const url = new URL(req.url);
+  const { token, ref, report } = await getActiveReportByToken(url.searchParams.get("token"));
+  const target = sanitizeLocalRedirectTarget(url.searchParams.get("target") || "/contact");
+
+  await ref.set(
+    {
+      ctaClickCount: admin.firestore.FieldValue.increment(1),
+      lastCtaClickedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  if (report.leadId) {
+    await adminDb.collection("outreach_leads").doc(String(report.leadId)).set(
+      {
+        reportCtaClickedAt: admin.firestore.FieldValue.serverTimestamp(),
+        tracking_history: admin.firestore.FieldValue.arrayUnion({
+          event: "report_cta_clicked",
+          reportToken: token,
+          target,
+          time: admin.firestore.Timestamp.now(),
+        }),
+      },
+      { merge: true },
+    );
+  }
+
+  if (Number(report.sheetRowNumber || 0) > 1) {
+    await patchSheetRowSafely(Number(report.sheetRowNumber), {
+      ctaClicked: "Yes",
+      lastCtaClickedAt: nowDhaka(),
+    });
+  }
+
+  return NextResponse.redirect(new URL(target, appBaseUrl()).toString());
+}
+
+
+
 function formatPostmasterDate(date: Date): string {
   const yyyy = date.getUTCFullYear();
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -4195,7 +4761,7 @@ async function handleCronSheetQueuedSends(req: Request) {
           businessType: clean(freshObj["Lead Label"]) || clean(freshObj["Lead Status"]),
           includeSignature: true,
           signatureMode: "full",
-          reportUrl: clean(freshObj["Report URL"]),
+          reportUrl: sanitizePublicReportUrl(clean(freshObj["Report URL"])),
           reportButtonText: "View short audit note",
           sheetRowNumber: rowNumber,
           sheetWebsiteUrl: clean(freshObj["Website URL"]),
@@ -5448,6 +6014,7 @@ async function handleAdminHealth(req: Request) {
     "GOOGLE_SHEET_ID",
     "GOOGLE_CLIENT_EMAIL",
     "GOOGLE_PRIVATE_KEY",
+    "REPORT_REGISTER_SECRET",
   ];
 
   return json({
@@ -5470,6 +6037,25 @@ async function handleAdminHealth(req: Request) {
   });
 }
 
+
+async function handleReportHealth(req: Request) {
+  await requireReportRegisterAccess(req);
+  return json({
+    success: true,
+    action: "reports/health",
+    reportRegisterReady: true,
+    appBaseUrl: appBaseUrl(),
+    requiredLocalRegisterUrl: `${appBaseUrl()}/api/trackflow/reports/register`,
+    env: {
+      NEXT_PUBLIC_APP_URL: Boolean(process.env.NEXT_PUBLIC_APP_URL),
+      REPORT_REGISTER_SECRET: Boolean(process.env.REPORT_REGISTER_SECRET),
+      GOOGLE_SHEET_ID: Boolean(process.env.GOOGLE_SHEET_ID),
+      GOOGLE_CLIENT_EMAIL: Boolean(process.env.GOOGLE_CLIENT_EMAIL),
+      GOOGLE_PRIVATE_KEY: Boolean(process.env.GOOGLE_PRIVATE_KEY),
+    },
+  });
+}
+
 async function handleError(error: any) {
   console.error("TrackFlow API Error:", error);
   if (error instanceof ApiError) return json({ success: false, error: error.message }, error.status);
@@ -5480,6 +6066,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   try {
     const action = await getAction(ctx);
 
+    if (["reports/register", "report/register", "reports/upsert", "reports/create"].includes(action)) return await handleReportRegister(req);
     if (action === "send-email") return await handleSendInitial(req);
     if (action === "sheets/leads") return await handleSheetLeadsPost(req);
     if (action === "webhooks/brevo") return await handleBrevoWebhook(req);
@@ -5506,6 +6093,9 @@ export async function GET(req: Request, ctx: RouteContext) {
   try {
     const action = await getAction(ctx);
 
+    if (action === "reports/health") return await handleReportHealth(req);
+    if (action === "reports/download") return await handleReportDownload(req);
+    if (action === "reports/cta") return await handleReportCta(req);
     if (action === "cron/scheduled-initials") return await handleCronScheduledInitials(req);
     if (action === "cron/sheet-queued-sends") return await handleCronSheetQueuedSends(req);
     if (action === "cron/followups") return await handleCronFollowups(req);
@@ -5527,6 +6117,9 @@ export async function GET(req: Request, ctx: RouteContext) {
         service: "TrackFlowPro Single API Route",
         actions: [
           "POST /api/trackflow/send-email",
+          "POST /api/trackflow/reports/register",
+          "GET /api/trackflow/reports/download?token=...",
+          "GET /api/trackflow/reports/cta?token=...&target=/contact",
           "GET /api/trackflow/sheets/leads",
           "POST /api/trackflow/sheets/leads",
           "PATCH /api/trackflow/sheets/leads",

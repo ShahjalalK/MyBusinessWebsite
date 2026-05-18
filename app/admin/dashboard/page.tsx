@@ -166,7 +166,18 @@ type SheetLead = {
   "Lead Label"?: string;
   "Main Issue"?: string;
   "Proof Points"?: string;
+  "Report Token"?: string;
   "Report URL"?: string;
+  "PDF File ID"?: string;
+  "PDF View URL"?: string;
+  "PDF Download URL"?: string;
+  "PDF Expires At"?: string;
+  "Report Page Viewed"?: string;
+  "PDF Downloaded"?: string;
+  "CTA Clicked"?: string;
+  "Last Report Viewed At"?: string;
+  "Last PDF Downloaded At"?: string;
+  "Last CTA Clicked At"?: string;
   "Email Subject"?: string;
   "Email Body"?: string;
   "Decision Maker"?: string;
@@ -493,6 +504,42 @@ function isSheetEmailReady(lead: SheetLead) {
 function isSheetMessageReady(lead: SheetLead) {
   return Boolean(stripHtml(sheetValue(lead, "Email Body"))) && Boolean(sheetValue(lead, "Email Subject"));
 }
+function isSecureReportUrl(value: string) {
+  const url = normalizeOptionalUrl(value);
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  if (lower.includes("localhost") || lower.includes("127.0.0.1") || lower.includes("/audit/pdf/") || lower.includes(":8000/")) return false;
+  if (lower.includes("drive.google.com") || lower.includes("googleusercontent.com")) return false;
+  return /\/r\/[a-z0-9_-]+/i.test(url) || lower.includes("trackflow");
+}
+
+function isSheetReportReady(lead: SheetLead) {
+  const reportUrl = sheetValue(lead, "Report URL");
+  const reportToken = sheetValue(lead, "Report Token");
+  const pdfFileId = sheetValue(lead, "PDF File ID");
+  const pdfViewUrl = sheetValue(lead, "PDF View URL");
+  const pdfDownloadUrl = sheetValue(lead, "PDF Download URL");
+  return Boolean(isSecureReportUrl(reportUrl) && (reportToken || reportUrl) && pdfFileId && (pdfViewUrl || pdfDownloadUrl));
+}
+
+function getSheetReportStatus(lead: SheetLead) {
+  if (isSheetReportReady(lead)) {
+    const viewed = sheetValue(lead, "Report Page Viewed").toLowerCase() === "yes";
+    const downloaded = sheetValue(lead, "PDF Downloaded").toLowerCase() === "yes";
+    const clicked = sheetValue(lead, "CTA Clicked").toLowerCase() === "yes";
+    return {
+      label: viewed ? "Report viewed" : "Report ready",
+      note: [downloaded ? "PDF downloaded" : "PDF hosted", clicked ? "CTA clicked" : "CTA pending"].join(" · "),
+      tone: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    };
+  }
+  return {
+    label: "Report missing",
+    note: "Upload PDF + register /r link before sending",
+    tone: "bg-red-50 text-red-700 border-red-100",
+  };
+}
+
 
 function normalizeSheetService(value: string): ServiceId {
   const text = String(value || "").toLowerCase();
@@ -1898,8 +1945,8 @@ export default function DashboardPage() {
       return false;
     }
 
-    if (reportUrl.trim() && !normalizeOptionalUrl(reportUrl)) {
-      window.alert("Please enter a valid report/PDF URL.");
+    if (reportUrl.trim() && (!normalizeOptionalUrl(reportUrl) || !isSecureReportUrl(reportUrl))) {
+      window.alert("Please use the secure TrackFlow report URL (/r/{token}), not a direct Drive/PDF/local URL.");
       return false;
     }
 
@@ -2291,6 +2338,9 @@ export default function DashboardPage() {
 
     const finalEmail = sheetValue(lead, "Final Email");
     if (!isEmailPatternValid(finalEmail)) throw new Error(`Invalid email on row ${lead.rowNumber}.`);
+    if (!isSheetReportReady(lead)) {
+      throw new Error(`Row ${lead.rowNumber} is not email-ready: secure report/PDF fields are missing.`);
+    }
 
     const currentSendStatus = sheetValue(lead, "Send Status") || "Not Sent";
     if (!["Not Sent", "Failed", ""].includes(currentSendStatus)) {
@@ -2317,7 +2367,7 @@ export default function DashboardPage() {
 
   const toggleAllVisibleSheetRows = () => {
     const readyRows = sheetLeads
-      .filter((lead) => isSheetEmailReady(lead) && (isSheetMessageReady(lead) || sheetValue(lead, "Main Issue")))
+      .filter((lead) => isSheetEmailReady(lead) && isSheetReportReady(lead) && (isSheetMessageReady(lead) || sheetValue(lead, "Main Issue")))
       .map((lead) => Number(lead.rowNumber))
       .filter(Boolean);
 
@@ -2352,6 +2402,9 @@ export default function DashboardPage() {
 
     const finalEmail = sheetValue(lead, "Final Email");
     if (!isEmailPatternValid(finalEmail)) throw new Error(`Invalid email on row ${lead.rowNumber}.`);
+    if (!isSheetReportReady(lead)) {
+      throw new Error(`Row ${lead.rowNumber} is missing a secure report link or PDF upload fields.`);
+    }
 
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const subjectFromSheet = sheetValue(lead, "Email Subject") || buildFallbackSheetSubject(lead);
@@ -2447,6 +2500,7 @@ export default function DashboardPage() {
         .map((rowNumber) => {
           const lead = sheetLeads.find((item) => Number(item.rowNumber) === Number(rowNumber));
           if (!lead) return null;
+          if (!isSheetEmailReady(lead) || !isSheetReportReady(lead) || !(isSheetMessageReady(lead) || sheetValue(lead, "Main Issue"))) return null;
           return {
             rowNumber,
             updates: {
@@ -2463,8 +2517,12 @@ export default function DashboardPage() {
         })
         .filter(Boolean) as Array<{ rowNumber: number; updates: Record<string, any> }>;
 
+      if (items.length === 0) {
+        throw new Error("No selected rows are ready. Each row needs email, message/main issue, secure Report URL, PDF File ID, and PDF View/Download URL.");
+      }
+
       await patchSheetLeadsBulk(items);
-      setSheetStatus(`Queued ${items.length} lead(s). Cron /api/trackflow/cron/sheet-queued-sends will send them.`);
+      setSheetStatus(`Queued ${items.length} verified report-ready lead(s). Cron /api/trackflow/cron/sheet-queued-sends will send them.`);
       setSelectedSheetRows([]);
       await loadSheetLeads(true);
     } catch (error: any) {
@@ -2998,7 +3056,7 @@ export default function DashboardPage() {
                       checked={
                         sheetLeads.length > 0 &&
                         sheetLeads
-                          .filter((lead) => isSheetEmailReady(lead) && (isSheetMessageReady(lead) || sheetValue(lead, "Main Issue")))
+                          .filter((lead) => isSheetEmailReady(lead) && isSheetReportReady(lead) && (isSheetMessageReady(lead) || sheetValue(lead, "Main Issue")))
                           .every((lead) => selectedSheetRows.includes(Number(lead.rowNumber)))
                       }
                       onChange={toggleAllVisibleSheetRows}
@@ -3018,6 +3076,8 @@ export default function DashboardPage() {
                   const isSelected = selectedSheetRows.includes(rowNumber);
                   const emailReady = isSheetEmailReady(lead);
                   const messageReady = isSheetMessageReady(lead) || Boolean(sheetValue(lead, "Main Issue"));
+                  const reportReady = isSheetReportReady(lead);
+                  const reportStatus = getSheetReportStatus(lead);
 
                   return (
                     <tr key={rowNumber} className={isSelected ? "bg-blue-50/50" : "hover:bg-gray-50/50"}>
@@ -3025,7 +3085,7 @@ export default function DashboardPage() {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          disabled={!emailReady || !messageReady}
+                          disabled={!emailReady || !messageReady || !reportReady}
                           onChange={() => toggleSheetRow(rowNumber)}
                         />
                       </td>
@@ -3041,16 +3101,21 @@ export default function DashboardPage() {
                         >
                           {sheetValue(lead, "Website URL") || "No website"} <ExternalLink size={12} />
                         </a>
-                        {sheetValue(lead, "Report URL") && (
-                          <a
-                            href={normalizeOptionalUrl(sheetValue(lead, "Report URL")) || "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block text-xs text-green-600 font-bold mt-1"
-                          >
-                            Report ready
-                          </a>
-                        )}
+                        <div className={`mt-3 rounded-2xl border px-3 py-2 ${reportStatus.tone}`}>
+                          {reportReady ? (
+                            <a
+                              href={normalizeOptionalUrl(sheetValue(lead, "Report URL")) || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block text-xs font-black"
+                            >
+                              {reportStatus.label} <ExternalLink size={12} className="inline" />
+                            </a>
+                          ) : (
+                            <p className="text-xs font-black">{reportStatus.label}</p>
+                          )}
+                          <p className="mt-1 text-[10px] font-bold opacity-80">{reportStatus.note}</p>
+                        </div>
                       </td>
 
                       <td className="p-4 align-top min-w-[320px]">
@@ -3100,7 +3165,7 @@ export default function DashboardPage() {
                                 setSending(false);
                               }
                             }}
-                            disabled={sending || !emailReady || !messageReady || !activeSender}
+                            disabled={sending || !emailReady || !messageReady || !reportReady || !activeSender}
                             className="px-3 py-2 rounded-xl bg-green-50 text-green-700 text-[10px] font-black uppercase disabled:opacity-50"
                           >
                             Queue Send
@@ -3147,7 +3212,7 @@ export default function DashboardPage() {
       { label: "Subject added", ok: Boolean(subject.trim()) },
       { label: "Message body ready", ok: Boolean(stripHtml(message)) },
       { label: "Links kept minimal", ok: totalLinkCount <= 2 },
-      { label: "Report/PDF link valid or empty", ok: !reportUrl.trim() || Boolean(safeReportUrl) },
+      { label: "Secure report link valid or empty", ok: !reportUrl.trim() || Boolean(safeReportUrl && isSecureReportUrl(safeReportUrl)) },
       { label: "No duplicate lead", ok: !duplicateLead || allowDuplicateSend },
       { label: "Cooldown memory cleared/overridden", ok: !contactMemoryWarning || allowCooldownOverride },
     ];

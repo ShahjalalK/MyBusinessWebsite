@@ -10,6 +10,15 @@ export type StepId = "step1" | "step2" | "step3" | "step4" | "step5";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
 export type CleanupBucket = "due" | "cold" | "warm" | "replied" | "protected" | "upcoming";
 
+export type ReportMetadata = {
+  reportUrl?: string;
+  reportToken?: string;
+  pdfFileId?: string;
+  pdfViewUrl?: string;
+  pdfDownloadUrl?: string;
+  pdfExpiresAt?: any;
+};
+
 export type Variant = {
   id: string;
   content: string;
