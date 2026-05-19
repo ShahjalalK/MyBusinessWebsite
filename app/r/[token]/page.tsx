@@ -86,6 +86,234 @@ function cleanText(value: unknown, fallback = ""): string {
   return text;
 }
 
+
+function normalizeDisplayText(value: unknown): string {
+  return cleanText(value, "")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripUrlNoise(value: string): string {
+  return normalizeDisplayText(value)
+    .replace(/https?:\/\/[^\s›>]+/gi, " ")
+    .replace(/www\.[^\s›>]+/gi, " ")
+    .replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s›>]*)?/gi, " ")
+    .replace(/[›»]+\s*[^|,]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleCaseWords(value: string): string {
+  return value
+    .split(/\s+/g)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      const upperWords = new Set(["dds", "dmd", "md", "pc", "llc", "pllc", "inc", "ltd", "ga4", "gtm"]);
+      if (upperWords.has(lower)) return lower.toUpperCase();
+      if (lower.length <= 2 && ["of", "at", "in", "on", "by", "to", "&"].includes(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ")
+    .replace(/\bAnd\b/g, "and")
+    .trim();
+}
+
+function splitCompactDomainName(value: string): string[] {
+  const compact = value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!compact) return [];
+
+  const knownWords = [
+    "orthodontics",
+    "orthodontic",
+    "chiropractic",
+    "pediatrics",
+    "consultants",
+    "consulting",
+    "construction",
+    "restaurant",
+    "technology",
+    "solutions",
+    "marketing",
+    "madison",
+    "dentistry",
+    "dental",
+    "medical",
+    "wellness",
+    "physical",
+    "therapy",
+    "pediatric",
+    "security",
+    "cleaning",
+    "services",
+    "service",
+    "digital",
+    "design",
+    "studio",
+    "agency",
+    "center",
+    "centre",
+    "health",
+    "clinic",
+    "smiles",
+    "smile",
+    "group",
+    "legal",
+    "lawyers",
+    "repair",
+    "roofing",
+    "plumbing",
+    "electric",
+    "beauty",
+    "travel",
+    "estate",
+    "finance",
+    "insurance",
+    "media",
+    "tech",
+    "auto",
+    "care",
+    "home",
+    "homes",
+    "real",
+    "spa",
+    "art",
+    "arts",
+    "law",
+  ].sort((a, b) => b.length - a.length);
+
+  const output: string[] = [];
+  let index = 0;
+
+  while (index < compact.length) {
+    const match = knownWords.find((word) => compact.startsWith(word, index));
+    if (match) {
+      output.push(match);
+      index += match.length;
+      continue;
+    }
+
+    const nextKnownIndex = knownWords
+      .map((word) => compact.indexOf(word, index + 1))
+      .filter((pos) => pos > index)
+      .sort((a, b) => a - b)[0];
+
+    if (nextKnownIndex && nextKnownIndex > index) {
+      output.push(compact.slice(index, nextKnownIndex));
+      index = nextKnownIndex;
+      continue;
+    }
+
+    output.push(compact.slice(index));
+    break;
+  }
+
+  return output.filter(Boolean);
+}
+
+function domainToDisplayName(domain: string): string {
+  const cleanDomain = getDomainLabel({ domain });
+  if (!cleanDomain) return "";
+
+  const withoutTld = cleanDomain.split(".")[0] || cleanDomain;
+  const spaced = withoutTld.replace(/[._-]+/g, " ").trim();
+
+  if (spaced.includes(" ")) return titleCaseWords(spaced);
+
+  const parts = splitCompactDomainName(spaced);
+  const readable = parts.length > 1 ? parts.join(" ") : spaced;
+  return titleCaseWords(readable);
+}
+
+function isMessyBusinessName(value: string, domain = ""): boolean {
+  const text = normalizeDisplayText(value);
+  const lower = text.toLowerCase();
+  const domainLower = domain.toLowerCase();
+
+  if (!text) return true;
+  if (/https?:\/\//i.test(text) || /www\./i.test(text)) return true;
+  if (/[›»]/.test(text)) return true;
+  if (domainLower && lower.includes(domainLower)) return true;
+  if (/\.com|\.net|\.org|\.co|\.io|\.us|\.uk/i.test(text)) return true;
+  if (text.length > 72) return true;
+  if (/\bnear me\b/i.test(text)) return true;
+  if (/\bservices?\b/i.test(text) && text.length > 45) return true;
+  if (/\bspecialist\b/i.test(text) && text.length > 45) return true;
+  return false;
+}
+
+function cleanBusinessNameCandidate(value: unknown, domain = ""): string {
+  let text = stripUrlNoise(normalizeDisplayText(value));
+  if (!text) return "";
+
+  if (domain) {
+    const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    text = text.replace(new RegExp(escapedDomain, "ig"), " ");
+  }
+
+  text = text
+    .replace(/\s*[|·•]\s*.*$/g, "")
+    .replace(/\s+-\s+(?:Home|Official Site|Services?|About|Contact)\b.*$/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text;
+}
+
+function getDisplayCompanyName(report: Record<string, any>, domain: string): string {
+  const candidates = [
+    report.preparedFor,
+    report.prepared_for,
+    report.displayCompanyName,
+    report.display_company_name,
+    report.clientName,
+    report.client_name,
+    report.businessName,
+    report.business_name,
+    report.companyName,
+    report.company_name,
+  ];
+
+  for (const candidate of candidates) {
+    const cleaned = cleanBusinessNameCandidate(candidate, domain);
+    if (cleaned && !isMessyBusinessName(cleaned, domain)) return cleaned;
+  }
+
+  const fromDomain = domainToDisplayName(domain);
+  return fromDomain || "this website";
+}
+
+function isMessyHeadline(value: string, domain = ""): boolean {
+  const text = normalizeDisplayText(value);
+  const lower = text.toLowerCase();
+  const domainLower = domain.toLowerCase();
+
+  if (isGenericHeadline(text)) return true;
+  if (/https?:\/\//i.test(text) || /www\./i.test(text)) return true;
+  if (/[›»]/.test(text)) return true;
+  if (domainLower && lower.includes(domainLower)) return true;
+  if (/\.com|\.net|\.org|\.co|\.io|\.us|\.uk/i.test(text)) return true;
+  if (text.length > 92) return true;
+  if (/\bservices?\b/i.test(text) && text.length > 60) return true;
+  if (/\bspecialist\b/i.test(text) && text.length > 45) return true;
+  return false;
+}
+
+function getDisplayHeadline(report: Record<string, any>, companyName: string, domain: string): string {
+  const raw = cleanBusinessNameCandidate(report.headline || report.reportHeadline || report.report_headline, domain);
+  if (raw && !isMessyHeadline(raw, domain)) return raw;
+
+  const label = companyName === "this website" ? "This Website" : companyName;
+  return `Tracking Review for ${label}`;
+}
+
+function getDisplayCtaText(value: unknown): string {
+  const text = cleanText(value, "");
+  if (!text || text.length > 70) return "Check if your enquiry tracking is working";
+  return text;
+}
+
 function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): string[] {
   const items = Array.isArray(value)
     ? value
@@ -438,13 +666,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
   if (expiresAtMs && Date.now() > expiresAtMs) notFound();
 
 
-  const companyName = cleanText(report.companyName || report.businessName, "this website");
   const domain = getDomainLabel(report);
-
-  const rawHeadline = cleanText(report.headline, "");
-  const headline = isGenericHeadline(rawHeadline)
-    ? `Tracking Review for ${companyName === "this website" ? "This Website" : companyName}`
-    : rawHeadline;
+  const companyName = getDisplayCompanyName(report, domain);
+  const headline = getDisplayHeadline(report, companyName, domain);
+  const ctaText = getDisplayCtaText(report.ctaText || report.cta_text);
 
   const mainFinding = sentenceCaseFirst(cleanText(
     report.mainFinding || report.mainIssue,
@@ -488,7 +713,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               Private tracking review
             </div>
 
-            <h1 className="mt-6 max-w-4xl text-4xl font-black tracking-[-0.055em] text-slate-950 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-6 max-w-4xl break-words text-4xl font-black leading-[0.95] tracking-[-0.055em] text-slate-950 sm:text-5xl lg:text-6xl">
               {headline}
             </h1>
 
@@ -681,11 +906,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 href={ctaHref}
                 className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
               >
-                Verify this inside GA4/GTM
+                {ctaText}
               </a>
 
               <a
-                href={`mailto:${CONTACT_EMAIL}?subject=Tracking%20Review%20Request`}
+                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`}
                 className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
               >
                 Reply by Email
