@@ -4270,12 +4270,165 @@ function getReportPdfRedirectTarget(report: AnyRecord, preferDownload = false): 
   return sanitizeOptionalUrl(first || second || "");
 }
 
+function getReportPdfFileId(report: AnyRecord): string {
+  const direct = String(report.pdfFileId || report.driveFileId || report.googleDriveFileId || "").trim();
+  if (direct) return direct;
+
+  const urls = [report.pdfDownloadUrl, report.pdfViewUrl].map((value) => String(value || ""));
+  for (const raw of urls) {
+    if (!raw) continue;
+    try {
+      const url = new URL(raw);
+      const idParam = url.searchParams.get("id");
+      if (idParam) return idParam.trim();
+
+      const match = url.pathname.match(/\/file\/d\/([^/]+)/i);
+      if (match?.[1]) return match[1].trim();
+    } catch {}
+  }
+
+  return "";
+}
+
+function hasDriveOAuthForReportProxy(): boolean {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+  );
+}
+
+function getDriveClientForReportProxy() {
+  const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim();
+  const clientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();
+  const refreshToken = String(process.env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim();
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new ApiError("Google Drive OAuth credentials are missing for PDF proxy streaming", 500);
+  }
+
+  const auth = new google.auth.OAuth2(clientId, clientSecret);
+  auth.setCredentials({ refresh_token: refreshToken });
+  return google.drive({ version: "v3", auth });
+}
+
+function assertPdfBuffer(buffer: Buffer, context = "PDF"): Buffer {
+  if (!buffer?.byteLength || buffer.byteLength < 500) {
+    throw new ApiError(`${context} is empty or too small`, 502);
+  }
+
+  const header = buffer.subarray(0, 5).toString("utf8");
+  if (header !== "%PDF-") {
+    throw new ApiError(`${context} response was not a valid PDF`, 502);
+  }
+
+  return buffer;
+}
+
+async function fetchPdfViaDriveApi(fileId: string): Promise<Buffer> {
+  const drive = getDriveClientForReportProxy();
+  const response = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" } as any,
+  );
+
+  const data: any = response.data;
+  let buffer: Buffer;
+
+  if (Buffer.isBuffer(data)) {
+    buffer = data;
+  } else if (data instanceof ArrayBuffer) {
+    buffer = Buffer.from(data);
+  } else if (ArrayBuffer.isView(data)) {
+    buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  } else if (typeof data === "string") {
+    buffer = Buffer.from(data, "binary");
+  } else {
+    throw new ApiError("Google Drive API returned an unreadable PDF response", 502);
+  }
+
+  return assertPdfBuffer(buffer, "Google Drive PDF");
+}
+
+async function fetchPdfViaPublicUrl(target: string): Promise<Buffer> {
+  const response = await fetch(target, {
+    method: "GET",
+    cache: "no-store",
+    redirect: "follow",
+    headers: {
+      accept: "application/pdf,*/*;q=0.8",
+      "user-agent": "TrackFlowPro-PDF-Proxy/1.0",
+    },
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`PDF fetch failed (${response.status})`, 502);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return assertPdfBuffer(Buffer.from(arrayBuffer), "PDF URL");
+}
+
+async function fetchReportPdfBuffer(report: AnyRecord, preferDownload = false): Promise<Buffer> {
+  const fileId = getReportPdfFileId(report);
+  const target = getReportPdfRedirectTarget(report, preferDownload);
+
+  if (fileId && hasDriveOAuthForReportProxy()) {
+    try {
+      return await fetchPdfViaDriveApi(fileId);
+    } catch (error) {
+      // Fall back to the stored public URL only when one exists. This keeps old reports working
+      // while still avoiding direct Google Drive if OAuth streaming is configured correctly.
+      if (!target) throw error;
+      console.warn("Drive API PDF proxy failed; falling back to stored PDF URL:", error);
+    }
+  }
+
+  if (!target) {
+    throw new ApiError("PDF link is missing", 404);
+  }
+
+  return await fetchPdfViaPublicUrl(target);
+}
+
+function makePdfFileName(report: AnyRecord, token: string): string {
+  const company = String(report.companyName || report.businessName || report.domain || "TrackFlow-Pro-Audit")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "TrackFlow-Pro-Audit";
+  const safeToken = normalizeReportToken(token).slice(0, 16) || "report";
+  return `${company}-${safeToken}.pdf`;
+}
+
+function pdfResponse(buffer: Buffer, options: { fileName: string; download?: boolean }) {
+  const disposition = options.download ? "attachment" : "inline";
+  const safeName = options.fileName.replace(/["\r\n]/g, "");
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(buffer));
+      controller.close();
+    },
+  });
+
+  return new NextResponse(body, {
+    status: 200,
+    headers: {
+      "content-type": "application/pdf",
+      "content-length": String(buffer.byteLength),
+      "content-disposition": `${disposition}; filename="${safeName}"`,
+      "cache-control": "private, no-store, max-age=0",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 async function handleReportPreview(req: Request) {
   const token = await getReportTokenFromRequest(req);
   const { report } = await getActiveReportByToken(token);
-  const target = getReportPdfRedirectTarget(report, false);
-  if (!target) throw new ApiError("PDF preview link is missing", 404);
-  return NextResponse.redirect(target);
+  const buffer = await fetchReportPdfBuffer(report, false);
+  return pdfResponse(buffer, { fileName: makePdfFileName(report, token), download: false });
 }
 
 async function handleReportView(req: Request) {
@@ -4330,8 +4483,7 @@ async function handleReportView(req: Request) {
 async function handleReportDownload(req: Request) {
   const token = await getReportTokenFromRequest(req);
   const { ref, report } = await getActiveReportByToken(token);
-  const target = getReportPdfRedirectTarget(report, true);
-  if (!target) throw new ApiError("PDF download link is missing", 404);
+  const buffer = await fetchReportPdfBuffer(report, true);
 
   const nowTs = admin.firestore.Timestamp.now();
   await ref.set(
@@ -4363,7 +4515,7 @@ async function handleReportDownload(req: Request) {
     });
   }
 
-  return NextResponse.redirect(target);
+  return pdfResponse(buffer, { fileName: makePdfFileName(report, token), download: true });
 }
 
 async function handleReportCta(req: Request) {
