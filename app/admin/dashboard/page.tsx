@@ -1358,7 +1358,7 @@ export default function DashboardPage() {
     if (!scheduledEdit.subject.trim()) return window.alert("Subject is required.");
     if (!stripHtml(scheduledEdit.message)) return window.alert("Message body cannot be empty.");
     if (scheduledEdit.reportUrl?.trim() && (!normalizeOptionalUrl(scheduledEdit.reportUrl) || !isSecureReportUrl(scheduledEdit.reportUrl))) {
-      return window.alert("Scheduled email report URL must be the secure TrackFlow /r/{token} page.");
+      return window.alert("Scheduled email report URL must be the secure TrackFlow /r/[token] page.");
     }
     if (!scheduledEdit.scheduledTime) return window.alert("Scheduled time is required.");
 
@@ -1984,7 +1984,7 @@ export default function DashboardPage() {
     }
 
     if (reportUrl.trim() && (!normalizeOptionalUrl(reportUrl) || !isSecureReportUrl(reportUrl))) {
-      window.alert("Please use the secure TrackFlow report URL (/r/{token}), not a direct Drive/PDF/local URL.");
+      window.alert("Please use the secure TrackFlow report URL (/r/[token]), not a direct Drive/PDF/local URL.");
       return false;
     }
 
@@ -3296,7 +3296,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                   <input
                     type="text"
-                    placeholder="Paste secure /r/{token} report link here"
+                    placeholder="Paste secure /r/[token] report link here"
                     className="md:col-span-3 w-full p-3 bg-white rounded-2xl outline-none border border-blue-100 focus:border-blue-500 text-xs font-bold"
                     value={reportUrl}
                     onChange={(e: any) => setReportUrl(e.target.value)}
@@ -3310,7 +3310,7 @@ export default function DashboardPage() {
                   />
                 </div>
                 <p className="text-[9px] font-bold text-blue-400 mt-2">
-                  Only secure TrackFlow /r/{token} links are allowed. Direct PDF, Drive, localhost, and audit engine links are blocked.
+                  Only secure TrackFlow /r/[token] links are allowed. Direct PDF, Drive, localhost, and audit engine links are blocked.
                 </p>
               </div>
             </div>
