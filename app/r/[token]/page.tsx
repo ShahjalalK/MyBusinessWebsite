@@ -124,15 +124,32 @@ function getDomainLabel(report: Record<string, any>): string {
   const raw = cleanText(report.domain || report.websiteUrl || report.website, "");
   if (!raw) return "";
 
+  const urlLike = raw.match(/https?:\/\/[^\s›>]+/i)?.[0];
+  const domainLike = raw.match(/(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+/i)?.[0];
+  const candidate = urlLike || domainLike || raw;
+
   try {
-    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const url = new URL(candidate.startsWith("http") ? candidate : `https://${candidate}`);
     return url.hostname.replace(/^www\./i, "");
   } catch {
-    return raw
+    return candidate
       .replace(/^https?:\/\//i, "")
       .replace(/^www\./i, "")
-      .split("/")[0];
+      .split("/")[0]
+      .split("›")[0]
+      .trim();
   }
+}
+
+function sentenceCaseFirst(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function isGenericHeadline(value: string): boolean {
+  const text = value.toLowerCase().trim();
+  return !text || text === "private tracking audit review" || text === "private tracking audit note" || text === "tracking audit note";
 }
 
 function cleanCtaTarget(value: unknown): string {
@@ -376,14 +393,14 @@ function ReportFooter() {
             </div>
 
             <p className="mt-4 text-xs font-semibold leading-6 text-slate-500">
-              Business correspondence: {MAILING_ADDRESS}
+              TrackFlow Pro · {MAILING_ADDRESS}
             </p>
           </div>
         </div>
 
         <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs font-semibold text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} TrackFlow Pro. Conversion tracking and attribution support.</p>
-          <p className="max-w-3xl leading-6">Independent browser-visible tracking review. Not affiliated with Google or Meta.</p>
+          <p className="max-w-3xl leading-6">Not affiliated with Google, Meta, or the reviewed business. Audit notes are based on browser-visible evidence first.</p>
 
           <div className="flex flex-wrap gap-4">
             <Link href="/privacy-policy" className="hover:text-blue-700">
@@ -424,17 +441,20 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const companyName = cleanText(report.companyName || report.businessName, "this website");
   const domain = getDomainLabel(report);
 
-  const headline = cleanText(report.headline, "Private Tracking Audit Review");
+  const rawHeadline = cleanText(report.headline, "");
+  const headline = isGenericHeadline(rawHeadline)
+    ? `Tracking Review for ${companyName === "this website" ? "This Website" : companyName}`
+    : rawHeadline;
 
-  const mainFinding = cleanText(
+  const mainFinding = sentenceCaseFirst(cleanText(
     report.mainFinding || report.mainIssue,
     "A conversion tracking review may be useful based on public browser-visible evidence.",
-  );
+  ));
 
-  const businessImpact = cleanText(
+  const businessImpact = sentenceCaseFirst(cleanText(
     report.businessImpact,
     "If important lead actions are not measured clearly, it can be harder to know which marketing channels are creating enquiries.",
-  );
+  ));
 
   const whatChecked = cleanList(report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
   const proofPoints = cleanList(report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
@@ -442,7 +462,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
   const expiresLabel = formatDate(report.pdfExpiresAt || report.expiresAt);
   const previewHref = `/api/trackflow/reports/preview?token=${encodeURIComponent(token)}`;
-  const previewFrameHref = `${previewHref}#toolbar=0&navpanes=0&view=FitH`;
   const downloadHref = `/api/trackflow/reports/download?token=${encodeURIComponent(token)}`;
 
   const ctaTarget = cleanCtaTarget(report.ctaUrl);
@@ -596,7 +615,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </SectionCard>
 
-          <section id="pdf-report" className="scroll-mt-24 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+          <section id="pdf-report" className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 p-6">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
                 Full PDF report
@@ -607,9 +626,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </h2>
 
               <p className="mt-3 text-sm font-semibold leading-7 text-slate-500">
-                The PDF preview is streamed through TrackFlow Pro, so the client does not need a Google
-                login. Previewing the PDF does not count as a download; only the download button records
-                a PDF download signal.
+                The PDF preview is streamed through TrackFlow Pro, so the client should not see a Google Drive login screen. Previewing does not count as a download; only the download button records a PDF download signal.
               </p>
 
               {expiresLabel ? (
@@ -620,18 +637,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
 
             <div className="bg-slate-100 p-4">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <iframe
-                  title="TrackFlow Pro audit PDF preview"
-                  src={previewFrameHref}
-                  loading="lazy"
-                  className="h-[620px] w-full bg-white"
-                />
-              </div>
-              <p className="mt-3 text-xs font-bold leading-6 text-slate-500">
-                If the inline preview is blocked by your browser, use “Open PDF” below. It opens the same
-                TrackFlow-hosted PDF stream in a new tab.
-              </p>
+              <iframe
+                title="TrackFlow Pro audit PDF preview"
+                src={previewHref}
+                loading="lazy"
+                className="h-[520px] w-full rounded-2xl border border-slate-200 bg-white"
+              />
             </div>
 
             <div className="grid gap-3 border-t border-slate-200 p-5 sm:grid-cols-2">
