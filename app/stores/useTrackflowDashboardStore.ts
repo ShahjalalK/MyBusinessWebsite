@@ -397,7 +397,7 @@ export const useTrackflowDashboardStore = create<TrackflowDashboardStoreState>((
       };
     });
   },
-  invalidateSheetCache: () => set({ sheetLoadedAt: null, sheetCacheKey: "" }),
+  invalidateSheetCache: () => set({ sheetLoadedAt: null, sheetCacheKey: "", selectedSheetRows: [] }),
 
   setFollowupConfig: buildSetter<FollowupConfig>("followupConfig", set),
   setFollowupLoading: buildSetter<boolean>("followupLoading", set),

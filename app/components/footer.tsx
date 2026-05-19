@@ -19,6 +19,10 @@ const currentYear = new Date().getFullYear();
 
 const businessEmail = "shahjalal@trackflowpro.com";
 
+const businessAddress =
+  process.env.NEXT_PUBLIC_TRACKFLOW_MAILING_ADDRESS ||
+  "Business mailing address available on request";
+
 const whatsappUrl =
   "https://api.whatsapp.com/send/?phone=%2B8801329532551&text=Hi%20Shahjalal%2C%20I%20need%20help%20with%20conversion%20tracking.&type=phone_number&app_absent=0";
 
@@ -95,6 +99,7 @@ const trustPoints = [
   "Public browser-visible evidence first",
   "GA4, GTM, Google Ads & Meta CAPI focused",
   "No login required for the initial review",
+  "Not affiliated with Google, Meta, or ad platforms",
 ];
 
 export default function Footer() {
@@ -217,6 +222,14 @@ export default function Footer() {
                   </span>
                   <ArrowRight className="h-4 w-4 shrink-0 text-emerald-300 transition-transform group-hover:translate-x-0.5" />
                 </a>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm font-semibold leading-6 text-slate-400">
+                  <div className="mb-1 flex items-center gap-2 text-white">
+                    <MapPin className="h-4 w-4 text-blue-300" />
+                    Business contact
+                  </div>
+                  <p>{businessAddress}</p>
+                </div>
               </div>
             </div>
 
@@ -264,7 +277,7 @@ export default function Footer() {
               <div className="mt-7 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="mb-2 flex items-center gap-2 text-sm font-black text-white">
                   <MapPin className="h-4 w-4 text-blue-300" />
-                  Remote Specialist
+                  Remote Tracking Specialist
                 </div>
 
                 <p className="text-sm font-medium leading-6 text-slate-400">
@@ -279,9 +292,12 @@ export default function Footer() {
         <div className="mt-14 border-t border-white/10 pt-8">
           <div className="flex flex-col gap-5 text-sm font-medium text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>© {currentYear} TrackFlow Pro. All rights reserved.</p>
-            <p className="max-w-3xl leading-6">
-              Audit notes are based on public browser-visible evidence first. Final confirmation may require access to GA4, GTM, Google Ads, Meta, CRM, or server-side logs.
-            </p>
+            <div className="max-w-3xl space-y-2 leading-6 md:text-right">
+              <p>
+                Audit notes are based on public browser-visible evidence first. Final confirmation may require access to GA4, GTM, Google Ads, Meta, CRM, or server-side logs.
+              </p>
+              <p>TrackFlow Pro is an independent service provider and is not affiliated with Google or Meta.</p>
+            </div>
           </div>
         </div>
       </div>

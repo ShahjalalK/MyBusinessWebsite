@@ -63,6 +63,7 @@ type LeadStoreState = {
   hasMore: boolean;
   nextCursor: string | null;
   lastFetchedAt: number | null;
+  inFlightFetchKey: string | null;
   filters: {
     view: LeadViewFilter;
     month: string;
@@ -104,6 +105,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
   hasMore: true,
   nextCursor: null,
   lastFetchedAt: null,
+  inFlightFetchKey: null,
   filters: {
     view: "active",
     month: "All",
@@ -114,6 +116,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     const state = get();
     const { force = false } = options;
     const filters = normalizeFetchFilters(state, options);
+    const fetchKey = `${filters.view}|${filters.month}|${filters.status}`;
     const sameFilters =
       filters.view === state.filters.view &&
       filters.month === state.filters.month &&
@@ -125,7 +128,12 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       return;
     }
 
-    set({ loading: true, error: "", filters });
+    // Avoid duplicate API reads when React effects fire twice during dev/Strict Mode.
+    if (!force && state.loading && state.inFlightFetchKey === fetchKey) {
+      return;
+    }
+
+    set({ loading: true, error: "", filters, inFlightFetchKey: fetchKey });
 
     try {
       const token = await getAuthToken();
@@ -154,11 +162,12 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         lastFetchedAt: Date.now(),
         loading: false,
         error: "",
+        inFlightFetchKey: null,
         filters,
       });
     } catch (error: any) {
       console.error("Lead cache load error:", error);
-      set({ loading: false, error: error?.message || "Lead load failed" });
+      set({ loading: false, inFlightFetchKey: null, error: error?.message || "Lead load failed" });
     }
   },
 
@@ -260,6 +269,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       hasMore: true,
       nextCursor: null,
       lastFetchedAt: null,
+      inFlightFetchKey: null,
       filters: {
         view: "active",
         month: "All",
