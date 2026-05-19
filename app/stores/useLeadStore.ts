@@ -1,7 +1,7 @@
 /**
  * TrackFlowPro lead cache store
- * বাংলা ব্যাখ্যা: Dashboard বারবার open/tab switch করলে যেন Firestore/API read না বাড়ে,
- * তাই leads cache, pagination, load more, refresh control এখানে রাখা হয়েছে।
+ * বাংলা ব্যাখ্যা: Dashboard বারবার open/tab switch করলে যেন Firestore/API read না বাড়ে।
+ * তাই leads cache, TTL, pagination, load more, refresh control এখানে রাখা হয়েছে।
  */
 import { create } from "zustand";
 import { auth } from "@/lib/firebase";
@@ -59,6 +59,7 @@ type LeadStoreState = {
   loadingMore: boolean;
   error: string;
   pageSize: number;
+  cacheTtlMs: number;
   hasLoadedOnce: boolean;
   hasMore: boolean;
   nextCursor: string | null;
@@ -68,6 +69,7 @@ type LeadStoreState = {
     view: LeadViewFilter;
     month: string;
     status: string;
+    reportReadyOnly: boolean;
   };
   fetchLatestLeads: (options?: LeadFetchOptions) => Promise<void>;
   refreshLeads: (options?: Omit<LeadFetchOptions, "force">) => Promise<void>;
@@ -80,13 +82,23 @@ type LeadStoreState = {
 };
 
 const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_CACHE_TTL_MS = 90_000;
 
 function normalizeFetchFilters(state: LeadStoreState, options: LeadFetchOptions = {}) {
   return {
     view: options.view || state.filters.view || "active",
     month: options.month || state.filters.month || "All",
     status: options.status || state.filters.status || "All",
+    reportReadyOnly: options.reportReadyOnly ?? state.filters.reportReadyOnly ?? false,
   };
+}
+
+function buildFetchKey(filters: LeadStoreState["filters"]) {
+  return `${filters.view}|${filters.month}|${filters.status}|reportReady:${filters.reportReadyOnly ? "1" : "0"}`;
+}
+
+function isCacheFresh(lastFetchedAt: number | null, ttlMs: number) {
+  return Boolean(lastFetchedAt && Date.now() - lastFetchedAt < ttlMs);
 }
 
 async function getAuthToken() {
@@ -101,6 +113,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
   loadingMore: false,
   error: "",
   pageSize: DEFAULT_PAGE_SIZE,
+  cacheTtlMs: DEFAULT_CACHE_TTL_MS,
   hasLoadedOnce: false,
   hasMore: true,
   nextCursor: null,
@@ -110,21 +123,19 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     view: "active",
     month: "All",
     status: "All",
+    reportReadyOnly: false,
   },
 
   fetchLatestLeads: async (options: LeadFetchOptions = {}) => {
     const state = get();
     const { force = false } = options;
     const filters = normalizeFetchFilters(state, options);
-    const fetchKey = `${filters.view}|${filters.month}|${filters.status}`;
-    const sameFilters =
-      filters.view === state.filters.view &&
-      filters.month === state.filters.month &&
-      filters.status === state.filters.status;
+    const fetchKey = buildFetchKey(filters);
+    const sameFilters = buildFetchKey(state.filters) === fetchKey;
 
-    // Cache empty results too. Otherwise an empty tab/filter repeatedly calls the API
-    // and wastes Firestore reads on every tab switch or re-render.
-    if (!force && sameFilters && state.hasLoadedOnce) {
+    // Cache empty results too. TTL prevents repeated reads on tab switch/re-render,
+    // while still allowing automatic freshness after a short window.
+    if (!force && sameFilters && state.hasLoadedOnce && isCacheFresh(state.lastFetchedAt, state.cacheTtlMs)) {
       return;
     }
 
@@ -144,6 +155,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
 
       if (filters.month && filters.month !== "All") params.set("month", filters.month);
       if (filters.status && filters.status !== "All") params.set("status", filters.status);
+      if (filters.reportReadyOnly) params.set("reportReadyOnly", "true");
 
       const response = await fetch(`/api/trackflow/leads?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -179,7 +191,8 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     const state = get();
     if (state.loadingMore || !state.hasMore || !state.nextCursor) return;
 
-    set({ loadingMore: true, error: "" });
+    const fetchKey = buildFetchKey(state.filters);
+    set({ loadingMore: true, error: "", inFlightFetchKey: `more:${fetchKey}` });
 
     try {
       const token = await getAuthToken();
@@ -191,6 +204,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
 
       if (state.filters.month && state.filters.month !== "All") params.set("month", state.filters.month);
       if (state.filters.status && state.filters.status !== "All") params.set("status", state.filters.status);
+      if (state.filters.reportReadyOnly) params.set("reportReadyOnly", "true");
 
       const response = await fetch(`/api/trackflow/leads?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -202,15 +216,13 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
       const moreRows = Array.isArray(data.rows) ? data.rows : [];
 
       set((current) => {
-        const stillSameFilters =
-          current.filters.view === state.filters.view &&
-          current.filters.month === state.filters.month &&
-          current.filters.status === state.filters.status;
+        const stillSameFilters = buildFetchKey(current.filters) === fetchKey;
 
         // If the user changed filters while the request was in flight, ignore this old page.
         if (!stillSameFilters) {
           return {
             loadingMore: false,
+            inFlightFetchKey: null,
             error: "",
           };
         }
@@ -223,13 +235,14 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
           nextCursor: data.nextCursor || null,
           hasMore: Boolean(data.hasMore),
           loadingMore: false,
+          inFlightFetchKey: null,
           lastFetchedAt: Date.now(),
           error: "",
         };
       });
     } catch (error: any) {
       console.error("Lead cache pagination error:", error);
-      set({ loadingMore: false, error: error?.message || "More lead load failed" });
+      set({ loadingMore: false, inFlightFetchKey: null, error: error?.message || "More lead load failed" });
     }
   },
 
@@ -274,6 +287,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         view: "active",
         month: "All",
         status: "All",
+        reportReadyOnly: false,
       },
     });
   },

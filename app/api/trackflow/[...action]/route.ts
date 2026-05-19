@@ -41,6 +41,13 @@ import {
  *
  * Optional ENV:
  *   ALLOW_UNAUTHENTICATED_ADMIN_API=false
+ *   GOOGLE_OAUTH_CLIENT_ID=                 // needed when Vercel proxies/deletes Drive PDFs
+ *   GOOGLE_OAUTH_CLIENT_SECRET=
+ *   GOOGLE_OAUTH_REFRESH_TOKEN=
+ *   DELETE_DRIVE_PDF_ON_LEAD_DELETE=true    // permanent delete only; archive/trash keeps PDFs
+ *   DRIVE_PDF_DELETE_MODE=trash             // trash is safer than delete
+ *   REQUIRE_DRIVE_PDF_CLEANUP_ON_LEAD_DELETE=true
+ *   PERMANENT_DELETE_SHEET_MODE=mark        // mark/delete/skip for bulk permanent deletes
  *
  * Free-limit friendly architecture note:
  * - Sender list/config stays in lib/senders.ts, not Firestore.
@@ -171,6 +178,142 @@ const STALE_LOCK_MINUTES = 30;
 // - When engagement exists, send follow-ups 1 hour before the lead's last engagement time + configured delay.
 const REQUIRE_OPEN_OR_CLICK_FOR_FOLLOWUP = true;
 const FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES = 60;
+
+
+const SERVICE_IDS = ["Email Signature", "Google Ads", "Server Side Tracking"] as const;
+const STEP_IDS = ["step1", "step2", "step3", "step4", "step5"] as const;
+
+const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
+  "Email Signature": {
+    step1: {
+      delay: 1440,
+      variants: [
+        {
+          id: "code-default-email-signature-step1",
+          content:
+            "<p>Hi {name}, just checking if you saw my note about the email signature tracking issue I noticed for {company}.</p><p>If helpful, I can point out the exact area to verify—no pitch, just a quick check.</p>",
+        },
+      ],
+    },
+    step2: {
+      delay: 2880,
+      variants: [
+        {
+          id: "code-default-email-signature-step2",
+          content:
+            "<p>Hi {name}, one last quick note on this.</p><p>If signature clicks are not being tracked cleanly, replies and website visits from outbound emails can be hard to measure. Worth checking when you have a minute.</p>",
+        },
+      ],
+    },
+    step3: { delay: 4320, variants: [{ id: "code-default-email-signature-step3", content: "<p>Hi {name}, should I close the loop on this for now?</p>" }] },
+    step4: { delay: 7200, variants: [{ id: "code-default-email-signature-step4", content: "<p>Hi {name}, no worries if this is not a priority right now. I can leave this with you.</p>" }] },
+    step5: { delay: 10080, variants: [{ id: "code-default-email-signature-step5", content: "<p>Hi {name}, closing this out. If email tracking becomes relevant later, feel free to revisit the note.</p>" }] },
+  },
+  "Google Ads": {
+    step1: {
+      delay: 1440,
+      variants: [
+        {
+          id: "code-default-google-ads-step1",
+          content:
+            "<p>Hi {name}, just following up on the tracking note I sent for {company}.</p><p>The main point was about whether important lead actions are clearly visible from the browser side and then confirmed inside Google Ads or GA4.</p>",
+        },
+      ],
+    },
+    step2: {
+      delay: 2880,
+      variants: [
+        {
+          id: "code-default-google-ads-step2",
+          content:
+            "<p>Hi {name}, quick second follow-up.</p><p>If Google Ads is spending but lead actions are not recorded consistently, it can quietly make campaign decisions less reliable. Worth a quick check before changing budgets.</p>",
+        },
+      ],
+    },
+    step3: { delay: 4320, variants: [{ id: "code-default-google-ads-step3", content: "<p>Hi {name}, should I leave this for now, or would a quick tracking check be useful?</p>" }] },
+    step4: { delay: 7200, variants: [{ id: "code-default-google-ads-step4", content: "<p>Hi {name}, I will not keep chasing. Just wanted to make sure the tracking note did not get buried.</p>" }] },
+    step5: { delay: 10080, variants: [{ id: "code-default-google-ads-step5", content: "<p>Hi {name}, closing the loop here. Hope the note was useful as a quick tracking sanity check.</p>" }] },
+  },
+  "Server Side Tracking": {
+    step1: {
+      delay: 1440,
+      variants: [
+        {
+          id: "code-default-sst-step1",
+          content:
+            "<p>Hi {name}, following up on the server-side tracking note for {company}.</p><p>I only checked public browser-visible signals, so the next step would be confirming the setup inside GTM/GA4/server logs.</p>",
+        },
+      ],
+    },
+    step2: {
+      delay: 2880,
+      variants: [
+        {
+          id: "code-default-sst-step2",
+          content:
+            "<p>Hi {name}, quick reminder on this.</p><p>If browser-side signals are unclear, server-side tracking can help, but only if events are being forwarded and deduplicated correctly. That is the part worth verifying.</p>",
+        },
+      ],
+    },
+    step3: { delay: 4320, variants: [{ id: "code-default-sst-step3", content: "<p>Hi {name}, should I close this out, or is tracking verification something you want to revisit?</p>" }] },
+    step4: { delay: 7200, variants: [{ id: "code-default-sst-step4", content: "<p>Hi {name}, no pressure. I will leave the note with you in case it becomes useful later.</p>" }] },
+    step5: { delay: 10080, variants: [{ id: "code-default-sst-step5", content: "<p>Hi {name}, closing the loop here. If server-side tracking becomes a priority, the report should give you a starting point.</p>" }] },
+  },
+};
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function sanitizeFollowupRuntimeConfig(rawData: AnyRecord = {}) {
+  const merged: AnyRecord = cloneJson(CODE_DEFAULT_FOLLOWUP_CONFIG);
+
+  for (const service of SERVICE_IDS) {
+    for (const step of STEP_IDS) {
+      const loadedStep = rawData?.[service]?.[step];
+      if (!loadedStep || typeof loadedStep !== "object") continue;
+
+      const safeVariants = Array.isArray(loadedStep.variants)
+        ? loadedStep.variants
+            .map((variant: any, index: number) => ({
+              id: String(variant?.id || `${service}-${step}-variant-${index + 1}`).slice(0, 80),
+              content: stripDangerousHtml(String(variant?.content || "")),
+            }))
+            .filter((variant: any) => plainTextFromHtml(variant.content))
+            .slice(0, 10)
+        : [];
+
+      const delay = Math.max(60, Math.min(Number(loadedStep.delay || merged[service][step].delay || 1440), 60 * 24 * 30));
+      merged[service][step] = {
+        delay,
+        variants: safeVariants.length ? safeVariants : merged[service][step].variants,
+      };
+    }
+  }
+
+  merged.daily_followup_limit = Math.max(1, Math.min(Number(rawData?.daily_followup_limit || 50), 500));
+  merged.followup_batch_per_run = Math.max(1, Math.min(Number(rawData?.followup_batch_per_run || DEFAULT_FOLLOWUP_BATCH_PER_RUN), MAX_FOLLOWUP_BATCH_PER_RUN));
+  merged.followup_trigger_mode = "open_required";
+  return merged;
+}
+
+async function loadFollowupRuntimeConfig(): Promise<{ data: AnyRecord; source: "firestore" | "code_default"; exists: boolean }> {
+  const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
+  if (!configDoc.exists) {
+    return {
+      data: sanitizeFollowupRuntimeConfig({}),
+      source: "code_default",
+      exists: false,
+    };
+  }
+
+  return {
+    data: sanitizeFollowupRuntimeConfig(configDoc.data() || {}),
+    source: "firestore",
+    exists: true,
+  };
+}
+
 
 const ServiceSchema = z.enum(["Email Signature", "Google Ads", "Server Side Tracking"]);
 
@@ -538,8 +681,30 @@ async function addSuppression(emailLower: string, reason: string, extra: Record<
   );
 }
 
+function shouldStoreRawEmailEvent(event: string): boolean {
+  const name = String(event || "").toLowerCase().trim();
+  if (!name) return false;
+  if (envFlag("STORE_LOW_VALUE_EMAIL_EVENTS", false)) return true;
+
+  // Free-limit friendly default: keep only high-value compliance/debug events.
+  // Open/click/request/delivered are reflected on the lead aggregate fields, not logged as raw docs.
+  return (
+    (name === "sent" && envFlag("STORE_SENT_EMAIL_EVENTS", false)) ||
+    name === "replied" ||
+    name === "reply" ||
+    name === "unsubscribed" ||
+    name === "spam" ||
+    name === "hard_bounce" ||
+    name === "soft_bounce" ||
+    name === "bounced" ||
+    name === "failed" ||
+    name === "cron_error" ||
+    name === "manual_action"
+  );
+}
+
 async function addEmailEvent(leadId: string, event: string, payload: Record<string, any> = {}) {
-  if (!leadId) return;
+  if (!leadId || !shouldStoreRawEmailEvent(event)) return;
   await adminDb.collection("email_events").add({
     leadId,
     event,
@@ -1094,6 +1259,10 @@ async function sendInitialFromBody(rawBody: any) {
   }
   const body = { ...rawBody, ...parsedBody.data };
 
+  if (automationPaused()) {
+    return json(pausedPayload("initial_email_send"), 423);
+  }
+
   // Cloudflare Turnstile removed. Firebase admin auth now protects this internal agency API.
 
   const emailLower = normalizeEmail(body.email);
@@ -1382,6 +1551,7 @@ async function handleCancelInitial(req: Request) {
 /** GET /api/trackflow/cron/scheduled-initials */
 async function handleCronScheduledInitials(req: Request) {
   requireCronSecret(req);
+  if (automationPaused()) return json(pausedPayload("scheduled_initials_cron"), 423);
 
   const cronLock = await acquireCronLock("scheduled_initials", 10);
   if (!cronLock.acquired) {
@@ -1412,7 +1582,7 @@ async function handleCronScheduledInitials(req: Request) {
       .collection("outreach_leads")
       .where("status", "==", "scheduled")
       .where("scheduledAt", "<=", now)
-      .limit(20)
+      .limit(requestLimit(req, "limit", "SCHEDULED_INITIALS_BATCH_PER_RUN", 20, 1, 50))
       .get();
 
     const runId = randomUUID();
@@ -1892,10 +2062,8 @@ async function handleFollowupDryRun(req: Request) {
   const includeBlocked = url.searchParams.get("includeBlocked") === "true";
   const mode = String(url.searchParams.get("mode") || "due").toLowerCase();
 
-  const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
-  if (!configDoc.exists) throw new ApiError("Follow-up config not found", 404);
-
-  const configData = configDoc.data() || {};
+  const runtimeConfig = await loadFollowupRuntimeConfig();
+  const configData = runtimeConfig.data;
   const nowMs = Date.now();
   const nowTs = admin.firestore.Timestamp.now();
 
@@ -1937,6 +2105,7 @@ async function handleFollowupDryRun(req: Request) {
   return json({
     success: true,
     mode,
+    configSource: runtimeConfig.source,
     checked: candidatesSnap.size,
     returned: rows.length,
     eligibleCount: rows.filter((row: any) => row.eligible).length,
@@ -1968,8 +2137,8 @@ async function getFollowupSentTodayTotal(dateKey = todayKey()): Promise<number> 
 async function handleFollowupSummary(req: Request) {
   await requireAdmin(req);
 
-  const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
-  const configData = configDoc.exists ? configDoc.data() || {} : {};
+  const runtimeConfig = await loadFollowupRuntimeConfig();
+  const configData = runtimeConfig.data;
   const dailyLimit = Math.max(1, Math.min(Number(configData.daily_followup_limit || 50), 500));
   const batchPerRun = getFollowupBatchPerRun(configData);
   const nowTs = admin.firestore.Timestamp.now();
@@ -2007,6 +2176,7 @@ async function handleFollowupSummary(req: Request) {
     success: true,
     generatedAt: new Date().toISOString(),
     dateKey: key,
+    configSource: runtimeConfig.source,
     dailyLimit,
     batchPerRun,
     remainingToday,
@@ -2026,6 +2196,8 @@ async function handleFollowupSummary(req: Request) {
 /** GET /api/trackflow/cron/followups */
 async function handleCronFollowups(req: Request) {
   requireCronSecret(req);
+  if (automationPaused()) return json(pausedPayload("followups_cron"), 423);
+  if (!followupsEnabled()) return json({ success: true, skipped: true, disabled: true, feature: "followups", message: "FOLLOWUPS_ENABLED=false" });
 
   const cronLock = await acquireCronLock("followups", 20);
   if (!cronLock.acquired) {
@@ -2053,10 +2225,8 @@ async function handleCronFollowups(req: Request) {
   try {
   const recoveredLocks = await releaseStaleAutomationLocks(200).catch(() => []);
 
-  const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
-  if (!configDoc.exists) throw new ApiError("Follow-up config not found", 404);
-
-  const configData = configDoc.data() || {};
+  const runtimeConfig = await loadFollowupRuntimeConfig();
+  const configData = runtimeConfig.data;
   const globalDailyLimit = Math.max(1, Math.min(Number(configData.daily_followup_limit || 50), 500));
   const batchPerRun = getFollowupBatchPerRun(configData);
   const sentTodayBeforeRun = await getFollowupSentTodayTotal();
@@ -2066,7 +2236,7 @@ async function handleCronFollowups(req: Request) {
   const nowTs = admin.firestore.Timestamp.now();
   const runId = randomUUID();
   const url = new URL(req.url);
-  const includeLegacyBackfill = url.searchParams.get("legacy") !== "false";
+  const includeLegacyBackfill = url.searchParams.get("legacy") === "true" || envFlag("FOLLOWUP_LEGACY_BACKFILL", false);
 
   if (runSendLimit <= 0) {
     return json({
@@ -2108,7 +2278,7 @@ async function handleCronFollowups(req: Request) {
     const legacySnap = await adminDb
       .collection("outreach_leads")
       .where("stopAutomation", "==", false)
-      .limit(Math.min(FOLLOWUP_CANDIDATE_LIMIT, 150))
+      .limit(intEnv("FOLLOWUP_LEGACY_BACKFILL_LIMIT", Math.min(FOLLOWUP_CANDIDATE_LIMIT, 75), 1, 150))
       .get();
 
     legacyChecked = legacySnap.size;
@@ -2341,6 +2511,7 @@ async function handleCronFollowups(req: Request) {
 
   return json({
     success: true,
+    configSource: runtimeConfig.source,
     recoveredLocks,
     checked: candidateDocs.length,
     dueChecked: dueSnap.size,
@@ -2368,17 +2539,7 @@ async function applyNextFollowupScheduleFromEngagement(
   reason: "opened" | "clicked"
 ) {
   try {
-    const configDoc = await adminDb.collection("automation_settings").doc("followup_config").get();
-    if (!configDoc.exists) {
-      Object.assign(updatePayload, {
-        nextFollowupStatus: "waiting_for_new_engagement",
-        nextFollowupReason: "followup_config_missing",
-        nextFollowupAt: admin.firestore.FieldValue.delete(),
-        nextFollowupStep: admin.firestore.FieldValue.delete(),
-        lastFollowupEvaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return;
-    }
+    const runtimeConfig = await loadFollowupRuntimeConfig();
 
     const effectiveLead = {
       ...leadData,
@@ -2386,7 +2547,7 @@ async function applyNextFollowupScheduleFromEngagement(
       lastEngagedAt: eventTime,
     } as LeadData;
 
-    const schedule = buildNextFollowupSchedule(effectiveLead, configDoc.data() || {}, eventTime.toMillis(), reason);
+    const schedule = buildNextFollowupSchedule(effectiveLead, runtimeConfig.data, eventTime.toMillis(), reason);
 
     if (schedule.ok) {
       Object.assign(updatePayload, {
@@ -2454,6 +2615,8 @@ async function handleBrevoWebhook(req: Request) {
 
   const docRef = outreachRef.doc(leadDoc.id);
   const updatePayload: any = {};
+  let openRecorded = false;
+  let clickRecorded = false;
   const trackingEntryBase = {
     time: eventTime,
     step_tag: receivedTag || "unknown",
@@ -2519,7 +2682,8 @@ async function handleBrevoWebhook(req: Request) {
     const lastOpened = toMillis(leadData.lastOpenedAt);
     const currentRequestTime = eventTime.toMillis();
 
-    if (currentRequestTime - lastOpened > 20_000) {
+    if (!isDuplicateEngagement(lastOpened, currentRequestTime, webhookOpenDedupeMs())) {
+      openRecorded = true;
       if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
         updatePayload.status = "opened";
       }
@@ -2533,34 +2697,46 @@ async function handleBrevoWebhook(req: Request) {
       updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
       updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
       await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "opened");
-      updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
-        event: "opened",
-        ...trackingEntryBase,
-        ip: body.ip || "unknown",
-        device: body["user-agent"] || "unknown",
-      });
+      if (envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false)) {
+        updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
+          event: "opened",
+          ...trackingEntryBase,
+          ip: body.ip || "unknown",
+          device: body["user-agent"] || "unknown",
+        });
+      }
     }
   }
 
   if (event === "click") {
-    if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
-      updatePayload.status = "clicked";
-    }
+    const lastClicked = toMillis(leadData.lastClickedAt);
+    const currentRequestTime = eventTime.toMillis();
 
-    const engagementMinuteUtc = getEngagementMinuteOfDayUtc(eventTime.toMillis());
-    updatePayload.click_count = admin.firestore.FieldValue.increment(1);
-    updatePayload.lastClickedAt = eventTime;
-    updatePayload.lastEngagedAt = eventTime;
-    updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
-    updatePayload.preferred_engagement_minute_utc = engagementMinuteUtc;
-    updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
-    updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
-    await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "clicked");
-    updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
-      event: "clicked",
-      ...trackingEntryBase,
-      link: body.url || "unknown link",
-    });
+    if (!isDuplicateEngagement(lastClicked, currentRequestTime, webhookClickDedupeMs())) {
+      clickRecorded = true;
+
+      if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
+        updatePayload.status = "clicked";
+      }
+
+      const engagementMinuteUtc = getEngagementMinuteOfDayUtc(eventTime.toMillis());
+      updatePayload.click_count = admin.firestore.FieldValue.increment(1);
+      updatePayload.lastClickedAt = eventTime;
+      updatePayload.lastEngagedAt = eventTime;
+      updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
+      updatePayload.preferred_engagement_minute_utc = engagementMinuteUtc;
+      updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
+      updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
+      await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "clicked");
+
+      if (envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false)) {
+        updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
+          event: "clicked",
+          ...trackingEntryBase,
+          link: body.url || "unknown link",
+        });
+      }
+    }
   }
 
   if (Object.keys(updatePayload).length > 0) {
@@ -2570,10 +2746,10 @@ async function handleBrevoWebhook(req: Request) {
   const sheetRowNumber = Number(leadData.sheetRowNumber || 0);
   if (sheetRowNumber > 1 && ["opened", "click", "hard_bounce", "soft_bounce", "spam", "unsubscribed", "delivered"].includes(event)) {
     const sheetUpdates: AnyRecord = {};
-    if (event === "opened") {
+    if (event === "opened" && openRecorded) {
       sheetUpdates.openCount = String(Number(leadData.open_count || 0) + 1);
     }
-    if (event === "click") {
+    if (event === "click" && clickRecorded) {
       sheetUpdates.clickCount = String(Number(leadData.click_count || 0) + 1);
     }
     if (event === "delivered") sheetUpdates.sendStatus = "Sent";
@@ -4303,6 +4479,243 @@ function isPdfBuffer(buffer: Buffer): boolean {
   return buffer.byteLength > 4 && buffer.subarray(0, 5).toString("utf8") === "%PDF-";
 }
 
+
+type DrivePdfDeleteMode = "trash" | "delete";
+
+type DrivePdfCleanupResult = {
+  attempted: boolean;
+  ok: boolean;
+  fileId: string;
+  mode: DrivePdfDeleteMode | "disabled" | "skipped" | "missing_credentials" | "not_found";
+  error?: string;
+};
+
+type AuditReportCleanupResult = {
+  attempted: boolean;
+  ok: boolean;
+  reportToken: string;
+  error?: string;
+};
+
+type LeadAssetCleanupResult = {
+  drive: DrivePdfCleanupResult;
+  report: AuditReportCleanupResult;
+};
+
+function envFlag(name: string, fallback = false): boolean {
+  const raw = String(process.env[name] ?? "").trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  return fallback;
+}
+
+function intEnv(name: string, fallback: number, min: number, max: number): number {
+  const parsed = Number(process.env[name]);
+  const value = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.max(min, Math.min(value, max));
+}
+
+function requestLimit(req: Request, queryName: string, envName: string, fallback: number, min: number, max: number): number {
+  const url = new URL(req.url);
+  const fromQuery = Number(url.searchParams.get(queryName) || "");
+  const fromEnv = intEnv(envName, fallback, min, max);
+  const raw = Number.isFinite(fromQuery) && fromQuery > 0 ? fromQuery : fromEnv;
+  return Math.max(min, Math.min(raw, max));
+}
+
+function automationPaused(): boolean {
+  return envFlag("AUTOMATION_PAUSED", false);
+}
+
+function sheetQueueSendEnabled(): boolean {
+  return envFlag("SHEET_QUEUE_SEND_ENABLED", true);
+}
+
+function followupsEnabled(): boolean {
+  return envFlag("FOLLOWUPS_ENABLED", true);
+}
+
+function pausedPayload(feature: string) {
+  return {
+    success: false,
+    paused: true,
+    feature,
+    error: `${feature} is paused by server config. Set AUTOMATION_PAUSED=false or the feature-specific switch to enable it.`,
+  };
+}
+
+function webhookOpenDedupeMs(): number {
+  return intEnv("WEBHOOK_OPEN_DEDUPE_MINUTES", 240, 1, 24 * 60) * 60_000;
+}
+
+function webhookClickDedupeMs(): number {
+  return intEnv("WEBHOOK_CLICK_DEDUPE_MINUTES", 30, 1, 24 * 60) * 60_000;
+}
+
+function isDuplicateEngagement(lastMs: number, currentMs: number, windowMs: number): boolean {
+  return Boolean(lastMs && currentMs && currentMs - lastMs >= 0 && currentMs - lastMs <= windowMs);
+}
+
+function isUnsafeStoredPdfUrl(value: any): boolean {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return false;
+  if (raw.includes("localhost") || raw.includes("127.0.0.1") || raw.includes("0.0.0.0")) return true;
+  if (raw.includes(":8000/") || raw.includes("/audit/pdf/") || raw.includes("/audit/evidence/")) return true;
+  return false;
+}
+
+function drivePdfDeleteMode(): DrivePdfDeleteMode {
+  return String(process.env.DRIVE_PDF_DELETE_MODE || "trash").trim().toLowerCase() === "delete" ? "delete" : "trash";
+}
+
+function shouldDeleteDrivePdfOnLeadDelete(): boolean {
+  return envFlag("DELETE_DRIVE_PDF_ON_LEAD_DELETE", true);
+}
+
+function shouldRequireDrivePdfCleanupOnLeadDelete(): boolean {
+  return envFlag("REQUIRE_DRIVE_PDF_CLEANUP_ON_LEAD_DELETE", true);
+}
+
+function extractReportTokenFromUrl(value: any): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `${appBaseUrl()}${raw.startsWith("/") ? "" : "/"}${raw}`);
+    const match = url.pathname.match(/^\/r\/([a-zA-Z0-9_-]{8,128})\/?$/);
+    return normalizeReportToken(match?.[1] || "");
+  } catch {
+    const match = raw.match(/\/r\/([a-zA-Z0-9_-]{8,128})\/?/);
+    return normalizeReportToken(match?.[1] || "");
+  }
+}
+
+function getLeadReportTokenForCleanup(lead: LeadData): string {
+  return normalizeReportToken(
+    lead.reportToken ||
+      lead.report_token ||
+      lead.token ||
+      extractReportTokenFromUrl(lead.reportUrl || lead.report_url || "") ||
+      "",
+  );
+}
+
+function getLeadDrivePdfFileIdForCleanup(lead: LeadData): string {
+  return String(
+    lead.pdfFileId ||
+      lead.pdf_file_id ||
+      lead.driveFileId ||
+      lead.googleDriveFileId ||
+      extractGoogleDriveFileId(lead.pdfViewUrl || lead.pdf_view_url || "") ||
+      extractGoogleDriveFileId(lead.pdfDownloadUrl || lead.pdf_download_url || "") ||
+      "",
+  ).trim();
+}
+
+function getGoogleApiStatusCode(error: any): number {
+  return Number(error?.code || error?.status || error?.response?.status || error?.errors?.[0]?.code || 0) || 0;
+}
+
+async function cleanupDrivePdfForLeadDelete(lead: LeadData): Promise<DrivePdfCleanupResult> {
+  const fileId = getLeadDrivePdfFileIdForCleanup(lead);
+  if (!fileId) return { attempted: false, ok: true, fileId: "", mode: "skipped" };
+
+  if (!shouldDeleteDrivePdfOnLeadDelete()) {
+    return { attempted: false, ok: true, fileId, mode: "disabled" };
+  }
+
+  const drive = getGoogleDriveOAuthClient();
+  if (!drive) {
+    return {
+      attempted: true,
+      ok: false,
+      fileId,
+      mode: "missing_credentials",
+      error: "Missing Google Drive OAuth credentials for PDF cleanup.",
+    };
+  }
+
+  const mode = drivePdfDeleteMode();
+  try {
+    if (mode === "delete") {
+      await drive.files.delete({ fileId, supportsAllDrives: true });
+    } else {
+      await drive.files.update({
+        fileId,
+        requestBody: { trashed: true },
+        fields: "id,trashed",
+        supportsAllDrives: true,
+      });
+    }
+
+    return { attempted: true, ok: true, fileId, mode };
+  } catch (error: any) {
+    const statusCode = getGoogleApiStatusCode(error);
+    if (statusCode === 404) {
+      return { attempted: true, ok: true, fileId, mode: "not_found" };
+    }
+
+    return {
+      attempted: true,
+      ok: false,
+      fileId,
+      mode,
+      error: String(error?.message || error || "Google Drive PDF cleanup failed."),
+    };
+  }
+}
+
+async function deactivateAuditReportForLeadDelete(
+  lead: LeadData,
+  options: { actor?: string; reason?: string; driveCleanup?: DrivePdfCleanupResult } = {},
+): Promise<AuditReportCleanupResult> {
+  const reportToken = getLeadReportTokenForCleanup(lead);
+  if (!reportToken) return { attempted: false, ok: true, reportToken: "" };
+
+  try {
+    await adminDb.collection("audit_reports").doc(reportToken).set(
+      {
+        active: false,
+        reportReady: false,
+        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        deletedBy: options.actor || "admin",
+        deleteReason: options.reason || "lead_deleted",
+        drivePdfCleanup: options.driveCleanup || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return { attempted: true, ok: true, reportToken };
+  } catch (error: any) {
+    return {
+      attempted: true,
+      ok: false,
+      reportToken,
+      error: String(error?.message || error || "Report deactivation failed."),
+    };
+  }
+}
+
+async function cleanupLeadExternalAssetsBeforePermanentDelete(
+  lead: LeadData,
+  options: { actor?: string; reason?: string; allowAssetCleanupFailure?: boolean } = {},
+): Promise<LeadAssetCleanupResult> {
+  const drive = await cleanupDrivePdfForLeadDelete(lead);
+  const report = await deactivateAuditReportForLeadDelete(lead, { ...options, driveCleanup: drive });
+
+  const driveCleanupRequired =
+    drive.attempted && !drive.ok && shouldRequireDrivePdfCleanupOnLeadDelete() && options.allowAssetCleanupFailure !== true;
+  if (driveCleanupRequired) {
+    throw new ApiError(`Drive PDF cleanup failed before permanent delete: ${drive.error || drive.mode}`, 502);
+  }
+
+  if (report.attempted && !report.ok && options.allowAssetCleanupFailure !== true) {
+    throw new ApiError(`Report page deactivation failed before permanent delete: ${report.error || report.reportToken}`, 502);
+  }
+
+  return { drive, report };
+}
+
 async function fetchPdfBufferFromDriveApi(fileId: string): Promise<Buffer | null> {
   const drive = getGoogleDriveOAuthClient();
   if (!drive || !fileId) return null;
@@ -4496,34 +4909,35 @@ async function handleReportDownload(req: Request) {
   const target = getReportPdfRedirectTarget(report, true);
   if (!target) throw new ApiError("PDF download link is missing", 404);
 
-  const nowTs = admin.firestore.Timestamp.now();
-  await ref.set(
-    {
-      downloadCount: admin.firestore.FieldValue.increment(1),
-      lastDownloadedAt: nowTs,
-    },
-    { merge: true },
-  );
-
-  if (report.leadId) {
-    await adminDb.collection("outreach_leads").doc(String(report.leadId)).set(
+  const alreadyDownloaded = Boolean(report.lastDownloadedAt || report.firstDownloadedAt || report.pdfDownloadedAt);
+  if (!alreadyDownloaded) {
+    const nowTs = admin.firestore.Timestamp.now();
+    await ref.set(
       {
+        downloadCount: admin.firestore.FieldValue.increment(1),
+        firstDownloadedAt: nowTs,
+        lastDownloadedAt: nowTs,
         pdfDownloadedAt: nowTs,
-        tracking_history: admin.firestore.FieldValue.arrayUnion({
-          event: "pdf_downloaded",
-          reportToken: normalizeReportToken(report.token || token),
-          time: nowTs,
-        }),
       },
       { merge: true },
     );
-  }
 
-  if (Number(report.sheetRowNumber || 0) > 1) {
-    await patchSheetRowSafely(Number(report.sheetRowNumber), {
-      pdfDownloaded: "Yes",
-      lastPdfDownloadedAt: nowDhaka(),
-    });
+    if (report.leadId) {
+      await adminDb.collection("outreach_leads").doc(String(report.leadId)).set(
+        {
+          pdfDownloadedAt: nowTs,
+          lastPdfDownloadedAt: nowTs,
+        },
+        { merge: true },
+      );
+    }
+
+    if (Number(report.sheetRowNumber || 0) > 1) {
+      await patchSheetRowSafely(Number(report.sheetRowNumber), {
+        pdfDownloaded: "Yes",
+        lastPdfDownloadedAt: nowDhaka(),
+      });
+    }
   }
 
   try {
@@ -4540,34 +4954,34 @@ async function handleReportCta(req: Request) {
   const { token, ref, report } = await getActiveReportByToken(url.searchParams.get("token"));
   const target = sanitizeLocalRedirectTarget(url.searchParams.get("target") || "/contact");
 
-  await ref.set(
-    {
-      ctaClickCount: admin.firestore.FieldValue.increment(1),
-      lastCtaClickedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
-
-  if (report.leadId) {
-    await adminDb.collection("outreach_leads").doc(String(report.leadId)).set(
+  const alreadyClicked = Boolean(report.lastCtaClickedAt || report.firstCtaClickedAt || report.reportCtaClickedAt);
+  if (!alreadyClicked) {
+    const nowTs = admin.firestore.Timestamp.now();
+    await ref.set(
       {
-        reportCtaClickedAt: admin.firestore.FieldValue.serverTimestamp(),
-        tracking_history: admin.firestore.FieldValue.arrayUnion({
-          event: "report_cta_clicked",
-          reportToken: token,
-          target,
-          time: admin.firestore.Timestamp.now(),
-        }),
+        ctaClickCount: admin.firestore.FieldValue.increment(1),
+        firstCtaClickedAt: nowTs,
+        lastCtaClickedAt: nowTs,
       },
       { merge: true },
     );
-  }
 
-  if (Number(report.sheetRowNumber || 0) > 1) {
-    await patchSheetRowSafely(Number(report.sheetRowNumber), {
-      ctaClicked: "Yes",
-      lastCtaClickedAt: nowDhaka(),
-    });
+    if (report.leadId) {
+      await adminDb.collection("outreach_leads").doc(String(report.leadId)).set(
+        {
+          reportCtaClickedAt: nowTs,
+          lastReportCtaClickedAt: nowTs,
+        },
+        { merge: true },
+      );
+    }
+
+    if (Number(report.sheetRowNumber || 0) > 1) {
+      await patchSheetRowSafely(Number(report.sheetRowNumber), {
+        ctaClicked: "Yes",
+        lastCtaClickedAt: nowDhaka(),
+      });
+    }
   }
 
   return NextResponse.redirect(new URL(target, appBaseUrl()).toString());
@@ -4957,11 +5371,14 @@ function validateSheetQueuedSendReadiness(row: AnyRecord): string[] {
   const subject = clean(row["Email Subject"]);
   const emailBody = clean(row["Email Body"]);
   const mainIssue = clean(row["Main Issue"]);
-  const reportUrl = sanitizePublicReportUrl(clean(row["Report URL"]));
+  const rawReportUrl = clean(row["Report URL"]);
+  const reportUrl = sanitizePublicReportUrl(rawReportUrl);
   const reportToken = normalizeReportToken(row["Report Token"]);
+  const urlToken = extractReportTokenFromUrl(reportUrl || rawReportUrl);
   const pdfFileId = clean(row["PDF File ID"]);
   const pdfViewUrl = sanitizeOptionalUrl(clean(row["PDF View URL"]));
   const pdfDownloadUrl = sanitizeOptionalUrl(clean(row["PDF Download URL"]));
+  const pdfExpiresAtMs = toMillis(row["PDF Expires At"]);
 
   if (!isValidEmail(finalEmail)) blockers.push("Final Email is invalid or missing");
   if (!["approved", "send ready"].includes(approvalStatus)) blockers.push("Approval Status must be Approved or Send Ready");
@@ -4969,9 +5386,15 @@ function validateSheetQueuedSendReadiness(row: AnyRecord): string[] {
   if (!plainTextFromHtml(emailBody)) blockers.push("Email Body is missing");
   if (!mainIssue) blockers.push("Main Issue is missing");
   if (!reportUrl) blockers.push("secure TrackFlow /r report URL is missing");
+  if (!urlToken) blockers.push("Report URL must be a branded /r/{token} page");
   if (!reportToken) blockers.push("Report Token is missing");
-  if (!pdfFileId) blockers.push("PDF File ID is missing");
+  if (urlToken && reportToken && urlToken !== reportToken) blockers.push("Report Token does not match the /r URL token");
+  if (!pdfFileId) blockers.push("PDF file ID is missing");
   if (!pdfViewUrl && !pdfDownloadUrl) blockers.push("PDF View URL or PDF Download URL is missing");
+  if ((pdfViewUrl && isUnsafeStoredPdfUrl(pdfViewUrl)) || (pdfDownloadUrl && isUnsafeStoredPdfUrl(pdfDownloadUrl))) {
+    blockers.push("PDF URLs must point to Drive/storage, not localhost/Python audit endpoints");
+  }
+  if (pdfExpiresAtMs && Date.now() > pdfExpiresAtMs) blockers.push("PDF/report link is expired");
 
   return blockers;
 }
@@ -4984,6 +5407,8 @@ async function handleCronSheetQueuedSends(req: Request) {
    * lock করা হয়। এরপর row আবার read করে নিজের lock confirm করা হয়। এতে duplicate email যাওয়ার risk কমে।
    */
   requireCronSecret(req);
+  if (automationPaused()) return json(pausedPayload("sheet_queue_send_cron"), 423);
+  if (!sheetQueueSendEnabled()) return json({ success: true, skipped: true, disabled: true, feature: "sheet_queue_send", message: "SHEET_QUEUE_SEND_ENABLED=false" });
 
   const cronLock = await acquireCronLock("sheet_queued_sends", 10);
   if (!cronLock.acquired) {
@@ -5011,7 +5436,7 @@ async function handleCronSheetQueuedSends(req: Request) {
   try {
     const startedAtMs = Date.now();
     const url = new URL(req.url);
-    const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 10), 25));
+    const max = requestLimit(req, "limit", "SHEET_QUEUE_BATCH_PER_RUN", 5, 1, 20);
     const defaultSender = getDefaultSender();
     if (!defaultSender) throw new ApiError("No default sender configured", 500);
 
@@ -5387,19 +5812,6 @@ async function updateLeadsInChunks(ids: string[], buildUpdate: (id: string) => R
   return updated;
 }
 
-async function deleteLeadsInChunks(ids: string[]) {
-  let deleted = 0;
-  for (let start = 0; start < ids.length; start += 450) {
-    const chunk = ids.slice(start, start + 450);
-    const batch = adminDb.batch();
-    for (const id of chunk) {
-      batch.delete(adminDb.collection("outreach_leads").doc(id));
-      deleted += 1;
-    }
-    await batch.commit();
-  }
-  return deleted;
-}
 
 /** POST /api/trackflow/leads/bulk-action */
 async function handleLeadsBulkAction(req: Request) {
@@ -5416,8 +5828,70 @@ async function handleLeadsBulkAction(req: Request) {
   const actor = normalizeEmail(adminUser.email || "admin");
 
   if (action === "delete_permanent") {
-    const deleted = await deleteLeadsInChunks(ids);
-    return json({ success: true, action, count: deleted, message: `Permanently deleted ${deleted} lead(s).` });
+    const sheetMode = ["delete", "mark", "skip"].includes(String(body.sheetMode || process.env.PERMANENT_DELETE_SHEET_MODE || "mark"))
+      ? (String(body.sheetMode || process.env.PERMANENT_DELETE_SHEET_MODE || "mark") as "delete" | "mark" | "skip")
+      : "mark";
+    const dryRun = body.dryRun === true;
+    const allowAssetCleanupFailure = body.allowAssetCleanupFailure === true;
+    const reason = String(body.reason || "permanently_deleted_by_admin").slice(0, 160);
+    const results: any[] = [];
+
+    for (const leadId of ids) {
+      const ref = adminDb.collection("outreach_leads").doc(leadId);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        results.push({ leadId, ok: false, reason: "lead_not_found" });
+        continue;
+      }
+
+      const lead = { id: snap.id, ...(snap.data() || {}) } as LeadData;
+      if (dryRun) {
+        results.push({
+          leadId,
+          email: lead.emailLower || lead.email || "",
+          ok: true,
+          dryRun: true,
+          pdfFileId: getLeadDrivePdfFileIdForCleanup(lead),
+          reportToken: getLeadReportTokenForCleanup(lead),
+          sheetLinked: getLeadSourceKind(lead) === "sheet",
+        });
+        continue;
+      }
+
+      try {
+        const assetCleanup = await cleanupLeadExternalAssetsBeforePermanentDelete(lead, {
+          actor,
+          reason,
+          allowAssetCleanupFailure,
+        });
+        const sheet = await deleteOrMarkSheetRowForLead(lead, { mode: sheetMode, actor });
+        await ref.delete();
+
+        results.push({
+          leadId,
+          email: lead.emailLower || lead.email || "",
+          ok: true,
+          sheet,
+          assets: assetCleanup,
+        });
+      } catch (error: any) {
+        results.push({ leadId, email: lead.emailLower || lead.email || "", ok: false, reason: error?.message || String(error) });
+      }
+    }
+
+    const deleted = results.filter((item) => item.ok && !item.dryRun).length;
+    return json({
+      success: true,
+      action,
+      count: deleted,
+      failedCount: results.filter((item) => !item.ok).length,
+      dryRun,
+      sheetMode,
+      drivePdfDeleteMode: drivePdfDeleteMode(),
+      requireDriveCleanup: shouldRequireDrivePdfCleanupOnLeadDelete(),
+      results,
+      message: dryRun ? `Dry-run checked ${results.length} lead(s).` : `Permanently deleted ${deleted} lead(s).`,
+    });
   }
 
   const updated = await updateLeadsInChunks(ids, () => {
@@ -5956,6 +6430,12 @@ async function deleteOrMarkSheetRowForLead(
       ...existing,
       "Archive Status": "Deleted",
       "Send Status": "Deleted",
+      "Report Token": "",
+      "Report URL": "",
+      "PDF File ID": "",
+      "PDF View URL": "",
+      "PDF Download URL": "",
+      "PDF Expires At": "",
       "Queue Lock ID": "",
       "Queue Locked At": "",
       "Queue Attempt ID": "",
@@ -6051,6 +6531,11 @@ async function handleCleanupDeleteFullKeepMemory(req: Request) {
 
     try {
       await saveFootprintBeforeDelete(lead, decision, actor);
+      const assetCleanup = await cleanupLeadExternalAssetsBeforePermanentDelete(lead, {
+        actor,
+        reason: decision.reason,
+        allowAssetCleanupFailure: body.allowAssetCleanupFailure === true,
+      });
       const sheetResult = await deleteOrMarkSheetRowForLead(lead, { mode: sheetMode, actor });
       await ref.delete();
 
@@ -6060,7 +6545,8 @@ async function handleCleanupDeleteFullKeepMemory(req: Request) {
         ok: true,
         outcome: decision.outcome,
         sheet: sheetResult,
-        message: "Full lead deleted after footprint memory was saved.",
+        assets: assetCleanup,
+        message: "Full lead deleted after footprint memory was saved, Drive PDF cleanup was attempted, and the report page was deactivated.",
       });
     } catch (error: any) {
       results.push({ leadId, email: lead.emailLower || lead.email || "", ok: false, reason: error?.message || String(error) });
@@ -6361,6 +6847,7 @@ async function handleSaveFollowupConfig(req: Request) {
 async function handleAdminHealth(req: Request) {
   await requireAdmin(req);
 
+  const runtimeConfig = await loadFollowupRuntimeConfig().catch(() => ({ data: sanitizeFollowupRuntimeConfig({}), source: "code_default" as const, exists: false }));
   const cronSnap = await adminDb.collection("system_status").doc("cron").get().catch(() => null);
   const cronStatus = cronSnap?.exists ? cronSnap.data() || {} : {};
 
@@ -6376,6 +6863,9 @@ async function handleAdminHealth(req: Request) {
     "GOOGLE_CLIENT_EMAIL",
     "GOOGLE_PRIVATE_KEY",
     "REPORT_REGISTER_SECRET",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REFRESH_TOKEN",
   ];
 
   return json({
@@ -6384,12 +6874,29 @@ async function handleAdminHealth(req: Request) {
     senderSource: "lib/senders.ts",
     sheetRole: "lead_queue_and_status_mirror_only",
     automationSource: "Firestore outreach_leads",
+    followupConfigSource: runtimeConfig.source,
+    followupConfigSavedInFirestore: runtimeConfig.exists,
+    followupDailyLimit: Number(runtimeConfig.data?.daily_followup_limit || 50),
+    followupBatchPerRun: getFollowupBatchPerRun(runtimeConfig.data),
     sheetLockMode: "google_sheet_columns",
     cronStatus,
     env: requiredEnv.reduce((acc: Record<string, boolean>, key) => {
       acc[key] = Boolean(process.env[key]);
       return acc;
     }, {}),
+    switches: {
+      automationPaused: automationPaused(),
+      sheetQueueSendEnabled: sheetQueueSendEnabled(),
+      followupsEnabled: followupsEnabled(),
+      storeLowValueEmailEvents: envFlag("STORE_LOW_VALUE_EMAIL_EVENTS", false),
+      storeSentEmailEvents: envFlag("STORE_SENT_EMAIL_EVENTS", false),
+      storeLowValueTrackingHistory: envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false),
+    },
+    drivePdfCleanup: {
+      enabled: shouldDeleteDrivePdfOnLeadDelete(),
+      requireSuccessBeforePermanentDelete: shouldRequireDrivePdfCleanupOnLeadDelete(),
+      mode: drivePdfDeleteMode(),
+    },
     notes: [
       "Sender emails are not loaded from Firebase.",
       "Sheet queue locks are stored in Google Sheet columns, not a Firestore lock collection.",
@@ -6398,6 +6905,112 @@ async function handleAdminHealth(req: Request) {
   });
 }
 
+
+async function handleTrackflowHealth(req: Request) {
+  const url = new URL(req.url);
+  const deep = url.searchParams.get("deep") === "true";
+
+  const requiredEnv = [
+    "BREVO_API_KEY",
+    "CRON_SECRET",
+    "BREVO_WEBHOOK_SECRET",
+    "REPLY_WEBHOOK_SECRET",
+    "UNSUBSCRIBE_SECRET",
+    "NEXT_PUBLIC_APP_URL",
+    "ALLOWED_ADMIN_EMAILS",
+    "REPORT_REGISTER_SECRET",
+    "GOOGLE_SHEET_ID",
+    "GOOGLE_CLIENT_EMAIL",
+    "GOOGLE_PRIVATE_KEY",
+  ];
+
+  const optionalEnv = [
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REFRESH_TOKEN",
+    "SHEET_API_SECRET",
+  ];
+
+  const envStatus = [...requiredEnv, ...optionalEnv].reduce((acc: Record<string, boolean>, key) => {
+    acc[key] = Boolean(process.env[key]);
+    return acc;
+  }, {});
+
+  const checks: Record<string, any> = {
+    route: { ok: true },
+    requiredEnv: { ok: requiredEnv.every((key) => envStatus[key]), missing: requiredEnv.filter((key) => !envStatus[key]) },
+    driveOAuth: { ok: Boolean(getGoogleDriveOAuthClient()), configured: Boolean(getGoogleDriveOAuthClient()) },
+    automation: {
+      ok: !automationPaused(),
+      paused: automationPaused(),
+      sheetQueueSendEnabled: sheetQueueSendEnabled(),
+      followupsEnabled: followupsEnabled(),
+    },
+    firebaseAdmin: { ok: true, checked: false },
+    googleSheet: { ok: Boolean(process.env.GOOGLE_SHEET_ID && process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY), checked: false },
+    googleDrive: { ok: Boolean(getGoogleDriveOAuthClient()), checked: false },
+  };
+
+  if (deep) {
+    await requireAdmin(req);
+
+    try {
+      await adminDb.collection("system_status").doc("health_check").set(
+        {
+          checkedAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: "trackflow_health_deep",
+        },
+        { merge: true },
+      );
+      checks.firebaseAdmin = { ok: true, checked: true };
+    } catch (error: any) {
+      checks.firebaseAdmin = { ok: false, checked: true, error: String(error?.message || error) };
+    }
+
+    try {
+      const { sheets, spreadsheetId } = await getSheetsClient();
+      await sheets.spreadsheets.get({ spreadsheetId, fields: "spreadsheetId,properties.title" });
+      checks.googleSheet = { ok: true, checked: true };
+    } catch (error: any) {
+      checks.googleSheet = { ok: false, checked: true, error: String(error?.message || error) };
+    }
+
+    try {
+      const drive = getGoogleDriveOAuthClient();
+      if (!drive) throw new Error("Google Drive OAuth credentials are missing");
+      await drive.about.get({ fields: "user(emailAddress)" });
+      checks.googleDrive = { ok: true, checked: true };
+    } catch (error: any) {
+      checks.googleDrive = { ok: false, checked: true, error: String(error?.message || error) };
+    }
+  }
+
+  const ok = Object.values(checks).every((check: any) => check?.ok !== false);
+
+  return json({
+    success: true,
+    service: "TrackFlowPro API",
+    status: ok ? "ok" : "needs_attention",
+    deep,
+    generatedAt: new Date().toISOString(),
+    appBaseUrl: appBaseUrl(),
+    env: envStatus,
+    switches: {
+      automationPaused: automationPaused(),
+      sheetQueueSendEnabled: sheetQueueSendEnabled(),
+      followupsEnabled: followupsEnabled(),
+      deleteDrivePdfOnLeadDelete: shouldDeleteDrivePdfOnLeadDelete(),
+      drivePdfDeleteMode: drivePdfDeleteMode(),
+      requireDrivePdfCleanupOnLeadDelete: shouldRequireDrivePdfCleanupOnLeadDelete(),
+      webhookOpenDedupeMinutes: webhookOpenDedupeMs() / 60_000,
+      webhookClickDedupeMinutes: webhookClickDedupeMs() / 60_000,
+      storeLowValueEmailEvents: envFlag("STORE_LOW_VALUE_EMAIL_EVENTS", false),
+      storeSentEmailEvents: envFlag("STORE_SENT_EMAIL_EVENTS", false),
+      storeLowValueTrackingHistory: envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false),
+    },
+    checks,
+  });
+}
 
 async function handleReportHealth(req: Request) {
   await requireReportRegisterAccess(req);
@@ -6475,59 +7088,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "system/usage-summary") return await handleUsageSummary(req);
     if (action === "cleanup/candidates") return await handleCleanupCandidates(req);
 
-    if (action === "health" || action === "") {
-      if (isProductionEnv()) {
-        return json({
-          success: true,
-          service: "TrackFlowPro API",
-          status: "ok",
-        });
-      }
-
-      return json({
-        success: true,
-        service: "TrackFlowPro Single API Route",
-        actions: [
-          "POST /api/trackflow/send-email",
-          "POST /api/trackflow/reports/register",
-          "GET /api/trackflow/reports/view?token=...",
-          "GET /api/trackflow/reports/preview?token=...",
-          "GET /api/trackflow/reports/download?token=...",
-          "GET /api/trackflow/reports/cta?token=...&target=/contact",
-          "GET /api/trackflow/sheets/leads",
-          "POST /api/trackflow/sheets/leads",
-          "PATCH /api/trackflow/sheets/leads",
-          "GET /api/trackflow/scheduled-emails",
-          "PATCH /api/trackflow/scheduled-emails",
-          "POST /api/trackflow/scheduled-emails/send-now",
-          "GET /api/trackflow/leads",
-          "POST /api/trackflow/leads/bulk-action",
-          "GET /api/trackflow/system/usage-summary",
-          "POST /api/trackflow/system/cleanup",
-          "GET /api/trackflow/cleanup/candidates",
-          "POST /api/trackflow/cleanup/manual-run",
-          "POST /api/trackflow/cleanup/delete-full-keep-memory",
-          "POST /api/trackflow/cleanup/skip",
-          "POST /api/trackflow/cleanup/protect",
-          "DELETE /api/trackflow/send-email?leadId=...",
-          "GET /api/trackflow/cron/scheduled-initials",
-          "GET /api/trackflow/cron/sheet-queued-sends",
-          "GET /api/trackflow/cron/followups",
-          "GET /api/trackflow/cron/recover-locks",
-          "GET /api/trackflow/automation/followups/dry-run",
-          "GET /api/trackflow/automation/followups/summary",
-          "POST /api/trackflow/automation/followups/config",
-          "POST /api/trackflow/automation/followups/release-template-blocked",
-          "POST /api/trackflow/admin/leads/mark-replied",
-          "GET /api/trackflow/admin/health",
-          "GET /api/trackflow/postmaster/health",
-          "POST /api/trackflow/webhooks/brevo",
-          "POST /api/trackflow/webhooks/reply",
-          "GET /api/trackflow/unsubscribe",
-          "POST /api/trackflow/unsubscribe",
-        ],
-      });
-    }
+    if (action === "health" || action === "") return await handleTrackflowHealth(req);
 
     return json({ success: false, error: `Unknown GET action: ${action}` }, 404);
   } catch (error: any) {

@@ -64,7 +64,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import AdminGuard from "@/app/components/AdminGuard";
 import Navbar from "@/app/components/navbar";
-import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, type SenderAccount } from "../../../lib/senders";
+import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, getColdEmailTemplateForService, applyColdEmailMergeTags, type SenderAccount } from "../../../lib/senders";
 import { useLeadStore, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
 
@@ -950,6 +950,8 @@ export default function DashboardPage() {
     setFollowupSummary,
     firebaseUsage,
     setFirebaseUsage,
+    systemHealth,
+    setSystemHealth,
     cleanupLoading,
     setCleanupLoading,
     leadCleanup,
@@ -1568,6 +1570,54 @@ export default function DashboardPage() {
     }
   };
 
+  const loadSystemHealth = async (force = false, deep = false) => {
+    if (!force && systemHealth.loadedAt && Date.now() - systemHealth.loadedAt < 60_000) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setSystemHealth((current) => ({ ...current, loading: false, error: "Please login again.", status: "error" }));
+      return;
+    }
+
+    try {
+      setSystemHealth((current) => ({ ...current, loading: true, error: "" }));
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/trackflow/admin/health${deep ? "?deep=true" : ""}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "System health check failed");
+
+      setSystemHealth({
+        loading: false,
+        error: "",
+        loadedAt: Date.now(),
+        status: data.switches?.automationPaused ? "paused" : data.status || "ok",
+        service: String(data.service || data.mode || "TrackFlowPro API"),
+        deep: Boolean(data.deep),
+        env: data.env || {},
+        switches: {
+          ...(data.switches || {}),
+          ...(data.drivePdfCleanup ? { drivePdfCleanup: data.drivePdfCleanup } : {}),
+        },
+        checks: data.checks || data.cronStatus || {},
+        followupConfigSource: data.followupConfigSource || data.admin?.followupConfigSource || "",
+        followupConfigSavedInFirestore: Boolean(data.followupConfigSavedInFirestore || data.admin?.followupConfigSavedInFirestore),
+        followupDailyLimit: Number(data.followupDailyLimit || data.admin?.followupDailyLimit || 0),
+        followupBatchPerRun: Number(data.followupBatchPerRun || data.admin?.followupBatchPerRun || 0),
+      } as any);
+    } catch (error: any) {
+      console.error("System health check error:", error);
+      setSystemHealth((current) => ({
+        ...current,
+        loading: false,
+        error: error?.message || "System health check failed",
+        status: "error",
+      }));
+    }
+  };
+
   const runSystemCleanup = async (action: string, days = 30) => {
     const currentUser = auth.currentUser;
     if (!currentUser) return window.alert("Please login again.");
@@ -1672,6 +1722,13 @@ export default function DashboardPage() {
     if (activeTab === "overview" || activeTab === "analytics") {
       loadFirebaseUsage(false).catch((error) => console.error("Firebase usage load error:", error));
     }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "overview" || activeTab === "automation") {
+      loadSystemHealth(false).catch((error) => console.error("System health load error:", error));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const loadFollowupDryRun = async () => {
@@ -1848,6 +1905,28 @@ export default function DashboardPage() {
   const handleServiceChange = (service: ServiceId) => {
     setSelectedService(service);
     window.localStorage.setItem("outreach_selected_service", service);
+
+    // Free-limit friendly: default cold email copy comes from code, not Firestore.
+    // The admin can still edit the subject/body before sending.
+    const template = getColdEmailTemplateForService(service);
+    const mergeData = {
+      name: clientName || "",
+      company: companyName || "",
+      website: website || "",
+      service,
+    };
+
+    if (!subject.trim()) {
+      setSubject(applyColdEmailMergeTags(template.subject, mergeData));
+    }
+
+    if (!stripHtml(message)) {
+      setMessage(applyColdEmailMergeTags(template.body, mergeData));
+    }
+
+    if (!reportButtonText.trim()) {
+      setReportButtonText(template.reportButtonText);
+    }
   };
 
   const getCurrentEditorHtml = () => {
@@ -4873,6 +4952,20 @@ export default function DashboardPage() {
                 <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Active Leads: {filteredLeads.length}</span>
                 <span className="text-orange-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1">
                   <Flame size={12} /> Hot Leads: {analytics.hot}
+                </span>
+                <span
+                  className={`font-bold text-[10px] uppercase tracking-widest flex items-center gap-1 ${
+                    systemHealth.status === "ok"
+                      ? "text-emerald-600"
+                      : systemHealth.status === "paused"
+                        ? "text-amber-600"
+                        : systemHealth.status === "error" || systemHealth.status === "needs_attention"
+                          ? "text-red-600"
+                          : "text-gray-400"
+                  }`}
+                  title={systemHealth.error || "TrackFlow system health"}
+                >
+                  <ShieldCheck size={12} /> System: {systemHealth.status === "unknown" ? "Not checked" : systemHealth.status.replace(/_/g, " ")}
                 </span>
                 <span className="text-green-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1">
                   <MessageSquare size={12} /> Replies: {analytics.replied}

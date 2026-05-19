@@ -84,6 +84,34 @@ type FirebaseUsageState = {
   note: string;
 };
 
+type SystemHealthState = {
+  loading: boolean;
+  error: string;
+  loadedAt: number | null;
+  status: "unknown" | "ok" | "needs_attention" | "paused" | "error";
+  service: string;
+  deep: boolean;
+  env: Record<string, boolean>;
+  switches: {
+    automationPaused?: boolean;
+    sheetQueueSendEnabled?: boolean;
+    followupsEnabled?: boolean;
+    deleteDrivePdfOnLeadDelete?: boolean;
+    drivePdfDeleteMode?: string;
+    requireDrivePdfCleanupOnLeadDelete?: boolean;
+    storeLowValueEmailEvents?: boolean;
+    storeSentEmailEvents?: boolean;
+    storeLowValueTrackingHistory?: boolean;
+    [key: string]: any;
+  };
+  checks: Record<string, any>;
+  followupConfigSource?: string;
+  followupConfigSavedInFirestore?: boolean;
+  followupDailyLimit?: number;
+  followupBatchPerRun?: number;
+};
+
+
 export type CleanupState = {
   loading: boolean;
   actionLoading: boolean;
@@ -147,6 +175,23 @@ const initialFirebaseUsage: FirebaseUsageState = {
   },
   note: "",
 };
+
+const initialSystemHealth: SystemHealthState = {
+  loading: false,
+  error: "",
+  loadedAt: null,
+  status: "unknown",
+  service: "",
+  deep: false,
+  env: {},
+  switches: {},
+  checks: {},
+  followupConfigSource: "",
+  followupConfigSavedInFirestore: false,
+  followupDailyLimit: 0,
+  followupBatchPerRun: 0,
+};
+
 
 const initialLeadCleanup: CleanupState = {
   loading: false,
@@ -225,6 +270,7 @@ export type TrackflowDashboardStoreState = {
   // System/cleanup state
   followupSummary: FollowupSummaryState;
   firebaseUsage: FirebaseUsageState;
+  systemHealth: SystemHealthState;
   cleanupLoading: boolean;
   leadCleanup: CleanupState;
   selectedCleanupIds: string[];
@@ -282,6 +328,7 @@ export type TrackflowDashboardStoreState = {
 
   setFollowupSummary: Setter<FollowupSummaryState>;
   setFirebaseUsage: Setter<FirebaseUsageState>;
+  setSystemHealth: Setter<SystemHealthState>;
   setCleanupLoading: Setter<boolean>;
   setLeadCleanup: Setter<CleanupState>;
   setSelectedCleanupIds: Setter<string[]>;
@@ -351,6 +398,7 @@ const initialState = {
 
   followupSummary: initialFollowupSummary,
   firebaseUsage: initialFirebaseUsage,
+  systemHealth: initialSystemHealth,
   cleanupLoading: false,
   leadCleanup: initialLeadCleanup,
   selectedCleanupIds: [] as string[],
@@ -436,6 +484,7 @@ export const useTrackflowDashboardStore = create<TrackflowDashboardStoreState>((
 
   setFollowupSummary: buildSetter<FollowupSummaryState>("followupSummary", set),
   setFirebaseUsage: buildSetter<FirebaseUsageState>("firebaseUsage", set),
+  setSystemHealth: buildSetter<SystemHealthState>("systemHealth", set),
   setCleanupLoading: buildSetter<boolean>("cleanupLoading", set),
   setLeadCleanup: buildSetter<CleanupState>("leadCleanup", set),
   setSelectedCleanupIds: buildSetter<string[]>("selectedCleanupIds", set),
