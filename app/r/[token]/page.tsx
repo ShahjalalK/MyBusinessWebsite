@@ -621,7 +621,7 @@ function ReportFooter() {
             </div>
 
             <p className="mt-4 text-xs font-semibold leading-6 text-slate-500">
-              TrackFlow Pro · {MAILING_ADDRESS}
+              {MAILING_ADDRESS}
             </p>
           </div>
         </div>
