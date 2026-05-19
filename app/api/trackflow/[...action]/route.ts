@@ -4307,20 +4307,27 @@ async function fetchPdfBufferFromDriveApi(fileId: string): Promise<Buffer | null
   const drive = getGoogleDriveOAuthClient();
   if (!drive || !fileId) return null;
 
-  const response = await (drive.files.get(
-    { fileId, alt: "media", supportsAllDrives: true },
-    { responseType: "arraybuffer" },
-  ) as Promise<{ data: ArrayBuffer | Buffer | Uint8Array | string }>);
+  try {
+    const response = (await drive.files.get(
+      { fileId, alt: "media", supportsAllDrives: true },
+      { responseType: "arraybuffer" },
+    )) as unknown as { data: ArrayBuffer | Buffer | Uint8Array | string };
 
-  const data: any = response.data;
-  if (Buffer.isBuffer(data)) return data;
-  if (data instanceof ArrayBuffer) return Buffer.from(data);
-  if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-  if (typeof data === "string") return Buffer.from(data, "binary");
+    const data = response.data;
 
-  return null;
+    if (Buffer.isBuffer(data)) return data;
+    if (data instanceof ArrayBuffer) return Buffer.from(data);
+    if (ArrayBuffer.isView(data)) {
+      return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    }
+    if (typeof data === "string") return Buffer.from(data, "binary");
+
+    return null;
+  } catch (error) {
+    console.warn("Drive API PDF fetch failed, falling back to public URL:", error);
+    return null;
+  }
 }
-
 async function fetchPdfBufferFromPublicUrl(rawTarget: string): Promise<Buffer> {
   const target = sanitizeOptionalUrl(rawTarget);
   if (!target) throw new ApiError("PDF URL is missing", 404);
