@@ -587,23 +587,9 @@ async function requireAdmin(req: Request) {
 }
 
 function requireCronSecret(req: Request) {
+  const secret = req.headers.get("x-cron-auth") || "";
   const expected = env("CRON_SECRET");
-  const url = new URL(req.url);
-  const authHeader = req.headers.get("authorization") || "";
-  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  const candidates = [
-    req.headers.get("x-cron-auth"),
-    req.headers.get("x-cron-secret"),
-    bearer,
-    url.searchParams.get("secret"),
-    url.searchParams.get("cron_secret"),
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-
-  if (!candidates.some((secret) => safeEqual(secret, expected))) {
-    throw new ApiError("Unauthorized cron request", 401);
-  }
+  if (!secret || !safeEqual(secret, expected)) throw new ApiError("Unauthorized cron request", 401);
 }
 
 function requireWebhookSecret(req: Request, envName: "BREVO_WEBHOOK_SECRET" | "REPLY_WEBHOOK_SECRET") {
@@ -841,76 +827,16 @@ function normalizeStringArray(value: any, maxItems = 8): string[] {
     : typeof value === "string"
       ? value.split(/\n|\||;/g)
       : [];
-
   const seen = new Set<string>();
   const output: string[] = [];
-
   for (const item of rawItems) {
-    const text = cleanCell(
-      item && typeof item === "object"
-        ? item.text || item.label || item.title || item.description || item.name || ""
-        : item || "",
-    );
+    const text = cleanCell(item || "");
     if (!text || seen.has(text.toLowerCase())) continue;
     seen.add(text.toLowerCase());
     output.push(text);
     if (output.length >= maxItems) break;
   }
-
   return output;
-}
-
-function normalizeRecommendationArray(value: any, maxItems = 8): AnyRecord[] {
-  const rawItems = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/\n|\||;/g)
-      : [];
-
-  const seen = new Set<string>();
-  const output: AnyRecord[] = [];
-
-  for (const item of rawItems) {
-    if (item && typeof item === "object") {
-      const title = cleanCell(item.title || item.step || item.name || item.description || "");
-      const description = cleanCell(item.description || item.detail || item.summary || "");
-      const priority = cleanCell(item.priority || `Priority ${output.length + 1}`);
-      const estimatedEffort = cleanCell(item.estimatedEffort || item.estimated_effort || item.effort || "Short review");
-      const key = `${title}|${description}`.toLowerCase();
-      if ((title || description) && !seen.has(key)) {
-        seen.add(key);
-        output.push({
-          priority,
-          title: title || description,
-          description,
-          estimatedEffort,
-        });
-      }
-    } else {
-      const title = cleanCell(item || "");
-      const key = title.toLowerCase();
-      if (title && !seen.has(key)) {
-        seen.add(key);
-        output.push({
-          priority: `Priority ${output.length + 1}`,
-          title,
-          description: "",
-          estimatedEffort: "Short review",
-        });
-      }
-    }
-
-    if (output.length >= maxItems) break;
-  }
-
-  return output;
-}
-
-function getObjectCandidate(...values: any[]): AnyRecord {
-  for (const value of values) {
-    if (value && typeof value === "object" && !Array.isArray(value)) return value as AnyRecord;
-  }
-  return {};
 }
 
 async function requireReportRegisterAccess(req: Request) {
@@ -937,110 +863,22 @@ function normalizeReportPayload(body: AnyRecord = {}) {
   const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token);
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
   const companyName = firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, domain);
-
-  const privateReportCopy = getObjectCandidate(body.privateReportCopy, body.private_report_copy, body.aiPrivateReportCopy, body.ai_private_report_copy);
-  const privatePage = getObjectCandidate(body.privateReportPage, body.private_report_page, privateReportCopy);
-
   const headline = firstCleanString(
     body.headline,
-    privatePage.headline,
-    privatePage.privatePageHeadline,
     body.clientMessageHeadline,
     body.client_message_headline,
     body.mainIssue,
     body.main_issue,
-    "Private tracking audit note",
+    "Private tracking audit note"
   );
-
-  const subheadline = firstCleanString(
-    body.subheadline,
-    body.privatePageSubheadline,
-    body.private_page_subheadline,
-    privatePage.subheadline,
-    privatePage.privatePageSubheadline,
-    privatePage.privatePageSummary,
-  );
-
-  const mainFinding = firstCleanString(
-    body.mainFinding,
-    body.main_finding,
-    privatePage.mainFinding,
-    body.mainIssue,
-    body.main_issue,
-    body.problemSummary,
-    body.problem_summary,
-  );
-
-  const businessImpact = firstCleanString(
-    body.businessImpact,
-    body.business_impact,
-    privatePage.businessImpact,
-    body.impact,
-    body.messageAngle,
-    body.message_angle,
-  );
-
-  const proofPoints = normalizeStringArray(
-    privatePage.proofPoints || privatePage.proof_points || body.proofPoints || body.proof_points || body.evidencePoints || body.evidence_points,
-    10,
-  );
-
-  const recommendations = normalizeRecommendationArray(
-    privatePage.recommendations || privatePage.recommendedFixPlan || privatePage.recommended_fix_plan || body.recommendations || body.fixRecommendations || body.fix_recommendations,
-    8,
-  );
-
-  const whatChecked = normalizeStringArray(
-    privatePage.whatChecked || privatePage.what_checked || privatePage.checks || body.whatChecked || body.what_checked || body.auditScope || body.audit_scope,
-    8,
-  );
-
-  const auditSnapshotQuestions = normalizeStringArray(
-    privatePage.auditSnapshotQuestions || privatePage.audit_snapshot_questions || privatePage.snapshotQuestions || body.auditSnapshotQuestions || body.audit_snapshot_questions,
-    4,
-  );
-
-  const trustNotes = normalizeStringArray(
-    privatePage.trustNotes || privatePage.trust_notes || privatePage.trustSignals || body.trustNotes || body.trust_notes || body.trustSignals,
-    4,
-  );
-
-  const howToReadParagraphs = normalizeStringArray(
-    privatePage.howToReadParagraphs || privatePage.how_to_read_paragraphs || privatePage.howToReadThisReview || body.howToReadParagraphs || body.how_to_read_paragraphs || body.howToReadThisReview,
-    4,
-  );
-
+  const mainFinding = firstCleanString(body.mainFinding, body.main_finding, body.mainIssue, body.main_issue, body.problemSummary, body.problem_summary);
+  const businessImpact = firstCleanString(body.businessImpact, body.business_impact, body.impact, body.messageAngle, body.message_angle);
+  const proofPoints = normalizeStringArray(body.proofPoints || body.proof_points || body.evidencePoints || body.evidence_points, 10);
+  const recommendations = normalizeStringArray(body.recommendations || body.fixRecommendations || body.fix_recommendations, 8);
   const email = normalizeEmail(body.email || body.finalEmail || body.final_email || "");
   const leadId = firstCleanString(body.leadId, body.firestoreLeadId, body.firestore_lead_id);
   const sheetRowNumber = Number(body.sheetRowNumber || body.sheet_row_number || 0) || null;
   const pdfExpiresAt = getReportTimestamp(body.pdfExpiresAt || body.pdf_expires_at || body.expiresAt || body.expires_at, 45);
-
-  const ctaText = firstCleanString(
-    body.ctaText,
-    body.cta_text,
-    privatePage.ctaText,
-    privatePage.cta_text,
-    "Book a tracking review",
-  );
-
-  const normalizedPrivateReportCopy = {
-    ...privateReportCopy,
-    headline,
-    subheadline,
-    mainFinding,
-    businessImpact,
-    proofPoints,
-    recommendations,
-    whatChecked,
-    auditSnapshotTitle: firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title, "What this review is designed to clarify"),
-    auditSnapshotQuestions,
-    trustNotes,
-    howToReadTitle: firstCleanString(privatePage.howToReadTitle, privatePage.how_to_read_title, body.howToReadTitle, body.how_to_read_title, "How to read this review"),
-    howToReadParagraphs,
-    ctaHeadline: firstCleanString(privatePage.ctaHeadline, privatePage.cta_headline, body.ctaHeadline, body.cta_headline, "Want this verified inside your actual accounts?"),
-    ctaText,
-    privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
-  };
 
   return {
     token,
@@ -1050,20 +888,10 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     companyName,
     email,
     headline,
-    subheadline,
     mainFinding,
     businessImpact,
     proofPoints,
     recommendations,
-    whatChecked,
-    auditSnapshotTitle: normalizedPrivateReportCopy.auditSnapshotTitle,
-    auditSnapshotQuestions,
-    trustNotes,
-    howToReadTitle: normalizedPrivateReportCopy.howToReadTitle,
-    howToReadParagraphs,
-    ctaHeadline: normalizedPrivateReportCopy.ctaHeadline,
-    privateReportCopy: normalizedPrivateReportCopy,
-    privateReportVersion: normalizedPrivateReportCopy.privateReportVersion,
     pdfFileId: firstCleanString(body.pdfFileId, body.pdf_file_id, body.driveFileId, body.drive_file_id, body.googleDriveFileId),
     pdfViewUrl,
     pdfDownloadUrl,
@@ -1074,8 +902,8 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     auditId: firstCleanString(body.auditId, body.audit_id, body.sourceAuditId, body.source_audit_id),
     storageProvider: firstCleanString(body.storageProvider, body.storage_provider, "google_drive_oauth"),
     contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
-    ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
-    ctaText,
+    ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, "/contact"),
+    ctaText: firstCleanString(body.ctaText, body.cta_text, "Book a tracking review"),
   };
 }
 
@@ -4498,21 +4326,10 @@ async function handleReportRegister(req: Request) {
     companyName: report.companyName,
     email: report.email,
     headline: report.headline,
-    subheadline: report.subheadline,
     mainFinding: report.mainFinding,
     businessImpact: report.businessImpact,
     proofPoints: report.proofPoints,
     recommendations: report.recommendations,
-    whatChecked: report.whatChecked,
-    auditSnapshotTitle: report.auditSnapshotTitle,
-    auditSnapshotQuestions: report.auditSnapshotQuestions,
-    trustNotes: report.trustNotes,
-    howToReadTitle: report.howToReadTitle,
-    howToReadParagraphs: report.howToReadParagraphs,
-    ctaHeadline: report.ctaHeadline,
-    privateReportCopy: report.privateReportCopy,
-    private_report_copy: report.privateReportCopy,
-    privateReportVersion: report.privateReportVersion,
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,

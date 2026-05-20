@@ -87,37 +87,6 @@ function cleanText(value: unknown, fallback = ""): string {
 }
 
 
-function getObjectCandidate(...values: unknown[]): Record<string, any> {
-  for (const value of values) {
-    if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, any>;
-  }
-  return {};
-}
-
-function getPrivateReportCopy(report: Record<string, any>): Record<string, any> {
-  return getObjectCandidate(
-    report.privateReportCopy,
-    report.private_report_copy,
-    report.privateReportPage,
-    report.private_report_page,
-    report.aiPrivateReportCopy,
-    report.ai_private_report_copy,
-  );
-}
-
-function cleanListItemText(item: unknown): string {
-  if (item && typeof item === "object" && !Array.isArray(item)) {
-    const record = item as Record<string, any>;
-    const title = cleanText(record.title || record.label || record.name || record.text, "");
-    const description = cleanText(record.description || record.summary || record.detail, "");
-    if (title && description && title.toLowerCase() !== description.toLowerCase()) return `${title}: ${description}`;
-    return title || description;
-  }
-
-  return cleanText(item, "");
-}
-
-
 function normalizeDisplayText(value: unknown): string {
   return cleanText(value, "")
     .replace(/&amp;/gi, "&")
@@ -332,15 +301,7 @@ function isMessyHeadline(value: string, domain = ""): boolean {
 }
 
 function getDisplayHeadline(report: Record<string, any>, companyName: string, domain: string): string {
-  const privateCopy = getPrivateReportCopy(report);
-  const raw = cleanBusinessNameCandidate(
-    privateCopy.headline ||
-      privateCopy.privatePageHeadline ||
-      report.headline ||
-      report.reportHeadline ||
-      report.report_headline,
-    domain,
-  );
+  const raw = cleanBusinessNameCandidate(report.headline || report.reportHeadline || report.report_headline, domain);
   if (raw && !isMessyHeadline(raw, domain)) return raw;
 
   const label = companyName === "this website" ? "This Website" : companyName;
@@ -364,7 +325,7 @@ function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): strin
   const output: string[] = [];
 
   for (const item of items) {
-    const text = cleanListItemText(item);
+    const text = cleanText(item);
     if (!text || seen.has(text.toLowerCase())) continue;
 
     seen.add(text.toLowerCase());
@@ -373,7 +334,7 @@ function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): strin
     if (output.length >= maxItems) break;
   }
 
-  return output.length ? output : fallback.slice(0, maxItems);
+  return output.length ? output : fallback;
 }
 
 function formatDate(value: unknown): string {
@@ -707,58 +668,22 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
   const domain = getDomainLabel(report);
   const companyName = getDisplayCompanyName(report, domain);
-  const privateReportCopy = getPrivateReportCopy(report);
   const headline = getDisplayHeadline(report, companyName, domain);
-  const pageSubheadline = sentenceCaseFirst(cleanText(
-    privateReportCopy.subheadline ||
-      privateReportCopy.privatePageSubheadline ||
-      report.subheadline ||
-      report.privatePageSubheadline,
-    "This page summarizes the most important browser-visible tracking evidence before any account-level review.",
-  ));
-  const ctaText = getDisplayCtaText(privateReportCopy.ctaText || report.ctaText || report.cta_text);
+  const ctaText = getDisplayCtaText(report.ctaText || report.cta_text);
 
   const mainFinding = sentenceCaseFirst(cleanText(
-    privateReportCopy.mainFinding || report.mainFinding || report.mainIssue,
+    report.mainFinding || report.mainIssue,
     "A conversion tracking review may be useful based on public browser-visible evidence.",
   ));
 
   const businessImpact = sentenceCaseFirst(cleanText(
-    privateReportCopy.businessImpact || report.businessImpact,
+    report.businessImpact,
     "If important lead actions are not measured clearly, it can be harder to know which marketing channels are creating enquiries.",
   ));
 
-  const whatChecked = cleanList(privateReportCopy.whatChecked || report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
-  const proofPoints = cleanList(privateReportCopy.proofPoints || report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
-  const recommendations = cleanList(privateReportCopy.recommendations || report.recommendations || report.nextSteps, DEFAULT_RECOMMENDATIONS, 6);
-  const auditSnapshotTitle = cleanText(
-    privateReportCopy.auditSnapshotTitle || report.auditSnapshotTitle || report.audit_snapshot_title,
-    "What this review is designed to clarify",
-  );
-  const auditSnapshotQuestions = cleanList(
-    privateReportCopy.auditSnapshotQuestions || report.auditSnapshotQuestions || report.audit_snapshot_questions,
-    [
-      "Are key tracking tags visible from the browser?",
-      "Does the lead path show clear conversion evidence?",
-      "Is account-level verification recommended?",
-    ],
-    3,
-  );
-  const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
-  const howToReadTitle = cleanText(privateReportCopy.howToReadTitle || report.howToReadTitle || report.how_to_read_title, "How to read this review");
-  const howToReadParagraphs = cleanList(
-    privateReportCopy.howToReadParagraphs || report.howToReadParagraphs || report.how_to_read_paragraphs || report.howToReadThisReview,
-    [
-      "This is an initial tracking review, not an account audit. It highlights what can be seen from the website/browser side and where account-level verification should be done.",
-      `TrackFlow Pro is not affiliated with Google, Meta, or ${companyName}.`,
-    ],
-    3,
-  );
-  const ctaHeadline = cleanText(privateReportCopy.ctaHeadline || report.ctaHeadline || report.cta_headline, "Want this verified inside your actual accounts?");
-  const ctaDescription = cleanText(
-    privateReportCopy.ctaDescription || report.ctaDescription || report.cta_description,
-    "I can check the conversion path inside GA4, Google Ads, GTM, CRM, or server tools and confirm whether your lead tracking is recording correctly.",
-  );
+  const whatChecked = cleanList(report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
+  const proofPoints = cleanList(report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
+  const recommendations = cleanList(report.recommendations || report.nextSteps, DEFAULT_RECOMMENDATIONS, 6);
 
   const expiresLabel = formatDate(report.pdfExpiresAt || report.expiresAt);
   const previewHref = `/api/trackflow/reports/preview?token=${encodeURIComponent(token)}`;
@@ -794,7 +719,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
             <p className="mt-6 max-w-2xl text-base font-semibold leading-8 text-slate-600 sm:text-lg">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
-              {domain ? <span> · {domain}</span> : null}. {pageSubheadline}
+              {domain ? <span> · {domain}</span> : null}. This page summarizes the most important
+              browser-visible tracking evidence before any account-level review.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -832,11 +758,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </p>
 
               <p className="mt-4 text-2xl font-black tracking-[-0.04em]">
-                {auditSnapshotTitle}
+                What this review is designed to clarify
               </p>
 
               <div className="mt-6 grid gap-3">
-                {auditSnapshotQuestions.map((item) => (
+                {[
+                  "Are key tracking tags visible from the browser?",
+                  "Does the lead path show clear conversion evidence?",
+                  "Is account-level verification recommended?",
+                ].map((item) => (
                   <div
                     key={item}
                     className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm font-bold leading-6 text-slate-200"
@@ -862,7 +792,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid gap-4 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-3 lg:p-6">
-          {trustSignals.map((item) => (
+          {TRUST_SIGNALS.map((item) => (
             <div key={item} className="rounded-[1.35rem] border border-slate-100 bg-slate-50 p-4">
               <div className="mb-3 h-2 w-10 rounded-full bg-blue-600" />
               <p className="text-sm font-black leading-6 text-slate-900">{item}</p>
@@ -898,11 +828,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
             <BulletList items={recommendations} marker="green" />
           </SectionCard>
 
-          <SectionCard label={howToReadTitle}>
+          <SectionCard label="How to read this review">
             <div className="space-y-3 text-sm font-semibold leading-7 text-slate-600">
-              {howToReadParagraphs.map((paragraph, index) => (
-                <p key={`${paragraph}-${index}`}>{paragraph}</p>
-              ))}
+              <p>
+                This is an initial tracking review, not an account audit. It highlights what can be
+                seen from the website/browser side and where account-level verification should be done.
+              </p>
+              <p>
+                TrackFlow Pro is not affiliated with Google, Meta, or {companyName}.
+              </p>
             </div>
           </SectionCard>
 
@@ -958,11 +892,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </p>
 
               <h2 className="mt-4 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
-                {ctaHeadline}
+                Want this verified inside your actual accounts?
               </h2>
 
               <p className="mt-4 max-w-2xl text-base font-semibold leading-8 text-slate-300">
-                {ctaDescription}
+                I can check the conversion path inside GA4, Google Ads, GTM, CRM, or server tools
+                and confirm whether your lead tracking is recording correctly.
               </p>
             </div>
 

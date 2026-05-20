@@ -503,7 +503,18 @@ test("sender config remains code-based and active senders have safe fields", (t)
   const src = readProjectFile(PROJECT_FILES.senders);
   assert.match(src, /export const SENDERS/);
   assert.match(src, /ACTIVE_SENDERS/);
-  assert.doesNotMatch(src, /firebase|firestore|collection\(/i, "senders.ts should not read Firebase");
+  // Comments may mention "Firestore/Firebase" to explain why senders stay code-based.
+  // So this guard only blocks real imports or API calls, not harmless comments.
+  assert.doesNotMatch(
+    src,
+    /from\s+["'][^"']*(firebase|firestore)[^"']*["']|require\(["'][^"']*(firebase|firestore)[^"']*["']\)/i,
+    "senders.ts should not import Firebase/Firestore"
+  );
+  assert.doesNotMatch(
+    src,
+    /\b(collection|getDoc|getDocs|query|where|onSnapshot)\s*\(/,
+    "senders.ts should not call Firebase/Firestore read APIs"
+  );
 
   const emailMatches = [...src.matchAll(/email:\s*["']([^"']+@[^"]+)["']/g)].map((m) => m[1].toLowerCase());
   const unique = new Set(emailMatches);
