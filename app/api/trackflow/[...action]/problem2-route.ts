@@ -906,50 +906,6 @@ function normalizeRecommendationArray(value: any, maxItems = 8): AnyRecord[] {
   return output;
 }
 
-function normalizeAdsFoundValue(value: any): "yes" | "no" | "unknown" {
-  const text = cleanCell(value || "").toLowerCase();
-  if (["yes", "true", "1", "found", "ads_found", "active", "running"].includes(text)) return "yes";
-  if (["no", "false", "0", "not_found", "none", "no_ads"].includes(text)) return "no";
-  return "unknown";
-}
-
-function boolFromAny(value: any): boolean {
-  if (typeof value === "boolean") return value;
-  const text = cleanCell(value || "").toLowerCase();
-  return ["1", "true", "yes", "y", "checked", "found", "active", "running"].includes(text);
-}
-
-function normalizeManualAdsTransparency(body: AnyRecord = {}, privatePage: AnyRecord = {}): AnyRecord {
-  const raw = getObjectCandidate(
-    body.manualAdsTransparency,
-    body.manual_ads_transparency,
-    privatePage.manualAdsTransparency,
-    privatePage.manual_ads_transparency,
-  );
-
-  const adsFound = normalizeAdsFoundValue(
-    raw.adsFound ?? raw.ads_found ?? body.manualAdsFound ?? body.manual_ads_found,
-  );
-
-  const checked = Boolean(
-    raw.checked === true ||
-      boolFromAny(raw.checked) ||
-      boolFromAny(body.manualAdsChecked) ||
-      boolFromAny(body.manual_ads_checked) ||
-      adsFound !== "unknown",
-  );
-
-  return {
-    checked,
-    adsFound,
-    ads_found: adsFound,
-    source: firstCleanString(raw.source, raw.manual_ads_source, body.manualAdsSource, body.manual_ads_source, "Google Ads Transparency"),
-    note: firstCleanString(raw.note, raw.manual_ads_note, body.manualAdsNote, body.manual_ads_note),
-    checkedAt: firstCleanString(raw.checkedAt, raw.checked_at, body.manualAdsCheckedAt, body.manual_ads_checked_at),
-    checked_at: firstCleanString(raw.checkedAt, raw.checked_at, body.manualAdsCheckedAt, body.manual_ads_checked_at),
-  };
-}
-
 function getObjectCandidate(...values: any[]): AnyRecord {
   for (const value of values) {
     if (value && typeof value === "object" && !Array.isArray(value)) return value as AnyRecord;
@@ -984,7 +940,6 @@ function normalizeReportPayload(body: AnyRecord = {}) {
 
   const privateReportCopy = getObjectCandidate(body.privateReportCopy, body.private_report_copy, body.aiPrivateReportCopy, body.ai_private_report_copy);
   const privatePage = getObjectCandidate(body.privateReportPage, body.private_report_page, privateReportCopy);
-  const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
 
   const headline = firstCleanString(
     body.headline,
@@ -1084,8 +1039,6 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     howToReadParagraphs,
     ctaHeadline: firstCleanString(privatePage.ctaHeadline, privatePage.cta_headline, body.ctaHeadline, body.cta_headline, "Want this verified inside your actual accounts?"),
     ctaText,
-    manualAdsTransparency,
-    manual_ads_transparency: manualAdsTransparency,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
   };
 
@@ -1111,13 +1064,6 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     ctaHeadline: normalizedPrivateReportCopy.ctaHeadline,
     privateReportCopy: normalizedPrivateReportCopy,
     privateReportVersion: normalizedPrivateReportCopy.privateReportVersion,
-    manualAdsTransparency,
-    manual_ads_transparency: manualAdsTransparency,
-    manual_ads_checked: manualAdsTransparency.checked,
-    manual_ads_found: manualAdsTransparency.adsFound,
-    manual_ads_source: manualAdsTransparency.source,
-    manual_ads_note: manualAdsTransparency.note,
-    manual_ads_checked_at: manualAdsTransparency.checkedAt,
     pdfFileId: firstCleanString(body.pdfFileId, body.pdf_file_id, body.driveFileId, body.drive_file_id, body.googleDriveFileId),
     pdfViewUrl,
     pdfDownloadUrl,
@@ -4567,13 +4513,6 @@ async function handleReportRegister(req: Request) {
     privateReportCopy: report.privateReportCopy,
     private_report_copy: report.privateReportCopy,
     privateReportVersion: report.privateReportVersion,
-    manualAdsTransparency: report.manualAdsTransparency,
-    manual_ads_transparency: report.manual_ads_transparency,
-    manual_ads_checked: report.manual_ads_checked,
-    manual_ads_found: report.manual_ads_found,
-    manual_ads_source: report.manual_ads_source,
-    manual_ads_note: report.manual_ads_note,
-    manual_ads_checked_at: report.manual_ads_checked_at,
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,

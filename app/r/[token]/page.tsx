@@ -28,6 +28,14 @@ type LinkButtonProps = {
   rel?: string;
 };
 
+type ManualAdsTransparency = {
+  checked: boolean;
+  adsFound: "yes" | "no" | "unknown";
+  source: string;
+  note: string;
+  checkedAt: string;
+};
+
 const DEFAULT_CHECKS = [
   "GA4 and Google Tag Manager browser-visible signals",
   "Google Ads conversion and remarketing request signals",
@@ -257,12 +265,44 @@ function domainToDisplayName(domain: string): string {
   return titleCaseWords(readable);
 }
 
+function isGenericBusinessNameSegment(value: string): boolean {
+  const text = normalizeDisplayText(value).toLowerCase();
+  if (!text) return true;
+  if (/^\(?\+?\d[\d\s().-]{6,}\)?$/.test(text)) return true;
+  if (/^(home|homepage|blog|articles?|news|privacy|terms|contact|contact us|about|services?|reviews?)$/.test(text)) return true;
+  if (/^(request|book|schedule|make|apply|get|view|download)\b/i.test(text) && text.length < 45) return true;
+  if (/\b(appointment|appoinment|consultation|quote|call now|new patients?|apply for financing|request an?)\b/i.test(text) && text.length < 60) return true;
+  if (/^[\d\s()+.-]+$/.test(text)) return true;
+  return false;
+}
+
+function pickBestNameSegment(value: string): string {
+  const raw = normalizeDisplayText(value);
+  if (!raw) return "";
+
+  const segments = raw
+    .split(/\s*[|·•»›]\s*/g)
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (segments.length <= 1) return raw;
+
+  const cleanSegments = segments
+    .map((item) => item.replace(/\(?\+?\d[\d\s().-]{6,}\)?/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((item) => !isGenericBusinessNameSegment(item));
+
+  if (cleanSegments.length) return cleanSegments[cleanSegments.length - 1];
+  return segments[0];
+}
+
 function isMessyBusinessName(value: string, domain = ""): boolean {
   const text = normalizeDisplayText(value);
   const lower = text.toLowerCase();
   const domainLower = domain.toLowerCase();
 
   if (!text) return true;
+  if (isGenericBusinessNameSegment(text)) return true;
   if (/https?:\/\//i.test(text) || /www\./i.test(text)) return true;
   if (/[›»]/.test(text)) return true;
   if (domainLower && lower.includes(domainLower)) return true;
@@ -275,7 +315,7 @@ function isMessyBusinessName(value: string, domain = ""): boolean {
 }
 
 function cleanBusinessNameCandidate(value: unknown, domain = ""): string {
-  let text = stripUrlNoise(normalizeDisplayText(value));
+  let text = pickBestNameSegment(stripUrlNoise(normalizeDisplayText(value)));
   if (!text) return "";
 
   if (domain) {
@@ -283,9 +323,9 @@ function cleanBusinessNameCandidate(value: unknown, domain = ""): string {
     text = text.replace(new RegExp(escapedDomain, "ig"), " ");
   }
 
-  text = text
-    .replace(/\s*[|·•]\s*.*$/g, "")
-    .replace(/\s+-\s+(?:Home|Official Site|Services?|About|Contact)\b.*$/gi, "")
+  text = pickBestNameSegment(text)
+    .replace(/\s+-\s+(?:Home|Official Site|Services?|About|Contact|Blog)\b.*$/gi, "")
+    .replace(/\s+\b(?:Home|Homepage|Official Site|Blog|Articles?)\b$/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -374,6 +414,59 @@ function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): strin
   }
 
   return output.length ? output : fallback.slice(0, maxItems);
+}
+
+function normalizeAdsFound(value: unknown): "yes" | "no" | "unknown" {
+  const text = cleanText(value, "").toLowerCase();
+  if (["yes", "true", "1", "found", "ads_found", "active", "running"].includes(text)) return "yes";
+  if (["no", "false", "0", "not_found", "none", "no_ads"].includes(text)) return "no";
+  return "unknown";
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  const text = cleanText(value, "").toLowerCase();
+  return ["1", "true", "yes", "y", "checked", "found", "active", "running"].includes(text);
+}
+
+function getManualAdsTransparency(report: Record<string, any>): ManualAdsTransparency {
+  const privateCopy = getPrivateReportCopy(report);
+  const raw = getObjectCandidate(
+    report.manualAdsTransparency,
+    report.manual_ads_transparency,
+    privateCopy.manualAdsTransparency,
+    privateCopy.manual_ads_transparency,
+  );
+
+  const adsFound = normalizeAdsFound(
+    raw.adsFound ?? raw.ads_found ?? report.manual_ads_found ?? report.manualAdsFound,
+  );
+  const checked = Boolean(
+    raw.checked === true ||
+      toBoolean(raw.checked) ||
+      toBoolean(report.manual_ads_checked) ||
+      toBoolean(report.manualAdsChecked) ||
+      adsFound !== "unknown",
+  );
+
+  return {
+    checked,
+    adsFound,
+    source: cleanText(raw.source || raw.manual_ads_source || report.manual_ads_source || "Google Ads Transparency", "Google Ads Transparency"),
+    note: cleanText(raw.note || raw.manual_ads_note || report.manual_ads_note, ""),
+    checkedAt: cleanText(raw.checkedAt || raw.checked_at || report.manual_ads_checked_at || report.manualAdsCheckedAt, ""),
+  };
+}
+
+function getManualAdsSummary(manualAds: ManualAdsTransparency): string {
+  if (!manualAds.checked) return "";
+  if (manualAds.adsFound === "yes") {
+    return "Google Ads activity was manually checked through Ads Transparency. This adds paid-traffic context, but final conversion recording still requires account-level verification.";
+  }
+  if (manualAds.adsFound === "no") {
+    return "Ads Transparency was manually checked and no active Google Ads were noted at the time of review. Browser-visible tracking evidence should still be verified where needed.";
+  }
+  return "Ads Transparency was manually checked, but the ad activity result was left as unsure. Account-level verification is still recommended before making final tracking decisions.";
 }
 
 function formatDate(value: unknown): string {
@@ -744,7 +837,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
     ],
     3,
   );
+  const manualAds = getManualAdsTransparency(report);
+  const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
+  const enhancedProofPoints = manualAdsSummary ? cleanList([manualAdsSummary, ...proofPoints], DEFAULT_PROOF_POINTS, 6) : proofPoints;
   const howToReadTitle = cleanText(privateReportCopy.howToReadTitle || report.howToReadTitle || report.how_to_read_title, "How to read this review");
   const howToReadParagraphs = cleanList(
     privateReportCopy.howToReadParagraphs || report.howToReadParagraphs || report.how_to_read_paragraphs || report.howToReadThisReview,
@@ -822,6 +918,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <span className="rounded-full border border-slate-200 bg-white px-4 py-2">
                 No account access used
               </span>
+              {manualAds.checked ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-amber-700">
+                  Ads Transparency: {manualAds.adsFound === "yes" ? "Ads found" : manualAds.adsFound === "no" ? "No ads found" : "Checked"}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -884,12 +985,24 @@ export default async function ReportPage({ params }: ReportPageProps) {
             <p className="text-base font-bold leading-8 text-emerald-950">{businessImpact}</p>
           </SectionCard>
 
+          {manualAds.checked ? (
+            <SectionCard label="Ads Transparency context" tone="amber">
+              <div className="space-y-3 text-sm font-bold leading-7 text-amber-950">
+                <p>{manualAdsSummary}</p>
+                {manualAds.note ? <p className="text-amber-900/80">Manual note: {manualAds.note}</p> : null}
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                  Source: {manualAds.source}{manualAds.checkedAt ? ` · Checked ${manualAds.checkedAt}` : ""}
+                </p>
+              </div>
+            </SectionCard>
+          ) : null}
+
           <SectionCard label="What I checked">
             <BulletList items={whatChecked} />
           </SectionCard>
 
           <SectionCard label="Supporting evidence">
-            <BulletList items={proofPoints} marker="slate" />
+            <BulletList items={enhancedProofPoints} marker="slate" />
           </SectionCard>
         </div>
 
