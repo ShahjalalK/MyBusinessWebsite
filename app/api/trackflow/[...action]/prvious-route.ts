@@ -957,228 +957,6 @@ function getObjectCandidate(...values: any[]): AnyRecord {
   return {};
 }
 
-function sanitizePlainObject(value: any, maxKeys = 30): AnyRecord {
-  /**
-   * Firestore-safe public report object sanitizer.
-   * Keeps only JSON-safe values from the register payload so the public /r page
-   * can receive richer professional report sections without storing huge raw audit objects.
-   */
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-
-  const output: AnyRecord = {};
-  let count = 0;
-
-  for (const [key, rawValue] of Object.entries(value)) {
-    if (count >= maxKeys) break;
-    if (!key || rawValue === undefined || typeof rawValue === "function") continue;
-
-    if (rawValue === null || typeof rawValue === "string" || typeof rawValue === "number" || typeof rawValue === "boolean") {
-      output[key] = rawValue;
-      count += 1;
-      continue;
-    }
-
-    if (Array.isArray(rawValue)) {
-      output[key] = rawValue
-        .slice(0, 12)
-        .map((item) => {
-          if (item === null || typeof item === "string" || typeof item === "number" || typeof item === "boolean") return item;
-          if (item && typeof item === "object" && !Array.isArray(item)) return sanitizePlainObject(item, 12);
-          return null;
-        })
-        .filter((item) => item !== null && item !== undefined);
-      count += 1;
-      continue;
-    }
-
-    if (rawValue && typeof rawValue === "object") {
-      output[key] = sanitizePlainObject(rawValue, 12);
-      count += 1;
-    }
-  }
-
-  return output;
-}
-
-function normalizeReportCards(value: any, fallbackEvidence: string[] = [], maxItems = 4): AnyRecord[] {
-  const rawItems = Array.isArray(value) ? value : [];
-  const output: AnyRecord[] = [];
-  const seen = new Set<string>();
-
-  for (const item of rawItems) {
-    const record = item && typeof item === "object" && !Array.isArray(item) ? (item as AnyRecord) : {};
-    const title = firstCleanString(record.title, record.problem, record.name, record.label);
-    const finding = firstCleanString(record.finding, record.summary, record.description, record.text);
-    const businessMeaning = firstCleanString(
-      record.businessMeaning,
-      record.business_meaning,
-      record.businessImpact,
-      record.business_impact,
-      record.whyItMatters,
-      record.why_it_matters,
-      record.impact,
-    );
-    const nextCheck = firstCleanString(
-      record.nextCheck,
-      record.next_check,
-      record.manualCheck,
-      record.manual_check,
-      record.recommendation,
-      record.nextStep,
-      record.next_step,
-    );
-    const evidence = normalizeStringArray(record.evidence || record.evidencePoints || record.evidence_points, 4);
-    const key = `${title}|${finding}`.toLowerCase();
-
-    if (!title && !finding) continue;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    output.push({
-      ...sanitizePlainObject(record, 24),
-      title: title || "Tracking item to verify",
-      finding: finding || "Browser-visible evidence suggests this area is worth checking.",
-      businessMeaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
-      business_meaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
-      nextCheck: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
-      next_check: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
-      evidence,
-    });
-
-    if (output.length >= maxItems) break;
-  }
-
-  if (output.length) return output;
-
-  return fallbackEvidence.slice(0, Math.min(3, maxItems)).map((item, index) => ({
-    title: index === 0 ? "Tracking evidence to verify" : `Evidence item ${index + 1}`,
-    finding: item,
-    businessMeaning: "This point should be confirmed before making budget or reporting decisions.",
-    business_meaning: "This point should be confirmed before making budget or reporting decisions.",
-    nextCheck: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
-    next_check: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
-    evidence: [],
-  }));
-}
-
-function normalizeVerificationPlan(value: any, fallback: AnyRecord[] | string[] = [], maxItems = 4): AnyRecord[] {
-  const rawItems = Array.isArray(value) && value.length ? value : fallback;
-  const output: AnyRecord[] = [];
-  const seen = new Set<string>();
-
-  for (const item of Array.isArray(rawItems) ? rawItems : []) {
-    if (item && typeof item === "object" && !Array.isArray(item)) {
-      const record = item as AnyRecord;
-      const title = firstCleanString(record.title, record.step, record.name, record.description);
-      const description = firstCleanString(record.description, record.detail, record.summary, record.text);
-      const priority = firstCleanString(record.priority, `Priority ${output.length + 1}`);
-      const estimatedEffort = firstCleanString(record.estimatedEffort, record.estimated_effort, record.effort, "Short review");
-      const key = `${title}|${description}`.toLowerCase();
-
-      if ((title || description) && !seen.has(key)) {
-        seen.add(key);
-        output.push({
-          ...sanitizePlainObject(record, 20),
-          priority,
-          title: title || description,
-          description,
-          estimatedEffort,
-          estimated_effort: estimatedEffort,
-        });
-      }
-    } else {
-      const title = firstCleanString(item);
-      const key = title.toLowerCase();
-      if (title && !seen.has(key)) {
-        seen.add(key);
-        output.push({
-          priority: `Priority ${output.length + 1}`,
-          title,
-          description: "",
-          estimatedEffort: "Short review",
-          estimated_effort: "Short review",
-        });
-      }
-    }
-
-    if (output.length >= maxItems) break;
-  }
-
-  return output;
-}
-
-function normalizeWebsiteSpeedSnapshot(...values: any[]): AnyRecord | null {
-  const raw = getObjectCandidate(...values);
-  if (!Object.keys(raw).length) return null;
-
-  const snapshot: AnyRecord = {};
-  const allowedKeys = [
-    "score",
-    "label",
-    "speedScore",
-    "speed_score",
-    "performance_score",
-    "homepage_load_time_seconds",
-    "visual_load_estimate_seconds",
-    "dom_content_loaded_seconds",
-    "network_idle_seconds",
-    "audit_total_scan_time_seconds",
-    "request_count",
-    "third_party_request_count",
-    "unique_host_count",
-    "scanned_page_count",
-    "client_facing_note",
-    "note",
-    "truth_note",
-    "url",
-    "page_url",
-  ];
-
-  for (const key of allowedKeys) {
-    if (raw[key] !== undefined && raw[key] !== null && raw[key] !== "") {
-      snapshot[key] = raw[key];
-    }
-  }
-
-  if (!Object.keys(snapshot).length) return sanitizePlainObject(raw, 20);
-  return snapshot;
-}
-
-function normalizeCtaInteractionReport(...values: any[]): AnyRecord | null {
-  const raw = getObjectCandidate(...values);
-  if (!Object.keys(raw).length) return null;
-
-  const testedItems = Array.isArray(raw.testedItems)
-    ? raw.testedItems
-    : Array.isArray(raw.tested_items)
-      ? raw.tested_items
-      : [];
-
-  return {
-    ...sanitizePlainObject(raw, 24),
-    enabled: raw.enabled !== false,
-    tested: Boolean(raw.tested || raw.ctasTested || raw.ctas_tested || testedItems.length),
-    status: firstCleanString(raw.status, raw.verdict, raw.test_status, "not_tested"),
-    ctasFound: Number(raw.ctasFound ?? raw.ctas_found ?? testedItems.length ?? 0) || 0,
-    ctas_found: Number(raw.ctas_found ?? raw.ctasFound ?? testedItems.length ?? 0) || 0,
-    ctasTested: Number(raw.ctasTested ?? raw.ctas_tested ?? 0) || 0,
-    ctas_tested: Number(raw.ctas_tested ?? raw.ctasTested ?? 0) || 0,
-    trackingObserved: Boolean(raw.trackingObserved || raw.tracking_observed),
-    tracking_observed: Boolean(raw.tracking_observed || raw.trackingObserved),
-    googleAdsAfterClick: Boolean(raw.googleAdsAfterClick || raw.google_ads_after_click || raw.google_ads_conversion_after_click),
-    google_ads_after_click: Boolean(raw.google_ads_after_click || raw.googleAdsAfterClick || raw.google_ads_conversion_after_click),
-    ga4EventsAfterClick: normalizeStringArray(raw.ga4EventsAfterClick || raw.ga4_events_after_click, 10),
-    ga4_events_after_click: normalizeStringArray(raw.ga4_events_after_click || raw.ga4EventsAfterClick, 10),
-    metaEventsAfterClick: normalizeStringArray(raw.metaEventsAfterClick || raw.meta_events_after_click, 10),
-    meta_events_after_click: normalizeStringArray(raw.meta_events_after_click || raw.metaEventsAfterClick, 10),
-    testedItems: testedItems.slice(0, 10).map((item: any) => sanitizePlainObject(item, 20)),
-    tested_items: testedItems.slice(0, 10).map((item: any) => sanitizePlainObject(item, 20)),
-    truthNote: firstCleanString(raw.truthNote, raw.truth_note),
-    truth_note: firstCleanString(raw.truth_note, raw.truthNote),
-  };
-}
-
-
 async function requireReportRegisterAccess(req: Request) {
   const expected = process.env.REPORT_REGISTER_SECRET || "";
   if (expected) {
@@ -1277,44 +1055,6 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     4,
   );
 
-  const problemCards = normalizeReportCards(
-    privatePage.problemCards || privatePage.businessProblems || body.problemCards || body.businessProblems,
-    proofPoints,
-    4,
-  );
-
-  const verificationPlan = normalizeVerificationPlan(
-    privatePage.verificationPlan ||
-      privatePage.verification_plan ||
-      privatePage.recommendedFixPlan ||
-      privatePage.recommended_fix_plan ||
-      body.verificationPlan ||
-      body.verification_plan ||
-      body.recommendedFixPlan ||
-      body.recommended_fix_plan,
-    recommendations,
-    4,
-  );
-
-  const websiteSpeed = normalizeWebsiteSpeedSnapshot(
-    privatePage.websiteSpeed,
-    privatePage.website_speed,
-    body.websiteSpeed,
-    body.website_speed,
-    body.speed,
-  );
-
-  const ctaInteractionTest = normalizeCtaInteractionReport(
-    privatePage.ctaInteractionTest,
-    privatePage.cta_interaction_test,
-    privatePage.leadActionTest,
-    privatePage.lead_action_test,
-    body.ctaInteractionTest,
-    body.cta_interaction_test,
-    body.leadActionTest,
-    body.lead_action_test,
-  );
-
   const email = normalizeEmail(body.email || body.finalEmail || body.final_email || "");
   const leadId = firstCleanString(body.leadId, body.firestoreLeadId, body.firestore_lead_id);
   const sheetRowNumber = Number(body.sheetRowNumber || body.sheet_row_number || 0) || null;
@@ -1336,14 +1076,6 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     businessImpact,
     proofPoints,
     recommendations,
-    problemCards,
-    businessProblems: problemCards,
-    verificationPlan,
-    verification_plan: verificationPlan,
-    websiteSpeed,
-    website_speed: websiteSpeed,
-    ctaInteractionTest,
-    cta_interaction_test: ctaInteractionTest,
     whatChecked,
     auditSnapshotTitle: firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title, "What this review is designed to clarify"),
     auditSnapshotQuestions,
@@ -1370,14 +1102,6 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     businessImpact,
     proofPoints,
     recommendations,
-    problemCards,
-    businessProblems: problemCards,
-    verificationPlan,
-    verification_plan: verificationPlan,
-    websiteSpeed,
-    website_speed: websiteSpeed,
-    ctaInteractionTest,
-    cta_interaction_test: ctaInteractionTest,
     whatChecked,
     auditSnapshotTitle: normalizedPrivateReportCopy.auditSnapshotTitle,
     auditSnapshotQuestions,
@@ -4833,14 +4557,6 @@ async function handleReportRegister(req: Request) {
     businessImpact: report.businessImpact,
     proofPoints: report.proofPoints,
     recommendations: report.recommendations,
-    problemCards: report.problemCards,
-    businessProblems: report.businessProblems,
-    verificationPlan: report.verificationPlan,
-    verification_plan: report.verification_plan,
-    websiteSpeed: report.websiteSpeed,
-    website_speed: report.website_speed,
-    ctaInteractionTest: report.ctaInteractionTest,
-    cta_interaction_test: report.cta_interaction_test,
     whatChecked: report.whatChecked,
     auditSnapshotTitle: report.auditSnapshotTitle,
     auditSnapshotQuestions: report.auditSnapshotQuestions,
