@@ -80,33 +80,6 @@ export function normalizeReportSlug(value: any): string {
     .slice(0, 80) || "website";
 }
 
-export function normalizeReportDomainKey(value: any): string {
-  const raw = String(value || "").trim().toLowerCase();
-  if (!raw) return "";
-
-  let host = "";
-  try {
-    const parsed = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-    host = parsed.hostname || "";
-  } catch {
-    host = raw
-      .replace(/^https?:\/\//i, "")
-      .replace(/^www\./i, "")
-      .split("/")[0]
-      .split("?")[0]
-      .split("#")[0]
-      .trim();
-  }
-
-  return host
-    .replace(/^www\./i, "")
-    .replace(/:\d+$/, "")
-    .replace(/[^a-z0-9.-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 180);
-}
-
 export function buildPublicReportUrl(token: string, domainSlug = "website"): string {
   const slug = normalizeReportSlug(domainSlug || "website");
   return `${appBaseUrl()}/tracking-review/${encodeURIComponent(slug)}/${encodeURIComponent(token)}`;
