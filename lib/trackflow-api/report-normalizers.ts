@@ -651,6 +651,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   );
 
   const normalizedPrivateReportCopy = {
+    ...privateReportCopy,
     headline,
     subheadline,
     mainFinding,
