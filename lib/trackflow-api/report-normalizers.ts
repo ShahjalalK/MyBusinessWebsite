@@ -80,6 +80,25 @@ export function normalizeReportSlug(value: any): string {
     .slice(0, 80) || "website";
 }
 
+export function normalizeReportDomainKey(value: any): string {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    return url.hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return raw
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split("/")[0]
+      .split("?")[0]
+      .replace(/:\d+$/, "")
+      .trim()
+      .toLowerCase();
+  }
+}
+
 export function buildPublicReportUrl(token: string, domainSlug = "website"): string {
   const slug = normalizeReportSlug(domainSlug || "website");
   return `${appBaseUrl()}/tracking-review/${encodeURIComponent(slug)}/${encodeURIComponent(token)}`;
@@ -477,6 +496,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
   const companyName = firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, domain);
+  const domainKey = normalizeReportDomainKey(domain || body.websiteUrl || body.website_url || body.website || body.url);
   const domainSlug = normalizeReportSlug(body.domainSlug || body.domain_slug || body.reportSlug || body.report_slug || domain || companyName || "website");
   const pdfViewUrl = sanitizeOptionalUrl(
     body.pdfViewUrl ||
@@ -660,6 +680,8 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
 
   return {
     token,
+    domainKey,
+    domain_key: domainKey,
     domainSlug,
     domain_slug: domainSlug,
     reportUrl,

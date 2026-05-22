@@ -7,6 +7,8 @@ import {
   appBaseUrl,
   escapeHtml,
   isLocalOrUnsafeReportUrl,
+  buildPublicReportUrl,
+  normalizeReportDomainKey,
   normalizeReportPayload,
   normalizeReportToken,
   sanitizeLocalRedirectTarget,
@@ -38,11 +40,176 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     nowDhaka,
   } = deps;
 
+  function getReportDomainKeyFromInput(input: AnyRecord = {}): string {
+    return normalizeReportDomainKey(
+      input.domain ||
+        input.domainKey ||
+        input.domain_key ||
+        input.websiteUrl ||
+        input.website_url ||
+        input.website ||
+        input.url ||
+        "",
+    );
+  }
+
+  async function resolveExistingReportByDomain(input: AnyRecord = {}) {
+    const domainKey = getReportDomainKeyFromInput(input);
+    const requestedDomainSlug = String(input.domainSlug || input.domain_slug || input.reportSlug || input.report_slug || "").trim();
+
+    if (!domainKey) {
+      return {
+        found: false,
+        domainKey: "",
+        message: "No domain/website was provided for report resolution.",
+      };
+    }
+
+    const indexRef = adminDb.collection("audit_report_domains").doc(domainKey);
+    const indexSnap = await indexRef.get();
+    const indexData = indexSnap.exists ? indexSnap.data() || {} : {};
+    let token = normalizeReportToken(indexData.token || indexData.reportToken || indexData.report_token || "");
+
+    let reportSnap: any = null;
+    if (token) {
+      reportSnap = await adminDb.collection("audit_reports").doc(token).get();
+      if (!reportSnap.exists) {
+        token = "";
+        reportSnap = null;
+      }
+    }
+
+    if (!token) {
+      const byDomain = await adminDb
+        .collection("audit_reports")
+        .where("domainKey", "==", domainKey)
+        .limit(1)
+        .get();
+
+      if (!byDomain.empty) {
+        reportSnap = byDomain.docs[0];
+        token = normalizeReportToken(reportSnap.id || reportSnap.data()?.token || "");
+      }
+    }
+
+    if (!token) {
+      const byLegacyDomain = await adminDb
+        .collection("audit_reports")
+        .where("domain", "==", domainKey)
+        .limit(1)
+        .get();
+
+      if (!byLegacyDomain.empty) {
+        reportSnap = byLegacyDomain.docs[0];
+        token = normalizeReportToken(reportSnap.id || reportSnap.data()?.token || "");
+      }
+    }
+
+    if (!token || !reportSnap?.exists) {
+      return {
+        found: false,
+        domainKey,
+        domain: domainKey,
+        domainSlug: requestedDomainSlug || domainKey.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "website",
+        message: "No existing report token found for this domain.",
+      };
+    }
+
+    const report = reportSnap.data() || {};
+    const domainSlug = String(
+      report.domainSlug ||
+        report.domain_slug ||
+        indexData.domainSlug ||
+        indexData.domain_slug ||
+        requestedDomainSlug ||
+        domainKey.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
+        "website",
+    );
+    const reportUrl = String(report.reportUrl || indexData.reportUrl || buildPublicReportUrl(token, domainSlug));
+
+    return {
+      found: true,
+      domainKey,
+      domain: report.domain || indexData.domain || domainKey,
+      domainSlug,
+      domain_slug: domainSlug,
+      token,
+      reportToken: token,
+      reportUrl,
+      pdfFileId: report.pdfFileId || indexData.pdfFileId || "",
+      pdfViewUrl: report.pdfViewUrl || indexData.pdfViewUrl || "",
+      pdfDownloadUrl: report.pdfDownloadUrl || indexData.pdfDownloadUrl || "",
+      blobPathname: report.blobPathname || indexData.blobPathname || "",
+      blobUrl: report.blobUrl || indexData.blobUrl || "",
+      updatedAt: report.updatedAt || indexData.updatedAt || null,
+    };
+  }
+
+  async function upsertReportDomainIndex(report: AnyRecord) {
+    const domainKey = report.domainKey || report.domain_key || normalizeReportDomainKey(report.domain || report.websiteUrl || "");
+    if (!domainKey || !report.token) return;
+
+    const domainSlug = report.domainSlug || report.domain_slug || domainKey.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "website";
+    const indexRef = adminDb.collection("audit_report_domains").doc(domainKey);
+    const indexSnap = await indexRef.get();
+    const indexPayload: AnyRecord = {
+      domainKey,
+      domain_key: domainKey,
+      domain: report.domain || domainKey,
+      websiteUrl: report.websiteUrl || "",
+      token: report.token,
+      reportToken: report.token,
+      reportUrl: report.reportUrl || buildPublicReportUrl(report.token, domainSlug),
+      domainSlug,
+      domain_slug: domainSlug,
+      pdfFileId: report.pdfFileId || "",
+      pdfViewUrl: report.pdfViewUrl || "",
+      pdfDownloadUrl: report.pdfDownloadUrl || "",
+      blobUrl: report.blobUrl || "",
+      blobDownloadUrl: report.blobDownloadUrl || "",
+      blobPathname: report.blobPathname || "",
+      storageProvider: report.storageProvider || "",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (!indexSnap.exists) {
+      indexPayload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await indexRef.set(indexPayload, { merge: true });
+  }
+
   async function handleReportRegister(req: Request) {
     await requireReportRegisterAccess(req);
     const rawBody = await readJson(req);
     const body = rawBody?.report || rawBody;
-    const report = normalizeReportPayload(body || {});
+
+    if (body?.resolveOnly || body?.resolve_only || body?.mode === "resolve_existing_report") {
+      const resolved = await resolveExistingReportByDomain(body || {});
+      return json({
+        success: true,
+        action: "reports/resolve",
+        ...resolved,
+      });
+    }
+
+    const explicitToken = normalizeReportToken(body?.token || body?.reportToken || body?.report_token || "");
+    let bodyForNormalize: AnyRecord = { ...(body || {}) };
+
+    if (!explicitToken) {
+      const resolved = await resolveExistingReportByDomain(bodyForNormalize);
+      if (resolved.found && resolved.reportToken) {
+        bodyForNormalize = {
+          ...bodyForNormalize,
+          token: resolved.reportToken,
+          reportToken: resolved.reportToken,
+          domainSlug: bodyForNormalize.domainSlug || bodyForNormalize.domain_slug || resolved.domainSlug,
+          reportUrl: bodyForNormalize.reportUrl || bodyForNormalize.report_url || resolved.reportUrl,
+        };
+      }
+    }
+
+    const report = normalizeReportPayload(bodyForNormalize || {});
   
     if (!report.domain && !report.websiteUrl) {
       throw new ApiError("domain or websiteUrl is required for report registration", 400);
@@ -63,6 +230,8 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
   
     const payload: AnyRecord = {
       token: report.token,
+      domainKey: report.domainKey,
+      domain_key: report.domainKey,
       domainSlug: report.domainSlug,
       domain_slug: report.domainSlug,
       reportUrl: report.reportUrl,
@@ -130,6 +299,10 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     }
   
     await reportRef.set(payload, { merge: true });
+    await upsertReportDomainIndex({
+      ...report,
+      ...payload,
+    });
   
     if (report.leadId) {
       await adminDb.collection("outreach_leads").doc(report.leadId).set(
@@ -175,6 +348,8 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       message: "Secure report registered successfully.",
       token: report.token,
       reportToken: report.token,
+      domainKey: report.domainKey,
+      domain_key: report.domainKey,
       domainSlug: report.domainSlug,
       domain_slug: report.domainSlug,
       reportUrl: report.reportUrl,
