@@ -792,8 +792,23 @@ function createReportToken(): string {
   return randomUUID().replace(/-/g, "");
 }
 
-function buildPublicReportUrl(token: string): string {
-  return `${appBaseUrl()}/r/${encodeURIComponent(token)}`;
+function normalizeReportSlug(value: any): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+    .split("?")[0]
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "website";
+}
+
+function buildPublicReportUrl(token: string, domainSlug = "website"): string {
+  const slug = normalizeReportSlug(domainSlug || "website");
+  return `${appBaseUrl()}/tracking-review/${encodeURIComponent(slug)}/${encodeURIComponent(token)}`;
 }
 
 function isLocalOrUnsafeReportUrl(value: string): boolean {
@@ -801,7 +816,7 @@ function isLocalOrUnsafeReportUrl(value: string): boolean {
   if (!raw) return true;
   if (raw.includes("localhost") || raw.includes("127.0.0.1") || raw.includes("0.0.0.0")) return true;
   if (raw.includes("/audit/pdf/") || raw.includes(":8000/")) return true;
-  // Email/report URL must be the branded TrackFlow /r/{token} page, not a direct PDF/Drive link.
+  // Email/report URL must be the branded TrackFlow /tracking-review/{domainSlug}/{token} page, not a direct PDF/Drive link.
   if (raw.includes("drive.google.com") || raw.includes("googleusercontent.com")) return true;
   if (/\.pdf(?:$|[?#])/.test(raw)) return true;
   return false;
@@ -1198,11 +1213,35 @@ function getReportTimestamp(value: any, fallbackDays = 30) {
 
 function normalizeReportPayload(body: AnyRecord = {}) {
   const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
-  const pdfViewUrl = sanitizeOptionalUrl(body.pdfViewUrl || body.pdf_view_url || body.driveViewUrl || body.drive_view_url || body.pdfUrl || body.pdf_url || "");
-  const pdfDownloadUrl = sanitizeOptionalUrl(body.pdfDownloadUrl || body.pdf_download_url || body.driveDownloadUrl || body.drive_download_url || "");
-  const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token);
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
   const companyName = firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, domain);
+  const domainSlug = normalizeReportSlug(body.domainSlug || body.domain_slug || body.reportSlug || body.report_slug || domain || companyName || "website");
+  const pdfViewUrl = sanitizeOptionalUrl(
+    body.pdfViewUrl ||
+      body.pdf_view_url ||
+      body.blobUrl ||
+      body.blob_url ||
+      body.blobViewUrl ||
+      body.blob_view_url ||
+      body.driveViewUrl ||
+      body.drive_view_url ||
+      body.pdfUrl ||
+      body.pdf_url ||
+      "",
+  );
+  const pdfDownloadUrl = sanitizeOptionalUrl(
+    body.pdfDownloadUrl ||
+      body.pdf_download_url ||
+      body.blobDownloadUrl ||
+      body.blob_download_url ||
+      body.downloadUrl ||
+      body.download_url ||
+      body.driveDownloadUrl ||
+      body.drive_download_url ||
+      pdfViewUrl ||
+      "",
+  );
+  const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token, domainSlug);
 
   const privateReportCopy = getObjectCandidate(body.privateReportCopy, body.private_report_copy, body.aiPrivateReportCopy, body.ai_private_report_copy);
   const privatePage = getObjectCandidate(body.privateReportPage, body.private_report_page, privateReportCopy);
@@ -1359,6 +1398,8 @@ function normalizeReportPayload(body: AnyRecord = {}) {
 
   return {
     token,
+    domainSlug,
+    domain_slug: domainSlug,
     reportUrl,
     domain,
     websiteUrl: firstCleanString(body.websiteUrl, body.website_url, body.website, domain ? `https://${domain}` : ""),
@@ -1394,15 +1435,33 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     manual_ads_source: manualAdsTransparency.source,
     manual_ads_note: manualAdsTransparency.note,
     manual_ads_checked_at: manualAdsTransparency.checkedAt,
-    pdfFileId: firstCleanString(body.pdfFileId, body.pdf_file_id, body.driveFileId, body.drive_file_id, body.googleDriveFileId),
+    pdfFileId: firstCleanString(
+      body.pdfFileId,
+      body.pdf_file_id,
+      body.blobFileId,
+      body.blob_file_id,
+      body.blobPathname,
+      body.blob_pathname,
+      body.pathname,
+      body.driveFileId,
+      body.drive_file_id,
+      body.googleDriveFileId,
+    ),
     pdfViewUrl,
     pdfDownloadUrl,
     pdfExpiresAt,
     leadId,
     sheetRowNumber,
-    source: firstCleanString(body.source, "python_drive_oauth_export"),
+    source: firstCleanString(body.source, "python_blob_export"),
     auditId: firstCleanString(body.auditId, body.audit_id, body.sourceAuditId, body.source_audit_id),
-    storageProvider: firstCleanString(body.storageProvider, body.storage_provider, "google_drive_oauth"),
+    storageProvider: firstCleanString(
+      body.storageProvider,
+      body.storage_provider,
+      body.blobUrl || body.blob_url ? "vercel_blob" : "storage",
+    ),
+    blobUrl: firstCleanString(body.blobUrl, body.blob_url, pdfViewUrl),
+    blobDownloadUrl: firstCleanString(body.blobDownloadUrl, body.blob_download_url, pdfDownloadUrl),
+    blobPathname: firstCleanString(body.blobPathname, body.blob_pathname, body.pathname),
     contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
     ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
     ctaText,
@@ -1779,7 +1838,7 @@ async function sendInitialFromBody(rawBody: any) {
   const rawReportUrl = String(body.reportUrl || "").trim();
   const reportUrl = rawReportUrl ? sanitizePublicReportUrl(rawReportUrl) : "";
   if (rawReportUrl && !reportUrl) {
-    throw new ApiError("Invalid or unsafe report URL. Use the secure TrackFlow /r/{token} report URL, not localhost or a direct PDF/Drive URL.", 400);
+    throw new ApiError("Invalid or unsafe report URL. Use the secure TrackFlow /tracking-review/{domainSlug}/{token} report URL, not localhost or a direct PDF/Drive URL.", 400);
   }
   const reportButtonText = String(body.reportButtonText || "View short audit note").trim().slice(0, 80);
   const source = String(body.source || "").trim();
@@ -1792,7 +1851,7 @@ async function sendInitialFromBody(rawBody: any) {
     const pdfDownloadUrl = sanitizeOptionalUrl(body.pdfDownloadUrl || body.pdf_download_url || "");
 
     const blockers: string[] = [];
-    if (!reportUrl) blockers.push("secure TrackFlow /r report URL is missing");
+    if (!reportUrl) blockers.push("secure TrackFlow tracking-review report URL is missing");
     if (!reportToken) blockers.push("report token is missing");
     if (!pdfFileId) blockers.push("PDF file ID is missing");
     if (!pdfViewUrl && !pdfDownloadUrl) blockers.push("PDF view/download URL is missing");
@@ -4813,7 +4872,7 @@ async function handleReportRegister(req: Request) {
     throw new ApiError("pdfViewUrl or pdfDownloadUrl is required", 400);
   }
   if (!report.reportUrl || isLocalOrUnsafeReportUrl(report.reportUrl)) {
-    throw new ApiError("A secure public reportUrl is required. Use NEXT_PUBLIC_APP_URL/r/{token}, not localhost or a direct PDF URL.", 400);
+    throw new ApiError("A secure public reportUrl is required. Use NEXT_PUBLIC_APP_URL/tracking-review/{domainSlug}/{token}, not localhost or a direct PDF URL.", 400);
   }
 
   const reportRef = adminDb.collection("audit_reports").doc(report.token);
@@ -4822,6 +4881,8 @@ async function handleReportRegister(req: Request) {
 
   const payload: AnyRecord = {
     token: report.token,
+    domainSlug: report.domainSlug,
+    domain_slug: report.domainSlug,
     reportUrl: report.reportUrl,
     domain: report.domain,
     websiteUrl: report.websiteUrl,
@@ -4861,6 +4922,9 @@ async function handleReportRegister(req: Request) {
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,
+    blobUrl: report.blobUrl,
+    blobDownloadUrl: report.blobDownloadUrl,
+    blobPathname: report.blobPathname,
     pdfExpiresAt: report.pdfExpiresAt,
     leadId: report.leadId,
     sheetRowNumber: report.sheetRowNumber,
@@ -4890,6 +4954,7 @@ async function handleReportRegister(req: Request) {
       {
         reportToken: report.token,
         reportUrl: report.reportUrl,
+        domainSlug: report.domainSlug,
         pdfFileId: report.pdfFileId,
         pdfViewUrl: report.pdfViewUrl,
         pdfDownloadUrl: report.pdfDownloadUrl,
@@ -4928,10 +4993,15 @@ async function handleReportRegister(req: Request) {
     message: "Secure report registered successfully.",
     token: report.token,
     reportToken: report.token,
+    domainSlug: report.domainSlug,
+    domain_slug: report.domainSlug,
     reportUrl: report.reportUrl,
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,
+    blobUrl: report.blobUrl,
+    blobDownloadUrl: report.blobDownloadUrl,
+    blobPathname: report.blobPathname,
     pdfExpiresAt: report.pdfExpiresAt,
     leadId: report.leadId,
     sheetRowNumber: report.sheetRowNumber,
@@ -5107,13 +5177,24 @@ function shouldRequireDrivePdfCleanupOnLeadDelete(): boolean {
 function extractReportTokenFromUrl(value: any): string {
   const raw = String(value || "").trim();
   if (!raw) return "";
+
+  const tokenFromPath = (pathname: string) => {
+    const trackingReviewMatch = pathname.match(/^\/tracking-review\/[^/]+\/([a-zA-Z0-9_-]{8,128})\/?$/);
+    if (trackingReviewMatch?.[1]) return normalizeReportToken(trackingReviewMatch[1]);
+
+    // Backward-compatible fallback only. New client-facing links use /tracking-review/{domainSlug}/{token}.
+    const oldShortMatch = pathname.match(/^\/r\/([a-zA-Z0-9_-]{8,128})\/?$/);
+    return normalizeReportToken(oldShortMatch?.[1] || "");
+  };
+
   try {
     const url = new URL(raw.startsWith("http") ? raw : `${appBaseUrl()}${raw.startsWith("/") ? "" : "/"}${raw}`);
-    const match = url.pathname.match(/^\/r\/([a-zA-Z0-9_-]{8,128})\/?$/);
-    return normalizeReportToken(match?.[1] || "");
+    return tokenFromPath(url.pathname);
   } catch {
-    const match = raw.match(/\/r\/([a-zA-Z0-9_-]{8,128})\/?/);
-    return normalizeReportToken(match?.[1] || "");
+    const trackingReviewMatch = raw.match(/\/tracking-review\/[^/]+\/([a-zA-Z0-9_-]{8,128})\/?/);
+    if (trackingReviewMatch?.[1]) return normalizeReportToken(trackingReviewMatch[1]);
+    const oldShortMatch = raw.match(/\/r\/([a-zA-Z0-9_-]{8,128})\/?/);
+    return normalizeReportToken(oldShortMatch?.[1] || "");
   }
 }
 
@@ -5913,10 +5994,10 @@ function validateSheetQueuedSendReadiness(row: AnyRecord): string[] {
   if (!subject) blockers.push("Email Subject is missing");
   if (!plainTextFromHtml(emailBody)) blockers.push("Email Body is missing");
   if (!mainIssue) blockers.push("Main Issue is missing");
-  if (!reportUrl) blockers.push("secure TrackFlow /r report URL is missing");
-  if (!urlToken) blockers.push("Report URL must be a branded /r/{token} page");
+  if (!reportUrl) blockers.push("secure TrackFlow tracking-review report URL is missing");
+  if (!urlToken) blockers.push("Report URL must be a branded /tracking-review/{domainSlug}/{token} page");
   if (!reportToken) blockers.push("Report Token is missing");
-  if (urlToken && reportToken && urlToken !== reportToken) blockers.push("Report Token does not match the /r URL token");
+  if (urlToken && reportToken && urlToken !== reportToken) blockers.push("Report Token does not match the tracking-review URL token");
   if (!pdfFileId) blockers.push("PDF file ID is missing");
   if (!pdfViewUrl && !pdfDownloadUrl) blockers.push("PDF View URL or PDF Download URL is missing");
   if ((pdfViewUrl && isUnsafeStoredPdfUrl(pdfViewUrl)) || (pdfDownloadUrl && isUnsafeStoredPdfUrl(pdfDownloadUrl))) {

@@ -6,7 +6,7 @@ import { adminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+const DEFAULT_METADATA: Metadata = {
   title: "Private Tracking Review | TrackFlow Pro",
   description: "A private browser-visible tracking review prepared by TrackFlow Pro.",
   robots: {
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 type ReportPageProps = {
-  params: Promise<{ token: string }> | { token: string };
+  params: Promise<{ domainSlug: string; token: string }> | { domainSlug: string; token: string };
 };
 
 type LinkButtonProps = {
@@ -72,6 +72,16 @@ function normalizeToken(value: unknown): string {
   return String(value || "")
     .trim()
     .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 96);
+}
+
+function normalizeSlug(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 96);
 }
 
@@ -779,11 +789,49 @@ function ReportFooter() {
   );
 }
 
-export default async function ReportPage({ params }: ReportPageProps) {
+export async function generateMetadata({ params }: ReportPageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const token = normalizeToken(resolvedParams.token);
 
-  if (!token) notFound();
+  if (!token) return DEFAULT_METADATA;
+
+  try {
+    const reportSnap = await adminDb.collection("audit_reports").doc(token).get();
+    if (!reportSnap.exists) return DEFAULT_METADATA;
+
+    const report = reportSnap.data() || {};
+    const domain = getDomainLabel(report);
+    const companyName = getDisplayCompanyName(report, domain);
+    const title = `Tracking Review for ${companyName} | TrackFlow Pro`;
+    const description = "A private browser-visible tracking and attribution review prepared by TrackFlow Pro.";
+
+    return {
+      ...DEFAULT_METADATA,
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        siteName: "TrackFlow Pro",
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title,
+        description,
+      },
+    };
+  } catch {
+    return DEFAULT_METADATA;
+  }
+}
+
+export default async function ReportPage({ params }: ReportPageProps) {
+  const resolvedParams = await params;
+  const domainSlug = normalizeSlug(resolvedParams.domainSlug);
+  const token = normalizeToken(resolvedParams.token);
+
+  if (!domainSlug || !token) notFound();
 
   const reportRef = adminDb.collection("audit_reports").doc(token);
   const reportSnap = await reportRef.get();
