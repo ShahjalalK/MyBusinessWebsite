@@ -505,6 +505,37 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   );
   const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token, domainSlug);
 
+  const ogImageUrl = sanitizeOptionalUrl(
+    body.ogImageUrl ||
+      body.og_image_url ||
+      body.openGraphImageUrl ||
+      body.open_graph_image_url ||
+      body.previewImageUrl ||
+      body.preview_image_url ||
+      body.homepageScreenshotUrl ||
+      body.homepage_screenshot_url ||
+      body.screenshotUrl ||
+      body.screenshot_url ||
+      "",
+  );
+  const ogImageAlt = firstCleanString(
+    body.ogImageAlt,
+    body.og_image_alt,
+    body.openGraphImageAlt,
+    body.open_graph_image_alt,
+    body.homepageScreenshotAlt,
+    body.homepage_screenshot_alt,
+    `${companyName || "Client website"} tracking review preview`,
+  );
+  const ogImagePathname = firstCleanString(
+    body.ogImagePathname,
+    body.og_image_pathname,
+    body.openGraphImagePathname,
+    body.open_graph_image_pathname,
+    body.homepageScreenshotPathname,
+    body.homepage_screenshot_pathname,
+  );
+
   const privateReportCopy = getObjectCandidate(body.privateReportCopy, body.private_report_copy, body.aiPrivateReportCopy, body.ai_private_report_copy);
   const privatePage = getObjectCandidate(body.privateReportPage, body.private_report_page, privateReportCopy);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
@@ -656,6 +687,18 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     manualAdsTransparency,
     manual_ads_transparency: manualAdsTransparency,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
+    ogImageUrl,
+    og_image_url: ogImageUrl,
+    openGraphImageUrl: ogImageUrl,
+    open_graph_image_url: ogImageUrl,
+    previewImageUrl: ogImageUrl,
+    preview_image_url: ogImageUrl,
+    homepageScreenshotUrl: ogImageUrl,
+    homepage_screenshot_url: ogImageUrl,
+    ogImageAlt,
+    og_image_alt: ogImageAlt,
+    ogImagePathname,
+    og_image_pathname: ogImagePathname,
   };
 
   return {
@@ -663,6 +706,20 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     domainSlug,
     domain_slug: domainSlug,
     reportUrl,
+    ogImageUrl,
+    og_image_url: ogImageUrl,
+    openGraphImageUrl: ogImageUrl,
+    open_graph_image_url: ogImageUrl,
+    previewImageUrl: ogImageUrl,
+    preview_image_url: ogImageUrl,
+    homepageScreenshotUrl: ogImageUrl,
+    homepage_screenshot_url: ogImageUrl,
+    ogImageAlt,
+    og_image_alt: ogImageAlt,
+    ogImagePathname,
+    og_image_pathname: ogImagePathname,
+    homepageScreenshotPathname: ogImagePathname,
+    homepage_screenshot_pathname: ogImagePathname,
     domain,
     websiteUrl: firstCleanString(body.websiteUrl, body.website_url, body.website, domain ? `https://${domain}` : ""),
     companyName,

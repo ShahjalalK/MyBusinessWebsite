@@ -789,6 +789,73 @@ function ReportFooter() {
   );
 }
 
+
+function getPublicBaseUrl(): string {
+  return String(
+    process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_TRACKFLOW_APP_URL ||
+      process.env.TRACKFLOW_APP_URL ||
+      "https://trackflowpro.com",
+  ).replace(/\/+$/, "");
+}
+
+function toSafePublicImageUrl(value: unknown): string {
+  const raw = cleanText(value, "");
+  if (!raw) return "";
+
+  try {
+    const base = getPublicBaseUrl();
+    const absolute = raw.startsWith("http")
+      ? raw
+      : `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+    const url = new URL(absolute);
+    const host = url.hostname.toLowerCase();
+
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0") return "";
+
+    const lower = url.toString().toLowerCase();
+    if (lower.includes("/audit/pdf/") || lower.includes(":8000/") || lower.includes("drive.google.com")) return "";
+    if (/\.pdf(?:$|[?#])/.test(lower)) return "";
+
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function getReportOgImageUrl(report: Record<string, any>): string {
+  const privateCopy = getPrivateReportCopy(report);
+
+  return (
+    toSafePublicImageUrl(report.ogImageUrl) ||
+    toSafePublicImageUrl(report.og_image_url) ||
+    toSafePublicImageUrl(report.openGraphImageUrl) ||
+    toSafePublicImageUrl(report.open_graph_image_url) ||
+    toSafePublicImageUrl(report.previewImageUrl) ||
+    toSafePublicImageUrl(report.preview_image_url) ||
+    toSafePublicImageUrl(report.homepageScreenshotUrl) ||
+    toSafePublicImageUrl(report.homepage_screenshot_url) ||
+    toSafePublicImageUrl(privateCopy.ogImageUrl) ||
+    toSafePublicImageUrl(privateCopy.og_image_url) ||
+    toSafePublicImageUrl(privateCopy.homepageScreenshotUrl) ||
+    toSafePublicImageUrl(privateCopy.homepage_screenshot_url)
+  );
+}
+
+function getReportOgImageAlt(report: Record<string, any>, companyName: string): string {
+  const privateCopy = getPrivateReportCopy(report);
+  return cleanText(
+    report.ogImageAlt ||
+      report.og_image_alt ||
+      privateCopy.ogImageAlt ||
+      privateCopy.og_image_alt ||
+      `${companyName} website tracking review preview`,
+    `${companyName} website tracking review preview`,
+  );
+}
+
+
 export async function generateMetadata({ params }: ReportPageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const token = normalizeToken(resolvedParams.token);
@@ -804,9 +871,22 @@ export async function generateMetadata({ params }: ReportPageProps): Promise<Met
     const companyName = getDisplayCompanyName(report, domain);
     const title = `Tracking Review for ${companyName} | TrackFlow Pro`;
     const description = "A private browser-visible tracking and attribution review prepared by TrackFlow Pro.";
+    const ogImageUrl = getReportOgImageUrl(report);
+    const ogImageAlt = getReportOgImageAlt(report, companyName);
+    const ogImages = ogImageUrl
+      ? [
+          {
+            url: ogImageUrl,
+            width: 1200,
+            height: 630,
+            alt: ogImageAlt,
+          },
+        ]
+      : undefined;
 
     return {
       ...DEFAULT_METADATA,
+      metadataBase: new URL(getPublicBaseUrl()),
       title,
       description,
       openGraph: {
@@ -814,11 +894,14 @@ export async function generateMetadata({ params }: ReportPageProps): Promise<Met
         description,
         siteName: "TrackFlow Pro",
         type: "website",
+        url: report.reportUrl || undefined,
+        images: ogImages,
       },
       twitter: {
-        card: "summary",
+        card: ogImageUrl ? "summary_large_image" : "summary",
         title,
         description,
+        images: ogImageUrl ? [ogImageUrl] : undefined,
       },
     };
   } catch {
