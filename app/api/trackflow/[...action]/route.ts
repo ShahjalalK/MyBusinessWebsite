@@ -1243,6 +1243,54 @@ function normalizeReportPayload(body: AnyRecord = {}) {
   );
   const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token, domainSlug);
 
+  const ogImageUrl = sanitizeOptionalUrl(
+    body.ogImageUrl ||
+      body.og_image_url ||
+      body.openGraphImageUrl ||
+      body.open_graph_image_url ||
+      body.previewImageUrl ||
+      body.preview_image_url ||
+      body.homepageScreenshotUrl ||
+      body.homepage_screenshot_url ||
+      "",
+  );
+  const openGraphImageUrl = sanitizeOptionalUrl(
+    body.openGraphImageUrl ||
+      body.open_graph_image_url ||
+      ogImageUrl ||
+      body.previewImageUrl ||
+      body.preview_image_url ||
+      body.homepageScreenshotUrl ||
+      body.homepage_screenshot_url ||
+      "",
+  );
+  const previewImageUrl = sanitizeOptionalUrl(
+    body.previewImageUrl ||
+      body.preview_image_url ||
+      ogImageUrl ||
+      openGraphImageUrl ||
+      body.homepageScreenshotUrl ||
+      body.homepage_screenshot_url ||
+      "",
+  );
+  const homepageScreenshotUrl = sanitizeOptionalUrl(
+    body.homepageScreenshotUrl ||
+      body.homepage_screenshot_url ||
+      previewImageUrl ||
+      ogImageUrl ||
+      openGraphImageUrl ||
+      "",
+  );
+  const ogImagePathname = firstCleanString(
+    body.ogImagePathname,
+    body.og_image_pathname,
+    body.previewImagePathname,
+    body.preview_image_pathname,
+    body.homepageScreenshotPathname,
+    body.homepage_screenshot_pathname,
+    "",
+  );
+
   const privateReportCopy = getObjectCandidate(body.privateReportCopy, body.private_report_copy, body.aiPrivateReportCopy, body.ai_private_report_copy);
   const privatePage = getObjectCandidate(body.privateReportPage, body.private_report_page, privateReportCopy);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
@@ -1401,6 +1449,11 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     domainSlug,
     domain_slug: domainSlug,
     reportUrl,
+    ogImageUrl,
+    openGraphImageUrl: openGraphImageUrl || ogImageUrl,
+    previewImageUrl: previewImageUrl || ogImageUrl || openGraphImageUrl,
+    homepageScreenshotUrl: homepageScreenshotUrl || previewImageUrl || ogImageUrl || openGraphImageUrl,
+    ogImagePathname,
     domain,
     websiteUrl: firstCleanString(body.websiteUrl, body.website_url, body.website, domain ? `https://${domain}` : ""),
     companyName,
@@ -4856,10 +4909,275 @@ async function patchSheetRowSafely(rowNumber: number, updates: AnyRecord) {
   }
 }
 
+
+function normalizeDomainKeyForReports(...values: any[]): string {
+  for (const value of values) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) continue;
+
+    try {
+      const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+      const host = url.hostname.replace(/^www\./i, "").replace(/:\d+$/g, "").trim();
+      if (host) return host;
+    } catch {}
+
+    const fallback = raw
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split("/")[0]
+      .split("?")[0]
+      .split("#")[0]
+      .replace(/:\d+$/g, "")
+      .trim();
+
+    if (fallback) return fallback;
+  }
+
+  return "";
+}
+
+function reportSortMsForReports(report: AnyRecord = {}): number {
+  return Math.max(
+    toMillis(report.lastRegisteredAt),
+    toMillis(report.updatedAt),
+    toMillis(report.createdAt),
+    toMillis(report.pdfExpiresAt),
+    0,
+  );
+}
+
+function serializeResolvedReportForReports(report: AnyRecord = {}, fallbackToken = ""): AnyRecord {
+  const token = normalizeReportToken(report.token || report.reportToken || report.report_token || fallbackToken);
+  const domainKey = normalizeDomainKeyForReports(report.domain, report.normalizedDomain, report.normalized_domain, report.websiteUrl, report.website_url, report.website);
+  const domainSlug = String(report.domainSlug || report.domain_slug || normalizeReportSlug(domainKey || report.domain || report.websiteUrl || "website"));
+
+  const ogImageUrl = String(
+    report.ogImageUrl ||
+      report.openGraphImageUrl ||
+      report.previewImageUrl ||
+      report.homepageScreenshotUrl ||
+      report.og_image_url ||
+      report.open_graph_image_url ||
+      report.preview_image_url ||
+      report.homepage_screenshot_url ||
+      "",
+  );
+
+  return {
+    found: Boolean(token),
+    token,
+    reportToken: token,
+    domain: domainKey || String(report.domain || ""),
+    normalizedDomain: domainKey,
+    domainSlug,
+    domain_slug: domainSlug,
+    reportUrl: String(report.reportUrl || report.report_url || ""),
+    ogImageUrl,
+    openGraphImageUrl: String(report.openGraphImageUrl || ogImageUrl || ""),
+    previewImageUrl: String(report.previewImageUrl || ogImageUrl || ""),
+    homepageScreenshotUrl: String(report.homepageScreenshotUrl || ogImageUrl || ""),
+    ogImagePathname: String(report.ogImagePathname || report.og_image_pathname || report.previewImagePathname || report.preview_image_pathname || ""),
+    pdfFileId: String(report.pdfFileId || report.pdf_file_id || report.blobPathname || report.blob_pathname || ""),
+    pdfViewUrl: String(report.pdfViewUrl || report.pdf_view_url || report.blobUrl || report.blob_url || ""),
+    pdfDownloadUrl: String(report.pdfDownloadUrl || report.pdf_download_url || report.blobDownloadUrl || report.blob_download_url || ""),
+    pdfExpiresAt: report.pdfExpiresAt || report.pdf_expires_at || "",
+    blobPathname: String(report.blobPathname || report.blob_pathname || report.pdfFileId || report.pdf_file_id || ""),
+    blobUrl: String(report.blobUrl || report.blob_url || report.pdfViewUrl || report.pdf_view_url || ""),
+    blobDownloadUrl: String(report.blobDownloadUrl || report.blob_download_url || report.pdfDownloadUrl || report.pdf_download_url || ""),
+    active: report.active !== false,
+    reportReady: report.reportReady !== false,
+    source: "audit_reports_lookup",
+  };
+}
+
+async function readReportDocByTokenForReports(tokenRaw: any): Promise<AnyRecord | null> {
+  const token = normalizeReportToken(tokenRaw);
+  if (!token) return null;
+
+  const snap = await adminDb.collection("audit_reports").doc(token).get();
+  if (!snap.exists) return null;
+
+  const report = snap.data() || {};
+  if (report.active === false) return null;
+
+  return serializeResolvedReportForReports(report, token);
+}
+
+async function resolveReportFromDomainIndexForReports(domainKey: string): Promise<AnyRecord | null> {
+  if (!domainKey) return null;
+
+  const indexSnap = await adminDb.collection("audit_report_domains").doc(domainKey).get();
+  if (!indexSnap.exists) return null;
+
+  const indexData = indexSnap.data() || {};
+  const token = normalizeReportToken(indexData.token || indexData.reportToken || indexData.report_token);
+  if (!token) return null;
+
+  const report = await readReportDocByTokenForReports(token);
+  if (report) {
+    return {
+      ...report,
+      source: "audit_report_domains_index",
+    };
+  }
+
+  return null;
+}
+
+async function queryReportsByFieldForReports(field: string, value: any): Promise<AnyRecord[]> {
+  const cleanValue = String(value || "").trim();
+  if (!cleanValue) return [];
+
+  const snap = await adminDb.collection("audit_reports").where(field, "==", cleanValue).limit(20).get();
+  const reports: AnyRecord[] = [];
+
+  snap.forEach((doc: any) => {
+    const data = doc.data() || {};
+    if (data.active === false) return;
+    reports.push({
+      ...serializeResolvedReportForReports(data, doc.id),
+      _sortMs: reportSortMsForReports(data),
+      _docId: doc.id,
+      source: `audit_reports_${field}`,
+    });
+  });
+
+  return reports;
+}
+
+async function findExistingReportByDomainForReports(body: AnyRecord = {}): Promise<AnyRecord> {
+  const domainKey = normalizeDomainKeyForReports(
+    body.normalizedDomain,
+    body.normalized_domain,
+    body.domain,
+    body.websiteUrl,
+    body.website_url,
+    body.website,
+    body.url,
+  );
+  const domainSlug = normalizeReportSlug(body.domainSlug || body.domain_slug || domainKey || body.domain || body.websiteUrl || "website");
+  const websiteHttps = domainKey ? `https://${domainKey}` : "";
+  const websiteHttp = domainKey ? `http://${domainKey}` : "";
+
+  const indexed = await resolveReportFromDomainIndexForReports(domainKey);
+  if (indexed) {
+    return {
+      ...indexed,
+      found: true,
+      domainSlug: indexed.domainSlug || domainSlug,
+      domain_slug: indexed.domain_slug || domainSlug,
+    };
+  }
+
+  const candidates = [
+    ...(await queryReportsByFieldForReports("domain", domainKey)),
+    ...(await queryReportsByFieldForReports("normalizedDomain", domainKey)),
+    ...(await queryReportsByFieldForReports("normalized_domain", domainKey)),
+    ...(await queryReportsByFieldForReports("websiteUrl", websiteHttps)),
+    ...(await queryReportsByFieldForReports("websiteUrl", websiteHttp)),
+    ...(await queryReportsByFieldForReports("website_url", websiteHttps)),
+    ...(await queryReportsByFieldForReports("website_url", websiteHttp)),
+    ...(await queryReportsByFieldForReports("domainSlug", domainSlug)),
+    ...(await queryReportsByFieldForReports("domain_slug", domainSlug)),
+  ];
+
+  const unique = new Map<string, AnyRecord>();
+  for (const candidate of candidates) {
+    const token = normalizeReportToken(candidate.token || candidate.reportToken);
+    if (!token) continue;
+    unique.set(token, candidate);
+  }
+
+  const sorted = Array.from(unique.values()).sort((a, b) => Number(b._sortMs || 0) - Number(a._sortMs || 0));
+  const best = sorted[0];
+
+  if (!best) {
+    return {
+      success: true,
+      found: false,
+      token: "",
+      reportToken: "",
+      reportUrl: "",
+      ogImageUrl: "",
+      openGraphImageUrl: "",
+      previewImageUrl: "",
+      homepageScreenshotUrl: "",
+      ogImagePathname: "",
+      domain: domainKey,
+      normalizedDomain: domainKey,
+      domainSlug,
+      domain_slug: domainSlug,
+      pdfFileId: "",
+      pdfViewUrl: "",
+      pdfDownloadUrl: "",
+      blobPathname: "",
+      source: "no_existing_report_for_domain",
+    };
+  }
+
+  const resolvedToken = normalizeReportToken(best.token || best.reportToken || best.report_token || best._docId || "");
+  const resolvedDomainSlug = String(best.domainSlug || best.domain_slug || domainSlug || "website");
+
+  const resolved: AnyRecord = {
+    ...best,
+    found: Boolean(resolvedToken),
+    token: resolvedToken,
+    reportToken: resolvedToken,
+    domain: best.domain || domainKey,
+    normalizedDomain: domainKey,
+    domainSlug: resolvedDomainSlug,
+    domain_slug: resolvedDomainSlug,
+  };
+
+  if (domainKey && resolvedToken) {
+    await adminDb.collection("audit_report_domains").doc(domainKey).set(
+      {
+        token: resolvedToken,
+        reportToken: resolvedToken,
+        reportUrl: String(resolved.reportUrl || ""),
+        ogImageUrl: String(resolved.ogImageUrl || ""),
+        openGraphImageUrl: String(resolved.openGraphImageUrl || resolved.ogImageUrl || ""),
+        previewImageUrl: String(resolved.previewImageUrl || resolved.ogImageUrl || ""),
+        homepageScreenshotUrl: String(resolved.homepageScreenshotUrl || resolved.ogImageUrl || ""),
+        ogImagePathname: String(resolved.ogImagePathname || ""),
+        domain: domainKey,
+        normalizedDomain: domainKey,
+        domainSlug: resolvedDomainSlug,
+        domain_slug: resolvedDomainSlug,
+        pdfFileId: String(resolved.pdfFileId || ""),
+        pdfViewUrl: String(resolved.pdfViewUrl || ""),
+        pdfDownloadUrl: String(resolved.pdfDownloadUrl || ""),
+        blobPathname: String(resolved.blobPathname || ""),
+        source: "backfilled_from_catch_all_route_lookup",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
+  return resolved;
+}
+
+async function handleResolveExistingReportForReports(body: AnyRecord = {}) {
+  const resolved = await findExistingReportByDomainForReports(body);
+
+  return json({
+    success: true,
+    mode: "resolve_existing_report",
+    resolveOnly: true,
+    ...resolved,
+  });
+}
+
 async function handleReportRegister(req: Request) {
   await requireReportRegisterAccess(req);
   const rawBody = await readJson(req);
   const body = rawBody?.report || rawBody;
+
+  if (body?.resolveOnly === true || body?.mode === "resolve_existing_report") {
+    return await handleResolveExistingReportForReports(body || {});
+  }
+
   const report = normalizeReportPayload(body || {});
 
   if (!report.domain && !report.websiteUrl) {
@@ -4878,13 +5196,22 @@ async function handleReportRegister(req: Request) {
   const reportRef = adminDb.collection("audit_reports").doc(report.token);
   const existing = await reportRef.get();
   const existingData = existing.exists ? existing.data() || {} : {};
+  const deleteField = admin.firestore.FieldValue.delete();
+  const normalizedDomain = normalizeDomainKeyForReports(report.domain, report.websiteUrl);
 
   const payload: AnyRecord = {
     token: report.token,
     domainSlug: report.domainSlug,
     domain_slug: report.domainSlug,
     reportUrl: report.reportUrl,
-    domain: report.domain,
+    ogImageUrl: report.ogImageUrl,
+    openGraphImageUrl: report.openGraphImageUrl || report.ogImageUrl,
+    previewImageUrl: report.previewImageUrl || report.ogImageUrl,
+    homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl,
+    ogImagePathname: report.ogImagePathname,
+    domain: normalizedDomain || report.domain,
+    normalizedDomain,
+    normalized_domain: normalizedDomain,
     websiteUrl: report.websiteUrl,
     companyName: report.companyName,
     email: report.email,
@@ -4895,13 +5222,8 @@ async function handleReportRegister(req: Request) {
     proofPoints: report.proofPoints,
     recommendations: report.recommendations,
     problemCards: report.problemCards,
-    businessProblems: report.businessProblems,
     verificationPlan: report.verificationPlan,
-    verification_plan: report.verification_plan,
     websiteSpeed: report.websiteSpeed,
-    website_speed: report.website_speed,
-    ctaInteractionTest: report.ctaInteractionTest,
-    cta_interaction_test: report.cta_interaction_test,
     whatChecked: report.whatChecked,
     auditSnapshotTitle: report.auditSnapshotTitle,
     auditSnapshotQuestions: report.auditSnapshotQuestions,
@@ -4909,16 +5231,8 @@ async function handleReportRegister(req: Request) {
     howToReadTitle: report.howToReadTitle,
     howToReadParagraphs: report.howToReadParagraphs,
     ctaHeadline: report.ctaHeadline,
-    privateReportCopy: report.privateReportCopy,
-    private_report_copy: report.privateReportCopy,
     privateReportVersion: report.privateReportVersion,
     manualAdsTransparency: report.manualAdsTransparency,
-    manual_ads_transparency: report.manual_ads_transparency,
-    manual_ads_checked: report.manual_ads_checked,
-    manual_ads_found: report.manual_ads_found,
-    manual_ads_source: report.manual_ads_source,
-    manual_ads_note: report.manual_ads_note,
-    manual_ads_checked_at: report.manual_ads_checked_at,
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,
@@ -4941,6 +5255,29 @@ async function handleReportRegister(req: Request) {
     viewCount: Number(existingData.viewCount || 0),
     downloadCount: Number(existingData.downloadCount || 0),
     ctaClickCount: Number(existingData.ctaClickCount || 0),
+
+    // Remove old heavy/duplicated Firestore fields from previous versions.
+    privateReportCopy: deleteField,
+    private_report_copy: deleteField,
+    businessProblems: deleteField,
+    business_problems: deleteField,
+    verification_plan: deleteField,
+    website_speed: deleteField,
+    ctaInteractionTest: deleteField,
+    cta_interaction_test: deleteField,
+    what_checked: deleteField,
+    proof_points: deleteField,
+    manual_ads_transparency: deleteField,
+    manual_ads_checked: deleteField,
+    manual_ads_found: deleteField,
+    manual_ads_source: deleteField,
+    manual_ads_note: deleteField,
+    manual_ads_checked_at: deleteField,
+    og_image_url: deleteField,
+    open_graph_image_url: deleteField,
+    preview_image_url: deleteField,
+    homepage_screenshot_url: deleteField,
+    og_image_pathname: deleteField,
   };
 
   if (!existing.exists) {
@@ -4949,12 +5286,41 @@ async function handleReportRegister(req: Request) {
 
   await reportRef.set(payload, { merge: true });
 
+  if (normalizedDomain) {
+    await adminDb.collection("audit_report_domains").doc(normalizedDomain).set(
+      {
+        token: report.token,
+        reportToken: report.token,
+        reportUrl: report.reportUrl,
+        ogImageUrl: report.ogImageUrl || "",
+        openGraphImageUrl: report.openGraphImageUrl || report.ogImageUrl || "",
+        previewImageUrl: report.previewImageUrl || report.ogImageUrl || "",
+        homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
+        ogImagePathname: report.ogImagePathname || "",
+        domain: normalizedDomain,
+        normalizedDomain,
+        normalized_domain: normalizedDomain,
+        domainSlug: report.domainSlug,
+        domain_slug: report.domainSlug,
+        pdfFileId: report.pdfFileId,
+        pdfViewUrl: report.pdfViewUrl,
+        pdfDownloadUrl: report.pdfDownloadUrl,
+        blobPathname: report.blobPathname,
+        source: "catch_all_route_register",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
   if (report.leadId) {
     await adminDb.collection("outreach_leads").doc(report.leadId).set(
       {
         reportToken: report.token,
         reportUrl: report.reportUrl,
         domainSlug: report.domainSlug,
+        ogImageUrl: report.ogImageUrl || "",
+        homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
         pdfFileId: report.pdfFileId,
         pdfViewUrl: report.pdfViewUrl,
         pdfDownloadUrl: report.pdfDownloadUrl,
@@ -4996,6 +5362,11 @@ async function handleReportRegister(req: Request) {
     domainSlug: report.domainSlug,
     domain_slug: report.domainSlug,
     reportUrl: report.reportUrl,
+    ogImageUrl: report.ogImageUrl || "",
+    openGraphImageUrl: report.openGraphImageUrl || report.ogImageUrl || "",
+    previewImageUrl: report.previewImageUrl || report.ogImageUrl || "",
+    homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
+    ogImagePathname: report.ogImagePathname || "",
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,
