@@ -458,6 +458,14 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
   
     await reportRef.set(payload, { merge: true });
 
+    const savedSnap = await reportRef.get();
+    const savedData = savedSnap.exists ? savedSnap.data() || {} : {};
+    logModularReportDebug("after_firestore_set", {
+      saved: pickModularReportDebugFields(savedData || {}),
+      savedKeys: savedData && typeof savedData === "object" ? Object.keys(savedData).sort() : [],
+      hasSavedOgImageUrl: Boolean(savedData?.ogImageUrl),
+    });
+
     const normalizedDomain = normalizeDomainKey(report.domain, report.websiteUrl);
     if (normalizedDomain) {
       await adminDb.collection("audit_report_domains").doc(normalizedDomain).set(
@@ -907,6 +915,8 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       success: true,
       action: "reports/health",
       reportRegisterReady: true,
+      debugVersion: TFP_MODULAR_REPORT_DEBUG_VERSION,
+      debugRoute: "lib/trackflow-api/reports.ts",
       appBaseUrl: appBaseUrl(),
       requiredLocalRegisterUrl: `${appBaseUrl()}/api/trackflow/reports/register`,
       env: {
