@@ -15,6 +15,8 @@ import {
   toMillis,
 } from "./report-normalizers";
 
+const TFP_MODULAR_REPORT_DEBUG_VERSION = "v18.26-og-modular-register-debug-2026-05-23";
+
 type ApiErrorInstance = Error & { status: number };
 type ApiErrorConstructor = new (message: string, status?: number) => ApiErrorInstance;
 
@@ -27,6 +29,34 @@ export type ReportHandlerDeps = {
   patchSheetRowSafely: (rowNumber: number, updates: AnyRecord) => Promise<void>;
   nowDhaka: () => string;
 };
+
+
+function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
+  const raw = value || {};
+  return {
+    token: String(raw.token || raw.reportToken || raw.report_token || ""),
+    domain: String(raw.domain || raw.websiteUrl || raw.website_url || raw.website || ""),
+    domainSlug: String(raw.domainSlug || raw.domain_slug || ""),
+    reportUrl: String(raw.reportUrl || raw.report_url || ""),
+    pdfViewUrl: String(raw.pdfViewUrl || raw.pdf_view_url || raw.blobUrl || raw.blob_url || ""),
+    pdfDownloadUrl: String(raw.pdfDownloadUrl || raw.pdf_download_url || raw.blobDownloadUrl || raw.blob_download_url || ""),
+    blobPathname: String(raw.blobPathname || raw.blob_pathname || raw.pdfFileId || raw.pdf_file_id || ""),
+    ogImageUrl: String(raw.ogImageUrl || raw.og_image_url || ""),
+    openGraphImageUrl: String(raw.openGraphImageUrl || raw.open_graph_image_url || ""),
+    previewImageUrl: String(raw.previewImageUrl || raw.preview_image_url || ""),
+    homepageScreenshotUrl: String(raw.homepageScreenshotUrl || raw.homepage_screenshot_url || ""),
+    ogImagePathname: String(raw.ogImagePathname || raw.og_image_pathname || raw.previewImagePathname || raw.preview_image_pathname || ""),
+  };
+}
+
+function logModularReportDebug(stage: string, details: AnyRecord = {}) {
+  try {
+    console.log("[TFP_MODULAR_REPORT_DEBUG]", JSON.stringify({ version: TFP_MODULAR_REPORT_DEBUG_VERSION, stage, ...details }));
+  } catch {
+    console.log("[TFP_MODULAR_REPORT_DEBUG]", TFP_MODULAR_REPORT_DEBUG_VERSION, stage, details);
+  }
+}
+
 
 export function createReportHandlers(deps: ReportHandlerDeps) {
   const {
@@ -305,11 +335,24 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const rawBody = await readJson(req);
     const body = rawBody?.report || rawBody;
 
+    logModularReportDebug("incoming_request", {
+      rawHasReportWrapper: Boolean(rawBody?.report),
+      rawKeys: rawBody && typeof rawBody === "object" ? Object.keys(rawBody).sort() : [],
+      bodyKeys: body && typeof body === "object" ? Object.keys(body).sort() : [],
+      incoming: pickModularReportDebugFields(body || {}),
+    });
+
     if (body?.resolveOnly === true || body?.mode === "resolve_existing_report") {
+      logModularReportDebug("resolve_only_request", { incoming: pickModularReportDebugFields(body || {}) });
       return await handleResolveExistingReport(body || {});
     }
 
     const report = normalizeReportPayload(body || {});
+
+    logModularReportDebug("normalized_report", {
+      normalized: pickModularReportDebugFields(report || {}),
+      hasOgImageUrl: Boolean(report.ogImageUrl),
+    });
   
     if (!report.domain && !report.websiteUrl) {
       throw new ApiError("domain or websiteUrl is required for report registration", 400);
@@ -510,6 +553,12 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       sheetRowNumber: report.sheetRowNumber,
       sheetUpdated,
       storageProvider: report.storageProvider,
+      debugVersion: TFP_MODULAR_REPORT_DEBUG_VERSION,
+      registerDebug: {
+        incoming: pickModularReportDebugFields(body || {}),
+        normalized: pickModularReportDebugFields(report || {}),
+        saved: pickModularReportDebugFields(savedData || {}),
+      },
     });
   }
 

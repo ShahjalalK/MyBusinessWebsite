@@ -59,6 +59,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const TFP_REPORT_REGISTER_DEBUG_VERSION = "v18.26-og-register-debug-2026-05-23";
+
 type RouteContext = {
   params?: { action?: string[] } | Promise<{ action?: string[] }>;
 };
@@ -5169,16 +5171,125 @@ async function handleResolveExistingReportForReports(body: AnyRecord = {}) {
   });
 }
 
+
+function pickReportRegisterDebugFields(value: AnyRecord = {}): AnyRecord {
+  const raw = value || {};
+  return {
+    token: String(raw.token || raw.reportToken || raw.report_token || ""),
+    domain: String(raw.domain || raw.websiteUrl || raw.website_url || raw.website || ""),
+    domainSlug: String(raw.domainSlug || raw.domain_slug || ""),
+    reportUrl: String(raw.reportUrl || raw.report_url || ""),
+    pdfViewUrl: String(raw.pdfViewUrl || raw.pdf_view_url || raw.blobUrl || raw.blob_url || ""),
+    pdfDownloadUrl: String(raw.pdfDownloadUrl || raw.pdf_download_url || raw.blobDownloadUrl || raw.blob_download_url || ""),
+    blobPathname: String(raw.blobPathname || raw.blob_pathname || raw.pdfFileId || raw.pdf_file_id || ""),
+    ogImageUrl: String(raw.ogImageUrl || raw.og_image_url || ""),
+    openGraphImageUrl: String(raw.openGraphImageUrl || raw.open_graph_image_url || ""),
+    previewImageUrl: String(raw.previewImageUrl || raw.preview_image_url || ""),
+    homepageScreenshotUrl: String(raw.homepageScreenshotUrl || raw.homepage_screenshot_url || ""),
+    ogImagePathname: String(raw.ogImagePathname || raw.og_image_pathname || raw.previewImagePathname || raw.preview_image_pathname || ""),
+    hasPrivateReportCopy: Boolean(raw.privateReportCopy || raw.private_report_copy),
+    hasHeavyDuplicates: Boolean(raw.privateReportCopy || raw.private_report_copy || raw.business_problems || raw.verification_plan || raw.website_speed || raw.manual_ads_transparency),
+  };
+}
+
+function logReportRegisterDebug(stage: string, details: AnyRecord = {}) {
+  try {
+    console.log(
+      "[TFP_REPORT_REGISTER_DEBUG]",
+      JSON.stringify({
+        version: TFP_REPORT_REGISTER_DEBUG_VERSION,
+        stage,
+        ...details,
+      }),
+    );
+  } catch {
+    console.log("[TFP_REPORT_REGISTER_DEBUG]", TFP_REPORT_REGISTER_DEBUG_VERSION, stage, details);
+  }
+}
+
+async function handleReportDebug(req: Request) {
+  await requireReportRegisterAccess(req);
+  const url = new URL(req.url);
+  const token = normalizeReportToken(url.searchParams.get("token") || url.searchParams.get("reportToken") || "");
+  const domainKey = normalizeDomainKeyForReports(
+    url.searchParams.get("domain") || "",
+    url.searchParams.get("websiteUrl") || "",
+  );
+
+  let reportData: AnyRecord | null = null;
+  let reportExists = false;
+  if (token) {
+    const reportSnap = await adminDb.collection("audit_reports").doc(token).get();
+    reportExists = reportSnap.exists;
+    reportData = reportSnap.exists ? reportSnap.data() || {} : null;
+  }
+
+  let domainIndexData: AnyRecord | null = null;
+  let domainIndexExists = false;
+  if (domainKey) {
+    const indexSnap = await adminDb.collection("audit_report_domains").doc(domainKey).get();
+    domainIndexExists = indexSnap.exists;
+    domainIndexData = indexSnap.exists ? indexSnap.data() || {} : null;
+  }
+
+  logReportRegisterDebug("debug_endpoint", {
+    token,
+    domainKey,
+    reportExists,
+    domainIndexExists,
+    report: pickReportRegisterDebugFields(reportData || {}),
+    domainIndex: pickReportRegisterDebugFields(domainIndexData || {}),
+  });
+
+  return json({
+    success: true,
+    action: "reports/debug",
+    debugVersion: TFP_REPORT_REGISTER_DEBUG_VERSION,
+    token,
+    domainKey,
+    reportExists,
+    report: pickReportRegisterDebugFields(reportData || {}),
+    domainIndexExists,
+    domainIndex: pickReportRegisterDebugFields(domainIndexData || {}),
+    rawReportKeys: reportData ? Object.keys(reportData).sort() : [],
+    rawDomainIndexKeys: domainIndexData ? Object.keys(domainIndexData).sort() : [],
+  });
+}
+
+
 async function handleReportRegister(req: Request) {
   await requireReportRegisterAccess(req);
+  const requestUrl = new URL(req.url);
+  const debugRequested =
+    requestUrl.searchParams.get("debug") === "1" ||
+    requestUrl.searchParams.get("debug") === "true";
   const rawBody = await readJson(req);
   const body = rawBody?.report || rawBody;
 
+  logReportRegisterDebug("incoming_request", {
+    path: requestUrl.pathname,
+    debugRequested,
+    rawHasReportWrapper: Boolean(rawBody?.report),
+    rawKeys: rawBody && typeof rawBody === "object" ? Object.keys(rawBody).sort() : [],
+    bodyKeys: body && typeof body === "object" ? Object.keys(body).sort() : [],
+    incoming: pickReportRegisterDebugFields(body || {}),
+  });
+
   if (body?.resolveOnly === true || body?.mode === "resolve_existing_report") {
+    logReportRegisterDebug("resolve_only_request", {
+      incoming: pickReportRegisterDebugFields(body || {}),
+    });
     return await handleResolveExistingReportForReports(body || {});
   }
 
   const report = normalizeReportPayload(body || {});
+
+  logReportRegisterDebug("normalized_report", {
+    normalized: pickReportRegisterDebugFields(report || {}),
+    hasOgImageUrl: Boolean(report.ogImageUrl),
+    hasHomepageScreenshotUrl: Boolean(report.homepageScreenshotUrl),
+    hasPdfViewUrl: Boolean(report.pdfViewUrl),
+  });
 
   if (!report.domain && !report.websiteUrl) {
     throw new ApiError("domain or websiteUrl is required for report registration", 400);
@@ -5284,7 +5395,24 @@ async function handleReportRegister(req: Request) {
     payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
   }
 
+  logReportRegisterDebug("before_firestore_set", {
+    docPath: `audit_reports/${report.token}`,
+    existing: existing.exists,
+    payload: pickReportRegisterDebugFields(payload),
+    deleteHeavyDuplicateFields: true,
+    payloadKeys: Object.keys(payload).sort(),
+  });
+
   await reportRef.set(payload, { merge: true });
+
+  const savedSnap = await reportRef.get();
+  const savedData = savedSnap.exists ? savedSnap.data() || {} : {};
+  logReportRegisterDebug("after_firestore_set", {
+    docPath: `audit_reports/${report.token}`,
+    exists: savedSnap.exists,
+    saved: pickReportRegisterDebugFields(savedData),
+    savedKeys: Object.keys(savedData).sort(),
+  });
 
   if (normalizedDomain) {
     await adminDb.collection("audit_report_domains").doc(normalizedDomain).set(
@@ -5311,6 +5439,17 @@ async function handleReportRegister(req: Request) {
       },
       { merge: true },
     );
+
+    logReportRegisterDebug("after_domain_index_set", {
+      docPath: `audit_report_domains/${normalizedDomain}`,
+      index: {
+        token: report.token,
+        reportUrl: report.reportUrl,
+        ogImageUrl: report.ogImageUrl || "",
+        homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
+        ogImagePathname: report.ogImagePathname || "",
+      },
+    });
   }
 
   if (report.leadId) {
@@ -5354,7 +5493,7 @@ async function handleReportRegister(req: Request) {
     sheetUpdated = true;
   }
 
-  return json({
+  const responsePayload: AnyRecord = {
     success: true,
     message: "Secure report registered successfully.",
     token: report.token,
@@ -5378,7 +5517,20 @@ async function handleReportRegister(req: Request) {
     sheetRowNumber: report.sheetRowNumber,
     sheetUpdated,
     storageProvider: report.storageProvider,
-  });
+    debugVersion: TFP_REPORT_REGISTER_DEBUG_VERSION,
+    registerDebug: {
+      requested: debugRequested,
+      docPath: `audit_reports/${report.token}`,
+      existing: existing.exists,
+      incoming: pickReportRegisterDebugFields(body || {}),
+      normalized: pickReportRegisterDebugFields(report || {}),
+      saved: pickReportRegisterDebugFields(savedData || {}),
+    },
+  };
+
+  logReportRegisterDebug("response", responsePayload.registerDebug);
+
+  return json(responsePayload);
 }
 
 async function getActiveReportByToken(tokenRaw: any) {
@@ -7998,6 +8150,7 @@ async function handleReportHealth(req: Request) {
     success: true,
     action: "reports/health",
     reportRegisterReady: true,
+    debugVersion: TFP_REPORT_REGISTER_DEBUG_VERSION,
     appBaseUrl: appBaseUrl(),
     requiredLocalRegisterUrl: `${appBaseUrl()}/api/trackflow/reports/register`,
     env: {
@@ -8011,6 +8164,7 @@ async function handleReportHealth(req: Request) {
 }
 
 async function handleError(error: any) {
+  console.error("[TFP_REPORT_REGISTER_DEBUG]", JSON.stringify({ version: TFP_REPORT_REGISTER_DEBUG_VERSION, stage: "error", message: error?.message || String(error || "") }));
   console.error("TrackFlow API Error:", error);
   if (error instanceof ApiError) return json({ success: false, error: error.message }, error.status);
   return json({ success: false, error: "Internal Server Error" }, 500);
@@ -8020,6 +8174,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   try {
     const action = await getAction(ctx);
 
+    if (action === "reports/debug") return await handleReportDebug(req);
     if (["reports/register", "report/register", "reports/upsert", "reports/create"].includes(action)) return await handleReportRegister(req);
     if (action === "reports/view") return await handleReportView(req);
     if (action === "send-email") return await handleSendInitial(req);
@@ -8049,6 +8204,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     const action = await getAction(ctx);
 
     if (action === "reports/health") return await handleReportHealth(req);
+    if (action === "reports/debug") return await handleReportDebug(req);
     if (action === "reports/view") return await handleReportView(req);
     if (action === "reports/preview") return await handleReportPreview(req);
     if (action === "reports/download") return await handleReportDownload(req);
