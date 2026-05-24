@@ -246,104 +246,6 @@ export function getObjectCandidate(...values: any[]): AnyRecord {
   return {};
 }
 
-
-const PUBLIC_REPORT_COPY_BLOCKED_KEYS = new Set([
-  "emailcopy",
-  "emailcopyhtml",
-  "emailcopytext",
-  "emaildraft",
-  "emaildrafthtml",
-  "emaildrafttext",
-  "emailmessage",
-  "emailmessages",
-  "emailoutreachcopy",
-  "emailsubject",
-  "emailbody",
-  "linkedincopy",
-  "linkedinmessage",
-  "linkedinmessages",
-  "linkedinmessagecopy",
-  "linkedinoutreachcopy",
-  "outreachcopy",
-  "outreachcopies",
-  "outreachmessage",
-  "outreachmessages",
-  "clientcopycontext",
-  "rawgeminiresponse",
-  "geminirawresponse",
-  "rawauditjson",
-  "rawaudit",
-  "networkrequests",
-  "observedrequests",
-  "allrequests",
-  "requestlogs",
-  "debuglogs",
-  "debug",
-]);
-
-function normalizePublicCopyKey(key: string): string {
-  return String(key || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-}
-
-export function isBlockedPublicReportCopyKey(key: string): boolean {
-  const normalized = normalizePublicCopyKey(key);
-  if (!normalized) return true;
-
-  if (PUBLIC_REPORT_COPY_BLOCKED_KEYS.has(normalized)) return true;
-
-  return (
-    normalized.includes("emailcopy") ||
-    normalized.includes("emaildraft") ||
-    normalized.includes("linkedincopy") ||
-    normalized.includes("linkedinmessage") ||
-    normalized.includes("outreachcopy") ||
-    normalized.includes("outreachmessage") ||
-    normalized.includes("rawgemini") ||
-    normalized.includes("networkrequests") ||
-    normalized.includes("observedrequests") ||
-    normalized.includes("debuglog")
-  );
-}
-
-export function sanitizePublicReportCopyObject(value: any, maxKeys = 40): AnyRecord {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-
-  const output: AnyRecord = {};
-  let count = 0;
-
-  for (const [key, rawValue] of Object.entries(value)) {
-    if (count >= maxKeys) break;
-    if (!key || rawValue === undefined || typeof rawValue === "function" || isBlockedPublicReportCopyKey(key)) continue;
-    if (isBlockedPublicReportCopyKey(key)) continue;
-
-    if (rawValue === null || typeof rawValue === "string" || typeof rawValue === "number" || typeof rawValue === "boolean") {
-      output[key] = rawValue;
-      count += 1;
-      continue;
-    }
-
-    if (Array.isArray(rawValue)) {
-      output[key] = rawValue
-        .slice(0, 12)
-        .map((item) => {
-          if (item === null || typeof item === "string" || typeof item === "number" || typeof item === "boolean") return item;
-          if (item && typeof item === "object" && !Array.isArray(item)) return sanitizePublicReportCopyObject(item, 12);
-          return null;
-        })
-        .filter((item) => item !== null && item !== undefined);
-      count += 1;
-      continue;
-    }
-
-    if (rawValue && typeof rawValue === "object") {
-      output[key] = sanitizePublicReportCopyObject(rawValue, 12);
-      count += 1;
-    }
-  }
-
-  return output;
-}
-
 export function sanitizePlainObject(value: any, maxKeys = 30): AnyRecord {
   /**
    * Firestore-safe public report object sanitizer.
@@ -624,21 +526,8 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     body.homepage_screenshot_pathname,
   );
 
-  const rawSecurePageCopy = getObjectCandidate(
-    body.securePageCopy,
-    body.secure_page_copy,
-    body.privateReportPage,
-    body.private_report_page,
-  );
-  const rawPrivateReportCopy = getObjectCandidate(
-    rawSecurePageCopy,
-    body.privateReportCopy,
-    body.private_report_copy,
-    body.aiPrivateReportCopy,
-    body.ai_private_report_copy,
-  );
-  const privateReportCopy = sanitizePublicReportCopyObject(rawPrivateReportCopy, 40);
-  const privatePage = sanitizePublicReportCopyObject(getObjectCandidate(rawSecurePageCopy, privateReportCopy), 40);
+  const privateReportCopy = getObjectCandidate(body.privateReportCopy, body.private_report_copy, body.aiPrivateReportCopy, body.ai_private_report_copy);
+  const privatePage = getObjectCandidate(body.privateReportPage, body.private_report_page, privateReportCopy);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
 
   const headline = firstCleanString(
@@ -762,6 +651,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   );
 
   const normalizedPrivateReportCopy = {
+    ...privateReportCopy,
     headline,
     subheadline,
     mainFinding,
@@ -830,8 +720,6 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     howToReadParagraphs,
     ctaHeadline: normalizedPrivateReportCopy.ctaHeadline,
     privateReportCopy: normalizedPrivateReportCopy,
-    securePageCopy: normalizedPrivateReportCopy,
-    secure_page_copy: normalizedPrivateReportCopy,
     privateReportVersion: normalizedPrivateReportCopy.privateReportVersion,
     manualAdsTransparency,
     manual_ads_transparency: manualAdsTransparency,
