@@ -1,146 +1,92 @@
-// ============================================================
-// FILE: lib/trackflow-storage/b2.ts
-// Purpose: Backblaze B2 private PDF storage via the S3-compatible API.
-// Notes:
-// - No AWS SDK dependency required.
-// - Keeps PDF files private; secure report preview/download routes stream the file server-side.
-// - Vercel Blob can still be used separately for public OG/LinkedIn preview images.
-// ============================================================
+import { createHash, createHmac } from "node:crypto";
 
-import { createHash, createHmac } from "crypto";
-
-type AnyRecord = Record<string, any>;
+type B2Config = {
+  endpoint: string;
+  bucket: string;
+  keyId: string;
+  applicationKey: string;
+  region: string;
+};
 
 export type B2UploadResult = {
   key: string;
   bucket: string;
-  endpoint: string;
-  storageProvider: "backblaze_b2";
-  contentType: string;
+  etag: string;
   size: number;
-  etag?: string;
 };
 
 export type B2ReadResult = {
   key: string;
-  contentType: string;
-  buffer: Buffer;
-  etag?: string;
-};
-
-type B2Config = {
-  endpoint: string;
-  host: string;
-  region: string;
   bucket: string;
-  keyId: string;
-  applicationKey: string;
+  contentType: string;
+  contentLength: number;
+  etag: string;
+  buffer: Buffer;
 };
 
-const DEFAULT_REGION = "us-west-004";
-const SERVICE = "s3";
-const EMPTY_SHA256 = createHash("sha256").update("").digest("hex");
-
-function clean(value: unknown): string {
-  return String(value || "").trim();
+function clean(value: unknown, fallback = ""): string {
+  const text = String(value ?? "").trim();
+  return text || fallback;
 }
 
-function normalizeEndpoint(value: string): string {
-  const raw = clean(value).replace(/\/+$/, "");
-  if (!raw) return "";
-  return raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+function envValue(...names: string[]): string {
+  for (const name of names) {
+    const value = clean(process.env[name]);
+    if (value) return value;
+  }
+  return "";
 }
 
-function parseRegion(endpoint: string): string {
+function inferRegionFromEndpoint(endpoint: string): string {
   try {
     const host = new URL(endpoint).hostname;
-    const match = host.match(/s3[.-]([a-z0-9-]+)\.backblazeb2\.com$/i);
+    const match = host.match(/^s3[.-]([a-z0-9-]+)\.backblazeb2\.com$/i);
     if (match?.[1]) return match[1];
   } catch {}
-  return clean(process.env.B2_REGION || process.env.BACKBLAZE_B2_REGION || DEFAULT_REGION) || DEFAULT_REGION;
+  return envValue("B2_REGION", "BACKBLAZE_B2_REGION") || "us-west-004";
 }
 
-function requireB2Config(): B2Config {
-  const endpoint = normalizeEndpoint(process.env.B2_ENDPOINT || process.env.BACKBLAZE_B2_ENDPOINT || "");
-  const bucket = clean(process.env.B2_BUCKET_NAME || process.env.BACKBLAZE_B2_BUCKET_NAME || "");
-  const keyId = clean(process.env.B2_KEY_ID || process.env.BACKBLAZE_B2_KEY_ID || "");
-  const applicationKey = clean(process.env.B2_APPLICATION_KEY || process.env.BACKBLAZE_B2_APPLICATION_KEY || "");
+function getB2Config(): B2Config {
+  const endpoint = envValue("B2_ENDPOINT", "BACKBLAZE_B2_ENDPOINT").replace(/\/+$/, "");
+  const bucket = envValue("B2_BUCKET_NAME", "BACKBLAZE_B2_BUCKET_NAME");
+  const keyId = envValue("B2_KEY_ID", "BACKBLAZE_B2_KEY_ID", "B2_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID");
+  const applicationKey = envValue(
+    "B2_APPLICATION_KEY",
+    "BACKBLAZE_B2_APPLICATION_KEY",
+    "B2_SECRET_ACCESS_KEY",
+    "AWS_SECRET_ACCESS_KEY",
+  );
 
-  const missing = [
-    !endpoint ? "B2_ENDPOINT" : "",
-    !bucket ? "B2_BUCKET_NAME" : "",
-    !keyId ? "B2_KEY_ID" : "",
-    !applicationKey ? "B2_APPLICATION_KEY" : "",
-  ].filter(Boolean);
+  if (!endpoint) throw new Error("Missing B2_ENDPOINT. Example: https://s3.us-west-004.backblazeb2.com");
+  if (!bucket) throw new Error("Missing B2_BUCKET_NAME.");
+  if (!keyId) throw new Error("Missing B2_KEY_ID.");
+  if (!applicationKey) throw new Error("Missing B2_APPLICATION_KEY.");
 
-  if (missing.length) {
-    throw new Error(`Missing Backblaze B2 ENV: ${missing.join(", ")}`);
-  }
-
-  const url = new URL(endpoint);
   return {
     endpoint,
-    host: url.host,
-    region: parseRegion(endpoint),
     bucket,
     keyId,
     applicationKey,
+    region: inferRegionFromEndpoint(endpoint),
   };
 }
 
-export function isB2Configured(): boolean {
-  return Boolean(
-    clean(process.env.B2_ENDPOINT || process.env.BACKBLAZE_B2_ENDPOINT || "") &&
-      clean(process.env.B2_BUCKET_NAME || process.env.BACKBLAZE_B2_BUCKET_NAME || "") &&
-      clean(process.env.B2_KEY_ID || process.env.BACKBLAZE_B2_KEY_ID || "") &&
-      clean(process.env.B2_APPLICATION_KEY || process.env.BACKBLAZE_B2_APPLICATION_KEY || ""),
-  );
+function sha256Hex(value: Buffer | string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
-export function getB2BucketName(): string {
-  return requireB2Config().bucket;
+function hmac(key: Buffer | string, value: string): Buffer {
+  return createHmac("sha256", key).update(value).digest();
 }
 
-export function sanitizeB2Key(value: unknown): string {
-  return clean(value)
-    .replace(/^\/+/, "")
-    .replace(/\.{2,}/g, ".")
-    .replace(/[\u0000-\u001F\u007F]/g, "")
-    .slice(0, 900);
+function signingKey(secret: string, dateStamp: string, region: string): Buffer {
+  const kDate = hmac(`AWS4${secret}`, dateStamp);
+  const kRegion = hmac(kDate, region);
+  const kService = hmac(kRegion, "s3");
+  return hmac(kService, "aws4_request");
 }
 
-export function buildReportPdfB2Key(input: { domainSlug: string; token: string }): string {
-  const domainSlug = clean(input.domainSlug || "website")
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "website";
-  const token = clean(input.token).replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 96);
-  if (!token) throw new Error("Report token is required before building a B2 PDF key.");
-  return `reports/${domainSlug}/${token}/audit-report.pdf`;
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-}
-
-function canonicalUri(bucket: string, key: string): string {
-  return `/${encodePathSegment(bucket)}/${sanitizeB2Key(key).split("/").map(encodePathSegment).join("/")}`;
-}
-
-function hashHex(data: Buffer | string): string {
-  return createHash("sha256").update(data).digest("hex");
-}
-
-function hmac(key: Buffer | string, data: string): Buffer {
-  return createHmac("sha256", key).update(data).digest();
-}
-
-function hmacHex(key: Buffer | string, data: string): string {
-  return createHmac("sha256", key).update(data).digest("hex");
-}
-
-function amzDates(date = new Date()) {
+function amzDateParts(date = new Date()): { amzDate: string; dateStamp: string } {
   const iso = date.toISOString().replace(/[:-]|\.\d{3}/g, "");
   return {
     amzDate: iso,
@@ -148,127 +94,219 @@ function amzDates(date = new Date()) {
   };
 }
 
-function signingKey(secret: string, dateStamp: string, region: string): Buffer {
-  const kDate = hmac(`AWS4${secret}`, dateStamp);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, SERVICE);
-  return hmac(kService, "aws4_request");
+function encodeS3Key(key: string): string {
+  return key
+    .split("/")
+    .map((part) => encodeURIComponent(part).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`))
+    .join("/");
 }
 
-async function signedB2Fetch({
-  method,
-  key,
-  body,
-  contentType,
-  extraHeaders = {},
-}: {
-  method: "GET" | "PUT" | "DELETE";
-  key: string;
-  body?: Buffer;
-  contentType?: string;
-  extraHeaders?: AnyRecord;
-}): Promise<Response> {
-  const config = requireB2Config();
-  const safeKey = sanitizeB2Key(key);
-  if (!safeKey) throw new Error("B2 object key is required.");
+function normalizeObjectKey(key: string): string {
+  const cleaned = clean(key)
+    .replace(/\\/g, "/")
+    .replace(/^\/+/g, "")
+    .replace(/\/+/g, "/");
 
-  const payloadHash = body ? hashHex(body) : EMPTY_SHA256;
-  const { amzDate, dateStamp } = amzDates();
+  if (!cleaned) throw new Error("B2 object key is required.");
+  if (cleaned.includes("..")) throw new Error("Unsafe B2 object key.");
+  return cleaned;
+}
+
+function signedHeadersFrom(headers: Record<string, string>): string {
+  return Object.keys(headers)
+    .map((name) => name.toLowerCase())
+    .sort()
+    .join(";");
+}
+
+function canonicalHeadersFrom(headers: Record<string, string>): string {
+  return Object.entries(headers)
+    .map(([name, value]) => [name.toLowerCase(), String(value).trim().replace(/\s+/g, " ")] as const)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${name}:${value}\n`)
+    .join("");
+}
+
+function buildSignedRequest(params: {
+  method: "GET" | "PUT" | "DELETE" | "HEAD";
+  key: string;
+  contentType?: string;
+  payloadHash?: string;
+  extraHeaders?: Record<string, string>;
+}): { url: string; headers: Record<string, string>; bucket: string } {
+  const config = getB2Config();
+  const key = normalizeObjectKey(params.key);
+  const endpoint = new URL(config.endpoint);
+  const canonicalUri = `/${encodeURIComponent(config.bucket)}/${encodeS3Key(key)}`;
+  const url = `${config.endpoint}${canonicalUri}`;
+  const { amzDate, dateStamp } = amzDateParts();
+  const payloadHash = params.payloadHash || "UNSIGNED-PAYLOAD";
 
   const headers: Record<string, string> = {
-    host: config.host,
+    host: endpoint.host,
     "x-amz-content-sha256": payloadHash,
     "x-amz-date": amzDate,
-    ...Object.entries(extraHeaders).reduce<Record<string, string>>((acc, [rawKey, rawValue]) => {
-      const headerName = String(rawKey || "").trim().toLowerCase();
-      const headerValue = String(rawValue || "").trim();
-      if (headerName && headerValue) acc[headerName] = headerValue;
-      return acc;
-    }, {}),
+    ...(params.contentType ? { "content-type": params.contentType } : {}),
+    ...(params.extraHeaders || {}),
   };
 
-  if (contentType) headers["content-type"] = contentType;
+  const signedHeaders = signedHeadersFrom(headers);
+  const canonicalHeaders = canonicalHeadersFrom(headers);
+  const canonicalRequest = [
+    params.method,
+    canonicalUri,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
 
-  const signedHeaderNames = Object.keys(headers).sort();
-  const canonicalHeaders = signedHeaderNames.map((name) => `${name}:${headers[name].replace(/\s+/g, " ").trim()}\n`).join("");
-  const signedHeaders = signedHeaderNames.join(";");
-  const uri = canonicalUri(config.bucket, safeKey);
-  const credentialScope = `${dateStamp}/${config.region}/${SERVICE}/aws4_request`;
-  const canonicalRequest = [method, uri, "", canonicalHeaders, signedHeaders, payloadHash].join("\n");
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, hashHex(canonicalRequest)].join("\n");
-  const signature = hmacHex(signingKey(config.applicationKey, dateStamp, config.region), stringToSign);
+  const algorithm = "AWS4-HMAC-SHA256";
+  const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`;
+  const stringToSign = [
+    algorithm,
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
 
-  const authorization = `AWS4-HMAC-SHA256 Credential=${config.keyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-  const url = `${config.endpoint}${uri}`;
+  const signature = createHmac("sha256", signingKey(config.applicationKey, dateStamp, config.region))
+    .update(stringToSign)
+    .digest("hex");
 
-  return fetch(url, {
-    method,
-    cache: "no-store",
-    headers: {
-      ...headers,
-      authorization,
-    },
-    ...(body ? { body: new Uint8Array(body) } : {}),
-  });
+  headers.authorization = `${algorithm} Credential=${config.keyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return { url, headers, bucket: config.bucket };
 }
 
-export async function uploadPdfToB2(input: { key: string; buffer: Buffer; filename?: string }): Promise<B2UploadResult> {
-  const key = sanitizeB2Key(input.key);
-  if (!Buffer.isBuffer(input.buffer) || input.buffer.byteLength < 5) throw new Error("PDF buffer is empty.");
-  if (input.buffer.subarray(0, 5).toString("utf8") !== "%PDF-") throw new Error("Only valid PDF files can be uploaded to B2.");
+function buildContentDisposition(filename?: string): string {
+  const cleanName = clean(filename, "TrackFlow-Audit-Report.pdf")
+    .replace(/[\r\n"]/g, "")
+    .slice(0, 180) || "TrackFlow-Audit-Report.pdf";
 
-  const response = await signedB2Fetch({
+  return `inline; filename="${cleanName}"`;
+}
+
+export function buildReportPdfB2Key(input: { domainSlug?: string; token: string; filename?: string }): string {
+  const domainSlug = clean(input.domainSlug, "website")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 96) || "website";
+
+  const token = clean(input.token)
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 96);
+
+  if (!token) throw new Error("Report token is required to build a B2 PDF key.");
+
+  return `reports/${domainSlug}/${token}/pdf/audit-report.pdf`;
+}
+
+export async function uploadPdfToB2(input: {
+  key: string;
+  buffer: Buffer | ArrayBuffer | Uint8Array;
+  filename?: string;
+}): Promise<B2UploadResult> {
+  const buffer = Buffer.isBuffer(input.buffer) ? input.buffer : Buffer.from(input.buffer);
+  if (buffer.byteLength < 500) throw new Error("PDF buffer is too small to upload to B2.");
+  if (buffer.subarray(0, 5).toString("utf8") !== "%PDF-") {
+    throw new Error("Refusing to upload non-PDF content to B2.");
+  }
+
+  const payloadHash = sha256Hex(buffer);
+  const signed = buildSignedRequest({
     method: "PUT",
-    key,
-    body: input.buffer,
+    key: input.key,
     contentType: "application/pdf",
+    payloadHash,
     extraHeaders: {
-      "x-amz-meta-trackflow-filename": clean(input.filename || "trackflow-report.pdf").slice(0, 180),
+      "content-disposition": buildContentDisposition(input.filename),
     },
+  });
+
+  const response = await fetch(signed.url, {
+    method: "PUT",
+    headers: signed.headers,
+    body: buffer,
   });
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`Backblaze B2 PDF upload failed (${response.status}). ${text.slice(0, 300)}`.trim());
+    throw new Error(`Backblaze B2 PDF upload failed (${response.status}): ${text.slice(0, 500)}`);
   }
 
   return {
-    key,
-    bucket: getB2BucketName(),
-    endpoint: requireB2Config().endpoint,
-    storageProvider: "backblaze_b2",
-    contentType: "application/pdf",
-    size: input.buffer.byteLength,
-    etag: clean(response.headers.get("etag") || "").replace(/^\"|\"$/g, ""),
+    key: normalizeObjectKey(input.key),
+    bucket: signed.bucket,
+    etag: response.headers.get("etag")?.replace(/"/g, "") || "",
+    size: buffer.byteLength,
   };
 }
 
-export async function readPdfFromB2(keyInput: unknown): Promise<B2ReadResult> {
-  const key = sanitizeB2Key(keyInput);
-  if (!key) throw new Error("B2 PDF key is missing.");
+export async function readB2Object(key: string): Promise<B2ReadResult> {
+  const objectKey = normalizeObjectKey(key);
+  const signed = buildSignedRequest({
+    method: "GET",
+    key: objectKey,
+  });
 
-  const response = await signedB2Fetch({ method: "GET", key });
+  const response = await fetch(signed.url, {
+    method: "GET",
+    cache: "no-store",
+    headers: signed.headers,
+  });
+
   if (!response.ok) {
-    throw new Error(`Backblaze B2 PDF fetch failed (${response.status}).`);
+    const text = await response.text().catch(() => "");
+    throw new Error(`Backblaze B2 object read failed (${response.status}): ${text.slice(0, 500)}`);
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.subarray(0, 5).toString("utf8") !== "%PDF-") {
-    throw new Error("Backblaze B2 object is not a valid PDF.");
-  }
 
   return {
-    key,
-    contentType: response.headers.get("content-type") || "application/pdf",
+    key: objectKey,
+    bucket: signed.bucket,
+    contentType: response.headers.get("content-type") || "application/octet-stream",
+    contentLength: Number(response.headers.get("content-length") || buffer.byteLength || 0),
+    etag: response.headers.get("etag")?.replace(/"/g, "") || "",
     buffer,
-    etag: clean(response.headers.get("etag") || "").replace(/^\"|\"$/g, ""),
   };
 }
 
-export async function deleteB2Object(keyInput: unknown): Promise<boolean> {
-  const key = sanitizeB2Key(keyInput);
-  if (!key || !isB2Configured()) return false;
+export async function readPdfFromB2(key: string): Promise<B2ReadResult> {
+  const object = await readB2Object(key);
+  if (object.buffer.subarray(0, 5).toString("utf8") !== "%PDF-") {
+    throw new Error("B2 object is not a valid PDF.");
+  }
+  return {
+    ...object,
+    contentType: "application/pdf",
+  };
+}
 
-  const response = await signedB2Fetch({ method: "DELETE", key });
-  return response.ok || response.status === 404;
+export async function deleteB2Object(key: string): Promise<boolean> {
+  const objectKey = normalizeObjectKey(key);
+  const signed = buildSignedRequest({
+    method: "DELETE",
+    key: objectKey,
+  });
+
+  const response = await fetch(signed.url, {
+    method: "DELETE",
+    headers: signed.headers,
+  });
+
+  if (response.status === 404) return false;
+  if (!response.ok && response.status !== 204) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Backblaze B2 object delete failed (${response.status}): ${text.slice(0, 500)}`);
+  }
+
+  return true;
+}
+
+export async function deletePdfFromB2(key: string): Promise<boolean> {
+  return deleteB2Object(key);
 }

@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.71-intent-safe-chat-answer-engine
+Version: v18.73-trackflow-api-modularization-stage-1
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -39,9 +39,10 @@ Local dashboard / lead list
 → Network evidence + screenshot evidence
 → Client-friendly PDF generated locally
 → Optional Gemini polish / safe copy builder
-→ Next.js Blob export route fetches PDF from Python
-→ PDF + OG image + preview image uploaded to Vercel Blob
-→ Vercel /api/trackflow/reports/register saves slim report data in Firestore
+→ Next.js export route fetches PDF from Python
+→ PDF uploaded to private Backblaze B2 through the Next.js storage helper
+→ OG / LinkedIn preview image stays on Vercel Blob
+→ Vercel /api/trackflow/reports/register saves slim report data, B2 PDF keys, and Blob image URLs in Firestore
 → Client opens /tracking-review/{domainSlug}/{token}
 → Optional report-aware Gemini assistant answers secure-page questions from saved report context
 → LinkedIn/email outreach sends secure report URL, not direct PDF URL
@@ -116,7 +117,11 @@ reportToken
 reportUrl
 pdfViewUrl
 pdfDownloadUrl
-blobPathname
+pdfStorageProvider / storageProvider
+pdfB2Key / b2Key / pdfObjectKey
+pdfBucket if needed for debugging
+pdfExpiresAt
+blobPathname for compatibility or OG/preview image pathname
 ogImageUrl / previewImageUrl
 homepageScreenshotUrl if needed
 domain / domainSlug
@@ -134,6 +139,8 @@ email_draft
 rawGeminiResponse
 raw network debug data
 full audit JSON unless explicitly needed
+Backblaze B2 credentials
+private B2 direct signed URLs unless intentionally short-lived
 ```
 
 
@@ -303,6 +310,95 @@ lib/trackflow-ai/report-chat.ts
 
 app/api/trackflow/report-chat/route.ts
 → still uses deterministic answers first, then Gemini if needed
+```
+
+
+### 3.15 Hybrid PDF / OG Storage Rule
+
+The current report-storage architecture is hybrid:
+
+```text
+PDF report files
+→ private Backblaze B2 bucket
+
+OG / LinkedIn preview images
+→ Vercel Blob public URL
+
+Secure report metadata
+→ Firestore audit_reports/{token}
+
+Secure report chatbot history
+→ Supabase when configured
+```
+
+Important decisions:
+
+```text
+PDF files should no longer be stored in Vercel Blob by default.
+PDF files are uploaded from the local Next.js export route to a private Backblaze B2 bucket.
+The B2 object key is saved in Firestore; B2 credentials are never saved in Firestore or exposed to clients.
+The secure page still uses /api/trackflow/reports/preview?token=... and /api/trackflow/reports/download?token=...
+The preview/download routes stream the PDF server-side from B2, so the client never sees the private B2 object URL.
+OG/preview images remain on Vercel Blob because LinkedIn/Facebook crawlers need a public image URL.
+The secure page page.tsx does not need to know whether the PDF is stored in B2 or Blob because it already uses internal preview/download routes.
+```
+
+Local/production placement rule:
+
+```text
+lib/trackflow-storage/b2.ts must exist inside the Next.js project root.
+Do not place this helper inside python-backend/.
+The local dashboard Next.js app needs B2 env values to upload PDFs.
+The Vercel production app needs the same B2 env values to preview/download PDFs from the secure page.
+```
+
+Future cleanup rule:
+
+```text
+Cron cleanup is intentionally separate and should be added later.
+A future cron should delete expired B2 PDFs, optionally delete Vercel Blob preview images, optionally delete Supabase chat logs, and then mark cleanup status in Firestore.
+```
+
+
+### 3.16 TrackFlow API Modularization Rule
+
+The catch-all TrackFlow API route is being split gradually so email automation, cleanup, report hosting, storage, and shared helpers do not remain in one giant file.
+
+Current stage-1 structure:
+
+```text
+app/api/trackflow/[...action]/route.ts
+→ still owns request dispatch and existing route behavior
+
+lib/trackflow-api/core.ts
+→ ApiError, json/html responses, env/readJson helpers, time/url/html helpers, follow-up content validation
+
+lib/trackflow-api/security.ts
+→ requireAdmin, requireCronSecret, requireWebhookSecret, unsubscribe token/url helpers
+
+lib/trackflow-email/sender-selection.ts
+→ verified sender selection and sender normalization
+
+lib/trackflow-email/contact-memory.ts
+→ contact cooldown/memory warning lookup
+
+lib/trackflow-email/suppression.ts
+→ suppression-list read/write helpers
+
+lib/trackflow-email/email-events.ts
+→ lightweight raw email event logging policy
+
+lib/trackflow-storage/b2.ts
+→ private Backblaze B2 PDF upload/read helpers
+```
+
+Important decisions:
+
+```text
+Keep route behavior and response shape unchanged while splitting helpers.
+Do not split dashboard page.tsx until backend route helpers are stable.
+Do not create one giant database-manager file; use small modules by responsibility.
+The route should become a thin dispatcher over time, but only in safe small patches.
 ```
 
 
@@ -955,15 +1051,18 @@ Local dashboard export route.
 Owns:
 
 - fetching PDF from Python
-- uploading PDF to Vercel Blob
+- uploading PDF to private Backblaze B2
 - creating/using OG card / preview image
-- optionally uploading homepage screenshot
-- registering secure report payload
+- uploading OG/LinkedIn preview image to Vercel Blob
+- optionally using homepage screenshot as OG card source
+- registering secure report payload with B2 PDF keys and Blob preview URLs
 - optional Google Sheet update
 
 Use this file when:
 
-- PDF upload to Blob fails
+- PDF upload to Backblaze B2 fails
+- B2 env values are missing in the local Next.js dashboard app
+- preview/OG image upload to Vercel Blob fails
 - preview/OG image is missing
 - secure page register payload is wrong
 - LinkedIn/Facebook preview image is wrong
@@ -981,7 +1080,8 @@ Owns:
 - safe report URL creation
 - Firestore-safe payload shape
 - PDF field aliases
-- Blob/Drive field aliases
+- Backblaze B2 PDF key aliases
+- Blob/Drive legacy field aliases
 - slim storage whitelist
 - remove/block raw email/LinkedIn/Gemini/debug fields
 
@@ -989,6 +1089,7 @@ Use this file when:
 
 - Firestore stores too much data
 - secure page data shape is wrong
+- B2 PDF key/provider fields are missing
 - `ogImageUrl`, `homepageScreenshotUrl`, `previewImageUrl`, `ogImagePathname` missing
 - PDF URL aliases missing
 - email/LinkedIn copy leaks into Firestore
@@ -1004,6 +1105,7 @@ Owns:
 - health handler
 - report view beacon
 - PDF preview/download tracking
+- B2-backed PDF preview/download streaming when report storage provider is Backblaze B2
 - CTA click tracking
 - writes to:
   - `audit_reports/{token}`
@@ -1026,14 +1128,30 @@ Main catch-all API dispatcher.
 Owns:
 
 - dispatching `/api/trackflow/...` actions
-- email automation actions
-- followups
-- webhooks
-- unsubscribe
-- report register catch-all
-- cleanup
-- health
-- legacy logic not yet split
+- keeping existing public API paths stable
+- calling email automation handlers
+- calling followup/cron handlers
+- calling webhook/unsubscribe handlers
+- calling report register/preview/download handlers
+- calling cleanup/health handlers
+
+Stage-1 extracted helper modules:
+
+```text
+lib/trackflow-api/core.ts
+lib/trackflow-api/security.ts
+lib/trackflow-email/sender-selection.ts
+lib/trackflow-email/contact-memory.ts
+lib/trackflow-email/suppression.ts
+lib/trackflow-email/email-events.ts
+```
+
+Long-term direction:
+
+```text
+route.ts should become a thin dispatcher.
+Email send/followups/webhooks/sheet/cleanup/report handlers should move out in small safe patches.
+```
 
 Use this file when:
 
@@ -1180,6 +1298,31 @@ Owns:
 - indexes for report token and session lookup
 - RLS enabled; inserts should use server-side service role only
 
+### 6.12 `lib/trackflow-storage/b2.ts`
+
+Next.js server-side Backblaze B2 helper.
+
+Owns:
+
+- reading B2 env values from the Next.js runtime
+- creating stable report PDF object keys
+- uploading PDF buffers to private Backblaze B2 through the S3-compatible API
+- returning the B2 key, bucket, size, and ETag used by the export/register flow
+
+Use this file when:
+
+- Next.js cannot resolve `@/lib/trackflow-storage/b2`
+- PDF upload to B2 fails
+- B2 endpoint/bucket/key/application key env values are missing
+- report PDF object key/path format needs changing
+
+Important placement rule:
+
+```text
+This helper belongs in the Next.js project root at lib/trackflow-storage/b2.ts.
+It does not belong inside python-backend/.
+```
+
 ### 6.6 `app/api/export/sheet/route.ts`
 
 Google Sheet queue/staging bridge.
@@ -1226,6 +1369,10 @@ normalizedDomain
 pdfViewUrl
 pdfDownloadUrl
 pdfFileId
+pdfStorageProvider / storageProvider
+pdfB2Key / b2Key / pdfObjectKey
+pdfBucket if needed
+pdfExpiresAt
 blobPathname
 ogImageUrl
 openGraphImageUrl
@@ -1270,7 +1417,9 @@ If Gemini quota/rate limit is reached, disable chat input and show manual verifi
 Storage policy:
 
 ```text
-PDF + OG image + secure page minimum fields are enough.
+PDF files should be stored in private Backblaze B2.
+OG / LinkedIn preview images should stay in Vercel Blob unless a future public-image strategy replaces it.
+Firestore should store only secure report metadata, B2 keys, and public preview image URLs.
 Homepage screenshot should only be stored when needed for OG card/PDF/secure page.
 Email/LinkedIn text can be generated in dashboard but does not need Firestore.
 ```
@@ -1295,8 +1444,18 @@ AUDIT_MAX_CONCURRENT_AUDITS=2
 
 ```env
 NEXT_PUBLIC_AUDIT_API_URL=http://127.0.0.1:8000
+
+# Vercel Blob is still used for public OG / LinkedIn preview images.
 BLOB_READ_WRITE_TOKEN=...
 BLOB_STORE_ID=...
+
+# Backblaze B2 is used for private PDF report storage.
+B2_ENDPOINT=https://s3.<region>.backblazeb2.com
+B2_BUCKET_NAME=trackflow-reports
+B2_KEY_ID=...
+B2_APPLICATION_KEY=...
+B2_REPORT_RETENTION_DAYS=45
+
 TRACKFLOW_REPORT_REGISTER_URL=https://trackflowpro.com/api/trackflow/reports/register
 TRACKFLOW_REPORT_REGISTER_SECRET=same-value-as-vercel-REPORT_REGISTER_SECRET
 TRACKFLOW_APP_URL=https://trackflowpro.com
@@ -1330,6 +1489,13 @@ GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-2.5-flash
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
+
+# Private PDF preview/download from Backblaze B2
+B2_ENDPOINT=https://s3.<region>.backblazeb2.com
+B2_BUCKET_NAME=trackflow-reports
+B2_KEY_ID=...
+B2_APPLICATION_KEY=...
+B2_REPORT_RETENTION_DAYS=45
 ```
 
 ### 8.4 Google Sheet / Service Account
@@ -1411,7 +1577,7 @@ Before sending to a client:
 | Secure page does not open | `reports.ts`, `report-normalizers.ts`, `[domainSlug]/[token]/page.tsx`, Firestore document screenshot |
 | Secure page register fails | `app/api/export/blob-reports/route.ts`, `lib/trackflow-api/reports.ts`, `app/api/trackflow/[...action]/route.ts` |
 | Firestore stores too much data | `report-normalizers.ts`, `reports.ts` |
-| Blob PDF/OG upload fails | `app/api/export/blob-reports/route.ts`, env variables |
+| B2 PDF upload or Blob OG upload fails | `app/api/export/blob-reports/route.ts`, `lib/trackflow-storage/b2.ts`, env variables |
 | LinkedIn preview image missing | `page.tsx` metadata, `reports.ts`, `report-normalizers.ts`, Blob preview fields |
 | LinkedIn/manual audit button missing | `LeadList.tsx`, `LinkedInAuditPanel.tsx` |
 | Row-level primary goal/visual focus issue | `LeadRow.tsx`, `LeadList.tsx`, `linkedinAuditOptions.ts`, `types.ts` |
@@ -1558,6 +1724,75 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.73 TrackFlow API Modularization Stage 1
+
+The first backend modularization patch moved shared helper logic out of the giant `app/api/trackflow/[...action]/route.ts` file without changing route behavior or dashboard UI.
+
+Changed files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-api/core.ts
+lib/trackflow-api/security.ts
+lib/trackflow-email/sender-selection.ts
+lib/trackflow-email/contact-memory.ts
+lib/trackflow-email/suppression.ts
+lib/trackflow-email/email-events.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The catch-all route still owns dispatch and existing route paths.
+Shared response/env/time/url/html helpers now live in lib/trackflow-api/core.ts.
+Admin/cron/webhook/unsubscribe security helpers now live in lib/trackflow-api/security.ts.
+Sender selection, contact memory, suppression, and email event logging are separated under lib/trackflow-email/.
+Dashboard UI was intentionally not touched in this patch.
+No email automation behavior, Firestore field shape, Sheet column shape, Brevo behavior, report register behavior, or B2/Blob storage behavior should change.
+```
+
+### v18.72 Backblaze B2 Private PDF + Vercel Blob OG Hybrid Patch
+
+PDF storage was moved from Vercel Blob to private Backblaze B2 while keeping OG/LinkedIn preview images on Vercel Blob.
+
+Changed files:
+
+```text
+app/api/export/blob-reports/route.ts
+lib/trackflow-storage/b2.ts
+lib/trackflow-api/report-normalizers.ts
+lib/trackflow-api/reports.ts
+app/api/trackflow/[...action]/route.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+PDF reports are uploaded to private Backblaze B2 from the local Next.js export route.
+OG/LinkedIn preview images remain on Vercel Blob because social crawlers need public image URLs.
+Firestore stores the B2 object key/provider metadata and public Blob preview URLs, not B2 credentials.
+The secure report page continues to use internal preview/download routes, so page.tsx does not need direct B2 knowledge.
+The B2 helper file must live in the Next.js app root at lib/trackflow-storage/b2.ts, not inside python-backend/.
+The local Next.js dashboard app and the Vercel production app both need B2 env values.
+Cron cleanup was intentionally deferred for a later patch.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+Create a test secure report
+Confirm PDF uploads to B2
+Confirm OG/preview image uploads to Vercel Blob
+Confirm secure page PDF iframe preview works
+Confirm Open PDF and Download PDF work
+Confirm Firestore stores B2 key/provider fields and Blob preview URL fields
+Confirm LinkedIn preview image still resolves from the public Blob URL
+```
 
 ### v18.71 Intent-Safe Chat Answer Engine Patch
 
@@ -1754,6 +1989,13 @@ The route may add formatting guidance to Gemini, but evidence-safe validation an
    - no chatbot history in `audit_reports`; use Supabase for chat logs if needed.
 
 6. README should be updated with every future patch.
+
+7. Future cleanup should be added in a separate patch:
+   - daily or scheduled cron route.
+   - delete expired B2 PDFs after the configured retention window.
+   - optionally delete Blob OG images.
+   - optionally delete Supabase chat history.
+   - mark cleanup status in Firestore instead of blindly deleting the report metadata.
 
 ---
 

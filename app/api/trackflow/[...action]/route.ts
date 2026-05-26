@@ -1,19 +1,51 @@
 import { NextResponse } from "next/server";
-import { createHmac, timingSafeEqual, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import { adminDb } from "@/lib/firebase-admin";
 import admin from "firebase-admin";
 import { google } from "googleapis";
 import { z } from "zod";
 import { readPdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import {
+  ApiError,
+  buildComplianceAddressLine,
+  emailDocId,
+  env,
+  escapeHtml,
+  getEngagementMinuteOfDayUtc,
+  htmlResponse,
+  isValidEmail,
+  json,
+  normalizeEmail,
+  readJson,
+  type RouteContext,
+  safeEqual,
+  sanitizeOptionalUrl,
+  scheduleBeforeEngagementTime,
+  shiftMinuteOfDay,
+  stripDangerousHtml,
+  timestampFromAny,
+  todayKey,
+  toMillis,
+  validateFollowupContent,
+} from "@/lib/trackflow-api/core";
+import {
+  requireAdmin,
+  requireCronSecret,
+  requireWebhookSecret,
+  unsubscribeToken,
+  unsubscribeUrl,
+} from "@/lib/trackflow-api/security";
+import { getActiveContactMemoryWarning } from "@/lib/trackflow-email/contact-memory";
+import { addEmailEvent } from "@/lib/trackflow-email/email-events";
+import { getSenderFromBody, getSenderFromLead, mapSharedSender } from "@/lib/trackflow-email/sender-selection";
+import { addSuppression, isSuppressed } from "@/lib/trackflow-email/suppression";
+import {
   BRAND_WEBSITE,
   BRAND_WEBSITE_LABEL,
   MAIN_INBOX_EMAIL,
   MAIN_INBOX_NAME,
   getDefaultSender,
-  getSenderByEmail,
   getSenderById,
-  toApiSenderConfig,
 } from "@/lib/senders";
 
 /**
@@ -62,9 +94,6 @@ export const dynamic = "force-dynamic";
 
 const TFP_REPORT_REGISTER_DEBUG_VERSION = "v18.26-og-register-debug-2026-05-23";
 
-type RouteContext = {
-  params?: { action?: string[] } | Promise<{ action?: string[] }>;
-};
 
 type SenderConfig = {
   id?: string;
@@ -146,13 +175,6 @@ type FirestoreQueryRef = any;
 type FirestoreDocSnap = any;
 type FirestoreQueryDocSnap = any;
 
-class ApiError extends Error {
-  status: number;
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
 
 /**
  * Sender is verified server-side from app/config/senders.ts.
@@ -367,390 +389,8 @@ const SendInitialBodySchema = z
     path: ["selectedService"],
   });
 
-function json(payload: any, status = 200) {
-  return NextResponse.json(payload, { status });
-}
-
-function htmlResponse(html: string, status = 200) {
-  return new NextResponse(html, {
-    status,
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
-}
-
-async function getAction(ctx: RouteContext): Promise<string> {
-  const maybeParams: any = ctx?.params;
-  const params = typeof maybeParams?.then === "function" ? await maybeParams : maybeParams;
-  return (params?.action || []).join("/").replace(/^\/+|\/+$/g, "").toLowerCase();
-}
-
-async function readJson(req: Request) {
-  try {
-    return await req.json();
-  } catch {
-    return {};
-  }
-}
-
-function env(name: string, required = true): string {
-  const value = process.env[name];
-  if (required && !value) throw new ApiError(`Missing ENV: ${name}`, 500);
-  return value || "";
-}
-
-function normalizeEmail(email: string): string {
-  return String(email || "").trim().toLowerCase();
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function emailDocId(emailLower: string): string {
-  return encodeURIComponent(emailLower).replace(/\./g, "%2E");
-}
-
-function toMillis(value: any): number {
-  if (!value) return 0;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (typeof value.seconds === "number") return value.seconds * 1000;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function timestampFromAny(value: any): any | null {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return admin.firestore.Timestamp.fromDate(date);
-}
-
-function todayKey(date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Dhaka",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
-function isProductionEnv(): boolean {
-  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-}
-
-function getComplianceMailingAddress(): string {
-  return String(
-    process.env.TRACKFLOW_MAILING_ADDRESS ||
-      process.env.BUSINESS_MAILING_ADDRESS ||
-      process.env.COMPANY_MAILING_ADDRESS ||
-      "",
-  ).trim();
-}
-
-function buildComplianceAddressLine(prefix = "Mailing address: "): string {
-  const address = escapeHtml(getComplianceMailingAddress());
-  if (!address) return "";
-  return `${prefix}${address}`;
-}
-
-function stripDangerousHtml(input: string): string {
-  /**
-   * EMAIL HTML SANITIZER
-   * বাংলা ব্যাখ্যা: Compose preview frontend-এ দেখা যাবে, কিন্তু final send করার আগে backend এই function দিয়ে
-   * unsafe HTML পরিষ্কার করে। এতে script/iframe/onClick/javascript link type ঝুঁকি কমে।
-   */
-  let html = String(input || "");
-
-  // Remove high-risk tags with their content.
-  html = html.replace(/<(script|iframe|object|embed|form|textarea|input|button|select|option|link|meta|style)[\s\S]*?>[\s\S]*?<\/\1>/gi, "");
-  // Remove self-closing or standalone high-risk tags.
-  html = html.replace(/<(script|iframe|object|embed|form|textarea|input|button|select|option|link|meta|style)\b[^>]*\/?\s*>/gi, "");
-  // Remove inline event handlers like onclick/onload.
-  html = html.replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
-  html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, "");
-  // Remove unsafe URL protocols from attributes/content.
-  html = html.replace(/javascript\s*:/gi, "");
-  html = html.replace(/data\s*:\s*text\/html/gi, "");
-  html = html.replace(/vbscript\s*:/gi, "");
-
-  return html.trim();
-}
-function plainTextFromHtml(input: string): string {
-  return String(input || "")
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function countWordsFromHtml(input: string): number {
-  const text = plainTextFromHtml(input);
-  return text ? text.split(/\s+/).filter(Boolean).length : 0;
-}
-
-function countLinksFromHtml(input: string): number {
-  return (String(input || "").match(/<a\s/gi) || []).length;
-}
-
-function validateFollowupContent(html: string): { ok: boolean; reasons: string[]; words: number; links: number } {
-  const words = countWordsFromHtml(html);
-  const links = countLinksFromHtml(html);
-  const reasons: string[] = [];
-
-  if (!words) reasons.push("Follow-up body is empty");
-  if (words > FOLLOWUP_MAX_WORDS) reasons.push(`Follow-up is too long (${words}/${FOLLOWUP_MAX_WORDS} words)`);
-  if (links > FOLLOWUP_MAX_LINKS) reasons.push(`Follow-up has too many links (${links}/${FOLLOWUP_MAX_LINKS})`);
-
-  return { ok: reasons.length === 0, reasons, words, links };
-}
-
-
-function getEngagementMinuteOfDayUtc(ms: number): number {
-  const date = new Date(ms);
-  return date.getUTCHours() * 60 + date.getUTCMinutes();
-}
-
-function shiftMinuteOfDay(minuteOfDay: number, offsetMinutes: number): number {
-  const total = 24 * 60;
-  return ((Math.floor(minuteOfDay) + offsetMinutes) % total + total) % total;
-}
-
-function scheduleBeforeEngagementTime(anchorEngagedMs: number, delayMinutes: number): number {
-  if (!anchorEngagedMs) return 0;
-  const safeDelay = Number.isFinite(delayMinutes) && delayMinutes > 0 ? delayMinutes : 1440;
-  return anchorEngagedMs + (safeDelay - FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES) * 60_000;
-}
-
-function mapSharedSender(sender: ReturnType<typeof getDefaultSender>): SenderConfig {
-  if (!sender) throw new ApiError("No active sender configured", 500);
-  const apiSender = toApiSenderConfig(sender);
-  return {
-    id: apiSender.id,
-    name: apiSender.name,
-    email: apiSender.email,
-    replyToEmail: apiSender.replyToEmail,
-    replyToName: apiSender.replyToName,
-    dailyLimit: apiSender.dailyLimit,
-  };
-}
-
-function getSenderFromBody(body: any): SenderConfig {
-  const senderId = String(body.senderId || body.sender_id || body.sender?.id || "").trim();
-  const sender = getSenderById(senderId);
-
-  if (!sender) {
-    throw new ApiError("Invalid sender selected. Choose an active sender from app/config/senders.ts", 400);
-  }
-
-  return mapSharedSender(sender);
-}
-
-function getSenderFromLead(lead: LeadData): SenderConfig {
-  const senderById = getSenderById(String(lead.sender_id || lead.senderId || ""));
-  const senderByEmail = getSenderByEmail(String(lead.sender_email || ""));
-  const sender = senderById || senderByEmail || getDefaultSender();
-  return mapSharedSender(sender);
-}
-
-async function requireAdmin(req: Request) {
-  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-
-  if (process.env.ALLOW_UNAUTHENTICATED_ADMIN_API === "true") {
-    if (isProduction) {
-      throw new ApiError("Unsafe config: unauthenticated admin API is not allowed in production", 500);
-    }
-    return { uid: "dev-mode", email: "dev@local" };
-  }
-
-  const allowed = (process.env.ALLOWED_ADMIN_EMAILS || "")
-    .split(",")
-    .map((x: string) => normalizeEmail(x))
-    .filter(Boolean);
-
-  if (allowed.length === 0) {
-    throw new ApiError("Server misconfigured: ALLOWED_ADMIN_EMAILS must contain at least one admin email", 500);
-  }
-
-  const authHeader = req.headers.get("authorization") || "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) {
-    throw new ApiError("Unauthorized: missing Firebase ID token", 401);
-  }
-
-  const idToken = authHeader.slice(7).trim();
-  const decoded = await admin.auth().verifyIdToken(idToken);
-  const userEmail = normalizeEmail(decoded.email || "");
-
-  if (!userEmail || !allowed.includes(userEmail)) {
-    throw new ApiError("Forbidden: this user is not allowed to use outreach API", 403);
-  }
-
-  return decoded;
-}
-
-function requireCronSecret(req: Request) {
-  const expected = env("CRON_SECRET");
-  const url = new URL(req.url);
-  const authHeader = req.headers.get("authorization") || "";
-  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  const candidates = [
-    req.headers.get("x-cron-auth"),
-    req.headers.get("x-cron-secret"),
-    bearer,
-    url.searchParams.get("secret"),
-    url.searchParams.get("cron_secret"),
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-
-  if (!candidates.some((secret) => safeEqual(secret, expected))) {
-    throw new ApiError("Unauthorized cron request", 401);
-  }
-}
-
-function requireWebhookSecret(req: Request, envName: "BREVO_WEBHOOK_SECRET" | "REPLY_WEBHOOK_SECRET") {
-  const secret = req.headers.get("x-webhook-secret") || "";
-  const expected = env(envName);
-  if (!secret || !safeEqual(secret, expected)) throw new ApiError("Unauthorized webhook request", 401);
-}
-
-
-
-function hmacHex(value: string, secret: string): string {
-  return createHmac("sha256", secret).update(value).digest("hex");
-}
-
-function unsubscribeToken(emailLower: string): string {
-  return hmacHex(emailLower, env("UNSUBSCRIBE_SECRET")).slice(0, 40);
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a || "");
-  const bBuf = Buffer.from(b || "");
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
-
-function unsubscribeUrl(emailLower: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || "https://trackflowpro.com").replace(/\/+$/, "");
-  const token = unsubscribeToken(emailLower);
-  return `${base}/api/trackflow/unsubscribe?email=${encodeURIComponent(emailLower)}&token=${encodeURIComponent(token)}`;
-}
-
-async function isSuppressed(emailLower: string) {
-  const snap = await adminDb.collection("suppression_list").doc(emailDocId(emailLower)).get();
-  return snap.exists ? snap.data() : null;
-}
-
-function serializeContactMemoryForWarning(memory: Record<string, any> = {}) {
-  const cooldownMs = toMillis(memory.cooldownUntil);
-  const memoryExpiresMs = toMillis(memory.memoryExpiresAt);
-  const lastContactedMs = toMillis(memory.lastContactedAt);
-
-  return {
-    emailLower: memory.emailLower || "",
-    lastOutcome: memory.lastOutcome || "previous_contact",
-    lastContactedAt: lastContactedMs ? new Date(lastContactedMs).toISOString() : "",
-    cooldownUntil: cooldownMs ? new Date(cooldownMs).toISOString() : "",
-    memoryExpiresAt: memoryExpiresMs ? new Date(memoryExpiresMs).toISOString() : "",
-    companyName: memory.companyName || "",
-    website: memory.website || "",
-    service: memory.service || "",
-    openCount: Number(memory.openCount || 0),
-    clickCount: Number(memory.clickCount || 0),
-    sourceLeadId: memory.sourceLeadId || "",
-  };
-}
-
-async function getActiveContactMemoryWarning(emailLower: string) {
-  /**
-   * CONTACT MEMORY COOLDOWN CHECK
-   * বাংলা ব্যাখ্যা: Full lead delete হলেও contact_memory footprint থাকে।
-   * একই email cooldown period-এর মধ্যে আবার Send Email tab থেকে পাঠাতে গেলে warning দেওয়া হবে।
-   * suppression_list হলে আলাদা hard block হবে; contact_memory শুধু warning + override flow।
-   */
-  const memorySnap = await adminDb.collection("contact_memory").doc(emailDocId(emailLower)).get();
-  if (!memorySnap.exists) return null;
-
-  const memory = memorySnap.data() || {};
-  const cooldownMs = toMillis(memory.cooldownUntil);
-  const memoryExpiresMs = toMillis(memory.memoryExpiresAt);
-  const nowMs = Date.now();
-
-  if (memoryExpiresMs && memoryExpiresMs <= nowMs) return null;
-  if (!cooldownMs || cooldownMs <= nowMs) return null;
-
-  return serializeContactMemoryForWarning(memory);
-}
-
-async function addSuppression(emailLower: string, reason: string, extra: Record<string, any> = {}) {
-  if (!emailLower) return;
-  await adminDb.collection("suppression_list").doc(emailDocId(emailLower)).set(
-    {
-      emailLower,
-      reason,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...extra,
-    },
-    { merge: true }
-  );
-}
-
-function shouldStoreRawEmailEvent(event: string): boolean {
-  const name = String(event || "").toLowerCase().trim();
-  if (!name) return false;
-  if (envFlag("STORE_LOW_VALUE_EMAIL_EVENTS", false)) return true;
-
-  // Free-limit friendly default: keep only high-value compliance/debug events.
-  // Open/click/request/delivered are reflected on the lead aggregate fields, not logged as raw docs.
-  return (
-    (name === "sent" && envFlag("STORE_SENT_EMAIL_EVENTS", false)) ||
-    name === "replied" ||
-    name === "reply" ||
-    name === "unsubscribed" ||
-    name === "spam" ||
-    name === "hard_bounce" ||
-    name === "soft_bounce" ||
-    name === "bounced" ||
-    name === "failed" ||
-    name === "cron_error" ||
-    name === "manual_action"
-  );
-}
-
-async function addEmailEvent(leadId: string, event: string, payload: Record<string, any> = {}) {
-  if (!leadId || !shouldStoreRawEmailEvent(event)) return;
-  await adminDb.collection("email_events").add({
-    leadId,
-    event,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    ...payload,
-  });
-}
-
-function escapeHtml(value: string): string {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function sanitizeOptionalUrl(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  try {
-    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-    if (!["http:", "https:"].includes(url.protocol)) return "";
-    return url.toString();
-  } catch {
-    return "";
-  }
-}
-
+// Shared route helpers, security helpers, sender selection, suppression,
+// contact-memory and lightweight email-event logging now live under lib/trackflow-*.
 function buildReportLinkBlock(reportUrl?: string, buttonText = "View private audit note") {
   const safeUrl = sanitizePublicReportUrl(reportUrl || "");
   if (!safeUrl) return "";
