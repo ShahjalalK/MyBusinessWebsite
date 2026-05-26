@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.75-dashboard-actions-hook-split-stage-2
+Version: v18.76-dashboard-scheduled-panel-split-stage-3
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -469,6 +469,36 @@ Do not change API route URLs, request payloads, response handling, Firestore fie
 Keep hooks in the dashboard folder under hooks/ and import them from page.tsx with relative paths.
 Each hook should receive existing Zustand state/setters from page.tsx so stored dashboard behavior remains unchanged.
 Split visual panels later, one panel at a time, after action hooks build cleanly.
+```
+
+
+
+### 3.19 Dashboard Scheduled Panel Modularization Rule
+
+The email automation dashboard visual panel split has started after helper and action-hook extraction.
+
+Current stage-3 structure:
+
+```text
+page.tsx
+→ still owns the main dashboard shell, top tabs, local outreach compose state, lead drawer, and remaining unsplit tab renderers
+
+ScheduledPanel.tsx
+→ owns the scheduled-email tab UI, scheduled email table, scheduled edit drawer, scheduled WYSIWYG editor, and scheduled edit action buttons
+
+hooks/useScheduledEmails.ts
+→ still owns scheduled-email loading, edit modal population, scheduled edit save, scheduled cancel, and send-soon actions
+```
+
+Important decisions:
+
+```text
+Split visual panels one at a time.
+Do not redesign the tab UI during panel extraction.
+Do not change scheduled-email API URLs, request payloads, response handling, Firestore fields, Sheet columns, or Brevo behavior.
+Keep ScheduledPanel.tsx in the same dashboard folder as page.tsx and import it with ./ScheduledPanel.
+The ScheduledPanel should receive existing state/actions from page.tsx as props so Zustand state and behavior remain unchanged.
+Next safe visual split can be a small overview/system panel before larger Outreach, Automation, Cleanup, Sheet, or Leads panels.
 ```
 
 ### 3.6 Secure Report Responsive UX Rule
@@ -1823,6 +1853,28 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.76 Dashboard Scheduled Panel Split Stage 3
+
+The first visual dashboard panel was split after helpers and action hooks were stable. The scheduled email tab UI now lives in a dedicated component while the main dashboard page remains the shell.
+
+Changed files:
+
+```text
+page.tsx
+ScheduledPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Only the scheduled email visual panel was extracted.
+Scheduled-email behavior still comes from hooks/useScheduledEmails.ts.
+The scheduled table, edit drawer, WYSIWYG editor, cancel, send-soon, save, and refresh controls should behave the same.
+No API route URLs, request payloads, Firestore fields, Sheet columns, Brevo behavior, or stored dashboard state should change.
+Do not split all remaining panels at once; continue one visual panel at a time.
+```
 
 ### v18.74 Dashboard Helper Split Stage 1
 

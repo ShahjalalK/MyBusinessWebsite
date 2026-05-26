@@ -1,44 +1,74 @@
-# v18.75 Dashboard Action Hook Split Stage 2
+# TrackFlow Pro v18.76 — Dashboard Scheduled Panel Split Stage 3
 
-Replace these files in the same dashboard folder that contains your current `page.tsx`:
+## Replace/Add these files
+
+Place these files in the same folder as your current dashboard `page.tsx`:
 
 ```text
 page.tsx
-hooks/useScheduledEmails.ts
-hooks/useSystemStatus.ts
-hooks/useFollowupAdmin.ts
+ScheduledPanel.tsx
 PROJECT_CONTEXT_README.md
 ```
 
-Keep your existing stage-1 helper files in the same folder:
+`ScheduledPanel.tsx` must sit beside `page.tsx`, not inside a deeper folder, because it imports:
 
-```text
-types.ts
-constants.ts
-utils.ts
-sheet-readiness.ts
-followup-utils.ts
+```ts
+./types
+./constants
+./utils
+../../../lib/senders
 ```
 
-This patch intentionally does not change dashboard UI, API routes, Firestore fields, Sheet columns, Brevo behavior, or report storage.
+## What changed
 
-After replacing, run:
+```text
+Scheduled email tab UI moved out of page.tsx
+ScheduledPanel.tsx now owns:
+- scheduled email table
+- scheduled status alert
+- scheduled edit drawer
+- scheduled WYSIWYG editor
+- refresh / edit / send soon / cancel / save buttons
+
+page.tsx still owns:
+- dashboard shell
+- top tabs
+- hooks/state wiring
+- remaining unsplit panels
+```
+
+## What did not change
+
+```text
+No API route URL changed
+No request payload changed
+No Firestore field changed
+No Sheet column changed
+No Brevo behavior changed
+No scheduled email hook behavior changed
+No UI redesign was done
+```
+
+## Test commands
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Test checklist:
+## Manual test checklist
 
 ```text
-1. Open dashboard and switch tabs.
-2. Scheduled tab loads scheduled emails.
-3. Edit scheduled email, save it, cancel one test item if safe, and send-soon if safe.
-4. Overview/Analytics loads Firebase usage summary.
-5. Overview/Automation loads system health.
-6. Automation follow-up summary loads.
-7. Follow-up dry-run works.
-8. Postmaster health button still works or shows the same configured/not-configured message.
-9. Existing lead bulk actions still work.
+Open dashboard
+Go to Scheduled tab
+Click Refresh
+Open Edit on a scheduled email
+Change subject/body/time
+Save changes
+Open Edit again
+Click Send Soon
+Cancel a scheduled email
+Confirm other tabs still render
 ```
+
+If build fails, send the exact terminal error and the latest file that error mentions.
