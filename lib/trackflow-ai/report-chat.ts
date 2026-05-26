@@ -30,6 +30,8 @@ export type ReportChatContext = {
   ctaText: string;
   ctaUrl: string;
   manualAdsSummary: string;
+  trackingScore: number | null;
+  scoreLabel: string;
 };
 
 export class GeminiApiError extends Error {
@@ -84,6 +86,16 @@ function cleanText(value: unknown, fallback = "", maxLength = 900): string {
 
   if (!text) return fallback;
   return text.slice(0, maxLength).trim();
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const match = String(value || "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function containsBengali(value: unknown): boolean {
@@ -280,6 +292,25 @@ export function extractReportChatContext(report: AnyRecord = {}, fallbackToken =
   const token = normalizeToken(report.token || report.reportToken || report.report_token || fallbackToken);
   const domainSlug = normalizeSlug(report.domainSlug || report.domain_slug || domain || "website");
   const companyName = getCompanyName(report, domain);
+  const trackingScore = toFiniteNumber(
+    report.trackingOpportunityScore ||
+      report.tracking_opportunity_score ||
+      report.opportunityScore ||
+      report.opportunity_score ||
+      report.auditScore ||
+      report.audit_score ||
+      report.score,
+  );
+  const scoreLabel = cleanClientText(
+    report.trackingScoreLabel ||
+      report.tracking_score_label ||
+      report.scoreLabel ||
+      report.score_label ||
+      report.priorityLabel ||
+      report.priority_label,
+    "",
+    120,
+  );
 
   const proofPoints = cleanList(
     report.proofPoints ||
@@ -334,6 +365,8 @@ export function extractReportChatContext(report: AnyRecord = {}, fallbackToken =
     ctaText: cleanText(report.ctaText || report.cta_text || privateCopy.ctaText || "Book a verification review", "Book a verification review", 80),
     ctaUrl: cleanUrl(report.ctaUrl || report.cta_url || privateCopy.ctaUrl || "/contact") || "/contact",
     manualAdsSummary: getManualAdsSummary(report),
+    trackingScore,
+    scoreLabel,
   };
 }
 
@@ -370,6 +403,11 @@ function contextToPromptBlock(context: ReportChatContext): string {
     `Reviewed company/website: ${context.companyName}`,
     `Reviewed domain: ${context.domain || context.websiteUrl || "Not provided"}`,
     `Report headline: ${context.headline}`,
+    context.trackingScore !== null
+      ? `Tracking opportunity score: ${Math.round(context.trackingScore)}/100${context.scoreLabel ? ` (${context.scoreLabel})` : ""}`
+      : context.scoreLabel
+        ? `Tracking opportunity label: ${context.scoreLabel}`
+        : "",
     context.subheadline ? `Subheadline: ${context.subheadline}` : "",
     `Main finding: ${context.mainFinding}`,
     `Business impact: ${context.businessImpact}`,
@@ -439,20 +477,86 @@ function buildTrackFlowIdentityAnswer(context: ReportChatContext, question: stri
   ].join("\n\n");
 }
 
-function buildMeaningAnswer(context: ReportChatContext): string {
+function getContextSearchText(context: ReportChatContext): string {
   return [
-    `This finding means ${context.companyName} should verify the main conversion path before relying on the tracking data for reporting or campaign decisions.`,
-    `Why it matters: if ${GENERIC_LEAD_PATH} is not recorded clearly, GA4 and Google Ads may not show which marketing activity created real enquiries.`,
-    `Next step: test the key journey in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics, and the final lead record. Final confirmation still needs account/server access.`,
-  ].join("\n\n");
+    context.headline,
+    context.subheadline,
+    context.mainFinding,
+    context.businessImpact,
+    context.manualAdsSummary,
+    context.scoreLabel,
+    ...context.proofPoints,
+    ...context.recommendations,
+    ...context.verificationPlan,
+    ...context.problemCards,
+    ...context.whatChecked,
+    ...context.trustNotes,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function contextMentions(context: ReportChatContext, pattern: RegExp): boolean {
+  return pattern.test(getContextSearchText(context));
+}
+
+function pickContextLine(context: ReportChatContext, pattern: RegExp, fallback = ""): string {
+  const candidates = [
+    context.mainFinding,
+    ...context.problemCards,
+    ...context.proofPoints,
+    ...context.recommendations,
+    ...context.verificationPlan,
+    context.businessImpact,
+  ];
+
+  for (const candidate of candidates) {
+    const clean = cleanClientText(candidate, "", 380);
+    if (clean && pattern.test(clean.toLowerCase())) return clean;
+  }
+
+  return fallback;
+}
+
+function buildStructuredAnswer({
+  shortAnswer,
+  whyItMatters,
+  evidence,
+  nextStep,
+  importantNote,
+}: {
+  shortAnswer: string;
+  whyItMatters?: string;
+  evidence?: string;
+  nextStep?: string;
+  importantNote?: string;
+}): string {
+  return [
+    `Short answer: ${shortAnswer}`,
+    whyItMatters ? `Why it matters: ${whyItMatters}` : "",
+    evidence ? `Evidence to review: ${evidence}` : "",
+    nextStep ? `What to verify next: ${nextStep}` : "",
+    importantNote ? `Important note: ${importantNote}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function buildMeaningAnswer(context: ReportChatContext): string {
+  return buildStructuredAnswer({
+    shortAnswer: `${context.companyName} should verify the main conversion path before relying on the tracking data for reporting or campaign decisions.`,
+    whyItMatters: `if ${GENERIC_LEAD_PATH} is not recorded clearly, GA4 and Google Ads may not show which marketing activity created real enquiries.`,
+    nextStep: `test the key journey in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics, and the final lead record.`,
+    importantNote: "browser-visible evidence is useful, but final confirmation still needs account/server access.",
+  });
 }
 
 function buildGoogleAdsImpactAnswer(context: ReportChatContext): string {
-  return [
-    `Yes, it can affect Google Ads reporting if the main enquiry or conversion path is not verified properly.`,
-    `The practical risk is not that this review proves conversions are missing; it means the browser-visible evidence should be checked against Google Ads, GA4, GTM, and the final lead record before using the data for bidding or optimisation.`,
-    `Best next step: verify one real test enquiry from click or form action through to Google Ads/GA4 and the CRM or server-side record.`,
-  ].join("\n\n");
+  return buildStructuredAnswer({
+    shortAnswer: "yes, it can affect Google Ads reporting if the main enquiry or conversion path is not verified properly.",
+    whyItMatters: "Google Ads optimisation depends on clean conversion signals. This public review does not prove conversions are missing; it shows that browser-visible evidence should be compared with Google Ads, GA4, GTM, and the final lead record.",
+    nextStep: "verify one real test enquiry from click or form action through to Google Ads/GA4 and the CRM, call-tracking, or server-side record.",
+  });
 }
 
 function buildVerifyFirstAnswer(context: ReportChatContext): string {
@@ -461,18 +565,252 @@ function buildVerifyFirstAnswer(context: ReportChatContext): string {
     context.verificationPlan[0] ||
     `Verify ${GENERIC_LEAD_PATH} inside GTM Preview, GA4 DebugView, Google Ads, and the final lead record.`;
 
-  return [
-    `First, verify ${GENERIC_LEAD_PATH} for ${context.companyName}.`,
-    `From this review, the priority is: ${firstRecommendation}`,
-    `The goal is to confirm that a real enquiry action creates the expected browser signal and is also recorded in the account or backend system. Browser-visible evidence is useful, but final confirmation needs GA4, GTM, Google Ads, CRM, or server access.`,
-  ].join("\n\n");
+  return buildStructuredAnswer({
+    shortAnswer: `first, verify the main conversion path for ${context.companyName}.`,
+    evidence: firstRecommendation,
+    nextStep: "confirm that a real enquiry action creates the expected browser signal and is also recorded in the account or backend system.",
+    importantNote: "browser-visible evidence is useful, but final confirmation needs GA4, GTM, Google Ads, CRM, call-tracking, or server access.",
+  });
 }
 
 function buildAccountAccessAnswer(context: ReportChatContext): string {
+  return buildStructuredAnswer({
+    shortAnswer: "account access is needed because the public website can only show browser-visible signals.",
+    whyItMatters: "browser evidence can show tags, requests, clicks, forms, and visible tracking signals, but it cannot prove final recording inside GA4, Google Ads, GTM, CRM, call-tracking, or server logs.",
+    nextStep: `compare the ${context.companyName} website journey with the actual account/backend records before making a final tracking decision.`,
+  });
+}
+
+function buildScoreAnswer(context: ReportChatContext): string {
+  const scoreText =
+    context.trackingScore !== null
+      ? `${Math.round(context.trackingScore)}/100${context.scoreLabel ? ` (${context.scoreLabel})` : ""}`
+      : context.scoreLabel || "the review priority score";
+
+  return buildStructuredAnswer({
+    shortAnswer: `${scoreText} is an opportunity/review-priority signal, not a final tracking-health grade.`,
+    whyItMatters: "a higher score means the public scan found stronger reasons to review the tracking setup, conversion journey, or account-side recording.",
+    nextStep: "use the score to decide priority, then verify the actual conversion path inside GA4, GTM, Google Ads, CRM, call-tracking, or server logs.",
+    importantNote: "the score does not prove that tracking is broken or that conversions are missing.",
+  });
+}
+
+function buildPhoneTrackingAnswer(context: ReportChatContext, question: string): string {
+  const isTestQuestion = /\b(how|test|tested|testing|verify|check|confirm|setup|set up)\b/i.test(question);
+  const phoneInReport = contextMentions(context, /\b(phone|calls?|call[-\s]?click|click[-\s]?to[-\s]?call|phone_click|call_click)\b/i);
+  const evidence = pickContextLine(
+    context,
+    /\b(phone|calls?|call[-\s]?click|click[-\s]?to[-\s]?call|phone_click|call_click)\b/i,
+    phoneInReport
+      ? "the saved review highlights phone-call or call-click tracking as a conversion path to verify."
+      : "phone calls were not clearly proven from public browser evidence alone.",
+  );
+
+  if (isTestQuestion) {
+    return buildStructuredAnswer({
+      shortAnswer: "test a real or safe phone-click journey, then compare the browser signal with account or call-tracking records.",
+      evidence,
+      nextStep: "click the phone CTA, watch for an expected event such as phone_click, click_to_call, call_click, or generate_lead in GTM Preview and GA4 DebugView, then confirm the same action in Google Ads, call-tracking, CRM, or server logs.",
+      importantNote: "a public page scan cannot prove that a phone call was finally recorded as a conversion.",
+    });
+  }
+
+  return buildStructuredAnswer({
+    shortAnswer: phoneInReport
+      ? "this public review cannot confirm that phone calls are tracked properly; it shows phone-call or call-click tracking should be verified."
+      : "this public review does not prove phone-call tracking either way. If calls are important, they should be tested separately.",
+    whyItMatters: "phone calls are often high-intent leads, so missed or duplicated call events can make reporting and optimisation less reliable.",
+    evidence,
+    nextStep: "verify the phone-click event in GTM Preview and GA4 DebugView, then confirm the final conversion record inside Google Ads, call-tracking, CRM, or server logs.",
+  });
+}
+
+function buildFormTrackingAnswer(context: ReportChatContext, question: string): string {
+  const isTestQuestion = /\b(how|test|tested|testing|verify|check|confirm|submit|submission)\b/i.test(question);
+  const formInReport = contextMentions(context, /\b(form|forms?|lead[-\s]?form|submission|enquir|inquir|contact|quote)\b/i);
+  const evidence = pickContextLine(
+    context,
+    /\b(form|forms?|lead[-\s]?form|submission|enquir|inquir|contact|quote|no clear event|conversion event)\b/i,
+    formInReport
+      ? "the saved review highlights the form or enquiry path as a conversion path to verify."
+      : "the public review does not prove final form recording from the website alone.",
+  );
+
+  if (isTestQuestion) {
+    return buildStructuredAnswer({
+      shortAnswer: "test one safe form or enquiry journey and follow it from the browser event to the final lead record.",
+      evidence,
+      nextStep: "submit a controlled test enquiry, watch GTM Preview and GA4 DebugView for an event such as generate_lead, form_submit, or a thank-you-page event, then confirm the same action in Google Ads, CRM, or server logs.",
+      importantNote: "do not rely only on a visible form submission; the final account/backend record must match.",
+    });
+  }
+
+  return buildStructuredAnswer({
+    shortAnswer: formInReport
+      ? "the review does not prove form submissions are recorded properly; it says the form or enquiry path should be verified."
+      : "this review does not fully confirm form-submission tracking. If forms are an important lead path, they should be tested separately.",
+    whyItMatters: "form submissions often become the main lead source in GA4, Google Ads, and CRM reporting.",
+    evidence,
+    nextStep: "run one controlled form test in GTM Preview and GA4 DebugView, then check Google Ads and the CRM or server record for the same test lead.",
+  });
+}
+
+function buildBookingTrackingAnswer(context: ReportChatContext, question: string): string {
+  const isTestQuestion = /\b(how|test|tested|testing|verify|check|confirm)\b/i.test(question);
+  const bookingInReport = contextMentions(context, /\b(booking|appointment|schedule|reservation|calendar)\b/i);
+  const evidence = pickContextLine(
+    context,
+    /\b(booking|appointment|schedule|reservation|calendar)\b/i,
+    bookingInReport
+      ? "the saved review highlights booking or appointment tracking as a path to verify."
+      : "booking activity was not fully confirmed from public browser evidence alone.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: bookingInReport
+      ? "booking or appointment tracking should be verified before it is used for reporting or optimisation."
+      : "this review does not prove booking tracking either way. If bookings are important, they should be tested as a separate conversion path.",
+    whyItMatters: "booking tools can load in iframes, third-party widgets, or separate domains, so the final booking record may not match the visible page signal unless it is configured carefully.",
+    evidence,
+    nextStep: isTestQuestion
+      ? "complete a controlled booking test, watch GTM Preview and GA4 DebugView, then confirm the booking event in Google Ads and the booking/CRM system."
+      : "verify the booking journey in GTM Preview, GA4 DebugView, Google Ads, and the booking or CRM record.",
+  });
+}
+
+function buildEcommerceTrackingAnswer(context: ReportChatContext, question: string): string {
+  const purchaseInReport = contextMentions(context, /\b(purchase|checkout|cart|add_to_cart|begin_checkout|order|transaction|ecommerce|e-commerce)\b/i);
+  const evidence = pickContextLine(
+    context,
+    /\b(purchase|checkout|cart|add_to_cart|begin_checkout|order|transaction|ecommerce|e-commerce)\b/i,
+    purchaseInReport
+      ? "the saved review highlights cart, checkout, or purchase tracking as a path to verify."
+      : "purchase tracking was not fully confirmed from public browser evidence alone.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: purchaseInReport
+      ? "checkout and purchase tracking should be verified before using the data for ecommerce reporting or bidding."
+      : "this review does not prove purchase tracking either way. If ecommerce is important, checkout and purchase events should be tested separately.",
+    whyItMatters: "purchase events can affect revenue reporting, product performance, and ad platform optimisation.",
+    evidence,
+    nextStep: "test add_to_cart, begin_checkout, and purchase or order-confirmation events in GA4 DebugView and GTM Preview, then confirm the transaction in Google Ads, the ecommerce platform, and any server-side setup.",
+  });
+}
+
+function buildGa4Answer(context: ReportChatContext, question: string): string {
+  const mentionsOnlyPageView = /\b(only\s+)?page[_\s-]?view\b/i.test(question) || contextMentions(context, /\bpage[_\s-]?view\b/i);
+  const evidence = pickContextLine(
+    context,
+    /\b(ga4|google analytics|page[_\s-]?view|generate_lead|form_submit|phone_click|click_to_call)\b/i,
+    mentionsOnlyPageView
+      ? "GA4 page_view was noted, but a lead-related GA4 event was not clearly confirmed from browser-visible evidence."
+      : "GA4 evidence should be compared with the actual GA4 property before making final decisions.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: mentionsOnlyPageView
+      ? "a GA4 page_view means analytics loaded for the page view, but it does not prove that leads, calls, bookings, or purchases are recorded as conversions."
+      : "GA4 should be checked to confirm whether the key enquiry actions are recorded as the right events and marked as conversions where appropriate.",
+    evidence,
+    nextStep: "repeat the key customer action while watching GA4 DebugView, then confirm the event name, parameters, conversion status, and source/medium attribution.",
+    importantNote: "a public browser scan can observe GA4 requests, but it cannot confirm the final GA4 property settings without access.",
+  });
+}
+
+function buildGtmAnswer(context: ReportChatContext): string {
+  const evidence = pickContextLine(
+    context,
+    /\b(gtm|tag manager|container|preview)\b/i,
+    "GTM may be visible from the website, but conversion-tag firing still needs account-level testing.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: "GTM being visible means the container/script may be loaded; it does not prove the conversion tags fire correctly on lead actions.",
+    evidence,
+    nextStep: "use GTM Preview to complete the main customer journey and confirm the correct triggers, tags, variables, and event payloads fire only once per real action.",
+    importantNote: "final confirmation still needs the connected GA4, Google Ads, CRM, or server-side records.",
+  });
+}
+
+function buildGoogleAdsVerificationAnswer(context: ReportChatContext): string {
+  const evidence = pickContextLine(
+    context,
+    /\b(google ads|ads conversion|conversion diagnostics|aw-|gtag|remarketing)\b/i,
+    "Google Ads final conversion recording still needs account-level verification.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: "Google Ads conversion recording cannot be proven from the public page alone.",
+    whyItMatters: "Google Ads needs the correct conversion action, attribution settings, and final account-side recording before the data can be trusted for bidding or reporting.",
+    evidence,
+    nextStep: "run one controlled conversion-path test, then check Google Ads conversion diagnostics, tag status, recent conversions, and the matching GA4/CRM/server record.",
+  });
+}
+
+function buildNoClearConversionEventAnswer(context: ReportChatContext): string {
+  const evidence = pickContextLine(
+    context,
+    /\b(no clear|not clearly observed|conversion event|lead-related|safe interaction|event observed)\b/i,
+    "the safe browser-visible interaction did not clearly show a final lead or conversion event.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: "it means the public browser review did not clearly see a lead or conversion event after the safe interaction.",
+    whyItMatters: "the website may still record conversions inside an account or backend system, but the public scan cannot prove that without access.",
+    evidence,
+    nextStep: "repeat the main enquiry journey in GTM Preview and GA4 DebugView, then confirm the matching event inside Google Ads, CRM, call-tracking, or server logs.",
+  });
+}
+
+function buildServerSideAnswer(context: ReportChatContext): string {
+  const evidence = pickContextLine(
+    context,
+    /\b(server|server-side|first-party|capi|enhanced conversions|server container)\b/i,
+    "server-side forwarding cannot be proven from browser evidence alone.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: "server-side tracking cannot be confirmed from public browser evidence alone.",
+    whyItMatters: "server-side setups may forward events from a server container, CRM, ecommerce backend, or first-party endpoint that is not fully visible in the browser.",
+    evidence,
+    nextStep: "check the server container, destination diagnostics, event match quality, consent behavior, and backend logs for one controlled test conversion.",
+  });
+}
+
+function buildMetaAnswer(context: ReportChatContext): string {
+  const evidence = pickContextLine(
+    context,
+    /\b(meta|facebook|pixel|capi|fbq)\b/i,
+    "Meta tracking was not fully confirmed from the public review.",
+  );
+
+  return buildStructuredAnswer({
+    shortAnswer: "Meta tracking should be checked separately if Meta Ads reporting matters for this business.",
+    evidence,
+    nextStep: "test the main lead action and compare browser Pixel activity with Events Manager, CAPI/server events, and the final lead record.",
+    importantNote: "this review should not be used to claim Meta conversions are working or missing without account access.",
+  });
+}
+
+function buildEvidenceAnswer(context: ReportChatContext): string {
+  const proof = context.proofPoints.slice(0, 3);
+  const evidence = proof.length
+    ? proof.join(" ")
+    : "the saved report highlights browser-visible tracking signals and recommends account-level verification.";
+
+  return buildStructuredAnswer({
+    shortAnswer: "the review is based on public browser-visible evidence, not account-login evidence.",
+    evidence,
+    nextStep: "use the visible evidence as a starting point, then verify the same customer action inside GA4, GTM, Google Ads, CRM, call-tracking, or server logs.",
+  });
+}
+
+function buildOutOfScopeAnswer(context: ReportChatContext): string {
   return [
-    `Account access is needed because browser evidence can show tags, requests, clicks, forms, and visible tracking signals, but it cannot prove final recording inside GA4, Google Ads, GTM, CRM, or server logs.`,
-    `For ${context.companyName}, the safe verification step is to compare the website journey with the actual account/backend records.`,
-    `That is how we confirm whether the reported conversion path is being measured correctly without making assumptions from the public website alone.`,
+    `I can help with the tracking findings, evidence, and verification steps for ${context.companyName}.`,
+    `This private report does not verify unrelated business details unless they are explicitly included in the saved review.`,
+    `A useful next question is: what should we verify first?`,
   ].join("\n\n");
 }
 
@@ -480,10 +818,23 @@ export function buildDeterministicAnswer(context: ReportChatContext, question = 
   const lower = question.toLowerCase();
 
   if (hasLeadershipIntent(question)) return buildTrackFlowIdentityAnswer(context, question);
-  if (/\b(what does this finding mean|finding mean|main finding|main point|what does this mean|what does it mean|explain this|explain the finding|meaning)\b/i.test(lower)) return buildMeaningAnswer(context);
-  if (/\b(verify first|check first|first thing|priority|what should we verify|what to verify|where should we start)\b/i.test(lower)) return buildVerifyFirstAnswer(context);
-  if (/\b(why.*access|why.*account|account access|login|permission)\b/i.test(lower)) return buildAccountAccessAnswer(context);
+  if (/\b(score|rating|priority score|opportunity score|\d{1,3}\s*\/\s*100)\b/i.test(lower)) return buildScoreAnswer(context);
+  if (/\b(no clear|not clearly observed|conversion event|lead-related event|clear event|safe interaction)\b/i.test(lower)) return buildNoClearConversionEventAnswer(context);
+  if (/\b(phone|calls?|call[-\s]?click|click[-\s]?to[-\s]?call|phone_click|call_click)\b/i.test(lower)) return buildPhoneTrackingAnswer(context, question);
+  if (/\b(form|forms?|submission|submissions|lead[-\s]?form|enquir|inquir|contact form|quote form|generate_lead|form_submit)\b/i.test(lower)) return buildFormTrackingAnswer(context, question);
+  if (/\b(booking|appointment|schedule|reservation|calendar)\b/i.test(lower)) return buildBookingTrackingAnswer(context, question);
+  if (/\b(checkout|purchase|cart|add_to_cart|begin_checkout|order|transaction|ecommerce|e-commerce)\b/i.test(lower)) return buildEcommerceTrackingAnswer(context, question);
   if (/\b(affect google ads|google ads reporting|ads reporting|campaign optimisation|campaign optimization|bidding)\b/i.test(lower)) return buildGoogleAdsImpactAnswer(context);
+  if (/\b(google ads|ads conversion|conversion diagnostics|ad account|aw-|gtag)\b/i.test(lower)) return buildGoogleAdsVerificationAnswer(context);
+  if (/\b(ga4|google analytics|debugview|page[_\s-]?view)\b/i.test(lower)) return buildGa4Answer(context, question);
+  if (/\b(gtm|tag manager|preview mode|tag firing|container)\b/i.test(lower)) return buildGtmAnswer(context);
+  if (/\b(meta|facebook|pixel|events manager|capi)\b/i.test(lower)) return buildMetaAnswer(context);
+  if (/\b(server-side|server side|server logs?|server container|first-party|enhanced conversions)\b/i.test(lower)) return buildServerSideAnswer(context);
+  if (/\b(evidence|proof|visible|observed|what did you find|what was found)\b/i.test(lower)) return buildEvidenceAnswer(context);
+  if (/\b(why.*access|why.*account|account access|login|permission)\b/i.test(lower)) return buildAccountAccessAnswer(context);
+  if (/\b(verify first|check first|first thing|priority|what should we verify|what to verify|where should we start)\b/i.test(lower)) return buildVerifyFirstAnswer(context);
+  if (/\b(what does this finding mean|finding mean|main finding|main point|what does this mean|what does it mean|explain this|explain the finding|meaning)\b/i.test(lower)) return buildMeaningAnswer(context);
+  if (/\b(what is your pricing|price|weather|sports|politics|recipe|unrelated)\b/i.test(lower)) return buildOutOfScopeAnswer(context);
 
   return "";
 }
@@ -514,12 +865,14 @@ Your job:
 - Answer client questions about the specific private tracking review below.
 - Stay evidence-safe and professional.
 - Use clear business language for a non-technical client.
+- Respect the exact question intent. Do not answer a phone-call question with a lead-form answer, and do not answer a form question with a phone-call answer.
+- If the question asks about a topic that is not clearly proven in the report, say what can and cannot be confirmed, then give the correct verification test.
 - Keep answers concise: usually 70-140 words, maximum 170 words.
 - Prefer this structure when useful: Short answer / Why it matters / Next step.
 - Use simple bullets only when helpful.
 - Do not use markdown bold, markdown headings, or long lists.
 - Answer in English only. If a saved report field contains Bengali or mixed-language internal notes, rewrite it into polished English or omit it.
-- Do not expose raw internal notes such as "পাওয়া গেছে" or any non-English evidence phrase.
+- Do not expose raw internal notes or any non-English evidence phrase.
 - Do not start every answer with "Based on the browser-visible review".
 - Explain browser-visible evidence only when it matters for the answer.
 - When final truth needs account/server access, say that clearly.

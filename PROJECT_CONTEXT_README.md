@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.70-dynamic-report-aware-chat-questions
+Version: v18.71-intent-safe-chat-answer-engine
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -263,6 +263,46 @@ app/components/trackflow/ReportChatAssistant.tsx
 
 app/tracking-review/[domainSlug]/[token]/page.tsx
 → extracts compact report context and passes it to the chatbot
+```
+
+
+### 3.14 Intent-Safe Chat Answer Rule
+
+Suggested questions and assistant answers must stay aligned. If the client asks about phone calls, the assistant must answer phone-call tracking. If the client asks about forms, it must answer form tracking. The assistant must not reuse one generic lead-form answer for every question.
+
+Required behavior:
+
+```text
+Phone/call questions → answer phone-call tracking and call-click verification.
+Form/enquiry questions → answer form submission / enquiry-path verification.
+Booking questions → answer booking/appointment verification.
+GA4 questions → explain GA4 event/property checks.
+GTM questions → explain container visibility versus tag firing.
+Google Ads questions → explain conversion diagnostics and account-side confirmation.
+No-clear-event questions → explain what was not clearly observed without claiming failure.
+Score questions → explain opportunity/review priority, not tracking health.
+Server-side questions → explain why browser evidence cannot prove server forwarding.
+Meta questions → explain Pixel/CAPI verification separately.
+```
+
+Safety rule:
+
+```text
+Never answer a phone-call question with a form-answer fallback.
+Never answer a form question with a phone-call answer.
+Never claim tracking is broken, conversions are missing, or final recording is confirmed from public browser evidence alone.
+```
+
+Current structure:
+
+```text
+lib/trackflow-ai/report-chat.ts
+→ deterministic intent-specific answer builders before Gemini
+→ safe fallback answer only after exact intent matching
+→ validation still blocks unsafe or incomplete AI output
+
+app/api/trackflow/report-chat/route.ts
+→ still uses deterministic answers first, then Gemini if needed
 ```
 
 
@@ -1518,6 +1558,28 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.71 Intent-Safe Chat Answer Engine Patch
+
+Secure report chatbot answer generation was tightened so suggested questions and answers stay aligned by intent.
+
+Changed files:
+
+```text
+lib/trackflow-ai/report-chat.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The answer engine must detect question intent before using a generic fallback.
+Phone-call questions must receive phone-call tracking answers.
+Form-submission questions must receive form/enquiry tracking answers.
+Booking, ecommerce, GA4, GTM, Google Ads, Meta, server-side, no-clear-event, score, evidence, and account-access questions each have their own evidence-safe deterministic answer path.
+If a topic is not clearly proven in the saved report, the assistant should say what can and cannot be confirmed and then give the correct verification test.
+Do not answer every question with the same lead-form template.
+```
 
 ### v18.69 Smart Chat Suggestions UX Patch
 
