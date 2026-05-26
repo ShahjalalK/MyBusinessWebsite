@@ -18,6 +18,11 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import {
+  buildReportChatQuestionSuggestions,
+  normalizeReportChatQuestionKey,
+  type ReportChatQuestionContext,
+} from "./reportChatQuestions";
 
 type ChatRole = "assistant" | "user";
 
@@ -42,45 +47,11 @@ type ReportChatAssistantProps = {
   headline?: string;
   ctaHref?: string;
   ctaText?: string;
+  chatContext?: ReportChatQuestionContext;
 };
 
 const GREETING =
   "Hi — I can help explain this private tracking review, the evidence points, and the safest next verification steps. I’ll stay within the browser-visible evidence shown here.";
-
-const STARTER_QUESTIONS = [
-  "What should we verify first?",
-  "What does this finding mean?",
-  "Can this affect Google Ads reporting?",
-  "What evidence was visible in the review?",
-];
-
-const CLOSED_STATE_QUESTIONS = [
-  "What should we verify first?",
-  "Can this affect Google Ads reporting?",
-  "Why does this need account access?",
-  "What evidence was visible in the review?",
-];
-
-const DEFAULT_FOLLOW_UP_QUESTIONS = [
-  "What is the safest next step?",
-  "Why does this need account access?",
-  "Can TrackFlow Pro verify this for us?",
-];
-
-const PRIORITY_QUESTION_POOL = [
-  "What should we verify first?",
-  "Can this affect Google Ads reporting?",
-  "What evidence was visible in the review?",
-  "Why does this need account access?",
-  "What should we check inside GA4?",
-  "What should we check in GTM Preview?",
-  "What should we check in Google Ads?",
-  "What should we test on the lead path?",
-  "Can this affect lead reporting?",
-  "What is the safest next step?",
-  "Can TrackFlow Pro verify this for us?",
-  "Who prepared this review?",
-];
 
 function createId(prefix = "msg"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -174,57 +145,6 @@ function cleanDisplayLine(value: string): string {
     .trim();
 }
 
-function normalizeQuestionKey(value: string): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\b(the|this|that|a|an|about|please)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function uniqueQuestions(items: string[]): string[] {
-  const output: string[] = [];
-  const seen = new Set<string>();
-
-  for (const item of items) {
-    const clean = cleanDisplayLine(item);
-    const key = normalizeQuestionKey(clean);
-    if (!clean || !key || seen.has(key)) continue;
-
-    seen.add(key);
-    output.push(clean);
-  }
-
-  return output;
-}
-
-function getUnaskedQuestions({
-  candidates,
-  askedKeys,
-  limit,
-}: {
-  candidates: string[];
-  askedKeys: Set<string>;
-  limit: number;
-}): string[] {
-  const output: string[] = [];
-  const seen = new Set<string>();
-
-  for (const item of uniqueQuestions(candidates)) {
-    const key = normalizeQuestionKey(item);
-    if (!key || askedKeys.has(key) || seen.has(key)) continue;
-
-    seen.add(key);
-    output.push(item);
-
-    if (output.length >= limit) break;
-  }
-
-  return output;
-}
-
 function isAssistantHeading(value: string): boolean {
   const text = cleanDisplayLine(value).replace(/[:：]\s*$/, "");
   if (!text || text.length > 62) return false;
@@ -246,36 +166,6 @@ function splitKnownHeading(value: string): { title: string; body: string } | nul
     title: match[1],
     body: match[2],
   };
-}
-
-function getFollowUpQuestions(content: string): string[] {
-  const text = String(content || "").toLowerCase();
-
-  if (/google ads|ads reporting|conversion/i.test(text)) {
-    return [
-      "Can this affect Google Ads reporting?",
-      "What should we check in Google Ads?",
-      "What should we verify first?",
-    ];
-  }
-
-  if (/ga4|gtm|debugview|tag manager/i.test(text)) {
-    return [
-      "What should we check inside GA4?",
-      "What should we check in GTM Preview?",
-      "Why does this need account access?",
-    ];
-  }
-
-  if (/form|lead|enquiry|inquiry|booking|phone/i.test(text)) {
-    return [
-      "What should we test on the lead path?",
-      "Can this affect lead reporting?",
-      "What is the safest next step?",
-    ];
-  }
-
-  return DEFAULT_FOLLOW_UP_QUESTIONS;
 }
 
 function FormattedAssistantMessage({ content }: { content: string }) {
@@ -431,6 +321,7 @@ export default function ReportChatAssistant({
   headline = "Private Tracking Review",
   ctaHref = "/contact",
   ctaText = "Book verification review",
+  chatContext,
 }: ReportChatAssistantProps) {
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(() => [buildGreeting()]);
@@ -461,7 +352,7 @@ export default function ReportChatAssistant({
   const askedQuestionSignature = useMemo(() => {
     return messages
       .filter((message) => message.role === "user")
-      .map((message) => normalizeQuestionKey(message.content))
+      .map((message) => normalizeReportChatQuestionKey(message.content))
       .filter(Boolean)
       .join("|");
   }, [messages]);
@@ -470,31 +361,33 @@ export default function ReportChatAssistant({
     return new Set(askedQuestionSignature ? askedQuestionSignature.split("|") : []);
   }, [askedQuestionSignature]);
 
-  const starterQuestionChips = useMemo(() => {
-    return getUnaskedQuestions({
-      candidates: [...STARTER_QUESTIONS, ...PRIORITY_QUESTION_POOL],
-      askedKeys: askedQuestionKeys,
-      limit: 4,
-    });
-  }, [askedQuestionKeys]);
+  const reportQuestionContext = useMemo<ReportChatQuestionContext>(
+    () => ({
+      companyName,
+      headline,
+      ...(chatContext || {}),
+    }),
+    [chatContext, companyName, headline],
+  );
 
-  const closedQuestionChips = useMemo(() => {
-    return getUnaskedQuestions({
-      candidates: [...CLOSED_STATE_QUESTIONS, ...PRIORITY_QUESTION_POOL],
-      askedKeys: askedQuestionKeys,
-      limit: 2,
-    });
-  }, [askedQuestionKeys]);
+  const questionSuggestions = useMemo(
+    () =>
+      buildReportChatQuestionSuggestions({
+        context: reportQuestionContext,
+        askedKeys: askedQuestionKeys,
+        latestAssistantContent: latestAssistantMessage?.content || "",
+        limits: {
+          closed: 2,
+          starter: 4,
+          followUp: 3,
+        },
+      }),
+    [askedQuestionKeys, latestAssistantMessage?.content, reportQuestionContext],
+  );
 
-  const followUpQuestionChips = useMemo(() => {
-    if (!latestAssistantMessage?.content) return [];
-
-    return getUnaskedQuestions({
-      candidates: [...getFollowUpQuestions(latestAssistantMessage.content), ...PRIORITY_QUESTION_POOL],
-      askedKeys: askedQuestionKeys,
-      limit: 3,
-    });
-  }, [askedQuestionKeys, latestAssistantMessage?.content]);
+  const starterQuestionChips = questionSuggestions.starterQuestions;
+  const closedQuestionChips = questionSuggestions.closedQuestions;
+  const followUpQuestionChips = questionSuggestions.followUpQuestions;
 
   useEffect(() => {
     if (!token) return;

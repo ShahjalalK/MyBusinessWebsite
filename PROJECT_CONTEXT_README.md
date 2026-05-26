@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.69-smart-chat-suggestions-ux-fix
+Version: v18.70-dynamic-report-aware-chat-questions
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -231,6 +231,38 @@ Design goal:
 ```text
 The chatbot should feel like a premium report-aware assistant, not a plain support textarea.
 The UI should invite the client to ask the next useful tracking-review question without covering the report content.
+```
+
+
+### 3.13 Dynamic Report-Aware Chat Questions Rule
+
+Chat suggestion chips should be generated from the saved report context instead of hardcoded for one audit.
+
+Required behavior:
+
+```text
+Do not hardcode a specific score such as 83/100 into chatbot questions.
+Build questions from report context: score, main finding, primary conversion focus, proof points, recommendations, observed signals, manual ads context, and business type.
+Phone-call reports should prioritize phone/call-tracking questions.
+Lead-form reports should prioritize form-submission questions.
+Booking reports should prioritize appointment/booking tracking questions.
+Ecommerce reports should prioritize cart, checkout, and purchase tracking questions.
+GA4/GTM/Google Ads/server-side evidence should create the matching verification questions.
+Already-asked questions should be hidden from closed-state, starter, and follow-up chips.
+Question-building rules should live outside the UI component when possible.
+```
+
+Current structure:
+
+```text
+app/components/trackflow/reportChatQuestions.ts
+→ pure dynamic question builder, report context types, de-dupe, asked-question filtering
+
+app/components/trackflow/ReportChatAssistant.tsx
+→ UI, chat state, history, message rendering, auto-grow input, uses question builder
+
+app/tracking-review/[domainSlug]/[token]/page.tsx
+→ extracts compact report context and passes it to the chatbot
 ```
 
 
@@ -1028,6 +1060,8 @@ Owns:
 - formatted assistant answer rendering with readable paragraphs, bullet lists, numbered steps, and important-note blocks
 - smart starter/follow-up question chips inside the chat
 - closed-state smart question chips above the floating button
+- dynamic report-aware question suggestions provided by `reportChatQuestions.ts`
+- already-asked question filtering
 - auto-growing textarea input with Enter-to-send and Shift+Enter new line
 - disabled-input fallback UI
 - CTA handoff when AI is unavailable or limited
@@ -1042,6 +1076,26 @@ Use this file when:
 - input does not disable after quota/session limit
 - CTA fallback wording/layout needs improvement
 - secure page chat UX needs changes
+
+### 6.8.1 `app/components/trackflow/reportChatQuestions.ts`
+
+Dynamic secure report chatbot question builder.
+
+Owns:
+
+- report-aware question generation from compact secure report context
+- score/main-finding/primary-conversion/signal based question rules
+- phone, lead form, booking, ecommerce, GA4, GTM, Google Ads, Meta, server-side, and speed question patterns
+- de-duplication and already-asked question filtering
+- closed-state, starter, and follow-up question sets
+
+Use this file when:
+
+- chatbot questions feel too generic
+- questions repeat after the client already asked them
+- a new business category needs smarter question suggestions
+- a report type needs better suggested questions
+
 
 ### 6.9 `lib/trackflow-ai/report-chat.ts`
 
@@ -1485,6 +1539,30 @@ Starter questions and follow-up questions should rotate to the next most helpful
 Follow-up chips should be contextual to the assistant answer when possible, for example Google Ads, GA4/GTM, lead path, account access, or safest next step.
 The bottom-right chat button still shows the online/active status, and the compact chips should invite conversation without making the page harder to read.
 ```
+
+### v18.70 Dynamic Report-Aware Chat Questions Patch
+
+Secure report chatbot question suggestions were moved into a dedicated dynamic builder so each secure report can show the most relevant next questions.
+
+Changed files:
+
+```text
+app/components/trackflow/reportChatQuestions.ts
+app/components/trackflow/ReportChatAssistant.tsx
+app/tracking-review/[domainSlug]/[token]/page.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Question chips must be report-aware, not hardcoded for one PDF or one score.
+The secure page passes compact report context into the chatbot.
+The chatbot builder hides already-asked questions and returns closed, starter, and follow-up question sets.
+No Zustand/global store is needed because this is local chatbot UI state plus report props.
+Supabase history, localStorage fallback, typing animation, formatted answers, and auto-growing input are preserved.
+```
+
 
 ### v18.68 Premium Chat Readability and Input Patch
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
 import ReportChatAssistant from "@/app/components/trackflow/ReportChatAssistant";
+import type { ReportChatQuestionContext } from "@/app/components/trackflow/reportChatQuestions";
 
 export const dynamic = "force-dynamic";
 
@@ -402,6 +403,77 @@ function getDisplayCtaText(value: unknown): string {
   const text = cleanText(value, "");
   if (!text || text.length > 70) return "Check if your enquiry tracking is working";
   return text;
+}
+
+function getReportScoreValue(report: Record<string, any>): number | undefined {
+  const candidates = [
+    report.score,
+    report.auditScore,
+    report.audit_score,
+    report.trackingScore,
+    report.tracking_score,
+    report.trackingOpportunityScore,
+    report.tracking_opportunity_score,
+    report.opportunityScore,
+    report.opportunity_score,
+  ];
+
+  for (const candidate of candidates) {
+    const numberValue =
+      typeof candidate === "number"
+        ? candidate
+        : Number.parseFloat(String(candidate || "").replace(/[^0-9.]/g, ""));
+
+    if (Number.isFinite(numberValue)) {
+      return Math.max(0, Math.min(100, Math.round(numberValue)));
+    }
+  }
+
+  return undefined;
+}
+
+function getReportScoreLabel(report: Record<string, any>): string {
+  return cleanText(
+    report.scoreLabel ||
+      report.score_label ||
+      report.auditScoreLabel ||
+      report.audit_score_label ||
+      report.priorityLabel ||
+      report.priority_label ||
+      report.trackingOpportunityLabel ||
+      report.tracking_opportunity_label,
+    "",
+  );
+}
+
+function getPrimaryConversionFocus(report: Record<string, any>, privateReportCopy: Record<string, any>): string {
+  return cleanText(
+    privateReportCopy.primaryConversionFocus ||
+      privateReportCopy.primary_conversion_focus ||
+      report.primaryConversionFocus ||
+      report.primary_conversion_focus ||
+      report.primaryConversionAction ||
+      report.primary_conversion_action ||
+      report.conversionActionContext ||
+      report.conversion_action_context ||
+      report.primaryConversion ||
+      report.primary_conversion,
+    "",
+  );
+}
+
+function getBusinessTypeLabel(report: Record<string, any>, privateReportCopy: Record<string, any>): string {
+  return cleanText(
+    privateReportCopy.businessType ||
+      privateReportCopy.business_type ||
+      report.businessType ||
+      report.business_type ||
+      report.businessCategory ||
+      report.business_category ||
+      report.category ||
+      "",
+    "",
+  );
 }
 
 function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): string[] {
@@ -979,6 +1051,23 @@ export default async function ReportPage({ params }: ReportPageProps) {
     formatDate(report.createdAt || report.registeredAt || report.uploadedAt) ||
     formatDate(new Date().toISOString());
 
+  const chatQuestionContext: ReportChatQuestionContext = {
+    companyName,
+    domain,
+    headline,
+    score: getReportScoreValue(report),
+    scoreLabel: getReportScoreLabel(report),
+    mainFinding,
+    businessImpact,
+    primaryConversionFocus: getPrimaryConversionFocus(report, privateReportCopy),
+    businessType: getBusinessTypeLabel(report, privateReportCopy),
+    whatChecked,
+    proofPoints: enhancedProofPoints,
+    recommendations,
+    auditSnapshotQuestions,
+    manualAdsSummary,
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <ReportViewBeacon token={token} />
@@ -1193,6 +1282,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
         headline={headline}
         ctaHref={ctaHref}
         ctaText={ctaText}
+        chatContext={chatQuestionContext}
       />
 
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
