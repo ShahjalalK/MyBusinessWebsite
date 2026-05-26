@@ -1,46 +1,45 @@
-# TrackFlow Pro v18.67 — Premium Floating Chat UX Fix
+# TrackFlow Pro v18.68 — Premium Chat Readability + Input Patch
 
-Replace this file:
+## Replace these files
 
 ```text
 app/components/trackflow/ReportChatAssistant.tsx
-```
-
-Optional context update:
-
-```text
+app/api/trackflow/report-chat/route.ts
 PROJECT_CONTEXT_README.md
 ```
 
-Do not replace `app/tracking-review/[domainSlug]/[token]/page.tsx` for this fix unless you have another page-specific change. Your current page already renders `<ReportChatAssistant />` and the hero button already links to `#ask-this-review`; the updated chat component now catches that click and opens the floating chat window.
-
 ## What changed
 
-- Chat message area is taller and easier to read.
-- Closed chat bubble shows an online/active green indicator.
-- When the chat window is open, the bottom floating button is hidden.
-- Hero “Ask about this review” button opens the chat window instead of behaving like a normal page section jump.
-- Assistant answers appear progressively with a typing-style effect.
-- Saved conversation behavior from the previous Supabase/localStorage update is preserved.
-- No Gemini prompt, Supabase API route, Firestore report loading, or PDF logic was changed.
+```text
+Assistant answers render with better spacing, sections, bullets, numbered steps, and important-note style blocks.
+Closed chat state shows smart quick-question chips above the floating chat button.
+Open chat state shows starter questions before the first user question.
+Latest assistant reply shows contextual follow-up question chips.
+Input textarea auto-grows while typing longer questions.
+Enter sends the message.
+Shift + Enter creates a new line.
+Chat history, Supabase load/save, localStorage fallback, and hero button open behavior are preserved.
+Gemini prompt gets lightweight formatting guidance, but evidence-safe validation remains unchanged.
+```
 
-## Test
+## Test after replace
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Then open a secure report page and test:
+## Manual QA checklist
 
 ```text
-1. Bottom-right bubble is visible when chat is closed.
-2. Bubble shows green online/active indicator.
-3. Click bubble → chat window opens.
-4. The blue bottom button disappears while the chat window is open.
-5. Message area has enough reading space.
-6. Ask a question → answer types in progressively.
-7. Close button closes the chat.
-8. Hero section “Ask about this review” button opens the chat window.
-9. Refresh page → saved messages reload if Supabase is configured, otherwise localStorage fallback works.
+1. Open a secure report page.
+2. Confirm closed chat state shows online indicator and quick question chips.
+3. Click the hero “Ask about this review” button and confirm the chat opens.
+4. Ask a question and confirm the answer appears progressively.
+5. Confirm assistant answer is formatted clearly, not one plain text wall.
+6. Confirm follow-up question chips appear under the latest assistant answer.
+7. Type a long question and confirm the textarea grows.
+8. Press Shift + Enter and confirm a new line is inserted.
+9. Press Enter and confirm the message sends.
+10. Refresh the page and confirm chat history reloads when Supabase/localStorage is available.
 ```

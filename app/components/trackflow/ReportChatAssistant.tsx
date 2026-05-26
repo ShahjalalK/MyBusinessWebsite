@@ -2,10 +2,10 @@
 
 // ============================================================
 // FILE: app/components/trackflow/ReportChatAssistant.tsx
-// Purpose: Floating Messenger-style secure-page chatbot UI.
+// Purpose: Premium floating Messenger-style secure-page chatbot UI.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from "react";
 import {
   Bot,
   CheckCircle2,
@@ -46,6 +46,24 @@ type ReportChatAssistantProps = {
 
 const GREETING =
   "Hi — I can help explain this private tracking review, the evidence points, and the safest next verification steps. I’ll stay within the browser-visible evidence shown here.";
+
+const STARTER_QUESTIONS = [
+  "What does this finding mean?",
+  "What should we verify first?",
+  "Can this affect Google Ads reporting?",
+  "Who prepared this review?",
+];
+
+const CLOSED_STATE_QUESTIONS = [
+  "What should we verify first?",
+  "Can this affect Google Ads reporting?",
+];
+
+const DEFAULT_FOLLOW_UP_QUESTIONS = [
+  "What should we check inside GA4?",
+  "Why does this need account access?",
+  "What is the safest next step?",
+];
 
 function createId(prefix = "msg"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -130,6 +148,214 @@ function getMessagesStorageKey(token: string, sessionId: string): string {
   return `trackflow_report_chat_messages_${token || "unknown"}_${sessionId || "unknown"}`;
 }
 
+function cleanDisplayLine(value: string): string {
+  return String(value || "")
+    .replace(/\*\*/g, "")
+    .replace(/__+/g, "")
+    .replace(/`+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isAssistantHeading(value: string): boolean {
+  const text = cleanDisplayLine(value).replace(/[:：]\s*$/, "");
+  if (!text || text.length > 62) return false;
+
+  return /^(short answer|what this means|what to verify next|important note|evidence to review|next step|why it matters|how to think about it|recommended action|verification plan)$/i.test(
+    text,
+  );
+}
+
+function splitKnownHeading(value: string): { title: string; body: string } | null {
+  const cleaned = cleanDisplayLine(value);
+  const match = cleaned.match(
+    /^(Short answer|What this means|What to verify next|Important note|Evidence to review|Next step|Why it matters|How to think about it|Recommended action|Verification plan)\s*[:：]\s*(.+)$/i,
+  );
+
+  if (!match) return null;
+
+  return {
+    title: match[1],
+    body: match[2],
+  };
+}
+
+function getFollowUpQuestions(content: string): string[] {
+  const text = String(content || "").toLowerCase();
+
+  if (/google ads|ads reporting|conversion/i.test(text)) {
+    return [
+      "Can this affect Google Ads reporting?",
+      "What should we check in Google Ads?",
+      "What should we verify first?",
+    ];
+  }
+
+  if (/ga4|gtm|debugview|tag manager/i.test(text)) {
+    return [
+      "What should we check inside GA4?",
+      "What should we check in GTM Preview?",
+      "Why does this need account access?",
+    ];
+  }
+
+  if (/form|lead|enquiry|inquiry|booking|phone/i.test(text)) {
+    return [
+      "What should we test on the lead path?",
+      "Can this affect lead reporting?",
+      "What is the safest next step?",
+    ];
+  }
+
+  return DEFAULT_FOLLOW_UP_QUESTIONS;
+}
+
+function FormattedAssistantMessage({ content }: { content: string }) {
+  const lines = String(content || "")
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n");
+
+  const elements: ReactElement[] = [];
+  let paragraphLines: string[] = [];
+  let bulletItems: string[] = [];
+  let numberItems: string[] = [];
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+
+    const paragraph = paragraphLines.join(" ").trim();
+    paragraphLines = [];
+
+    if (!paragraph) return;
+
+    const headingPair = splitKnownHeading(paragraph);
+    if (headingPair) {
+      elements.push(
+        <div
+          key={`section-${elements.length}`}
+          className="rounded-2xl border border-blue-100 bg-blue-50/70 px-3.5 py-3"
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+            {headingPair.title}
+          </p>
+          <p className="mt-1.5 text-sm font-semibold leading-6 text-slate-700">{headingPair.body}</p>
+        </div>,
+      );
+      return;
+    }
+
+    elements.push(
+      <p key={`p-${elements.length}`} className="text-sm font-semibold leading-6 text-slate-700">
+        {paragraph}
+      </p>,
+    );
+  };
+
+  const flushBullets = () => {
+    if (!bulletItems.length) return;
+
+    const items = [...bulletItems];
+    bulletItems = [];
+
+    elements.push(
+      <ul key={`ul-${elements.length}`} className="space-y-2">
+        {items.map((item, index) => (
+          <li key={`${item}-${index}`} className="flex gap-2.5 text-sm font-semibold leading-6 text-slate-700">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>,
+    );
+  };
+
+  const flushNumbers = () => {
+    if (!numberItems.length) return;
+
+    const items = [...numberItems];
+    numberItems = [];
+
+    elements.push(
+      <ol key={`ol-${elements.length}`} className="space-y-2">
+        {items.map((item, index) => (
+          <li key={`${item}-${index}`} className="flex gap-2.5 text-sm font-semibold leading-6 text-slate-700">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-slate-900 text-[10px] font-black text-white">
+              {index + 1}
+            </span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ol>,
+    );
+  };
+
+  const flushAll = () => {
+    flushParagraph();
+    flushBullets();
+    flushNumbers();
+  };
+
+  for (const rawLine of lines) {
+    const line = cleanDisplayLine(rawLine.replace(/^#{1,4}\s*/, ""));
+
+    if (!line) {
+      flushAll();
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*•]\s+(.+)$/);
+    const numberMatch = line.match(/^\d+[\).]\s+(.+)$/);
+
+    if (bulletMatch) {
+      flushParagraph();
+      flushNumbers();
+      bulletItems.push(cleanDisplayLine(bulletMatch[1]));
+      continue;
+    }
+
+    if (numberMatch) {
+      flushParagraph();
+      flushBullets();
+      numberItems.push(cleanDisplayLine(numberMatch[1]));
+      continue;
+    }
+
+    if (isAssistantHeading(line)) {
+      flushAll();
+      elements.push(
+        <p
+          key={`h-${elements.length}`}
+          className="pt-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500"
+        >
+          {line.replace(/[:：]\s*$/, "")}
+        </p>,
+      );
+      continue;
+    }
+
+    flushBullets();
+    flushNumbers();
+    paragraphLines.push(line);
+  }
+
+  flushAll();
+
+  if (!elements.length) {
+    return (
+      <p className="text-sm font-semibold leading-6 text-slate-700">
+        {cleanDisplayLine(content)}
+      </p>
+    );
+  }
+
+  return <div className="space-y-3">{elements}</div>;
+}
+
+function UserMessageText({ content }: { content: string }) {
+  return <p className="whitespace-pre-wrap text-sm font-semibold leading-6">{content}</p>;
+}
+
 export default function ReportChatAssistant({
   token,
   domainSlug,
@@ -150,15 +376,7 @@ export default function ReportChatAssistant({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const suggestedQuestions = useMemo(
-    () => [
-      "What does this finding mean?",
-      "What should we verify first?",
-      "Can this affect Google Ads reporting?",
-      "Who prepared this review?",
-    ],
-    [],
-  );
+  const suggestedQuestions = useMemo(() => STARTER_QUESTIONS, []);
 
   const storageKey = useMemo(
     () => (token && sessionId ? getMessagesStorageKey(token, sessionId) : ""),
@@ -169,6 +387,10 @@ export default function ReportChatAssistant({
     () => messages.some((message) => message.role === "user"),
     [messages],
   );
+
+  const latestAssistantMessage = useMemo(() => {
+    return [...messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
+  }, [messages]);
 
   useEffect(() => {
     if (!token) return;
@@ -268,11 +490,30 @@ export default function ReportChatAssistant({
     scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isOpen, isSending]);
 
+  const resizeInput = () => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    input.style.height = "auto";
+
+    const minHeight = 48;
+    const maxHeight = 150;
+    const nextHeight = Math.min(Math.max(input.scrollHeight, minHeight), maxHeight);
+
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > maxHeight ? "auto" : "hidden";
+  };
+
+  useEffect(() => {
+    resizeInput();
+  }, [question, isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
 
     const timer = window.setTimeout(() => {
       inputRef.current?.focus();
+      resizeInput();
     }, 180);
 
     return () => window.clearTimeout(timer);
@@ -281,7 +522,10 @@ export default function ReportChatAssistant({
   useEffect(() => {
     const openChat = () => {
       setIsOpen(true);
-      window.setTimeout(() => inputRef.current?.focus(), 180);
+      window.setTimeout(() => {
+        inputRef.current?.focus();
+        resizeInput();
+      }, 180);
     };
 
     const openFromHash = () => {
@@ -356,14 +600,16 @@ export default function ReportChatAssistant({
     setIsSending(true);
     setStatusLabel("Answering from this review...");
 
+    window.setTimeout(() => resizeInput(), 0);
+
     const abortController = new AbortController();
     const timeout = window.setTimeout(() => abortController.abort(), 65000);
     let renderedText = "";
 
     const typeAssistantText = async (targetText: string, speed: "normal" | "fast" = "normal") => {
       const nextText = String(targetText || "");
-      const step = speed === "fast" ? 8 : 4;
-      const delay = speed === "fast" ? 5 : 11;
+      const step = speed === "fast" ? 10 : 5;
+      const delay = speed === "fast" ? 4 : 10;
 
       while (renderedText.length < nextText.length) {
         renderedText = nextText.slice(0, Math.min(nextText.length, renderedText.length + step));
@@ -461,6 +707,13 @@ export default function ReportChatAssistant({
     void submitQuestion();
   }
 
+  const showFollowUps =
+    Boolean(latestAssistantMessage?.id) &&
+    hasUserMessages &&
+    !isSending &&
+    !isDisabled &&
+    latestAssistantMessage?.role === "assistant";
+
   return (
     <>
       <span id="ask-this-review" className="sr-only">
@@ -470,7 +723,7 @@ export default function ReportChatAssistant({
       <div className="fixed inset-x-3 bottom-3 z-[90] flex flex-col items-end sm:inset-x-auto sm:bottom-6 sm:right-6">
         {isOpen ? (
           <div
-            className="flex h-[min(780px,calc(100vh-24px))] w-full max-w-[520px] flex-col overflow-hidden rounded-[1.75rem] border border-blue-100 bg-white shadow-2xl shadow-slate-950/25 sm:w-[460px] lg:w-[500px]"
+            className="flex h-[min(820px,calc(100vh-24px))] w-full max-w-[540px] flex-col overflow-hidden rounded-[1.75rem] border border-blue-100 bg-white shadow-2xl shadow-slate-950/25 sm:w-[470px] lg:w-[520px]"
             role="dialog"
             aria-modal="false"
             aria-label="TrackFlow Pro report chat"
@@ -527,24 +780,47 @@ export default function ReportChatAssistant({
               <div className="space-y-3">
                 {messages.map((message) => {
                   const isUser = message.role === "user";
+                  const isLatestAssistant = message.id === latestAssistantMessage?.id;
 
                   return (
                     <div key={message.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[88%] rounded-3xl px-4 py-3 text-sm leading-6 shadow-sm ${
-                          isUser
-                            ? "rounded-br-md bg-blue-600 text-white shadow-blue-900/15"
-                            : "rounded-bl-md border border-slate-100 bg-white text-slate-700 shadow-slate-950/5"
-                        }`}
-                      >
-                        {message.content ? (
-                          <p className="whitespace-pre-wrap">{message.content}</p>
-                        ) : (
-                          <span className="inline-flex items-center gap-2 text-slate-400">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Thinking...
-                          </span>
-                        )}
+                      <div className={`max-w-[92%] ${isUser ? "text-right" : "text-left"}`}>
+                        <div
+                          className={`rounded-3xl px-4 py-3 shadow-sm ${
+                            isUser
+                              ? "rounded-br-md bg-blue-600 text-white shadow-blue-900/15"
+                              : "rounded-bl-md border border-slate-100 bg-white text-slate-700 shadow-slate-950/5"
+                          }`}
+                        >
+                          {message.content ? (
+                            isUser ? (
+                              <UserMessageText content={message.content} />
+                            ) : (
+                              <FormattedAssistantMessage content={message.content} />
+                            )
+                          ) : (
+                            <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Thinking...
+                            </span>
+                          )}
+                        </div>
+
+                        {isLatestAssistant && showFollowUps ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {getFollowUpQuestions(message.content).map((item) => (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => void submitQuestion(item)}
+                                disabled={isSending || isDisabled}
+                                className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-left text-[11px] font-bold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {item}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -565,18 +841,26 @@ export default function ReportChatAssistant({
 
             <div className="border-t border-slate-100 bg-white p-4">
               {!hasUserMessages && !isDisabled ? (
-                <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {suggestedQuestions.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => void submitQuestion(item)}
-                      disabled={isSending || isDisabled}
-                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {item}
-                    </button>
-                  ))}
+                <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                      Quick questions
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {suggestedQuestions.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => void submitQuestion(item)}
+                        disabled={isSending || isDisabled}
+                        className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-left text-[11px] font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
@@ -612,7 +896,7 @@ export default function ReportChatAssistant({
                     placeholder="Ask about this review..."
                     rows={1}
                     disabled={isSending}
-                    className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-[48px] flex-1 resize-none overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <button
                     type="submit"
@@ -631,26 +915,56 @@ export default function ReportChatAssistant({
             </div>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="group flex items-center gap-3 rounded-full bg-blue-600 px-5 py-4 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
-            aria-label="Open tracking review chat"
-            aria-expanded={isOpen}
-          >
-            <span className="relative grid h-10 w-10 place-items-center rounded-full bg-white/15">
-              <MessageCircle className="h-5 w-5" />
-              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-blue-600 bg-emerald-400" />
-              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 animate-ping rounded-full bg-emerald-300 opacity-60" />
-            </span>
+          <>
+            {!isDisabled ? (
+              <div className="mb-3 w-full max-w-[420px] rounded-3xl border border-blue-100 bg-white/95 p-3 shadow-xl shadow-slate-950/10 backdrop-blur sm:w-[420px]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    Ask a quick question
+                  </p>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    Online
+                  </span>
+                </div>
 
-            <span className="hidden text-left sm:block">
-              <span className="block text-sm font-black leading-none">Ask about this review</span>
-              <span className="mt-1 block text-[11px] font-bold text-blue-100">Online • report-aware assistant</span>
-            </span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {CLOSED_STATE_QUESTIONS.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => void submitQuestion(item)}
+                      disabled={isSending}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold leading-4 text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
-            <Sparkles className="hidden h-4 w-4 opacity-80 transition group-hover:rotate-12 sm:block" />
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              className="group flex items-center gap-3 rounded-full bg-blue-600 px-5 py-4 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
+              aria-label="Open tracking review chat"
+              aria-expanded={isOpen}
+            >
+              <span className="relative grid h-10 w-10 place-items-center rounded-full bg-white/15">
+                <MessageCircle className="h-5 w-5" />
+                <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-blue-600 bg-emerald-400" />
+                <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 animate-ping rounded-full bg-emerald-300 opacity-60" />
+              </span>
+
+              <span className="hidden text-left sm:block">
+                <span className="block text-sm font-black leading-none">Ask about this review</span>
+                <span className="mt-1 block text-[11px] font-bold text-blue-100">Online • report-aware assistant</span>
+              </span>
+
+              <Sparkles className="hidden h-4 w-4 opacity-80 transition group-hover:rotate-12 sm:block" />
+            </button>
+          </>
         )}
       </div>
     </>

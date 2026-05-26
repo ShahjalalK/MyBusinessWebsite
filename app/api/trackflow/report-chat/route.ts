@@ -34,6 +34,21 @@ export const dynamic = "force-dynamic";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
+const PREMIUM_CHAT_FORMAT_INSTRUCTIONS = `
+Premium chat formatting rules:
+- Answer in polished English only.
+- Keep the answer short, calm, and client-friendly.
+- Use clear spacing with short section labels when helpful:
+  Short answer:
+  What this means:
+  What to verify next:
+  Important note:
+- Use simple hyphen bullets or numbered steps when listing items.
+- Do not use Markdown bold markers, tables, code blocks, emojis, or long wall-of-text paragraphs.
+- Do not invent evidence. Do not claim final account-level truth without approved access.
+`.trim();
+
+
 function jsonError(message: string, status = 400, extra: AnyRecord = {}) {
   return NextResponse.json(
     {
@@ -267,7 +282,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const prompt = buildGeminiPrompt({ context, question, history });
+  const prompt = `${buildGeminiPrompt({ context, question, history })}\n\n${PREMIUM_CHAT_FORMAT_INSTRUCTIONS}`;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

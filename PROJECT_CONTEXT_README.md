@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.67-premium-floating-chat-ux-fix
+Version: v18.68-premium-chat-readability-and-input-fix
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -204,6 +204,33 @@ It should not scroll the user into a large inline chat section.
 ```
 
 The chat UI should keep all answers evidence-safe and report-aware.
+
+
+### 3.12 Premium Chat Readability and Input Rule
+
+The secure report chatbot should make answers easy to read inside a compact messenger window.
+
+Required behavior:
+
+```text
+Assistant answers should not appear as one plain text wall.
+Client-facing answers should render as readable paragraphs, short section blocks, bullet lists, and numbered steps when applicable.
+Important notes should be visually separated from the main explanation.
+Suggested questions should appear in a helpful, non-cluttered way.
+Closed chat state may show 1-2 smart question chips above the floating button.
+Open chat state should show starter questions before the first user question and contextual follow-up chips after assistant answers.
+The chat input should auto-grow while the visitor types longer questions.
+Enter sends the message; Shift + Enter creates a new line.
+The input must stop growing at a comfortable max height and then scroll internally.
+```
+
+Design goal:
+
+```text
+The chatbot should feel like a premium report-aware assistant, not a plain support textarea.
+The UI should invite the client to ask the next useful tracking-review question without covering the report content.
+```
+
 
 ### 3.6 Secure Report Responsive UX Rule
 
@@ -996,6 +1023,10 @@ Owns:
 - client-side session/visitor IDs
 - Supabase/localStorage history restore on refresh
 - progressive typing-style answer display
+- formatted assistant answer rendering with readable paragraphs, bullet lists, numbered steps, and important-note blocks
+- smart starter/follow-up question chips inside the chat
+- closed-state smart question chips above the floating button
+- auto-growing textarea input with Enter-to-send and Shift+Enter new line
 - disabled-input fallback UI
 - CTA handoff when AI is unavailable or limited
 
@@ -1431,6 +1462,31 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.68 Premium Chat Readability and Input Patch
+
+Secure report chatbot UX was improved so the floating messenger feels more premium and easier to use.
+
+Changed files:
+
+```text
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Assistant answers should render as structured chat content instead of plain wall text.
+The UI should support short section labels, bullets, numbered steps, and important-note style blocks.
+Closed state may show smart quick-question chips above the main chat button.
+Open state should show starter questions before the first user question and contextual follow-up questions after replies.
+The text input should auto-grow while typing, support Shift+Enter for a new line, and Enter to send.
+The route may add formatting guidance to Gemini, but evidence-safe validation and Supabase logging remain unchanged.
+```
+
+
 
 ### Early modularization
 
