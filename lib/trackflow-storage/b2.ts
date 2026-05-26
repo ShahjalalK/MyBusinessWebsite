@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash, createHmac } from "node:crypto";
 
 type B2Config = {
@@ -78,13 +79,27 @@ function sha256Hex(value: Buffer | string): string {
 
 function toBuffer(value: Buffer | ArrayBuffer | Uint8Array): Buffer {
   if (Buffer.isBuffer(value)) return value;
-  return Buffer.from(value);
+
+  if (value instanceof ArrayBuffer) {
+    return Buffer.from(new Uint8Array(value));
+  }
+
+  const copied = new Uint8Array(value.byteLength);
+  copied.set(value);
+  return Buffer.from(copied);
 }
 
-function toFetchBody(buffer: Buffer): BodyInit {
-  // Buffer is valid at runtime in Node fetch, but some DOM/Node type combinations
-  // flag it. Uint8Array keeps the same bytes and satisfies BodyInit reliably.
-  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) as BodyInit;
+function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
+  const arrayBuffer = new ArrayBuffer(buffer.byteLength);
+  const view = new Uint8Array(arrayBuffer);
+  view.set(buffer);
+  return arrayBuffer;
+}
+
+function toFetchBody(buffer: Buffer): ArrayBuffer {
+  // Use a copied ArrayBuffer instead of Buffer/Uint8Array so TypeScript stays happy
+  // across Node + DOM fetch type combinations.
+  return bufferToArrayBuffer(buffer);
 }
 
 function hmac(key: Buffer | string, value: string): Buffer {
