@@ -75,6 +75,18 @@ function sha256Hex(value: Buffer | string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+
+function toBuffer(value: Buffer | ArrayBuffer | Uint8Array): Buffer {
+  if (Buffer.isBuffer(value)) return value;
+  return Buffer.from(value);
+}
+
+function toFetchBody(buffer: Buffer): BodyInit {
+  // Buffer is valid at runtime in Node fetch, but some DOM/Node type combinations
+  // flag it. Uint8Array keeps the same bytes and satisfies BodyInit reliably.
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) as BodyInit;
+}
+
 function hmac(key: Buffer | string, value: string): Buffer {
   return createHmac("sha256", key).update(value).digest();
 }
@@ -110,6 +122,11 @@ function normalizeObjectKey(key: string): string {
   if (!cleaned) throw new Error("B2 object key is required.");
   if (cleaned.includes("..")) throw new Error("Unsafe B2 object key.");
   return cleaned;
+}
+
+
+export function sanitizeB2Key(key: string): string {
+  return normalizeObjectKey(key);
 }
 
 function signedHeadersFrom(headers: Record<string, string>): string {
@@ -209,7 +226,7 @@ export async function uploadPdfToB2(input: {
   buffer: Buffer | ArrayBuffer | Uint8Array;
   filename?: string;
 }): Promise<B2UploadResult> {
-  const buffer = Buffer.isBuffer(input.buffer) ? input.buffer : Buffer.from(input.buffer);
+  const buffer = toBuffer(input.buffer);
   if (buffer.byteLength < 500) throw new Error("PDF buffer is too small to upload to B2.");
   if (buffer.subarray(0, 5).toString("utf8") !== "%PDF-") {
     throw new Error("Refusing to upload non-PDF content to B2.");
@@ -229,7 +246,7 @@ export async function uploadPdfToB2(input: {
   const response = await fetch(signed.url, {
     method: "PUT",
     headers: signed.headers,
-    body: buffer,
+    body: toFetchBody(buffer),
   });
 
   if (!response.ok) {

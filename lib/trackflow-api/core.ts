@@ -1,16 +1,19 @@
-import { timingSafeEqual } from "crypto";
-import admin from "firebase-admin";
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
+import admin from "firebase-admin";
 
 export type RouteContext = {
   params?: { action?: string[] } | Promise<{ action?: string[] }>;
 };
+
+export type HealthJson = Record<string, any>;
 
 export class ApiError extends Error {
   status: number;
 
   constructor(message: string, status = 400) {
     super(message);
+    this.name = "ApiError";
     this.status = status;
   }
 }
@@ -26,7 +29,13 @@ export function htmlResponse(html: string, status = 200) {
   });
 }
 
-export async function readJson(req: Request) {
+export async function getAction(ctx: RouteContext): Promise<string> {
+  const maybeParams: any = ctx?.params;
+  const params = typeof maybeParams?.then === "function" ? await maybeParams : maybeParams;
+  return (params?.action || []).join("/").replace(/^\/+|\/+$/g, "").toLowerCase();
+}
+
+export async function readJson(req: Request): Promise<any> {
   try {
     return await req.json();
   } catch {
@@ -40,16 +49,22 @@ export function env(name: string, required = true): string {
   return value || "";
 }
 
-export function normalizeEmail(email: string): string {
+export function envFlag(name: string, fallback = false): boolean {
+  const raw = String(process.env[name] || "").trim().toLowerCase();
+  if (!raw) return fallback;
+  return ["1", "true", "yes", "y", "on"].includes(raw);
+}
+
+export function normalizeEmail(email: any): string {
   return String(email || "").trim().toLowerCase();
 }
 
-export function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+export function isValidEmail(email: any): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 }
 
 export function emailDocId(emailLower: string): string {
-  return encodeURIComponent(emailLower).replace(/\./g, "%2E");
+  return encodeURIComponent(String(emailLower || "").trim().toLowerCase()).replace(/\./g, "%2E");
 }
 
 export function toMillis(value: any): number {
@@ -77,8 +92,32 @@ export function todayKey(date = new Date()): string {
   }).format(date);
 }
 
-export function isProductionEnv(): boolean {
-  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+export function escapeHtml(value: any): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function safeEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a || "");
+  const bBuf = Buffer.from(b || "");
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
+
+export function sanitizeOptionalUrl(value: any): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 export function getComplianceMailingAddress(): string {
@@ -96,13 +135,17 @@ export function buildComplianceAddressLine(prefix = "Mailing address: "): string
   return `${prefix}${address}`;
 }
 
-export function stripDangerousHtml(input: string): string {
+export function stripDangerousHtml(input: any): string {
   let html = String(input || "");
 
+  // Remove high-risk tags with their content.
   html = html.replace(/<(script|iframe|object|embed|form|textarea|input|button|select|option|link|meta|style)[\s\S]*?>[\s\S]*?<\/\1>/gi, "");
+  // Remove self-closing or standalone high-risk tags.
   html = html.replace(/<(script|iframe|object|embed|form|textarea|input|button|select|option|link|meta|style)\b[^>]*\/?\s*>/gi, "");
+  // Remove inline event handlers like onclick/onload.
   html = html.replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
   html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, "");
+  // Remove unsafe URL protocols from attributes/content.
   html = html.replace(/javascript\s*:/gi, "");
   html = html.replace(/data\s*:\s*text\/html/gi, "");
   html = html.replace(/vbscript\s*:/gi, "");
@@ -110,21 +153,27 @@ export function stripDangerousHtml(input: string): string {
   return html.trim();
 }
 
-export function plainTextFromHtml(input: string): string {
+export function plainTextFromHtml(input: any): string {
   return String(input || "")
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
     .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-export function countWordsFromHtml(input: string): number {
+export function countWordsFromHtml(input: any): number {
   const text = plainTextFromHtml(input);
   return text ? text.split(/\s+/).filter(Boolean).length : 0;
 }
 
-export function countLinksFromHtml(input: string): number {
+export function countLinksFromHtml(input: any): number {
   return (String(input || "").match(/<a\s/gi) || []).length;
 }
 
@@ -154,32 +203,4 @@ export function scheduleBeforeEngagementTime(anchorEngagedMs: number, delayMinut
   if (!anchorEngagedMs) return 0;
   const safeDelay = Number.isFinite(delayMinutes) && delayMinutes > 0 ? delayMinutes : 1440;
   return anchorEngagedMs + (safeDelay - 60) * 60_000;
-}
-
-export function safeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a || "");
-  const bBuf = Buffer.from(b || "");
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
-
-export function escapeHtml(value: string): string {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-export function sanitizeOptionalUrl(value: string): string {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  try {
-    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
-    if (!["http:", "https:"].includes(url.protocol)) return "";
-    return url.toString();
-  } catch {
-    return "";
-  }
 }
