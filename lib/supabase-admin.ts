@@ -227,24 +227,27 @@ export async function loadReportChatMessages(input: {
     ].join("&"),
   });
 
-  return rows
-    .map((row) => {
-      const role = row.role === "assistant" ? "assistant" : row.role === "user" ? "user" : "";
-      const content = cleanText(row.content, 5000);
+  const messages: StoredReportChatMessage[] = [];
 
-      if (!role || !content) return null;
+  for (const row of rows) {
+    const role: StoredReportChatMessage["role"] | null =
+      row.role === "assistant" ? "assistant" : row.role === "user" ? "user" : null;
+    const content = cleanText(row.content, 5000);
 
-      return {
-        sessionId: cleanId(row.session_id || sessionId),
-        reportToken: cleanId(row.report_token || reportToken),
-        role,
-        content,
-        source: cleanText(row.source, 80),
-        quotaStatus: cleanText(row.quota_status, 80),
-        createdAt: cleanText(row.created_at, 80),
-      } satisfies StoredReportChatMessage;
-    })
-    .filter((item): item is StoredReportChatMessage => Boolean(item));
+    if (!role || !content) continue;
+
+    messages.push({
+      sessionId: cleanId(row.session_id || sessionId),
+      reportToken: cleanId(row.report_token || reportToken),
+      role,
+      content,
+      source: cleanText(row.source, 80),
+      quotaStatus: cleanText(row.quota_status, 80),
+      createdAt: cleanText(row.created_at, 80),
+    });
+  }
+
+  return messages;
 }
 
 export async function listReportChatSessions(input: {
@@ -274,18 +277,21 @@ export async function listReportChatSessions(input: {
     query: queryParts.join("&"),
   });
 
-  return rows
-    .map((row) => {
-      const id = cleanId(row.id);
-      const token = cleanId(row.report_token);
-      if (!id || !token) return null;
+  const sessions: StoredReportChatSession[] = [];
 
-      return {
-        id,
-        reportToken: token,
-        domain: cleanText(row.domain, 180),
-        updatedAt: cleanText(row.updated_at, 80),
-      } satisfies StoredReportChatSession;
-    })
-    .filter((item): item is StoredReportChatSession => Boolean(item));
+  for (const row of rows) {
+    const id = cleanId(row.id);
+    const token = cleanId(row.report_token);
+
+    if (!id || !token) continue;
+
+    sessions.push({
+      id,
+      reportToken: token,
+      domain: cleanText(row.domain, 180),
+      updatedAt: cleanText(row.updated_at, 80),
+    });
+  }
+
+  return sessions;
 }
