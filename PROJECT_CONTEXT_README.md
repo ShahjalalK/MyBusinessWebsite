@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.49-secure-report-responsive-ux  
+Version: v18.50-secure-report-chat-answer-quality  
 Last updated: 2026-05-26  
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -1133,6 +1133,45 @@ Before sending to a client:
 
 ---
 
+
+### v18.50 Secure Report Chat Answer Quality Patch
+
+Secure report chatbot answer quality was tightened without changing Firestore report storage or the secure page report-register flow.
+
+Changed files:
+
+```text
+app/api/trackflow/report-chat/route.ts
+lib/trackflow-ai/report-chat.ts
+app/components/trackflow/ReportChatAssistant.tsx
+lib/supabase-admin.ts
+```
+
+Important decisions:
+
+```text
+Node.js runtime remains required for Firebase Admin compatibility.
+The chatbot validates Gemini output before showing it to clients, so incomplete half-sentences are replaced with a safe report-based answer.
+Common report questions use deterministic professional answers before Gemini when appropriate.
+TrackFlow Pro identity questions may answer: Shahjalal Khan, Founder & Tracking Architect.
+Reviewed-business CEO/founder questions remain outside scope unless that information is explicitly saved in the report.
+Answers should be concise, calm, non-accusatory, and evidence-safe.
+Supabase logging uses UUID session IDs and base table columns only, so it works with the simple setup SQL.
+```
+
+The chatbot must continue to avoid:
+
+```text
+Invented evidence
+Account-level truth claims
+Revenue-loss claims
+Claims that tracking is broken
+Long generic AI answers
+Markdown-heavy formatting with visible **bold markers**
+```
+
+---
+
 ## 11. Version History Summary
 
 ### Early modularization
@@ -1190,6 +1229,10 @@ Before sending to a client:
 - **v18.44** — PDF client presentation polish.
 - **v18.45** — LinkedIn/manual audit Create Secure Page button.
 - **v18.46** — this master context README consolidating Python, Next.js, secure report, Blob, Firestore, PDF, OG, LinkedIn, and email automation context.
+- **v18.47** — secure report Gemini assistant context and optional Supabase logging documented.
+- **v18.48** — secure report streaming chatbot patch with Node.js runtime and quota fallback.
+- **v18.49** — secure report responsive UI/UX polish for mobile, tablet, and desktop.
+- **v18.50** — chatbot answer-quality patch: deterministic key answers, TrackFlow Pro identity handling, incomplete answer repair, and Supabase logging compatibility.
 - **v18.47** — secure report Gemini assistant context; report-aware, evidence-safe, Supabase optional chat logging.
 - **v18.48** — streaming secure report assistant route using Node.js runtime with Gemini fallback behavior.
 - **v18.49** — secure report responsive UX polish for desktop, tablet, and mobile; PDF mobile compact card and clearer chatbot layout.

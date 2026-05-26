@@ -1,21 +1,22 @@
 // ============================================================
 // FILE: app/api/trackflow/report-chat/route.ts
-// Purpose: Streaming Gemini assistant for private tracking-review pages.
+// Purpose: Validated Gemini assistant for private tracking-review pages.
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import {
+  buildDeterministicAnswer,
   buildGeminiPrompt,
   buildSafeFallbackAnswer,
   cleanQuestion,
   extractReportChatContext,
-  filterUnsafeAnswer,
   isQuotaLikeError,
   normalizeChatHistory,
   normalizeSlug,
   normalizeToken,
   streamGeminiChunks,
+  validateAssistantAnswer,
   type AnyRecord,
 } from "@/lib/trackflow-ai/report-chat";
 import {
@@ -53,11 +54,11 @@ function makeTextStream(text: string, onDone?: () => Promise<void>) {
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const paragraphs = String(text || "")
-          .split(/(\n\n)/g)
+        const parts = String(text || "")
+          .split(/(\n\n|(?<=\.)\s+)/g)
           .filter(Boolean);
 
-        for (const part of paragraphs) {
+        for (const part of parts) {
           controller.enqueue(encoder.encode(part));
         }
       } finally {
@@ -84,6 +85,21 @@ function streamResponse(stream: ReadableStream<Uint8Array>, mode: string) {
       "x-trackflow-chat-mode": mode,
     },
   });
+}
+
+async function logSafely(input: {
+  sessionId: string;
+  reportToken: string;
+  question: string;
+  answer: string;
+  mode: "gemini_stream" | "smart_fallback" | "quota_disabled" | "error";
+  status?: string;
+}) {
+  try {
+    await logReportChatMessages(input);
+  } catch {
+    // Optional logging only.
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -141,17 +157,34 @@ export async function POST(req: NextRequest) {
     // Optional logging only.
   }
 
-  if (!GEMINI_API_KEY) {
-    const fallback = buildSafeFallbackAnswer(context, question);
-    const safeFallback = filterUnsafeAnswer(fallback, context);
-
+  const deterministic = buildDeterministicAnswer(context, question);
+  if (deterministic) {
+    const answer = validateAssistantAnswer(deterministic, context, question);
     return streamResponse(
-      makeTextStream(safeFallback, async () => {
-        await logReportChatMessages({
+      makeTextStream(answer, async () => {
+        await logSafely({
           sessionId,
           reportToken: token,
           question,
-          answer: safeFallback,
+          answer,
+          mode: "smart_fallback",
+          status: "deterministic_answer",
+        });
+      }),
+      "deterministic_answer",
+    );
+  }
+
+  if (!GEMINI_API_KEY) {
+    const fallback = validateAssistantAnswer(buildSafeFallbackAnswer(context, question), context, question);
+
+    return streamResponse(
+      makeTextStream(fallback, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer: fallback,
           mode: "smart_fallback",
           status: "missing_gemini_api_key",
         });
@@ -161,80 +194,64 @@ export async function POST(req: NextRequest) {
   }
 
   const prompt = buildGeminiPrompt({ context, question, history });
-  const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const chunks: string[] = [];
+      const encoder = new TextEncoder();
       let mode: "gemini_stream" | "smart_fallback" | "quota_disabled" | "error" = "gemini_stream";
       let status = "ok";
+      let answer = "";
 
       try {
+        const chunks: string[] = [];
+
+        // Buffer the Gemini stream first, then stream the validated answer to the browser.
+        // This avoids client-facing half-sentences while still keeping the Vercel response streaming-safe.
         for await (const chunk of streamGeminiChunks({
           prompt,
           apiKey: GEMINI_API_KEY,
           model: GEMINI_MODEL,
         })) {
           chunks.push(chunk);
-          controller.enqueue(encoder.encode(chunk));
         }
 
         const joined = chunks.join("").trim();
-        const safe = filterUnsafeAnswer(joined, context);
+        answer = validateAssistantAnswer(joined, context, question);
 
-        if (joined && safe !== joined) {
-          chunks.length = 0;
-          chunks.push(safe);
-          // The unsafe text was already streamed, so add a final correction.
-          controller.enqueue(
-            encoder.encode(
-              "\n\nImportant correction: this review is based on browser-visible evidence only. Final confirmation requires GA4, GTM, Google Ads, CRM, or server/server-side access.",
-            ),
-          );
-        }
-
-        if (!chunks.join("").trim()) {
-          mode = "smart_fallback";
-          status = "empty_gemini_stream";
-          const fallback = buildSafeFallbackAnswer(context, question);
-          chunks.push(fallback);
-          controller.enqueue(encoder.encode(fallback));
+        if (!joined || answer !== joined.trim()) {
+          status = !joined ? "empty_gemini_stream" : "validated_or_repaired_answer";
         }
       } catch (error) {
         if (isQuotaLikeError(error)) {
           mode = "quota_disabled";
           status = "quota_or_rate_limit";
-          const message =
+          answer =
             "The AI review assistant is temporarily unavailable because the usage limit was reached. You can still request a manual tracking verification review from TrackFlow Pro.";
-          chunks.push(message);
-          controller.enqueue(encoder.encode(message));
         } else {
           mode = "smart_fallback";
           status = "gemini_stream_error";
-          const fallback = buildSafeFallbackAnswer(context, question);
-          chunks.push(fallback);
-          controller.enqueue(encoder.encode(fallback));
+          answer = validateAssistantAnswer(buildSafeFallbackAnswer(context, question), context, question);
+        }
+      }
+
+      try {
+        const parts = answer.split(/(\n\n|(?<=\.)\s+)/g).filter(Boolean);
+        for (const part of parts) {
+          controller.enqueue(encoder.encode(part));
         }
       } finally {
         controller.close();
-
-        const answer = filterUnsafeAnswer(chunks.join("").trim(), context);
-
-        try {
-          await logReportChatMessages({
-            sessionId,
-            reportToken: token,
-            question,
-            answer,
-            mode,
-            status,
-          });
-        } catch {
-          // Optional logging only.
-        }
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode,
+          status,
+        });
       }
     },
   });
 
-  return streamResponse(stream, "gemini_stream");
+  return streamResponse(stream, "validated_gemini_stream");
 }

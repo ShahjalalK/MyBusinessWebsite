@@ -34,11 +34,33 @@ function cleanText(value: unknown, maxLength = 3000): string {
     .slice(0, maxLength);
 }
 
-async function insertRows(table: string, rows: AnyRecord | AnyRecord[]): Promise<void> {
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function safeTableName(value: string): string {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_]/g, "")
+    .slice(0, 80);
+}
+
+async function postRows({
+  table,
+  rows,
+  upsert = false,
+}: {
+  table: string;
+  rows: AnyRecord | AnyRecord[];
+  upsert?: boolean;
+}): Promise<void> {
   if (!isConfigured()) return;
 
+  const cleanTable = safeTableName(table);
+  if (!cleanTable) return;
+
   const baseUrl = SUPABASE_URL.replace(/\/+$/, "");
-  const url = `${baseUrl}/rest/v1/${encodeURIComponent(table)}`;
+  const url = `${baseUrl}/rest/v1/${cleanTable}${upsert ? "?on_conflict=id" : ""}`;
 
   try {
     await fetch(url, {
@@ -47,7 +69,7 @@ async function insertRows(table: string, rows: AnyRecord | AnyRecord[]): Promise
         apikey: SUPABASE_SERVICE_ROLE_KEY,
         authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         "content-type": "application/json",
-        prefer: "return=minimal",
+        prefer: upsert ? "resolution=merge-duplicates,return=minimal" : "return=minimal",
       },
       body: JSON.stringify(rows),
     });
@@ -57,8 +79,8 @@ async function insertRows(table: string, rows: AnyRecord | AnyRecord[]): Promise
 }
 
 export function createChatSessionId(value?: unknown): string {
-  const cleaned = cleanId(value);
-  return cleaned || randomUUID().replace(/-/g, "");
+  const raw = String(value || "").trim();
+  return isUuid(raw) ? raw : randomUUID();
 }
 
 export async function logReportChatSession(input: {
@@ -71,15 +93,18 @@ export async function logReportChatSession(input: {
 }): Promise<void> {
   const sessionId = createChatSessionId(input.sessionId);
 
-  await insertRows(CHAT_SESSIONS_TABLE, {
-    id: sessionId,
-    report_token: cleanId(input.reportToken),
-    domain_slug: cleanText(input.domainSlug, 120),
-    domain: cleanText(input.domain, 180),
-    company_name: cleanText(input.companyName, 180),
-    source: cleanText(input.source || "secure_report_chat", 80),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+  // Keep this payload compatible with the simple SQL table shared in setup instructions.
+  // Extra values like companyName/domainSlug are intentionally omitted so logging does not fail
+  // on projects that have only the base columns.
+  await postRows({
+    table: CHAT_SESSIONS_TABLE,
+    upsert: true,
+    rows: {
+      id: sessionId,
+      report_token: cleanId(input.reportToken),
+      domain: cleanText(input.domain, 180),
+      updated_at: new Date().toISOString(),
+    },
   });
 }
 
@@ -94,24 +119,28 @@ export async function logReportChatMessages(input: {
   const sessionId = createChatSessionId(input.sessionId);
   const now = new Date().toISOString();
 
-  await insertRows(CHAT_MESSAGES_TABLE, [
-    {
-      session_id: sessionId,
-      report_token: cleanId(input.reportToken),
-      role: "user",
-      content: cleanText(input.question, 1400),
-      mode: input.mode,
-      status: cleanText(input.status || "ok", 80),
-      created_at: now,
-    },
-    {
-      session_id: sessionId,
-      report_token: cleanId(input.reportToken),
-      role: "assistant",
-      content: cleanText(input.answer, 5000),
-      mode: input.mode,
-      status: cleanText(input.status || "ok", 80),
-      created_at: now,
-    },
-  ]);
+  // Match the base messages table: session_id, report_token, role, content, source, quota_status, created_at.
+  await postRows({
+    table: CHAT_MESSAGES_TABLE,
+    rows: [
+      {
+        session_id: sessionId,
+        report_token: cleanId(input.reportToken),
+        role: "user",
+        content: cleanText(input.question, 1400),
+        source: cleanText(input.mode, 80),
+        quota_status: cleanText(input.status || "ok", 80),
+        created_at: now,
+      },
+      {
+        session_id: sessionId,
+        report_token: cleanId(input.reportToken),
+        role: "assistant",
+        content: cleanText(input.answer, 5000),
+        source: cleanText(input.mode, 80),
+        quota_status: cleanText(input.status || "ok", 80),
+        created_at: now,
+      },
+    ],
+  });
 }

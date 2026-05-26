@@ -42,18 +42,31 @@ function createId(prefix = "msg"): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+function createUuid(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function getOrCreateSessionId(token: string): string {
   const key = `trackflow_report_chat_session_${token || "unknown"}`;
 
   try {
     const existing = window.localStorage.getItem(key);
-    if (existing) return existing;
+    if (existing && isUuid(existing)) return existing;
 
-    const next = createId("session").replace(/[^a-zA-Z0-9_-]/g, "");
+    const next = createUuid();
     window.localStorage.setItem(key, next);
     return next;
   } catch {
-    return createId("session").replace(/[^a-zA-Z0-9_-]/g, "");
+    return createUuid();
   }
 }
 
@@ -81,7 +94,7 @@ export default function ReportChatAssistant({
       id: createId(),
       role: "assistant",
       content:
-        "Hi — I can help explain this private tracking review, the evidence points, and the safest next verification steps. I’ll stay within the browser-visible evidence shown in this report.",
+        "Hi — I can help explain this private tracking review, the evidence points, and the safest next verification steps. You can also ask who prepared the review. I’ll stay within the browser-visible evidence shown here.",
     },
   ]);
   const [question, setQuestion] = useState("");
@@ -94,8 +107,8 @@ export default function ReportChatAssistant({
     () => [
       "What does this finding mean?",
       "What should we verify first?",
-      "Why is account access needed?",
       "Can this affect Google Ads reporting?",
+      "Who prepared this review?",
     ],
     [],
   );

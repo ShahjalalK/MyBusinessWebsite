@@ -1,53 +1,80 @@
-# TrackFlow Pro v18.49 — Secure Report Responsive UX Patch
+# TrackFlow Pro v18.50 — Secure Report Chat Answer Quality Patch
 
-## Changed files
+## Replace these files
 
-Replace these files only:
+```text
+app/api/trackflow/report-chat/route.ts
+lib/trackflow-ai/report-chat.ts
+app/components/trackflow/ReportChatAssistant.tsx
+lib/supabase-admin.ts
+PROJECT_CONTEXT_README.md
+```
 
-- `app/tracking-review/[domainSlug]/[token]/page.tsx`
-- `app/components/trackflow/ReportChatAssistant.tsx`
-- `PROJECT_CONTEXT_README.md`
+## What this patch fixes
 
-No report registration, Firestore storage, Gemini API route, Supabase logging, or Firebase Admin files were changed in this patch.
+- Prevents incomplete client-facing answers such as “Based on our browser-visible review of…”
+- Adds deterministic professional answers for common secure-page questions.
+- Adds TrackFlow Pro identity handling:
+  - TrackFlow Pro / who prepared this review: Shahjalal Khan, Founder & Tracking Architect.
+  - Reviewed business CEO/founder/owner: outside the tracking-review scope unless explicitly present in saved report data.
+- Reduces repeated “browser-visible review” openings.
+- Avoids markdown-heavy output with visible `**bold**` markers.
+- Validates Gemini output before it reaches the client.
+- Keeps Node.js runtime for Firebase Admin compatibility.
+- Keeps Supabase logging optional and compatible with the simple SQL table setup.
 
-## What changed
+## Required env vars
 
-- Added a hero-level `Ask about this review` shortcut so clients can quickly find the assistant.
-- Improved mobile/tablet spacing and headline readability.
-- Made section anchors easier to navigate with fixed navbar spacing.
-- Changed PDF mobile experience to a compact card with Open/Download buttons instead of forcing a cramped embedded PDF preview on small screens.
-- Kept embedded PDF preview for tablet/desktop.
-- Made the chatbot stack cleanly on mobile/tablet and use a wider chat panel on desktop.
-- Improved suggested question chips so they stack on mobile without overflow.
-- Improved chat message area height and padding across devices.
-- Made final CTA buttons full-width on smaller screens.
+```env
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Optional chat history logging:
+
+```env
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+TRACKFLOW_CHAT_SESSIONS_TABLE=trackflow_report_chat_sessions
+TRACKFLOW_CHAT_MESSAGES_TABLE=trackflow_report_chat_messages
+```
 
 ## Test checklist
 
-Run:
+After replacing files, run:
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Then test these screen widths:
+Open a secure report page and test:
 
-- 360px mobile
-- 390px mobile
-- 430px mobile
-- 768px tablet
-- 1024px laptop/tablet landscape
-- 1366px desktop
+```text
+What does this finding mean?
+What should we verify first?
+Can this affect Google Ads reporting?
+Who prepared this review?
+What is CEO name of this company?
+```
 
-Check:
+Expected CEO/identity behavior:
 
-- No horizontal scrolling.
-- Hero buttons are clear and tappable.
-- `View findings`, `View PDF report`, and `Ask about this review` scroll correctly.
-- PDF preview does not feel broken on mobile.
-- Chatbot input is easy to type in on mobile.
-- Suggested questions do not overflow.
-- Final CTA buttons are readable and easy to tap.
-- Existing secure report page still loads from Firestore.
-- Gemini chat still streams from `/api/trackflow/report-chat`.
+```text
+If the user means TrackFlow Pro, answer Shahjalal Khan, Founder & Tracking Architect.
+If the user means the reviewed business, say leadership is outside the tracking-review scope unless present in the saved report.
+```
+
+Expected tracking-answer behavior:
+
+```text
+Short, complete answers.
+No half-sentences.
+No invented account-level claims.
+No “tracking is broken” claims.
+Clear next verification step.
+```
+
+## Notes
+
+This patch does not touch Firestore report registration, report normalizers, PDF storage, Blob export, or secure page layout.
