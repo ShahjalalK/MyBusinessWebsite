@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.65-secure-chat-messenger-history-admin-viewer
+Version: v18.67-premium-floating-chat-ux-fix
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -172,6 +172,39 @@ Supabase may store chat sessions/messages for review and follow-up.
 If Supabase is not configured, the chatbot should still answer but silently skip chat-history logging.
 ```
 
+
+### 3.11 Floating Secure Report Chat UX Rule
+
+The secure report chatbot should feel like a premium Messenger-style assistant, not a large inline page section.
+
+Required behavior:
+
+```text
+Closed state:
+bottom-right floating chat button only
+green online/active indicator
+clear label: Ask about this review
+no large chat panel taking page space
+
+Open state:
+floating chat window opens above the page content
+closed-state button is hidden while the window is open
+large readable message area
+input stays visible at the bottom
+assistant answer appears progressively/typing-style
+header close button closes the window
+saved conversation reloads after refresh when Supabase is configured
+```
+
+Hero CTA rule:
+
+```text
+The secure page "Ask about this review" hero button should open the floating chatbox.
+It should not scroll the user into a large inline chat section.
+```
+
+The chat UI should keep all answers evidence-safe and report-aware.
+
 ### 3.6 Secure Report Responsive UX Rule
 
 The secure tracking-review page must remain clear and easy to use on desktop, laptop, tablet, and mobile.
@@ -292,51 +325,6 @@ weak research-intent penalty
 ```
 
 The UI should clearly explain why a keyword matters and what the next action is. Backend `/keyword-ideas-smart` should also enforce the Use Now cap, so the dashboard and Python response stay aligned.
-
-
-### 3.11 Secure Report Chat Messenger + History Rule
-
-The secure report chatbot should behave like a professional Messenger-style support widget, not a large inline page section.
-
-Required behavior:
-
-```text
-Bottom-right floating chat bubble
-Click opens a smooth Messenger-style chat window
-Desktop: compact floating panel
-Mobile: safe viewport-height panel
-Chat stays report-aware and evidence-safe
-Suggested questions remain available
-CTA fallback remains visible when AI is unavailable
-```
-
-Conversation persistence:
-
-```text
-Client messages and assistant answers should be saved to Supabase when configured.
-Refresh should reload the same session conversation.
-localStorage may be used only as a browser fallback.
-Firestore audit_reports should not store full chat history.
-```
-
-Admin review:
-
-```text
-Internal admin viewer: /admin/trackflow-chat?key=TRACKFLOW_CHAT_ADMIN_SECRET
-Requires TRACKFLOW_CHAT_ADMIN_SECRET in Vercel
-Reads sessions/messages from Supabase using the server-side service role key
-Should never expose SUPABASE_SERVICE_ROLE_KEY to the browser
-```
-
-Important files:
-
-```text
-app/components/trackflow/ReportChatAssistant.tsx
-app/api/trackflow/report-chat/route.ts
-lib/supabase-admin.ts
-app/admin/trackflow-chat/page.tsx
-supabase/trackflow_report_chat.sql
-```
 
 ### 3.4 PDF Pagination Rule
 
@@ -1003,15 +991,21 @@ Client-side secure page chat UI component.
 
 Owns:
 
-- “Ask about this review” chat box
+- bottom-right Messenger-style floating chat widget
+- hero "Ask about this review" trigger handling
 - client-side session/visitor IDs
-- per-session question limit
+- Supabase/localStorage history restore on refresh
+- progressive typing-style answer display
 - disabled-input fallback UI
 - CTA handoff when AI is unavailable or limited
 
 Use this file when:
 
 - chat UI is missing/broken
+- floating bubble/window layout needs improvement
+- hero Ask button does not open chat
+- saved conversation does not restore after refresh
+- typing-style answer display feels too fast/instant
 - input does not disable after quota/session limit
 - CTA fallback wording/layout needs improvement
 - secure page chat UX needs changes
@@ -1078,32 +1072,6 @@ Use this file when:
 Google Sheet is **not** the client-facing report database. Firestore is the client report database.
 
 ---
-
-
-### 6.12 `app/admin/trackflow-chat/page.tsx`
-
-Internal admin viewer for saved secure report chatbot conversations.
-
-Owns:
-
-- listing recent Supabase chat sessions
-- reading messages for a selected session
-- simple secret-gated access using `TRACKFLOW_CHAT_ADMIN_SECRET`
-- server-side Supabase reads through `lib/supabase-admin.ts`
-
-Use this file when:
-
-- you want to review what a client asked in the secure page chatbot
-- the admin viewer is locked or cannot load sessions
-- Supabase chat history is saved but not visible in the dashboard viewer
-
-Security rule:
-
-```text
-Do not expose SUPABASE_SERVICE_ROLE_KEY to client components.
-Use a long private TRACKFLOW_CHAT_ADMIN_SECRET.
-Do not index the admin page.
-```
 
 ## 7. Firestore Collections and Storage
 
@@ -1694,30 +1662,4 @@ LeadList feels too crowded
 Row action area is hard to understand
 Manual LinkedIn audit panel is confusing
 Dashboard UX needs desktop polish without changing audit logic
-```
-
-
-
-## Latest Patch Note — v18.65 Secure Chat Messenger + Supabase History
-
-Files changed/added:
-
-```text
-app/components/trackflow/ReportChatAssistant.tsx
-app/api/trackflow/report-chat/route.ts
-lib/supabase-admin.ts
-app/admin/trackflow-chat/page.tsx
-supabase/trackflow_report_chat.sql
-PROJECT_CONTEXT_README.md
-```
-
-What changed:
-
-```text
-Secure report chatbot is now a bottom-right Messenger-style floating widget.
-Chat history loads from Supabase by token/session when configured.
-localStorage remains as a browser fallback for refresh persistence.
-New GET handler in /api/trackflow/report-chat returns saved messages for the current report/session.
-Supabase helper can write sessions/messages and read them back safely from the server.
-Admin viewer at /admin/trackflow-chat?key=TRACKFLOW_CHAT_ADMIN_SECRET shows saved conversations.
 ```
