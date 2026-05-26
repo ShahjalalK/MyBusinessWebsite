@@ -1,7 +1,7 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.51-secure-report-chat-english-client-output  
-Last updated: 2026-05-26  
+Version: v18.65-secure-chat-messenger-history-admin-viewer
+Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
@@ -196,6 +196,146 @@ Tablet/mobile: assistant intro and chat should stack cleanly.
 Suggested questions should wrap or stack without overflow.
 Chat history area should have a controlled height.
 Input should remain comfortable on small screens.
+```
+
+
+### 3.7 English-Only Client and Dashboard Copy Rule
+
+All client-facing and operator-facing outreach/report copy must be written in professional English for US/UK clients.
+
+This applies to:
+
+```text
+PDF report text
+Secure report page text
+Secure report chatbot answers
+Dashboard problem cards
+Dashboard email readiness messages
+Dashboard generated email copy
+Gemini email/report prompts
+LinkedIn/email outreach draft text
+```
+
+Do not write Bengali or mixed Bengali-English text in active project files, client emails, secure pages, chatbot answers, PDF copy, or dashboard helper messages.
+
+If raw audit evidence or older stored data contains non-English text:
+
+```text
+Rewrite it into polished English before showing it to the client or using it inside an AI prompt.
+If it cannot be safely rewritten, omit it and use a generic evidence-safe fallback.
+```
+
+Important dashboard email source files:
+
+```text
+app/components/LeadDetailsModal/problemDetails.ts
+app/components/LeadDetailsModal/emailHelpers.ts
+app/components/LeadDetailsModal/utils.ts
+app/components/LeadDetailsModal.tsx
+```
+
+These files must keep email prompts, ready email copy, modal helper text, and problem summaries English-only.
+
+
+### 3.9 Manual Audit Modal Stability Rule
+
+Manual / LinkedIn Website Audit should open as a focused overlay from the Audit Dashboard.
+
+Required behavior:
+
+```text
+Open Website Panel / + Manual Website Audit
+→ fixed full-screen overlay opens
+→ background dashboard is dimmed and locked
+→ modal content is independently scrollable
+→ Escape closes the panel
+→ backdrop click closes the panel
+→ no Form Submit Test / Ads Transparency section should appear above or inside the modal by accident
+```
+
+Avoid fragile implementations that depend on parent stacking context. Prefer a simple fixed overlay with inline critical positioning styles when debugging z-index/portal conflicts.
+
+
+
+### 3.10 KeywordMagic Priority Rule
+
+KeywordMagic should not mark every generated keyword as equally urgent. The operator needs one clear starting keyword, then a short capped list of secondary keywords.
+
+Correct keyword priority behavior:
+
+```text
+Best Pick = the first keyword to test today
+Use Now = capped shortlist only, not every good-looking keyword
+Use Later = promising but secondary
+Skip = weak buyer intent, weak tracking opportunity, or poor direct-business likelihood
+```
+
+Default caps:
+
+```text
+Free mode: maximum 3 Use Now keywords
+Balanced mode: maximum 5 Use Now keywords
+Deep mode: maximum 7 Use Now keywords
+```
+
+Priority should combine:
+
+```text
+tracking_hunter_score
+tracking_problem_chance
+business_site_chance
+ads_likely_score
+smart_score
+market_priority
+buyer/action intent
+weak research-intent penalty
+```
+
+The UI should clearly explain why a keyword matters and what the next action is. Backend `/keyword-ideas-smart` should also enforce the Use Now cap, so the dashboard and Python response stay aligned.
+
+
+### 3.11 Secure Report Chat Messenger + History Rule
+
+The secure report chatbot should behave like a professional Messenger-style support widget, not a large inline page section.
+
+Required behavior:
+
+```text
+Bottom-right floating chat bubble
+Click opens a smooth Messenger-style chat window
+Desktop: compact floating panel
+Mobile: safe viewport-height panel
+Chat stays report-aware and evidence-safe
+Suggested questions remain available
+CTA fallback remains visible when AI is unavailable
+```
+
+Conversation persistence:
+
+```text
+Client messages and assistant answers should be saved to Supabase when configured.
+Refresh should reload the same session conversation.
+localStorage may be used only as a browser fallback.
+Firestore audit_reports should not store full chat history.
+```
+
+Admin review:
+
+```text
+Internal admin viewer: /admin/trackflow-chat?key=TRACKFLOW_CHAT_ADMIN_SECRET
+Requires TRACKFLOW_CHAT_ADMIN_SECRET in Vercel
+Reads sessions/messages from Supabase using the server-side service role key
+Should never expose SUPABASE_SERVICE_ROLE_KEY to the browser
+```
+
+Important files:
+
+```text
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+app/admin/trackflow-chat/page.tsx
+supabase/trackflow_report_chat.sql
 ```
 
 ### 3.4 PDF Pagination Rule
@@ -685,6 +825,36 @@ Use this file when:
 - local/Vercel environment URL mismatch
 - audit default settings need changing
 
+
+### 5.10 `app/components/KeywordMagic.tsx`
+
+Keyword research and prioritization UI.
+
+Owns:
+
+- market pack selection
+- location suggestions
+- niche/custom-service keyword generation
+- credit mode guidance
+- Best Pick / Use Now / Use Later / Skip display
+- keyword selection into the main lead search store
+- capped Use Now UX so the operator can see the most important keyword first
+
+Use this file when:
+
+- every keyword appears as Use Now
+- the best keyword is unclear
+- keyword cards are too confusing
+- credit-saving guidance needs improvement
+- frontend ranking should align with backend `/keyword-ideas-smart`
+
+Related backend files:
+
+```text
+python-backend/audit.py — `/keyword-ideas-smart` scoring and final Use Now cap
+python-backend/trackflow_modules/keywords.py — tracking/vendor/business keyword constants
+```
+
 ---
 
 ## 6. Email Automation / Report Hosting / Storage Map
@@ -909,6 +1079,32 @@ Google Sheet is **not** the client-facing report database. Firestore is the clie
 
 ---
 
+
+### 6.12 `app/admin/trackflow-chat/page.tsx`
+
+Internal admin viewer for saved secure report chatbot conversations.
+
+Owns:
+
+- listing recent Supabase chat sessions
+- reading messages for a selected session
+- simple secret-gated access using `TRACKFLOW_CHAT_ADMIN_SECRET`
+- server-side Supabase reads through `lib/supabase-admin.ts`
+
+Use this file when:
+
+- you want to review what a client asked in the secure page chatbot
+- the admin viewer is locked or cannot load sessions
+- Supabase chat history is saved but not visible in the dashboard viewer
+
+Security rule:
+
+```text
+Do not expose SUPABASE_SERVICE_ROLE_KEY to client components.
+Use a long private TRACKFLOW_CHAT_ADMIN_SECRET.
+Do not index the admin page.
+```
+
 ## 7. Firestore Collections and Storage
 
 Known current Firestore collections:
@@ -1129,6 +1325,7 @@ Before sending to a client:
 | Gemini wrong/unsafe copy | `gemini_client.py`, `email_copy.py`, sample output |
 | Email send/followup issue | `app/api/trackflow/[...action]/route.ts`, sender config, Brevo/webhook logs |
 | Google Sheet export issue | `app/api/export/sheet/route.ts`, Sheet screenshot |
+| Dashboard email copy includes Bengali/mixed language | `app/components/LeadDetailsModal/problemDetails.ts`, `app/components/LeadDetailsModal/emailHelpers.ts`, `app/components/LeadDetailsModal/utils.ts`, `app/components/LeadDetailsModal.tsx` |
 | TypeScript build error | exact file in error + related type file |
 
 ---
@@ -1150,7 +1347,7 @@ Important decisions:
 ```text
 Chatbot answers must be English-only on client secure pages.
 If saved report evidence contains Bengali or mixed-language internal notes, rewrite common tracking signals into polished English or omit them.
-Never show raw phrases such as "পাওয়া গেছে" to clients.
+Never show raw internal or mixed-language phrases to clients.
 Default fallback answers should avoid robotic labels like "The main point is" / "A useful evidence point is" when a more professional explanation is possible.
 Common finding/explain/main-point questions should route to deterministic professional answers.
 ```
@@ -1158,7 +1355,7 @@ Common finding/explain/main-point questions should route to deterministic profes
 Example improvement:
 
 ```text
-Before: A useful evidence point is: GA4 signal পাওয়া গেছে
+Before: A useful evidence point is: GA4 signal found [raw/internal wording]
 After: Evidence to review: GA4 signal was noted in the browser-visible review.
 ```
 
@@ -1200,6 +1397,70 @@ Markdown-heavy formatting with visible **bold markers**
 ```
 
 ---
+
+
+### v18.53 Dashboard Email English-Only Patch
+
+Dashboard-generated email copy and LeadDetailsModal helper text were made English-only. The earlier Python English-only patch fixed future audit/report generation, but dashboard email copy was still pulling mixed-language strings from Next.js problem helpers.
+
+Changed files:
+
+```text
+app/components/LeadDetailsModal/problemDetails.ts
+app/components/LeadDetailsModal/emailHelpers.ts
+app/components/LeadDetailsModal/utils.ts
+app/components/LeadDetailsModal.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The master context must stay in one PROJECT_CONTEXT_README.md file.
+Do not maintain separate Bengali README context files for active development.
+Dashboard email copy must be English-only before it reaches Gemini prompts or ready-email copy.
+Problem details must use US/UK-friendly English wording.
+If older/raw evidence contains non-English text, sanitize or fall back before showing it in outreach copy.
+```
+
+Example improvement:
+
+```text
+Before: One thing that may be worth confirming: mixed-language enquiry/action wording.
+After: One thing that may be worth confirming: It is not clear from the public scan whether the enquiry/action is being counted correctly in analytics or ad platforms.
+```
+
+
+### v18.56 Manual Audit Drawer Overlay Fix
+
+The Manual / LinkedIn Website Audit workflow stays as a right-side drawer, but the drawer must be rendered above the whole dashboard shell so the main page sticky tab navigation never appears inside or over the drawer.
+
+Changed files:
+
+```text
+app/components/LeadList.tsx
+app/page.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Manual audit drawer renders through React portal into document.body.
+Drawer overlay uses an isolated high z-index layer.
+Body scrolling is locked while the drawer is open.
+Backdrop click and Escape key still close the drawer.
+The main page tab bar z-index is intentionally lower than modal/drawer layers.
+No manual audit, row audit, bulk audit, PDF, polish, secure report, or export logic was changed.
+```
+
+Use this fix when:
+
+```text
+Keyword Magic / Search Discovery / Audit Dashboard / Data Maintenance tabs appear under or over the manual audit drawer.
+The background page scrolls while the manual audit drawer is open.
+The drawer feels like it is part of the page instead of a true side modal.
+```
 
 ## 11. Version History Summary
 
@@ -1398,3 +1659,65 @@ This master README consolidates:
 - and version history/decisions from v18.3 through v18.45.
 
 If this README conflicts with current source code, the current source code wins. Inspect the latest file before making code changes.
+
+
+### v18.54 LeadList Desktop UX Cleanup Patch
+
+The LeadList dashboard remains desktop-first and keeps all existing features. The goal of this patch is not to remove functionality, but to make daily operator use less crowded.
+
+Changed files:
+
+```text
+app/components/LeadList.tsx
+app/components/LeadList/LeadRow.tsx
+app/components/LeadList/LinkedInAuditPanel.tsx
+app/components/LeadList/Badge.tsx
+app/components/LeadList/rowHelpers.tsx
+app/components/LeadList/types.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important UX decisions:
+
+```text
+No backend, audit API, report export, Firestore, or Python behavior changed.
+All existing actions remain available: Run Audit, Cancel Audit, Safe/Live/Off form mode, Ads Transparency, Primary Conversion, Visual Focus, PDF, Polish Report, Details modal, Secure Report, manual LinkedIn audit, and bulk/export actions.
+Default LeadRow view is cleaner: primary action buttons are visible first, while form mode, report focus, visual focus, and Ads Transparency live inside Advanced audit settings.
+Manual LinkedIn audit panel is English-only and easier to follow: context, audit mode, optional notes, run audit, and result actions are grouped more clearly.
+Dashboard copy should remain English-only for US/UK workflow use.
+```
+
+Use this file group when:
+
+```text
+LeadList feels too crowded
+Row action area is hard to understand
+Manual LinkedIn audit panel is confusing
+Dashboard UX needs desktop polish without changing audit logic
+```
+
+
+
+## Latest Patch Note — v18.65 Secure Chat Messenger + Supabase History
+
+Files changed/added:
+
+```text
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+app/admin/trackflow-chat/page.tsx
+supabase/trackflow_report_chat.sql
+PROJECT_CONTEXT_README.md
+```
+
+What changed:
+
+```text
+Secure report chatbot is now a bottom-right Messenger-style floating widget.
+Chat history loads from Supabase by token/session when configured.
+localStorage remains as a browser fallback for refresh persistence.
+New GET handler in /api/trackflow/report-chat returns saved messages for the current report/session.
+Supabase helper can write sessions/messages and read them back safely from the server.
+Admin viewer at /admin/trackflow-chat?key=TRACKFLOW_CHAT_ADMIN_SECRET shows saved conversations.
+```

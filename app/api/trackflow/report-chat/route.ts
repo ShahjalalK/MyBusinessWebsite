@@ -21,6 +21,8 @@ import {
 } from "@/lib/trackflow-ai/report-chat";
 import {
   createChatSessionId,
+  isReportChatLoggingConfigured,
+  loadReportChatMessages,
   logReportChatMessages,
   logReportChatSession,
 } from "@/lib/supabase-admin";
@@ -41,6 +43,21 @@ function jsonError(message: string, status = 400, extra: AnyRecord = {}) {
     },
     {
       status,
+      headers: {
+        "cache-control": "no-store",
+      },
+    },
+  );
+}
+
+function jsonOk(payload: AnyRecord = {}) {
+  return NextResponse.json(
+    {
+      ok: true,
+      ...payload,
+    },
+    {
+      status: 200,
       headers: {
         "cache-control": "no-store",
       },
@@ -87,6 +104,17 @@ function streamResponse(stream: ReadableStream<Uint8Array>, mode: string) {
   });
 }
 
+async function loadReportByToken(token: string): Promise<AnyRecord | null> {
+  try {
+    const snap = await adminDb.collection("audit_reports").doc(token).get();
+    if (snap.exists) return snap.data() || {};
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function logSafely(input: {
   sessionId: string;
   reportToken: string;
@@ -100,6 +128,55 @@ async function logSafely(input: {
   } catch {
     // Optional logging only.
   }
+}
+
+export async function GET(req: NextRequest) {
+  const token = normalizeToken(req.nextUrl.searchParams.get("token"));
+  const domainSlug = normalizeSlug(req.nextUrl.searchParams.get("domainSlug"));
+  const rawSessionId = String(req.nextUrl.searchParams.get("sessionId") || "").trim();
+
+  if (!token) {
+    return jsonError("Missing report token.", 400, { messages: [], disableChat: true });
+  }
+
+  if (!rawSessionId) {
+    return jsonOk({
+      messages: [],
+      loggingConfigured: isReportChatLoggingConfigured(),
+      note: "No chat session was provided.",
+    });
+  }
+
+  const report = await loadReportByToken(token);
+
+  if (!report || report.active === false) {
+    return jsonError("This private tracking review could not be found.", 404, {
+      messages: [],
+      disableChat: true,
+    });
+  }
+
+  const context = extractReportChatContext(report, token);
+
+  if (domainSlug && context.domainSlug && domainSlug !== context.domainSlug) {
+    return jsonError("This chat request does not match the private report URL.", 403, {
+      messages: [],
+      disableChat: true,
+    });
+  }
+
+  const sessionId = createChatSessionId(rawSessionId);
+  const messages = await loadReportChatMessages({
+    sessionId,
+    reportToken: token,
+    limit: 60,
+  });
+
+  return jsonOk({
+    messages,
+    sessionId,
+    loggingConfigured: isReportChatLoggingConfigured(),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -125,16 +202,13 @@ export async function POST(req: NextRequest) {
     return jsonError("Please ask a short question about this tracking review.", 400);
   }
 
-  let report: AnyRecord | null = null;
+  const report = await loadReportByToken(token);
 
-  try {
-    const snap = await adminDb.collection("audit_reports").doc(token).get();
-    if (snap.exists) report = snap.data() || {};
-  } catch {
+  if (!report) {
     return jsonError("This report could not be loaded right now.", 503);
   }
 
-  if (!report || report.active === false) {
+  if (report.active === false) {
     return jsonError("This private tracking review could not be found.", 404, { disableChat: true });
   }
 

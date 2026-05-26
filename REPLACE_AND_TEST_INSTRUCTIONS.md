@@ -1,54 +1,90 @@
-# TrackFlow Pro v18.51 — Secure Report Chat English Client Output Patch
+# TrackFlow Pro v18.65 — Secure Chat Messenger + Supabase History
 
-## Replace files
-
-Copy these files into the matching project paths:
+Replace/add these files in your Next.js project:
 
 ```text
-lib/trackflow-ai/report-chat.ts
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+app/admin/trackflow-chat/page.tsx
+supabase/trackflow_report_chat.sql
 PROJECT_CONTEXT_README.md
 ```
 
-This patch does not change the secure page UI, Gemini API route, Firebase Admin, Firestore report storage, or Supabase table schema.
+## 1. Supabase setup
 
-## Why this patch exists
-
-It prevents client-facing chatbot answers from showing mixed Bengali/internal evidence notes such as:
+Run this SQL in Supabase SQL Editor:
 
 ```text
-GA4 signal পাওয়া গেছে
+supabase/trackflow_report_chat.sql
 ```
 
-The assistant now rewrites common mixed-language tracking notes into polished English, for example:
+Then set these Vercel environment variables:
+
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+TRACKFLOW_CHAT_SESSIONS_TABLE=trackflow_report_chat_sessions
+TRACKFLOW_CHAT_MESSAGES_TABLE=trackflow_report_chat_messages
+TRACKFLOW_CHAT_ADMIN_SECRET=choose-a-long-private-admin-key
+```
+
+Important:
 
 ```text
-GA4 signal was noted in the browser-visible review.
+Never expose SUPABASE_SERVICE_ROLE_KEY in client components.
+Only use it from server files such as lib/supabase-admin.ts.
 ```
 
-## Test checklist
-
-Run:
+## 2. Build and run
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Then open a secure report page and test:
+## 3. Test secure page chatbot
+
+Open any secure report page:
 
 ```text
-What does this finding mean?
-What is the main point?
-What should we verify first?
-Can this affect Google Ads reporting?
-Who prepared this review?
-What is CEO name of this company?
+/tracking-review/{domainSlug}/{token}
 ```
 
-Expected behavior:
+Test:
 
-- No Bengali/raw internal evidence phrases appear in client answers.
-- Common questions get complete professional answers.
-- TrackFlow Pro identity questions mention Shahjalal Khan, Founder & Tracking Architect.
-- Reviewed-business leadership questions remain out of scope unless the report explicitly contains that information.
-- Evidence-safe wording is preserved.
+```text
+1. Bottom-right chat bubble appears
+2. Click opens Messenger-style chat window
+3. Ask: What does this finding mean?
+4. Refresh page
+5. Same conversation reloads
+6. Ask another question
+7. Close/open bubble
+8. Mobile viewport still fits
+```
+
+## 4. Test Supabase admin viewer
+
+Open:
+
+```text
+/admin/trackflow-chat?key=YOUR_TRACKFLOW_CHAT_ADMIN_SECRET
+```
+
+Expected:
+
+```text
+Recent chat sessions are listed
+Click a session to view user and assistant messages
+If Supabase is not configured, the page shows a setup message
+```
+
+## 5. Notes
+
+```text
+Firestore remains slim for report rendering.
+Supabase stores chatbot sessions/messages.
+localStorage is only a browser fallback if Supabase is not configured or temporarily unavailable.
+The chatbot remains report-aware and evidence-safe.
+```

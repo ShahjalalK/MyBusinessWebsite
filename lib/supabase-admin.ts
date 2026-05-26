@@ -1,15 +1,32 @@
 // ============================================================
 // FILE: lib/supabase-admin.ts
-// Purpose: Optional server-side Supabase REST logging for secure report chat.
+// Purpose: Optional server-side Supabase REST logging and reading for secure report chat.
 // Notes:
 // - No Supabase package dependency required.
-// - If env vars or tables are missing, logging fails silently and the chatbot still works.
+// - If env vars or tables are missing, logging/reading fails silently and the chatbot still works.
 // - Never expose SUPABASE_SERVICE_ROLE_KEY to client components.
 // ============================================================
 
 import { randomUUID } from "crypto";
 
 type AnyRecord = Record<string, any>;
+
+export type StoredReportChatMessage = {
+  sessionId: string;
+  reportToken: string;
+  role: "user" | "assistant";
+  content: string;
+  source?: string;
+  quotaStatus?: string;
+  createdAt?: string;
+};
+
+export type StoredReportChatSession = {
+  id: string;
+  reportToken: string;
+  domain?: string;
+  updatedAt?: string;
+};
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -18,6 +35,10 @@ const CHAT_MESSAGES_TABLE = process.env.TRACKFLOW_CHAT_MESSAGES_TABLE || "trackf
 
 function isConfigured(): boolean {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+}
+
+export function isReportChatLoggingConfigured(): boolean {
+  return isConfigured();
 }
 
 function cleanId(value: unknown): string {
@@ -45,6 +66,10 @@ function safeTableName(value: string): string {
     .slice(0, 80);
 }
 
+function getBaseUrl(): string {
+  return SUPABASE_URL.replace(/\/+$/, "");
+}
+
 async function postRows({
   table,
   rows,
@@ -59,8 +84,7 @@ async function postRows({
   const cleanTable = safeTableName(table);
   if (!cleanTable) return;
 
-  const baseUrl = SUPABASE_URL.replace(/\/+$/, "");
-  const url = `${baseUrl}/rest/v1/${cleanTable}${upsert ? "?on_conflict=id" : ""}`;
+  const url = `${getBaseUrl()}/rest/v1/${cleanTable}${upsert ? "?on_conflict=id" : ""}`;
 
   try {
     await fetch(url, {
@@ -75,6 +99,34 @@ async function postRows({
     });
   } catch {
     // Logging is optional. Never break the client-facing secure report chatbot.
+  }
+}
+
+async function getRows<T>({ table, query }: { table: string; query: string }): Promise<T[]> {
+  if (!isConfigured()) return [];
+
+  const cleanTable = safeTableName(table);
+  if (!cleanTable) return [];
+
+  const url = `${getBaseUrl()}/rest/v1/${cleanTable}${query.startsWith("?") ? query : `?${query}`}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "content-type": "application/json",
+      },
+    });
+
+    if (!response.ok) return [];
+
+    const json = await response.json().catch(() => []);
+    return Array.isArray(json) ? (json as T[]) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -143,4 +195,97 @@ export async function logReportChatMessages(input: {
       },
     ],
   });
+}
+
+export async function loadReportChatMessages(input: {
+  sessionId: string;
+  reportToken: string;
+  limit?: number;
+}): Promise<StoredReportChatMessage[]> {
+  const sessionId = createChatSessionId(input.sessionId);
+  const reportToken = cleanId(input.reportToken);
+  const limit = Math.max(1, Math.min(100, Number(input.limit || 60)));
+
+  if (!reportToken) return [];
+
+  const rows = await getRows<{
+    session_id?: string;
+    report_token?: string;
+    role?: string;
+    content?: string;
+    source?: string;
+    quota_status?: string;
+    created_at?: string;
+  }>({
+    table: CHAT_MESSAGES_TABLE,
+    query: [
+      "select=session_id,report_token,role,content,source,quota_status,created_at",
+      `session_id=eq.${encodeURIComponent(sessionId)}`,
+      `report_token=eq.${encodeURIComponent(reportToken)}`,
+      "order=created_at.asc",
+      `limit=${limit}`,
+    ].join("&"),
+  });
+
+  return rows
+    .map((row) => {
+      const role = row.role === "assistant" ? "assistant" : row.role === "user" ? "user" : "";
+      const content = cleanText(row.content, 5000);
+
+      if (!role || !content) return null;
+
+      return {
+        sessionId: cleanId(row.session_id || sessionId),
+        reportToken: cleanId(row.report_token || reportToken),
+        role,
+        content,
+        source: cleanText(row.source, 80),
+        quotaStatus: cleanText(row.quota_status, 80),
+        createdAt: cleanText(row.created_at, 80),
+      } satisfies StoredReportChatMessage;
+    })
+    .filter((item): item is StoredReportChatMessage => Boolean(item));
+}
+
+export async function listReportChatSessions(input: {
+  reportToken?: string;
+  limit?: number;
+} = {}): Promise<StoredReportChatSession[]> {
+  const reportToken = cleanId(input.reportToken);
+  const limit = Math.max(1, Math.min(200, Number(input.limit || 80)));
+
+  const queryParts = [
+    "select=id,report_token,domain,updated_at",
+    "order=updated_at.desc",
+    `limit=${limit}`,
+  ];
+
+  if (reportToken) {
+    queryParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
+  }
+
+  const rows = await getRows<{
+    id?: string;
+    report_token?: string;
+    domain?: string;
+    updated_at?: string;
+  }>({
+    table: CHAT_SESSIONS_TABLE,
+    query: queryParts.join("&"),
+  });
+
+  return rows
+    .map((row) => {
+      const id = cleanId(row.id);
+      const token = cleanId(row.report_token);
+      if (!id || !token) return null;
+
+      return {
+        id,
+        reportToken: token,
+        domain: cleanText(row.domain, 180),
+        updatedAt: cleanText(row.updated_at, 80),
+      } satisfies StoredReportChatSession;
+    })
+    .filter((item): item is StoredReportChatSession => Boolean(item));
 }
