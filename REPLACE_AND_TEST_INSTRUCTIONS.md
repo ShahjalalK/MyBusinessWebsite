@@ -1,80 +1,54 @@
-# TrackFlow Pro v18.50 — Secure Report Chat Answer Quality Patch
+# TrackFlow Pro v18.51 — Secure Report Chat English Client Output Patch
 
-## Replace these files
+## Replace files
+
+Copy these files into the matching project paths:
 
 ```text
-app/api/trackflow/report-chat/route.ts
 lib/trackflow-ai/report-chat.ts
-app/components/trackflow/ReportChatAssistant.tsx
-lib/supabase-admin.ts
 PROJECT_CONTEXT_README.md
 ```
 
-## What this patch fixes
+This patch does not change the secure page UI, Gemini API route, Firebase Admin, Firestore report storage, or Supabase table schema.
 
-- Prevents incomplete client-facing answers such as “Based on our browser-visible review of…”
-- Adds deterministic professional answers for common secure-page questions.
-- Adds TrackFlow Pro identity handling:
-  - TrackFlow Pro / who prepared this review: Shahjalal Khan, Founder & Tracking Architect.
-  - Reviewed business CEO/founder/owner: outside the tracking-review scope unless explicitly present in saved report data.
-- Reduces repeated “browser-visible review” openings.
-- Avoids markdown-heavy output with visible `**bold**` markers.
-- Validates Gemini output before it reaches the client.
-- Keeps Node.js runtime for Firebase Admin compatibility.
-- Keeps Supabase logging optional and compatible with the simple SQL table setup.
+## Why this patch exists
 
-## Required env vars
+It prevents client-facing chatbot answers from showing mixed Bengali/internal evidence notes such as:
 
-```env
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash
+```text
+GA4 signal পাওয়া গেছে
 ```
 
-Optional chat history logging:
+The assistant now rewrites common mixed-language tracking notes into polished English, for example:
 
-```env
-SUPABASE_URL=...
-SUPABASE_SERVICE_ROLE_KEY=...
-TRACKFLOW_CHAT_SESSIONS_TABLE=trackflow_report_chat_sessions
-TRACKFLOW_CHAT_MESSAGES_TABLE=trackflow_report_chat_messages
+```text
+GA4 signal was noted in the browser-visible review.
 ```
 
 ## Test checklist
 
-After replacing files, run:
+Run:
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Open a secure report page and test:
+Then open a secure report page and test:
 
 ```text
 What does this finding mean?
+What is the main point?
 What should we verify first?
 Can this affect Google Ads reporting?
 Who prepared this review?
 What is CEO name of this company?
 ```
 
-Expected CEO/identity behavior:
+Expected behavior:
 
-```text
-If the user means TrackFlow Pro, answer Shahjalal Khan, Founder & Tracking Architect.
-If the user means the reviewed business, say leadership is outside the tracking-review scope unless present in the saved report.
-```
-
-Expected tracking-answer behavior:
-
-```text
-Short, complete answers.
-No half-sentences.
-No invented account-level claims.
-No “tracking is broken” claims.
-Clear next verification step.
-```
-
-## Notes
-
-This patch does not touch Firestore report registration, report normalizers, PDF storage, Blob export, or secure page layout.
+- No Bengali/raw internal evidence phrases appear in client answers.
+- Common questions get complete professional answers.
+- TrackFlow Pro identity questions mention Shahjalal Khan, Founder & Tracking Architect.
+- Reviewed-business leadership questions remain out of scope unless the report explicitly contains that information.
+- Evidence-safe wording is preserved.

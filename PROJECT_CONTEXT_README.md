@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.50-secure-report-chat-answer-quality  
+Version: v18.51-secure-report-chat-english-client-output  
 Last updated: 2026-05-26  
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -1134,6 +1134,35 @@ Before sending to a client:
 ---
 
 
+### v18.51 Secure Report Chat English Client Output Patch
+
+Secure report chatbot client output was tightened so internal/mixed-language evidence notes do not appear in client-facing answers. This patch is focused on `lib/trackflow-ai/report-chat.ts` and preserves the existing Node.js route, Supabase optional logging, Firestore slim storage, and secure page UI.
+
+Changed files:
+
+```text
+lib/trackflow-ai/report-chat.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Chatbot answers must be English-only on client secure pages.
+If saved report evidence contains Bengali or mixed-language internal notes, rewrite common tracking signals into polished English or omit them.
+Never show raw phrases such as "পাওয়া গেছে" to clients.
+Default fallback answers should avoid robotic labels like "The main point is" / "A useful evidence point is" when a more professional explanation is possible.
+Common finding/explain/main-point questions should route to deterministic professional answers.
+```
+
+Example improvement:
+
+```text
+Before: A useful evidence point is: GA4 signal পাওয়া গেছে
+After: Evidence to review: GA4 signal was noted in the browser-visible review.
+```
+
+
 ### v18.50 Secure Report Chat Answer Quality Patch
 
 Secure report chatbot answer quality was tightened without changing Firestore report storage or the secure page report-register flow.
@@ -1233,6 +1262,7 @@ Markdown-heavy formatting with visible **bold markers**
 - **v18.48** — secure report streaming chatbot patch with Node.js runtime and quota fallback.
 - **v18.49** — secure report responsive UI/UX polish for mobile, tablet, and desktop.
 - **v18.50** — chatbot answer-quality patch: deterministic key answers, TrackFlow Pro identity handling, incomplete answer repair, and Supabase logging compatibility.
+- **v18.51** — chatbot English client-output patch; mixed Bengali/internal evidence notes are rewritten/omitted before client display.
 - **v18.47** — secure report Gemini assistant context; report-aware, evidence-safe, Supabase optional chat logging.
 - **v18.48** — streaming secure report assistant route using Node.js runtime with Gemini fallback behavior.
 - **v18.49** — secure report responsive UX polish for desktop, tablet, and mobile; PDF mobile compact card and clearer chatbot layout.

@@ -86,6 +86,51 @@ function cleanText(value: unknown, fallback = "", maxLength = 900): string {
   return text.slice(0, maxLength).trim();
 }
 
+function containsBengali(value: unknown): boolean {
+  return /[\u0980-\u09FF]/.test(String(value || ""));
+}
+
+function humanJoin(items: string[]): string {
+  if (items.length <= 1) return items[0] || "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function rewriteMixedLanguageTrackingText(value: string): string {
+  const text = cleanText(value, "", 620);
+  if (!text) return "";
+  if (!containsBengali(text)) return text;
+
+  const lower = text.toLowerCase();
+  const signals: string[] = [];
+
+  if (/\bga4\b|google analytics/.test(lower)) signals.push("GA4 signal");
+  if (/\bgtm\b|tag manager/.test(lower)) signals.push("GTM signal");
+  if (/google ads|google ad|ads tag|ads conversion|gtag|aw-/.test(lower)) signals.push("Google Ads signal");
+  if (/meta|facebook|pixel|capi/.test(lower)) signals.push("Meta tracking signal");
+  if (/form|lead|enquir|inquir|contact/.test(lower)) signals.push("lead-form tracking signal");
+  if (/server|ssr|server-side|first-party/.test(lower)) signals.push("server-side tracking signal");
+  if (/phone|call/.test(lower)) signals.push("phone-call tracking signal");
+  if (/booking|appointment/.test(lower)) signals.push("booking tracking signal");
+
+  const uniqueSignals = Array.from(new Set(signals));
+  if (uniqueSignals.length) {
+    return `${humanJoin(uniqueSignals)} was noted in the browser-visible review.`;
+  }
+
+  // Do not show mixed-language/internal notes to clients. The assistant should stay English-only.
+  return "";
+}
+
+function cleanClientText(value: unknown, fallback = "", maxLength = 900): string {
+  const text = cleanText(value, "", maxLength);
+  if (!text) return fallback;
+  if (!containsBengali(text)) return text;
+
+  const rewritten = rewriteMixedLanguageTrackingText(text);
+  return rewritten || fallback;
+}
+
 function cleanUrl(value: unknown): string {
   const raw = cleanText(value, "", 900);
   if (!raw) return "";
@@ -110,8 +155,8 @@ function getObjectCandidate(...values: unknown[]): AnyRecord {
 function stringifyListItem(item: unknown): string {
   if (item && typeof item === "object" && !Array.isArray(item)) {
     const record = item as AnyRecord;
-    const title = cleanText(record.title || record.step || record.name || record.label || record.finding || record.text, "", 260);
-    const description = cleanText(
+    const title = cleanClientText(record.title || record.step || record.name || record.label || record.finding || record.text, "", 260);
+    const description = cleanClientText(
       record.description ||
         record.summary ||
         record.detail ||
@@ -124,13 +169,13 @@ function stringifyListItem(item: unknown): string {
     );
 
     if (title && description && title.toLowerCase() !== description.toLowerCase()) {
-      return `${title}: ${description}`.slice(0, 620).trim();
+      return rewriteMixedLanguageTrackingText(`${title}: ${description}`.slice(0, 620).trim());
     }
 
-    return (title || description).slice(0, 620).trim();
+    return rewriteMixedLanguageTrackingText((title || description).slice(0, 620).trim());
   }
 
-  return cleanText(item, "", 620);
+  return rewriteMixedLanguageTrackingText(cleanText(item, "", 620));
 }
 
 function cleanList(value: unknown, maxItems = 6): string[] {
@@ -276,10 +321,10 @@ export function extractReportChatContext(report: AnyRecord = {}, fallbackToken =
     domain,
     websiteUrl: cleanUrl(report.websiteUrl || report.website_url || report.website || domain),
     companyName,
-    headline: cleanText(privateCopy.headline || report.headline || report.reportHeadline || report.report_headline, `Tracking Review for ${companyName}`, 180),
-    subheadline: cleanText(privateCopy.subheadline || report.subheadline, "", 260),
-    mainFinding: cleanText(privateCopy.mainFinding || privateCopy.main_finding || report.mainFinding || report.main_finding, "Browser-visible tracking evidence was reviewed, and final confirmation requires account/server access.", 520),
-    businessImpact: cleanText(privateCopy.businessImpact || privateCopy.business_impact || report.businessImpact || report.business_impact, "This can affect how confidently marketing enquiries are measured and attributed.", 520),
+    headline: cleanClientText(privateCopy.headline || report.headline || report.reportHeadline || report.report_headline, `Tracking Review for ${companyName}`, 180),
+    subheadline: cleanClientText(privateCopy.subheadline || report.subheadline, "", 260),
+    mainFinding: cleanClientText(privateCopy.mainFinding || privateCopy.main_finding || report.mainFinding || report.main_finding, "Browser-visible tracking evidence was reviewed, and final confirmation requires account/server access.", 520),
+    businessImpact: cleanClientText(privateCopy.businessImpact || privateCopy.business_impact || report.businessImpact || report.business_impact, "This can affect how confidently marketing enquiries are measured and attributed.", 520),
     proofPoints,
     recommendations,
     verificationPlan,
@@ -435,8 +480,8 @@ export function buildDeterministicAnswer(context: ReportChatContext, question = 
   const lower = question.toLowerCase();
 
   if (hasLeadershipIntent(question)) return buildTrackFlowIdentityAnswer(context, question);
-  if (/\b(what does this finding mean|finding mean|what does this mean|meaning)\b/i.test(lower)) return buildMeaningAnswer(context);
-  if (/\b(verify first|check first|first thing|priority|what should we verify)\b/i.test(lower)) return buildVerifyFirstAnswer(context);
+  if (/\b(what does this finding mean|finding mean|main finding|main point|what does this mean|what does it mean|explain this|explain the finding|meaning)\b/i.test(lower)) return buildMeaningAnswer(context);
+  if (/\b(verify first|check first|first thing|priority|what should we verify|what to verify|where should we start)\b/i.test(lower)) return buildVerifyFirstAnswer(context);
   if (/\b(why.*access|why.*account|account access|login|permission)\b/i.test(lower)) return buildAccountAccessAnswer(context);
   if (/\b(affect google ads|google ads reporting|ads reporting|campaign optimisation|campaign optimization|bidding)\b/i.test(lower)) return buildGoogleAdsImpactAnswer(context);
 
@@ -473,6 +518,8 @@ Your job:
 - Prefer this structure when useful: Short answer / Why it matters / Next step.
 - Use simple bullets only when helpful.
 - Do not use markdown bold, markdown headings, or long lists.
+- Answer in English only. If a saved report field contains Bengali or mixed-language internal notes, rewrite it into polished English or omit it.
+- Do not expose raw internal notes such as "পাওয়া গেছে" or any non-English evidence phrase.
 - Do not start every answer with "Based on the browser-visible review".
 - Explain browser-visible evidence only when it matters for the answer.
 - When final truth needs account/server access, say that clearly.
@@ -521,10 +568,16 @@ export function buildSafeFallbackAnswer(context: ReportChatContext, question = "
     ].join("\n\n");
   }
 
+  const safeProof = rewriteMixedLanguageTrackingText(firstProof);
+  const evidenceLine = safeProof
+    ? `Evidence to review: ${safeProof}`
+    : "Evidence to review: the saved report highlights browser-visible tracking signals that should be checked against the actual account/backend records.";
+
   return [
-    `The main point is: ${context.mainFinding}`,
-    `A useful evidence point is: ${firstProof}`,
-    `This is still browser-visible evidence only. Final confirmation requires access to GA4, GTM, Google Ads, CRM, or server-side systems.`,
+    `This review points to one practical question for ${context.companyName}: ${context.mainFinding}`,
+    `Why it matters: marketing reports are only useful when the main enquiry path is recorded clearly across the website, analytics, ad platform, and final lead record.`,
+    evidenceLine,
+    `Next step: verify one real test enquiry in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics, and the CRM or server-side record.`,
   ].join("\n\n");
 }
 
