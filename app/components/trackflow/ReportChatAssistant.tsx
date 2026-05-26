@@ -48,21 +48,38 @@ const GREETING =
   "Hi — I can help explain this private tracking review, the evidence points, and the safest next verification steps. I’ll stay within the browser-visible evidence shown here.";
 
 const STARTER_QUESTIONS = [
-  "What does this finding mean?",
   "What should we verify first?",
+  "What does this finding mean?",
   "Can this affect Google Ads reporting?",
-  "Who prepared this review?",
+  "What evidence was visible in the review?",
 ];
 
 const CLOSED_STATE_QUESTIONS = [
   "What should we verify first?",
   "Can this affect Google Ads reporting?",
+  "Why does this need account access?",
+  "What evidence was visible in the review?",
 ];
 
 const DEFAULT_FOLLOW_UP_QUESTIONS = [
-  "What should we check inside GA4?",
-  "Why does this need account access?",
   "What is the safest next step?",
+  "Why does this need account access?",
+  "Can TrackFlow Pro verify this for us?",
+];
+
+const PRIORITY_QUESTION_POOL = [
+  "What should we verify first?",
+  "Can this affect Google Ads reporting?",
+  "What evidence was visible in the review?",
+  "Why does this need account access?",
+  "What should we check inside GA4?",
+  "What should we check in GTM Preview?",
+  "What should we check in Google Ads?",
+  "What should we test on the lead path?",
+  "Can this affect lead reporting?",
+  "What is the safest next step?",
+  "Can TrackFlow Pro verify this for us?",
+  "Who prepared this review?",
 ];
 
 function createId(prefix = "msg"): string {
@@ -155,6 +172,57 @@ function cleanDisplayLine(value: string): string {
     .replace(/`+/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeQuestionKey(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(the|this|that|a|an|about|please)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function uniqueQuestions(items: string[]): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    const clean = cleanDisplayLine(item);
+    const key = normalizeQuestionKey(clean);
+    if (!clean || !key || seen.has(key)) continue;
+
+    seen.add(key);
+    output.push(clean);
+  }
+
+  return output;
+}
+
+function getUnaskedQuestions({
+  candidates,
+  askedKeys,
+  limit,
+}: {
+  candidates: string[];
+  askedKeys: Set<string>;
+  limit: number;
+}): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of uniqueQuestions(candidates)) {
+    const key = normalizeQuestionKey(item);
+    if (!key || askedKeys.has(key) || seen.has(key)) continue;
+
+    seen.add(key);
+    output.push(item);
+
+    if (output.length >= limit) break;
+  }
+
+  return output;
 }
 
 function isAssistantHeading(value: string): boolean {
@@ -376,8 +444,6 @@ export default function ReportChatAssistant({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const suggestedQuestions = useMemo(() => STARTER_QUESTIONS, []);
-
   const storageKey = useMemo(
     () => (token && sessionId ? getMessagesStorageKey(token, sessionId) : ""),
     [token, sessionId],
@@ -391,6 +457,44 @@ export default function ReportChatAssistant({
   const latestAssistantMessage = useMemo(() => {
     return [...messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
   }, [messages]);
+
+  const askedQuestionSignature = useMemo(() => {
+    return messages
+      .filter((message) => message.role === "user")
+      .map((message) => normalizeQuestionKey(message.content))
+      .filter(Boolean)
+      .join("|");
+  }, [messages]);
+
+  const askedQuestionKeys = useMemo(() => {
+    return new Set(askedQuestionSignature ? askedQuestionSignature.split("|") : []);
+  }, [askedQuestionSignature]);
+
+  const starterQuestionChips = useMemo(() => {
+    return getUnaskedQuestions({
+      candidates: [...STARTER_QUESTIONS, ...PRIORITY_QUESTION_POOL],
+      askedKeys: askedQuestionKeys,
+      limit: 4,
+    });
+  }, [askedQuestionKeys]);
+
+  const closedQuestionChips = useMemo(() => {
+    return getUnaskedQuestions({
+      candidates: [...CLOSED_STATE_QUESTIONS, ...PRIORITY_QUESTION_POOL],
+      askedKeys: askedQuestionKeys,
+      limit: 2,
+    });
+  }, [askedQuestionKeys]);
+
+  const followUpQuestionChips = useMemo(() => {
+    if (!latestAssistantMessage?.content) return [];
+
+    return getUnaskedQuestions({
+      candidates: [...getFollowUpQuestions(latestAssistantMessage.content), ...PRIORITY_QUESTION_POOL],
+      askedKeys: askedQuestionKeys,
+      limit: 3,
+    });
+  }, [askedQuestionKeys, latestAssistantMessage?.content]);
 
   useEffect(() => {
     if (!token) return;
@@ -712,7 +816,8 @@ export default function ReportChatAssistant({
     hasUserMessages &&
     !isSending &&
     !isDisabled &&
-    latestAssistantMessage?.role === "assistant";
+    latestAssistantMessage?.role === "assistant" &&
+    followUpQuestionChips.length > 0;
 
   return (
     <>
@@ -808,7 +913,7 @@ export default function ReportChatAssistant({
 
                         {isLatestAssistant && showFollowUps ? (
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {getFollowUpQuestions(message.content).map((item) => (
+                            {followUpQuestionChips.map((item) => (
                               <button
                                 key={item}
                                 type="button"
@@ -840,16 +945,16 @@ export default function ReportChatAssistant({
             </div>
 
             <div className="border-t border-slate-100 bg-white p-4">
-              {!hasUserMessages && !isDisabled ? (
+              {!hasUserMessages && !isDisabled && starterQuestionChips.length > 0 ? (
                 <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
                   <div className="mb-2 flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-blue-600" />
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
-                      Quick questions
+                      Helpful questions
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {suggestedQuestions.map((item) => (
+                    {starterQuestionChips.map((item) => (
                       <button
                         key={item}
                         type="button"
@@ -916,31 +1021,19 @@ export default function ReportChatAssistant({
           </div>
         ) : (
           <>
-            {!isDisabled ? (
-              <div className="mb-3 w-full max-w-[420px] rounded-3xl border border-blue-100 bg-white/95 p-3 shadow-xl shadow-slate-950/10 backdrop-blur sm:w-[420px]">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                    Ask a quick question
-                  </p>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    Online
-                  </span>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {CLOSED_STATE_QUESTIONS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => void submitQuestion(item)}
-                      disabled={isSending}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold leading-4 text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
+            {!isDisabled && closedQuestionChips.length > 0 ? (
+              <div className="mb-3 flex w-full max-w-[360px] flex-col items-end gap-2 sm:max-w-[380px]">
+                {closedQuestionChips.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => void submitQuestion(item)}
+                    disabled={isSending}
+                    className="max-w-full rounded-full border border-white/70 bg-white/90 px-3.5 py-2 text-right text-[11px] font-bold leading-4 text-slate-700 shadow-lg shadow-slate-950/10 backdrop-blur transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {item}
+                  </button>
+                ))}
               </div>
             ) : null}
 

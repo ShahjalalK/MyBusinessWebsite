@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.68-premium-chat-readability-and-input-fix
+Version: v18.69-smart-chat-suggestions-ux-fix
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -217,8 +217,10 @@ Assistant answers should not appear as one plain text wall.
 Client-facing answers should render as readable paragraphs, short section blocks, bullet lists, and numbered steps when applicable.
 Important notes should be visually separated from the main explanation.
 Suggested questions should appear in a helpful, non-cluttered way.
-Closed chat state may show 1-2 smart question chips above the floating button.
+Already-asked questions should not be repeated in starter, closed-state, or follow-up chips.
+Closed chat state may show 1-2 compact smart question chips above the floating button, but it should not show a large background card that covers important page text.
 Open chat state should show starter questions before the first user question and contextual follow-up chips after assistant answers.
+Follow-up chips should prioritize the next useful verification question for the client, such as GA4, GTM, Google Ads, lead-path testing, account access, or the safest next step.
 The chat input should auto-grow while the visitor types longer questions.
 Enter sends the message; Shift + Enter creates a new line.
 The input must stop growing at a comfortable max height and then scroll internally.
@@ -1462,6 +1464,27 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.69 Smart Chat Suggestions UX Patch
+
+Secure report chatbot question suggestions were made smarter and less intrusive.
+
+Changed files:
+
+```text
+app/components/trackflow/ReportChatAssistant.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Closed-state quick questions must be compact pill chips only, without a large card/background that blocks report content.
+The chat should hide questions the visitor already asked.
+Starter questions and follow-up questions should rotate to the next most helpful report-aware question.
+Follow-up chips should be contextual to the assistant answer when possible, for example Google Ads, GA4/GTM, lead path, account access, or safest next step.
+The bottom-right chat button still shows the online/active status, and the compact chips should invite conversation without making the page harder to read.
+```
 
 ### v18.68 Premium Chat Readability and Input Patch
 
