@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import admin from "firebase-admin";
 import { google } from "googleapis";
 import { z } from "zod";
+import { readPdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import {
   BRAND_WEBSITE,
   BRAND_WEBSITE_LABEL,
@@ -1624,11 +1625,20 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     storageProvider: firstCleanString(
       body.storageProvider,
       body.storage_provider,
-      body.blobUrl || body.blob_url ? "vercel_blob" : "storage",
+      (body.b2Key || body.b2_key || body.pdfStorageKey || body.pdf_storage_key || body.storageProvider === "backblaze_b2" || body.storage_provider === "backblaze_b2")
+        ? "backblaze_b2"
+        : body.blobUrl || body.blob_url
+          ? "vercel_blob"
+          : "storage",
     ),
     blobUrl: firstCleanString(body.blobUrl, body.blob_url, pdfViewUrl),
     blobDownloadUrl: firstCleanString(body.blobDownloadUrl, body.blob_download_url, pdfDownloadUrl),
-    blobPathname: firstCleanString(body.blobPathname, body.blob_pathname, body.pathname),
+    blobPathname: firstCleanString(body.blobPathname, body.blob_pathname, body.pathname, body.b2Key, body.b2_key, body.pdfStorageKey, body.pdf_storage_key),
+    b2Key: firstCleanString(body.b2Key, body.b2_key, body.pdfStorageKey, body.pdf_storage_key, body.blobPathname, body.blob_pathname, body.pdfFileId, body.pdf_file_id),
+    b2Bucket: firstCleanString(body.b2Bucket, body.b2_bucket, body.b2BucketName, body.b2_bucket_name),
+    pdfStorageKey: firstCleanString(body.pdfStorageKey, body.pdf_storage_key, body.b2Key, body.b2_key, body.blobPathname, body.blob_pathname, body.pdfFileId, body.pdf_file_id),
+    pdfStorageEtag: firstCleanString(body.pdfStorageEtag, body.pdf_storage_etag, body.b2Etag, body.b2_etag),
+    pdfStorageSize: Number(body.pdfStorageSize || body.pdf_storage_size || body.b2Size || body.b2_size || 0) || undefined,
     contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
     ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
     ctaText,
@@ -5462,6 +5472,11 @@ async function handleReportRegister(req: Request) {
     blobUrl: report.blobUrl,
     blobDownloadUrl: report.blobDownloadUrl,
     blobPathname: report.blobPathname,
+    b2Key: report.b2Key,
+    b2Bucket: report.b2Bucket,
+    pdfStorageKey: report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId,
+    pdfStorageEtag: report.pdfStorageEtag,
+    pdfStorageSize: report.pdfStorageSize,
     pdfExpiresAt: report.pdfExpiresAt,
     leadId: report.leadId,
     sheetRowNumber: report.sheetRowNumber,
@@ -5646,6 +5661,11 @@ async function handleReportRegister(req: Request) {
     blobUrl: report.blobUrl,
     blobDownloadUrl: report.blobDownloadUrl,
     blobPathname: report.blobPathname,
+    b2Key: report.b2Key,
+    b2Bucket: report.b2Bucket,
+    pdfStorageKey: report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId,
+    pdfStorageEtag: report.pdfStorageEtag,
+    pdfStorageSize: report.pdfStorageSize,
     pdfExpiresAt: report.pdfExpiresAt,
     leadId: report.leadId,
     sheetRowNumber: report.sheetRowNumber,
@@ -6032,7 +6052,23 @@ async function fetchPdfBufferFromPublicUrl(rawTarget: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+function getReportB2PdfKey(report: AnyRecord): string {
+  return sanitizeB2Key(
+    report.b2Key ||
+      report.b2_key ||
+      report.pdfStorageKey ||
+      report.pdf_storage_key ||
+      (String(report.storageProvider || report.storage_provider || "").toLowerCase() === "backblaze_b2" ? report.blobPathname || report.pdfFileId : ""),
+  );
+}
+
 async function resolveReportPdfBuffer(report: AnyRecord, preferDownload = false): Promise<Buffer> {
+  const b2Key = getReportB2PdfKey(report);
+  if (b2Key) {
+    const viaB2 = await readPdfFromB2(b2Key);
+    if (viaB2?.buffer && isPdfBuffer(viaB2.buffer)) return viaB2.buffer;
+  }
+
   const target = getReportPdfRedirectTarget(report, preferDownload);
   const fileId = String(report.pdfFileId || report.driveFileId || extractGoogleDriveFileId(target) || "").trim();
 
@@ -6041,7 +6077,7 @@ async function resolveReportPdfBuffer(report: AnyRecord, preferDownload = false)
 
   const viaPublicUrl = await fetchPdfBufferFromPublicUrl(target);
   if (!isPdfBuffer(viaPublicUrl)) {
-    throw new ApiError("Stored PDF could not be streamed. Check Google Drive sharing or OAuth credentials.", 502);
+    throw new ApiError("Stored PDF could not be streamed. Check Backblaze B2, Vercel Blob URL, Google Drive sharing, or OAuth credentials.", 502);
   }
 
   return viaPublicUrl;

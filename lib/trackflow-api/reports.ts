@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
+import { readPdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import admin from "firebase-admin";
 import { adminDb } from "@/lib/firebase-admin";
 import {
@@ -41,6 +42,8 @@ function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
     pdfViewUrl: String(raw.pdfViewUrl || raw.pdf_view_url || raw.blobUrl || raw.blob_url || ""),
     pdfDownloadUrl: String(raw.pdfDownloadUrl || raw.pdf_download_url || raw.blobDownloadUrl || raw.blob_download_url || ""),
     blobPathname: String(raw.blobPathname || raw.blob_pathname || raw.pdfFileId || raw.pdf_file_id || ""),
+    b2Key: String(raw.b2Key || raw.b2_key || raw.pdfStorageKey || raw.pdf_storage_key || ""),
+    storageProvider: String(raw.storageProvider || raw.storage_provider || ""),
     ogImageUrl: String(raw.ogImageUrl || raw.og_image_url || ""),
     openGraphImageUrl: String(raw.openGraphImageUrl || raw.open_graph_image_url || ""),
     previewImageUrl: String(raw.previewImageUrl || raw.preview_image_url || ""),
@@ -133,6 +136,9 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       blobPathname: String(report.blobPathname || report.blob_pathname || report.pdfFileId || report.pdf_file_id || ""),
       blobUrl: String(report.blobUrl || report.blob_url || report.pdfViewUrl || report.pdf_view_url || ""),
       blobDownloadUrl: String(report.blobDownloadUrl || report.blob_download_url || report.pdfDownloadUrl || report.pdf_download_url || ""),
+      b2Key: String(report.b2Key || report.b2_key || report.pdfStorageKey || report.pdf_storage_key || report.blobPathname || report.blob_pathname || report.pdfFileId || report.pdf_file_id || ""),
+      pdfStorageKey: String(report.pdfStorageKey || report.pdf_storage_key || report.b2Key || report.b2_key || report.blobPathname || report.blob_pathname || report.pdfFileId || report.pdf_file_id || ""),
+      storageProvider: String(report.storageProvider || report.storage_provider || ""),
       active: report.active !== false,
       reportReady: report.reportReady !== false,
       source: "audit_reports_lookup",
@@ -456,6 +462,16 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       blobUrl: report.blobUrl,
       blobDownloadUrl: report.blobDownloadUrl,
       blobPathname: report.blobPathname,
+      b2Key: report.b2Key,
+      b2_key: deleteField,
+      b2Bucket: report.b2Bucket,
+      b2_bucket: deleteField,
+      pdfStorageKey: report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId,
+      pdf_storage_key: deleteField,
+      pdfStorageEtag: report.pdfStorageEtag,
+      pdf_storage_etag: deleteField,
+      pdfStorageSize: report.pdfStorageSize,
+      pdf_storage_size: deleteField,
       pdfExpiresAt: report.pdfExpiresAt,
       leadId: report.leadId,
       sheetRowNumber: report.sheetRowNumber,
@@ -578,6 +594,16 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       blobUrl: report.blobUrl,
       blobDownloadUrl: report.blobDownloadUrl,
       blobPathname: report.blobPathname,
+      b2Key: report.b2Key,
+      b2_key: deleteField,
+      b2Bucket: report.b2Bucket,
+      b2_bucket: deleteField,
+      pdfStorageKey: report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId,
+      pdf_storage_key: deleteField,
+      pdfStorageEtag: report.pdfStorageEtag,
+      pdf_storage_etag: deleteField,
+      pdfStorageSize: report.pdfStorageSize,
+      pdf_storage_size: deleteField,
       pdfExpiresAt: report.pdfExpiresAt,
       leadId: report.leadId,
       sheetRowNumber: report.sheetRowNumber,
@@ -710,7 +736,23 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     return Buffer.from(await response.arrayBuffer());
   }
 
+  function getReportB2PdfKey(report: AnyRecord): string {
+    return sanitizeB2Key(
+      report.b2Key ||
+        report.b2_key ||
+        report.pdfStorageKey ||
+        report.pdf_storage_key ||
+        (String(report.storageProvider || report.storage_provider || "").toLowerCase() === "backblaze_b2" ? report.blobPathname || report.pdfFileId : ""),
+    );
+  }
+
   async function resolveReportPdfBuffer(report: AnyRecord, preferDownload = false): Promise<Buffer> {
+    const b2Key = getReportB2PdfKey(report);
+    if (b2Key) {
+      const viaB2 = await readPdfFromB2(b2Key);
+      if (viaB2?.buffer && isPdfBuffer(viaB2.buffer)) return viaB2.buffer;
+    }
+
     const target = getReportPdfRedirectTarget(report, preferDownload);
     const fileId = String(report.pdfFileId || report.driveFileId || extractGoogleDriveFileId(target) || "").trim();
   
@@ -719,7 +761,7 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
   
     const viaPublicUrl = await fetchPdfBufferFromPublicUrl(target);
     if (!isPdfBuffer(viaPublicUrl)) {
-      throw new ApiError("Stored PDF could not be streamed. Check the Vercel Blob URL or storage sharing settings.", 502);
+      throw new ApiError("Stored PDF could not be streamed. Check Backblaze B2, Vercel Blob URL, or storage sharing settings.", 502);
     }
   
     return viaPublicUrl;
