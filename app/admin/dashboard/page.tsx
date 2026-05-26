@@ -128,6 +128,7 @@ import { useSystemStatus } from "./hooks/useSystemStatus";
 import { useFollowupAdmin } from "./hooks/useFollowupAdmin";
 import ScheduledPanel from "./ScheduledPanel";
 import OverviewPanel from "./OverviewPanel";
+import AnalyticsPanel from "./AnalyticsPanel";
 
 const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
   { id: "Email Signature", icon: <MousePointer2 size={16} /> },
@@ -3279,111 +3280,6 @@ export default function DashboardPage() {
   };
 
 
-  const renderAnalytics = () => {
-    const senderPerformance = ACTIVE_SENDERS.map((sender) => {
-      const senderLeads = leads.filter((lead) => lead.sender_email === sender.email);
-      const replied = senderLeads.filter((lead) => lead.status === "replied").length;
-      const opened = senderLeads.filter((lead) => Number(lead.open_count || 0) > 0).length;
-      const clicked = senderLeads.filter((lead) => Number(lead.click_count || 0) > 0).length;
-
-      return {
-        ...sender,
-        total: senderLeads.length,
-        replied,
-        opened,
-        clicked,
-      };
-    });
-
-    return (
-      <div className="space-y-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {renderStatCard("Open Rate", `${analytics.openRate}%`, <Activity size={22} />)}
-          {renderStatCard("Click Rate", `${analytics.clickRate}%`, <MousePointer2 size={22} />, "orange")}
-          {renderStatCard("Reply Rate", `${analytics.replyRate}%`, <MessageSquare size={22} />, "green")}
-          {renderStatCard("Bounce Rate", `${analytics.bounceRate}%`, <AlertCircle size={22} />, "red")}
-        </div>
-
-        <div className="bg-slate-950 rounded-[35px] border border-slate-800 p-6 shadow-sm text-white">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-white">Google Postmaster Tools</p>
-              <p className="text-[11px] text-slate-300 mt-2 font-bold">
-                Domain-level Gmail health: spam rate, reputation, authentication, and delivery errors.
-              </p>
-              {postmasterStatus && <p className="text-[10px] text-blue-200 mt-2 font-black uppercase">{postmasterStatus}</p>}
-            </div>
-            <button
-              type="button"
-              data-no-track="true"
-              onClick={(event: any) => {
-                event.preventDefault();
-                event.stopPropagation();
-                loadPostmasterHealth();
-              }}
-              disabled={postmasterLoading}
-              className="px-5 py-3 rounded-2xl bg-white text-slate-900 font-black text-xs uppercase flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {postmasterLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Load Postmaster
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800">
-              <p className="text-[8px] text-slate-400 font-black uppercase">Domain</p>
-              <p className="text-xs font-black mt-1">{postmasterHealth?.domain || "trackflowpro.com"}</p>
-            </div>
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800">
-              <p className="text-[8px] text-slate-400 font-black uppercase">Spam Rate</p>
-              <p className="text-xs font-black mt-1">{postmasterHealth?.spamRate != null ? `${(Number(postmasterHealth.spamRate) * 100).toFixed(3)}%` : "N/A"}</p>
-            </div>
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800">
-              <p className="text-[8px] text-slate-400 font-black uppercase">Domain Reputation</p>
-              <p className="text-xs font-black mt-1">{postmasterHealth?.domainReputation || "N/A"}</p>
-            </div>
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800">
-              <p className="text-[8px] text-slate-400 font-black uppercase">DMARC Pass</p>
-              <p className="text-xs font-black mt-1">{postmasterHealth?.dmarcSuccessRatio != null ? `${(Number(postmasterHealth.dmarcSuccessRatio) * 100).toFixed(1)}%` : "N/A"}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[35px] border border-gray-100 p-6 shadow-sm">
-          <h2 className="text-lg font-black text-gray-900 uppercase tracking-tighter mb-5">Sender Performance</h2>
-
-          <div className="space-y-3">
-            {senderPerformance.map((sender) => (
-              <div key={sender.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                <div className="flex justify-between gap-4 mb-3">
-                  <div>
-                    <p className="text-sm font-black text-gray-900">{sender.name}</p>
-                    <p className="text-[10px] font-bold text-gray-400">{sender.email}</p>
-                  </div>
-                  <p className="text-xs font-black text-blue-600">{sender.total} leads</p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-white rounded-xl p-3">
-                    <p className="text-sm font-black text-gray-900">{sender.opened}</p>
-                    <p className="text-[8px] font-black text-gray-400 uppercase">Opened</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-3">
-                    <p className="text-sm font-black text-gray-900">{sender.clicked}</p>
-                    <p className="text-[8px] font-black text-gray-400 uppercase">Clicked</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-3">
-                    <p className="text-sm font-black text-gray-900">{sender.replied}</p>
-                    <p className="text-[8px] font-black text-gray-400 uppercase">Replied</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderLeadDrawer = () => (
     <AnimatePresence>
       {selectedLead && (
@@ -3633,7 +3529,16 @@ export default function DashboardPage() {
           {activeTab === "leads" && renderLeads()}
           {activeTab === "cleanup" && renderCleanupManager()}
           {activeTab === "automation" && renderFollowups()}
-          {activeTab === "analytics" && renderAnalytics()}
+          {activeTab === "analytics" && (
+            <AnalyticsPanel
+              analytics={analytics}
+              leads={leads}
+              postmasterStatus={postmasterStatus}
+              postmasterLoading={postmasterLoading}
+              postmasterHealth={postmasterHealth}
+              loadPostmasterHealth={loadPostmasterHealth}
+            />
+          )}
 
           {renderLeadDrawer()}
 

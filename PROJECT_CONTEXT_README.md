@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.77-dashboard-overview-panel-split-stage-4
+Version: v18.78-dashboard-analytics-panel-split-stage-5
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -526,6 +526,37 @@ Do not move sensitive outreach composer, cleanup table, automation editor, sheet
 OverviewPanel should receive existing state/actions from page.tsx as props.
 Do not change API route URLs, request payloads, response handling, Firestore fields, Sheet columns, Brevo behavior, or Zustand stored dashboard state.
 Continue splitting visual panels one at a time only after the previous panel builds and works locally.
+```
+
+
+### 3.20 Dashboard Analytics Panel Modularization Rule
+
+The dashboard visual split has now moved one low-risk display tab into its own component after the scheduled and overview panels were stable.
+
+Current stage-5 structure:
+
+```text
+page.tsx
+→ still owns the dashboard shell, tab routing, local outreach compose state, lead/sheet/cleanup/automation/outreach rendering, and shared lead drawer behavior
+
+ScheduledPanel.tsx
+→ scheduled-email visual panel and scheduled edit drawer
+
+OverviewPanel.tsx
+→ overview tab visual panel
+
+AnalyticsPanel.tsx
+→ analytics tab visual panel, including open/click/reply/bounce rate cards, Google Postmaster summary card, and sender performance cards
+```
+
+Important decisions:
+
+```text
+AnalyticsPanel is display-focused and receives existing state/actions from page.tsx as props.
+Google Postmaster loading still uses the existing useFollowupAdmin hook through page.tsx.
+Sender performance still uses ACTIVE_SENDERS and cached leads; no Firestore/API behavior should change.
+Do not split Outreach, Automation, Cleanup, Sheet, or Leads in the same patch.
+Continue visual panel extraction one panel at a time only after the previous patch builds and works locally.
 ```
 
 ### 3.6 Secure Report Responsive UX Rule
@@ -1880,6 +1911,29 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+### v18.78 Dashboard Analytics Panel Split Stage 5
+
+The analytics tab was split into a dedicated visual component after the overview panel worked locally. The main dashboard page remains the shell and continues to own state wiring and tab routing.
+
+Changed files:
+
+```text
+page.tsx
+AnalyticsPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Only the analytics visual panel was extracted.
+AnalyticsPanel owns open/click/reply/bounce cards, Google Postmaster display, and sender performance display.
+Google Postmaster loading still comes from the existing useFollowupAdmin hook through page.tsx.
+No API route URLs, request payloads, Firestore fields, Sheet columns, Brevo behavior, sender config, or stored dashboard state should change.
+Do not split the outreach composer, automation editor, cleanup manager, sheet queue, or lead table in the same patch.
+```
 
 ### v18.77 Dashboard Overview Panel Split Stage 4
 

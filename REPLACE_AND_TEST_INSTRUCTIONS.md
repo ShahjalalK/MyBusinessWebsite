@@ -1,28 +1,29 @@
-# Replace and Test Instructions — v18.77 Dashboard Overview Panel Split Stage 4
+# Replace and Test — v18.78 Dashboard Analytics Panel Split Stage 5
 
-Replace/add these files in the same folder as your email automation dashboard `page.tsx`:
+Replace these files in the same dashboard folder where your current `page.tsx` lives:
 
 ```text
 page.tsx
-OverviewPanel.tsx
+AnalyticsPanel.tsx
 PROJECT_CONTEXT_README.md
 ```
 
-Keep your existing helper/hook files from the previous working version:
+Keep the existing files already added in previous stages:
 
 ```text
+OverviewPanel.tsx
+ScheduledPanel.tsx
 types.ts
 constants.ts
 utils.ts
 sheet-readiness.ts
 followup-utils.ts
-ScheduledPanel.tsx
 hooks/useScheduledEmails.ts
 hooks/useSystemStatus.ts
 hooks/useFollowupAdmin.ts
 ```
 
-Then run:
+After replacing, run:
 
 ```bash
 npm run build
@@ -32,15 +33,14 @@ npm run dev
 Test checklist:
 
 ```text
-1. Overview tab opens normally.
-2. Top summary cards show cached leads, hot leads, replies, bounces.
-3. Refresh Report works.
-4. Refresh Usage works.
-5. System cleanup buttons still trigger confirmation/action.
-6. Hot lead cards open the lead drawer.
-7. Manage Automation switches to the automation tab.
-8. See more leads button still behaves the same.
-9. Scheduled tab still works after this patch.
+1. Dashboard opens normally.
+2. Overview tab still works.
+3. Scheduled tab still works.
+4. Analytics tab opens.
+5. Open/Click/Reply/Bounce cards display.
+6. Load Postmaster button works or shows the same status as before.
+7. Sender Performance cards display correctly.
+8. Lead drawer still opens from other tabs.
 ```
 
-This patch only splits the overview visual panel. It does not change API routes, Firestore fields, Sheet columns, Brevo behavior, or storage behavior.
+This patch only moves the analytics tab UI into `AnalyticsPanel.tsx`. It does not change API routes, Firestore fields, Sheet columns, Brevo behavior, sender config, or stored Zustand state.
