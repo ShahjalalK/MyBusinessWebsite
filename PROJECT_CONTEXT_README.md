@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.76-dashboard-scheduled-panel-split-stage-3
+Version: v18.77-dashboard-overview-panel-split-stage-4
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -499,6 +499,33 @@ Do not change scheduled-email API URLs, request payloads, response handling, Fir
 Keep ScheduledPanel.tsx in the same dashboard folder as page.tsx and import it with ./ScheduledPanel.
 The ScheduledPanel should receive existing state/actions from page.tsx as props so Zustand state and behavior remain unchanged.
 Next safe visual split can be a small overview/system panel before larger Outreach, Automation, Cleanup, Sheet, or Leads panels.
+```
+
+
+### 3.19 Dashboard Overview Panel Modularization Rule
+
+The dashboard visual split should continue one panel at a time after helper extraction and action hook extraction are stable.
+
+Current stage-4 structure:
+
+```text
+page.tsx
+→ still owns the dashboard shell, tab routing, local compose state, lead/sheet/cleanup/automation/outreach rendering, and shared drawer behavior
+
+ScheduledPanel.tsx
+→ scheduled-email visual panel and scheduled edit drawer
+
+OverviewPanel.tsx
+→ overview tab visual panel, including top summary cards, follow-up report cards, Firebase usage cards, hot lead preview, and automation health card
+```
+
+Important decisions:
+
+```text
+Do not move sensitive outreach composer, cleanup table, automation editor, sheet queue, or lead table in the same patch.
+OverviewPanel should receive existing state/actions from page.tsx as props.
+Do not change API route URLs, request payloads, response handling, Firestore fields, Sheet columns, Brevo behavior, or Zustand stored dashboard state.
+Continue splitting visual panels one at a time only after the previous panel builds and works locally.
 ```
 
 ### 3.6 Secure Report Responsive UX Rule
@@ -1853,6 +1880,28 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.77 Dashboard Overview Panel Split Stage 4
+
+The second visual dashboard panel was split after the scheduled panel worked locally. The overview tab now lives in a dedicated component while the main dashboard page remains the shell.
+
+Changed files:
+
+```text
+page.tsx
+OverviewPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Only the overview visual panel was extracted.
+The overview panel receives existing dashboard state and action functions from page.tsx.
+Follow-up summary, Firebase usage, system cleanup, hot lead selection, and tab navigation behavior should remain unchanged.
+No API route URLs, request payloads, Firestore fields, Sheet columns, Brevo behavior, or stored dashboard state should change.
+Do not split the outreach composer, automation editor, cleanup manager, sheet queue, or lead table in the same patch.
+```
 
 ### v18.76 Dashboard Scheduled Panel Split Stage 3
 
