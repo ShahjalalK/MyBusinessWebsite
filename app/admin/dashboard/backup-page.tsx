@@ -68,61 +68,264 @@ import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, getColdEmailTemp
 import { useLeadStore, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
 
-import type {
-  BulkLeadAction,
-  CleanupBucket,
-  CleanupCandidate,
-  CleanupState,
-  ContactMemoryWarning,
-  FirebaseUsageState,
-  FollowupConfig,
-  FollowupSummaryState,
-  Lead,
-  MainTab,
-  ScheduledEditState,
-  ServiceId,
-  SheetLead,
-  StepConfig,
-  StepId,
-  TriggerMode,
-  Variant,
-} from "./types";
-import { ACTIVE_STATUSES, OUTREACH_DRAFT_KEY, SERVICE_NAMES, STEPS } from "./constants";
-import {
-  applyMergeTags,
-  countLinksFromHtml,
-  countWordsFromHtml,
-  emailStatsDocId,
-  formatDate,
-  getFollowupRiskLabel,
-  getRecentMonthOptions,
-  isEmailPatternValid,
-  makeNameFromEmail,
-  monthKeyFromMillis,
-  normalizeOptionalUrl,
-  normalizeSheetService,
-  sanitizePreviewHtml,
-  stripHtml,
-  toDateTimeLocalInput,
-  toMillis,
-  todayKeyDhaka,
-} from "./utils";
-import {
-  getSheetReadiness,
-  getSheetReportStatus,
-  isSecureReportUrl,
-  isSheetReportReady,
-  sheetValue,
-} from "./sheet-readiness";
-import {
-  getNextFollowUpStatus,
-  isHotLead,
-  isLeadEligibleForStep,
-  leadScore,
-  makeDefaultConfig,
-  makeDefaultStep,
-  mergeWithDefaultConfig,
-} from "./followup-utils";
+type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics";
+type TriggerMode = "no_reply_after_delay" | "open_required";
+
+type ServiceId = "Email Signature" | "Google Ads" | "Server Side Tracking";
+type StepId = "step1" | "step2" | "step3" | "step4" | "step5";
+
+type Variant = {
+  id: string;
+  content: string;
+};
+
+type StepConfig = {
+  variants: Variant[];
+  delay: number;
+};
+
+type FollowupConfig = Record<ServiceId, Record<StepId, StepConfig>>;
+
+type TrackingHistory = {
+  event: string;
+  time: any;
+  link?: string;
+  step?: number;
+  step_tag?: string;
+};
+
+type SentMessage = {
+  step: number;
+  subject: string;
+  message?: string;
+  sentAt: any;
+  trackingTag?: string;
+};
+
+type Lead = {
+  id: string;
+  name?: string;
+  company_name?: string;
+  website?: string;
+  email: string;
+  emailLower?: string;
+  subject: string;
+  message?: string;
+  open_count?: number;
+  click_count?: number;
+  status?: string;
+  createdAt?: any;
+  lastOpenedAt?: any;
+  lastClickedAt?: any;
+  lastEngagedAt?: any;
+  lastFollowUp?: any;
+  nextFollowupAt?: any;
+  nextFollowupStep?: number;
+  nextFollowupStatus?: string;
+  nextFollowupReason?: string;
+  retryCount?: number;
+  lastFollowupError?: string;
+  sentAt?: any;
+  tracking_history?: TrackingHistory[];
+  follow_up_count?: number;
+  sent_messages?: SentMessage[];
+  service?: ServiceId | string;
+  stopAutomation?: boolean;
+  sender_email?: string;
+  sender_name?: string;
+  source?: string;
+  sheetRowNumber?: number;
+  sheetFinalEmail?: string;
+  sheetWebsiteUrl?: string;
+  archived?: boolean;
+  archivedAt?: any;
+  deleted?: boolean;
+  deletedAt?: any;
+  archiveReason?: string;
+  deleteReason?: string;
+  [key: string]: any;
+};
+
+type SheetLead = {
+  rowNumber: number;
+  "Export Date"?: string;
+  "Business Name"?: string;
+  "Website URL"?: string;
+  "Final Email"?: string;
+  "Email Source"?: string;
+  "Social Platform"?: string;
+  "Social Link"?: string;
+  "WhatsApp"?: string;
+  "ChatGPT Prompt"?: string;
+  "Lead Status"?: string;
+  "Approval Status"?: string;
+  "Send Status"?: string;
+  "Service Type"?: string;
+  "Audit Score"?: string;
+  "Lead Label"?: string;
+  "Main Issue"?: string;
+  "Proof Points"?: string;
+  "Report Token"?: string;
+  "Report URL"?: string;
+  "PDF File ID"?: string;
+  "PDF View URL"?: string;
+  "PDF Download URL"?: string;
+  "PDF Expires At"?: string;
+  "Report Page Viewed"?: string;
+  "PDF Downloaded"?: string;
+  "CTA Clicked"?: string;
+  "Last Report Viewed At"?: string;
+  "Last PDF Downloaded At"?: string;
+  "Last CTA Clicked At"?: string;
+  "Email Subject"?: string;
+  "Email Body"?: string;
+  "Decision Maker"?: string;
+  "Decision Maker Title"?: string;
+  "Contact Quality"?: string;
+  "Tracking ID"?: string;
+  "Firestore Lead ID"?: string;
+  "Open Count"?: string;
+  "Click Count"?: string;
+  "Reply Status"?: string;
+  "Last Synced"?: string;
+  "Archive Status"?: string;
+  "Notes"?: string;
+  "Sender ID"?: string;
+  "Attempt Count"?: string;
+  "Queue Lock ID"?: string;
+  "Queue Locked At"?: string;
+  "Queue Attempt ID"?: string;
+  [key: string]: any;
+};
+
+
+type ScheduledEditState = {
+  leadId: string;
+  email: string;
+  clientName: string;
+  companyName: string;
+  website: string;
+  businessType: string;
+  subject: string;
+  message: string;
+  scheduledTime: string;
+  selectedService: ServiceId | "";
+  selectedSender: string;
+  includeSignature: boolean;
+  reportUrl: string;
+  reportButtonText: string;
+};
+
+type FollowupSummaryState = {
+  loading: boolean;
+  error: string;
+  loadedAt: number | null;
+  sentToday: number;
+  dailyLimit: number;
+  batchPerRun: number;
+  remainingToday: number;
+  maxThisRun: number;
+  dueNow: number;
+  scheduled: number;
+  waitingFirstOpen: number;
+  waitingNewEngagement: number;
+  templateBlocked: number;
+  failedRetry: number;
+  failedFinal: number;
+  blocked: number;
+};
+
+type FirebaseUsageState = {
+  loading: boolean;
+  error: string;
+  loadedAt: number | null;
+  usage: {
+    estimatedReadsToday: number;
+    estimatedWritesToday: number;
+    estimatedDeletesToday: number;
+    estimatedStorageMb: number;
+    readPercent: number;
+    writePercent: number;
+    deletePercent: number;
+    storagePercent: number;
+  };
+  quota: {
+    readsPerDay: number;
+    writesPerDay: number;
+    deletesPerDay: number;
+    storageMb: number;
+  };
+  counts: {
+    leadCount: number;
+    activeLeadCount: number;
+    archivedLeadCount: number;
+    trashedLeadCount: number;
+    emailEventCount: number;
+    suppressionCount: number;
+    initialSentToday: number;
+    followupSentToday: number;
+    eventsToday: number;
+  };
+  note: string;
+};
+
+
+type CleanupBucket = "due" | "cold" | "warm" | "replied" | "protected" | "upcoming";
+
+type CleanupCandidate = {
+  leadId: string;
+  email: string;
+  name?: string;
+  company?: string;
+  website?: string;
+  service?: string;
+  status?: string;
+  source?: string;
+  sourceKind?: "sheet" | "cold" | "test";
+  sheetLinked?: boolean;
+  sheetRowNumber?: number | null;
+  openCount?: number;
+  clickCount?: number;
+  followUpCount?: number;
+  lastContactedAt?: string;
+  dueAt?: string;
+  daysOld?: number;
+  eligible?: boolean;
+  outcome?: string;
+  reason?: string;
+  protectedLead?: boolean;
+  cooldownMonths?: number;
+  memoryMonths?: number;
+  blockedReasons?: string[];
+};
+
+type CleanupState = {
+  loading: boolean;
+  actionLoading: boolean;
+  error: string;
+  status: string;
+  loadedAt: number | null;
+  bucket: CleanupBucket;
+  rows: CleanupCandidate[];
+  policy?: any;
+};
+
+
+type ContactMemoryWarning = {
+  emailLower?: string;
+  lastOutcome?: string;
+  lastContactedAt?: string;
+  cooldownUntil?: string;
+  memoryExpiresAt?: string;
+  companyName?: string;
+  website?: string;
+  service?: string;
+  openCount?: number;
+  clickCount?: number;
+  sourceLeadId?: string;
+};
+
+type BulkLeadAction = "archive" | "restore" | "trash" | "delete_permanent";
 
 const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
   { id: "Email Signature", icon: <MousePointer2 size={16} /> },
@@ -130,10 +333,132 @@ const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
   { id: "Server Side Tracking", icon: <Database size={16} /> },
 ];
 
+const SERVICE_NAMES: ServiceId[] = ["Email Signature", "Google Ads", "Server Side Tracking"];
+const STEPS: StepId[] = ["step1", "step2", "step3", "step4", "step5"];
+const ACTIVE_STATUSES = new Set(["sent", "opened", "clicked", "active", "interested"]);
+const OUTREACH_DRAFT_KEY = "trackflowpro_admin_outreach_draft_v1";
 const MAILING_ADDRESS =
   process.env.NEXT_PUBLIC_TRACKFLOW_MAILING_ADDRESS ||
   process.env.NEXT_PUBLIC_BUSINESS_MAILING_ADDRESS ||
   "";
+
+function stripHtml(html: string) {
+  return String(html || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sanitizePreviewHtml(html: string) {
+  if (typeof window === "undefined") return "";
+
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+
+  template.content.querySelectorAll("script, iframe, object, embed, link, meta, style").forEach((node) => node.remove());
+
+  template.content.querySelectorAll("*").forEach((element) => {
+    Array.from(element.attributes).forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim();
+
+      if (name.startsWith("on")) {
+        element.removeAttribute(attr.name);
+        return;
+      }
+
+      if (["href", "src", "xlink:href"].includes(name)) {
+        const lower = value.toLowerCase();
+        const isSafe =
+          lower.startsWith("http://") ||
+          lower.startsWith("https://") ||
+          lower.startsWith("mailto:") ||
+          lower.startsWith("tel:") ||
+          lower.startsWith("#") ||
+          lower.startsWith("/");
+
+        if (!isSafe) element.removeAttribute(attr.name);
+      }
+    });
+  });
+
+  return template.innerHTML;
+}
+
+function countWordsFromHtml(html: string) {
+  return stripHtml(html).split(/\s+/).filter(Boolean).length;
+}
+
+function countLinksFromHtml(html: string) {
+  return (String(html || "").match(/<a\s/gi) || []).length;
+}
+
+function getFollowupRiskLabel(html: string) {
+  const words = countWordsFromHtml(html);
+  const links = countLinksFromHtml(html);
+  if (words > 120 || links > 1) return { label: "Needs cleanup", tone: "bg-red-50 text-red-600 border-red-100" };
+  if (words > 80 || links === 1) return { label: "Review", tone: "bg-amber-50 text-amber-700 border-amber-100" };
+  return { label: "Clean", tone: "bg-emerald-50 text-emerald-700 border-emerald-100" };
+}
+
+function isEmailPatternValid(inputEmail: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEmail);
+}
+
+function makeNameFromEmail(email: string) {
+  const local = email.split("@")[0] || "Sender";
+  return local.replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()).trim();
+}
+
+function normalizeOptionalUrl(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function emailStatsDocId(email: string) {
+  return encodeURIComponent(String(email || "").trim().toLowerCase()).replace(/\./g, "%2E");
+}
+
+function todayKeyDhaka(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function monthKeyFromMillis(value: any) {
+  const millis = toMillis(value);
+  if (!millis) return "";
+  const date = new Date(millis);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getRecentMonthOptions(count = 18) {
+  const options: { value: string; label: string }[] = [];
+  const start = new Date();
+  start.setDate(1);
+
+  for (let i = 0; i < count; i += 1) {
+    const date = new Date(start);
+    date.setMonth(start.getMonth() - i);
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const label = date.toLocaleString("en-GB", { month: "short", year: "numeric" });
+    options.push({ value, label });
+  }
+
+  return options;
+}
 
 function emptyFirebaseUsageState(): FirebaseUsageState {
   return {
@@ -171,6 +496,109 @@ function emptyFirebaseUsageState(): FirebaseUsageState {
   };
 }
 
+function sheetValue(lead: SheetLead | null | undefined, key: keyof SheetLead | string) {
+  return String(lead?.[key as keyof SheetLead] || "").trim();
+}
+
+function isSheetEmailReady(lead: SheetLead) {
+  return isEmailPatternValid(sheetValue(lead, "Final Email"));
+}
+
+function isSheetMessageReady(lead: SheetLead) {
+  return Boolean(stripHtml(sheetValue(lead, "Email Body"))) && Boolean(sheetValue(lead, "Email Subject"));
+}
+
+function isSecureReportUrl(value: string) {
+  const url = normalizeOptionalUrl(value);
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+    const lower = url.toLowerCase();
+
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    if (lower.includes("localhost") || lower.includes("127.0.0.1") || lower.includes("0.0.0.0")) return false;
+    if (lower.includes("/audit/pdf/") || lower.includes(":8000/")) return false;
+    if (lower.includes("drive.google.com") || lower.includes("googleusercontent.com")) return false;
+    if (/\.pdf(?:$|[?#])/i.test(parsed.pathname + parsed.search)) return false;
+
+    // Client-facing email/report links must be branded token pages, not raw files.
+    return /^\/r\/[a-z0-9_-]{16,96}\/?$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function isSheetReportReady(lead: SheetLead) {
+  const reportUrl = sheetValue(lead, "Report URL");
+  const reportToken = sheetValue(lead, "Report Token");
+  const pdfFileId = sheetValue(lead, "PDF File ID");
+  const pdfViewUrl = sheetValue(lead, "PDF View URL");
+  const pdfDownloadUrl = sheetValue(lead, "PDF Download URL");
+  return Boolean(isSecureReportUrl(reportUrl) && reportToken && pdfFileId && (pdfViewUrl || pdfDownloadUrl));
+}
+
+function isSheetApprovalReady(lead: SheetLead) {
+  const approval = sheetValue(lead, "Approval Status").toLowerCase();
+  return ["approved", "manual approved", "system qualified", "send ready"].includes(approval);
+}
+
+function isSheetSendStatusReady(lead: SheetLead) {
+  const sendStatus = sheetValue(lead, "Send Status").toLowerCase();
+  return ["", "not sent", "failed", "needs review"].includes(sendStatus);
+}
+
+function getSheetReadiness(lead: SheetLead) {
+  const blockers: string[] = [];
+
+  if (!isSheetEmailReady(lead)) blockers.push("valid email missing");
+  if (!isSheetApprovalReady(lead)) blockers.push("approval not ready");
+  if (!isSheetSendStatusReady(lead)) blockers.push(`send status is ${sheetValue(lead, "Send Status") || "not allowed"}`);
+  if (!stripHtml(sheetValue(lead, "Email Subject"))) blockers.push("email subject missing");
+  if (!stripHtml(sheetValue(lead, "Email Body"))) blockers.push("email body missing");
+  if (!sheetValue(lead, "Main Issue")) blockers.push("main issue missing");
+  if (!isSheetReportReady(lead)) blockers.push("secure /r report or PDF fields missing");
+
+  return {
+    ready: blockers.length === 0,
+    blockers,
+    note: blockers.length ? blockers.join(" · ") : "Ready for verified outreach",
+  };
+}
+
+function getSheetReportStatus(lead: SheetLead) {
+  if (isSheetReportReady(lead)) {
+    const viewed = sheetValue(lead, "Report Page Viewed").toLowerCase() === "yes";
+    const downloaded = sheetValue(lead, "PDF Downloaded").toLowerCase() === "yes";
+    const clicked = sheetValue(lead, "CTA Clicked").toLowerCase() === "yes";
+    return {
+      label: viewed ? "Report viewed" : "Report ready",
+      note: [downloaded ? "PDF downloaded" : "PDF hosted", clicked ? "CTA clicked" : "CTA pending"].join(" · "),
+      tone: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    };
+  }
+  return {
+    label: "Report missing",
+    note: "Upload PDF + register /r link before sending",
+    tone: "bg-red-50 text-red-700 border-red-100",
+  };
+}
+
+
+function normalizeSheetService(value: string): ServiceId {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("signature")) return "Email Signature";
+  if (text.includes("server") || text.includes("sst")) return "Server Side Tracking";
+  return "Google Ads";
+}
+
+function applyMergeTags(html: string, data: { name?: string; company?: string; website?: string; service?: string }) {
+  return String(html || "")
+    .replace(/{name}/g, data.name || "there")
+    .replace(/{company}/g, data.company || "your company")
+    .replace(/{website}/g, data.website || "your website")
+    .replace(/{service}/g, data.service || "our service");
+}
 
 function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "full" | "compact" = "full") {
   if (!sender) return "";
@@ -213,6 +641,196 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
   `;
 }
 
+function toMillis(time: any): number {
+  if (!time) return 0;
+  if (typeof time.toMillis === "function") return time.toMillis();
+  if (typeof time.seconds === "number") return time.seconds * 1000;
+  const date = new Date(time);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function formatDate(timestamp: any) {
+  const millis = toMillis(timestamp);
+  if (millis === 0) return "N/A";
+  return new Date(millis).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+
+function toDateTimeLocalInput(timestamp: any) {
+  const millis = toMillis(timestamp);
+  if (!millis) return "";
+  const date = new Date(millis);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function makeDefaultStep(): StepConfig {
+  return {
+    variants: [{ id: "V1", content: "" }],
+    delay: 1440,
+  };
+}
+
+function makeDefaultConfig(): FollowupConfig {
+  return SERVICE_NAMES.reduce((serviceAcc, service) => {
+    serviceAcc[service] = STEPS.reduce((stepAcc, step) => {
+      stepAcc[step] = makeDefaultStep();
+      return stepAcc;
+    }, {} as Record<StepId, StepConfig>);
+    return serviceAcc;
+  }, {} as FollowupConfig);
+}
+
+function mergeWithDefaultConfig(data: any): FollowupConfig {
+  const defaults = makeDefaultConfig();
+
+  for (const service of SERVICE_NAMES) {
+    for (const step of STEPS) {
+      const loadedStep = data?.[service]?.[step];
+      if (!loadedStep) continue;
+
+      const variants = Array.isArray(loadedStep.variants)
+        ? loadedStep.variants.filter((variant: any) => variant && typeof variant === "object")
+        : [];
+
+      defaults[service][step] = {
+        variants: variants.length > 0 ? variants : [{ id: "V1", content: "" }],
+        delay: Number(loadedStep.delay || 1440),
+      };
+    }
+  }
+
+  return defaults;
+}
+
+function getLastSentMs(lead: Lead) {
+  return toMillis(lead.lastFollowUp || lead.sentAt || lead.createdAt);
+}
+
+function getLastEngagedMs(lead: Lead) {
+  return Math.max(
+    toMillis(lead.lastEngagedAt),
+    toMillis(lead.lastClickedAt),
+    toMillis(lead.lastOpenedAt || lead.last_opened)
+  );
+}
+
+function isHotLead(lead: Lead) {
+  return Number(lead.click_count || 0) > 0 || Number(lead.open_count || 0) >= 1 || lead.status === "clicked";
+}
+
+function leadScore(lead: Lead) {
+  if (["bounced", "spam", "unsubscribed"].includes(String(lead.status || ""))) return -100;
+  if (lead.status === "replied") return 100;
+
+  return (
+    Number(lead.open_count || 0) * 10 +
+    Number(lead.click_count || 0) * 25 +
+    Number(lead.follow_up_count || 0) * 3
+  );
+}
+
+function getNextFollowUpStatus(lead: Lead, triggerMode: TriggerMode, config: FollowupConfig) {
+  if (lead.status === "replied" || lead.stopAutomation) return null;
+  if (["bounced", "spam", "unsubscribed", "finished"].includes(String(lead.status || ""))) return null;
+
+  const storedStatus = String(lead.nextFollowupStatus || "").toLowerCase();
+  const storedTime = toMillis(lead.nextFollowupAt);
+  const nextNumber = Number(lead.nextFollowupStep || Number(lead.follow_up_count || 0) + 1);
+
+  if (storedStatus === "scheduled" && storedTime) {
+    const now = Date.now();
+    return {
+      label: now >= storedTime ? `Ready: F-${nextNumber}` : `Scheduled: F-${nextNumber}`,
+      color: now >= storedTime ? "text-green-500" : "text-blue-500",
+      time: formatDate(lead.nextFollowupAt),
+    };
+  }
+
+  if (storedStatus === "processing") {
+    return { label: `Processing F-${nextNumber}`, color: "text-amber-600", time: null };
+  }
+
+  if (storedStatus === "template_blocked") {
+    return { label: "Template/config blocked", color: "text-red-600", time: storedTime ? formatDate(lead.nextFollowupAt) : null };
+  }
+
+  if (storedStatus === "failed_final") {
+    return { label: "Follow-up failed final", color: "text-red-600", time: null };
+  }
+
+  if (storedStatus === "waiting_for_first_open_or_click") {
+    return { label: "Waiting for first Open/Click", color: "text-orange-500", time: null };
+  }
+
+  if (storedStatus === "waiting_for_new_engagement") {
+    return { label: "Waiting for New Open/Click", color: "text-orange-500", time: null };
+  }
+
+  if (storedStatus === "blocked") {
+    return { label: `Blocked: ${lead.nextFollowupReason || "automation stopped"}`, color: "text-red-600", time: null };
+  }
+
+  const followUpCount = Number(lead.follow_up_count || 0);
+  if (followUpCount >= 5) return null;
+
+  const service = (lead.service || "Email Signature") as ServiceId;
+  const nextStep = (STEPS[followUpCount] || "step1") as StepId;
+  const stepConfig = config?.[service]?.[nextStep];
+  const delayMinutes = Number(stepConfig?.delay || 1440);
+
+  const lastSent = getLastSentMs(lead);
+  const lastEngaged = getLastEngagedMs(lead);
+
+  if (!lastSent) return { label: "Syncing...", color: "text-gray-400", time: null };
+
+  if (Number(lead.open_count || 0) < 1 && Number(lead.click_count || 0) < 1 && !lastEngaged) {
+    return { label: "No auto follow-up: No Open/Click", color: "text-orange-500", time: null };
+  }
+
+  if (followUpCount >= 1 && lastEngaged <= lastSent) {
+    return { label: "Waiting for New Open/Click", color: "text-orange-500", time: null };
+  }
+
+  const scheduledMillis = lastEngaged
+    ? lastEngaged + (delayMinutes - 60) * 60_000
+    : lastSent + delayMinutes * 60_000;
+
+  if (Date.now() >= scheduledMillis) {
+    return { label: `Ready: F-${followUpCount + 1}`, color: "text-green-500", time: formatDate(scheduledMillis) };
+  }
+
+  return { label: `F-${followUpCount + 1} Scheduled`, color: "text-blue-500", time: formatDate(scheduledMillis) };
+}
+
+function isLeadEligibleForStep(lead: Lead, service: ServiceId, step: StepId, triggerMode: TriggerMode): boolean {
+  if (lead.stopAutomation === true) return false;
+  if (!ACTIVE_STATUSES.has(String(lead.status || ""))) return false;
+  if (String(lead.service || "").toLowerCase().trim() !== service.toLowerCase().trim()) return false;
+
+  const followUpCount = Number(lead.follow_up_count || 0);
+  const currentStepIndex = STEPS.indexOf(step);
+  if (followUpCount !== currentStepIndex) return false;
+
+  const lastSent = getLastSentMs(lead);
+  const lastEngaged = getLastEngagedMs(lead);
+  const hasAnyEngagement = Number(lead.open_count || 0) >= 1 || Number(lead.click_count || 0) >= 1 || lastEngaged > 0 || lead.status === "clicked";
+
+  if (!hasAnyEngagement) return false;
+
+  if (step === "step1") {
+    return hasAnyEngagement;
+  }
+
+  return lastSent > 0 && lastEngaged > lastSent;
+}
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<MainTab>("overview");

@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.73-trackflow-api-modularization-stage-1
+Version: v18.74-dashboard-helper-split-stage-1
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -399,6 +399,43 @@ Keep route behavior and response shape unchanged while splitting helpers.
 Do not split dashboard page.tsx until backend route helpers are stable.
 Do not create one giant database-manager file; use small modules by responsibility.
 The route should become a thin dispatcher over time, but only in safe small patches.
+```
+
+
+### 3.17 Dashboard Helper Modularization Rule
+
+The email automation dashboard is now being split gradually so the main `page.tsx` does not keep every type, helper, readiness rule, and follow-up utility inline.
+
+Current stage-1 structure:
+
+```text
+page.tsx
+→ still owns the main dashboard component, state wiring, tab rendering, and existing UI behavior
+
+types.ts
+→ MainTab, Lead, SheetLead, follow-up config types, scheduled edit types, cleanup types, and shared dashboard state types
+
+constants.ts
+→ service names, follow-up step IDs, active automation statuses, and outreach draft localStorage key
+
+utils.ts
+→ HTML stripping/sanitizing helpers, email/URL helpers, date/time helpers, sender stats doc ID helper, sheet service normalization, and simple merge-tag helper
+
+sheet-readiness.ts
+→ Google Sheet queue readiness checks, secure report URL check, report status label helper, and sheet value helper
+
+followup-utils.ts
+→ default follow-up config, config merge helper, hot lead scoring, next follow-up status helper, and step eligibility helper
+```
+
+Important decisions:
+
+```text
+Stage 1 should not redesign dashboard UI.
+Keep `page.tsx` as the shell until helper extraction is stable.
+New helper files should live in the same folder as the dashboard `page.tsx` and be imported with relative paths such as `./types`.
+Do not change API routes, Firestore fields, Sheet columns, Brevo behavior, or stored dashboard state as part of this helper split.
+Split visual panels later, one panel at a time, only after helper files build cleanly.
 ```
 
 
@@ -1323,6 +1360,36 @@ This helper belongs in the Next.js project root at lib/trackflow-storage/b2.ts.
 It does not belong inside python-backend/.
 ```
 
+
+### 6.13 Email Automation Dashboard Helper Files
+
+These helper files should live in the same folder as the email automation dashboard `page.tsx`.
+
+```text
+types.ts
+constants.ts
+utils.ts
+sheet-readiness.ts
+followup-utils.ts
+```
+
+Use these files when:
+
+```text
+Dashboard TypeScript types need updating
+Sheet queue readiness rules need changing
+Follow-up status/eligibility logic needs changing
+Email/URL/date/HTML helper behavior needs changing
+The dashboard page is becoming too crowded but UI panels should not be split yet
+```
+
+Important rule:
+
+```text
+Do not move JSX-heavy panels until the helper split is stable.
+Keep imports relative to the page folder, for example `./types`, so the helper files work even if the dashboard route folder name changes.
+```
+
 ### 6.6 `app/api/export/sheet/route.ts`
 
 Google Sheet queue/staging bridge.
@@ -1724,6 +1791,47 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+### v18.74 Dashboard Helper Split Stage 1
+
+The email automation dashboard `page.tsx` was split safely by moving non-UI types and helper logic into local helper files while keeping the existing dashboard UI and route behavior unchanged.
+
+Changed files:
+
+```text
+page.tsx
+types.ts
+constants.ts
+utils.ts
+sheet-readiness.ts
+followup-utils.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Only non-UI helpers/types/constants were moved in this stage.
+The dashboard component, tabs, state wiring, API calls, Firestore reads, Sheet behavior, Brevo behavior, and cleanup actions should behave the same.
+The new helper files should be placed in the same folder as the dashboard page.tsx.
+The updated page uses relative imports like ./types and ./utils to avoid depending on the exact route folder name.
+Panel/component splitting is intentionally deferred to a later patch after this helper split builds cleanly.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+Open the email automation dashboard
+Check Overview, Sheet Queue, Outreach, Scheduled, Leads, Cleanup, Automation, and Analytics tabs
+Send/save a test draft only if safe
+Load scheduled emails
+Load follow-up summary
+Load cleanup candidates
+Confirm Sheet readiness labels still appear
+Confirm no TypeScript import errors from the new helper files
+```
 
 ### v18.73 TrackFlow API Modularization Stage 1
 
