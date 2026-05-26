@@ -235,10 +235,10 @@ export default function ReportChatAssistant({
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8" id="ask-this-review">
+    <section className="mx-auto max-w-7xl scroll-mt-24 px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16" id="ask-this-review">
       <div className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/5">
-        <div className="grid gap-0 lg:grid-cols-[0.82fr_1.18fr]">
-          <div className="relative overflow-hidden bg-slate-950 p-7 text-white sm:p-8 lg:p-10">
+        <div className="grid gap-0 xl:grid-cols-[0.72fr_1.28fr]">
+          <div className="relative overflow-hidden bg-slate-950 p-5 text-white sm:p-7 lg:p-8 xl:p-10">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.35),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)]" />
             <div className="relative">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-100">
@@ -246,31 +246,30 @@ export default function ReportChatAssistant({
                 Ask about this review
               </div>
 
-              <h2 className="mt-6 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+              <h2 className="mt-5 text-2xl font-black leading-tight tracking-[-0.04em] sm:mt-6 sm:text-3xl lg:text-4xl">
                 Understand the tracking findings before the next step.
               </h2>
 
               <p className="mt-4 text-sm font-semibold leading-7 text-slate-300">
                 This assistant answers from the saved private review for{" "}
                 <span className="text-white">{companyName}</span>. It explains browser-visible
-                evidence, recommendations, and what should be verified inside GA4, GTM, Google Ads,
-                CRM, or server-side systems.
+                evidence, recommendations, and the account-level checks that should happen next.
               </p>
 
-              <div className="mt-7 space-y-3">
+              <div className="mt-6 grid gap-3 sm:grid-cols-3 xl:block xl:space-y-3">
                 {[
                   "Report-aware answers only",
                   "Evidence-safe wording",
                   "Final confirmation still requires approved access",
                 ].map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm font-bold text-slate-200">
+                  <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm font-bold text-slate-200 xl:border-0 xl:bg-transparent xl:p-0">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
                     <span>{item}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5">
+              <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-4 sm:p-5 xl:mt-8">
                 <div className="flex items-center gap-3">
                   <ShieldCheck className="h-5 w-5 text-blue-300" />
                   <p className="text-sm font-black text-white">Evidence note</p>
@@ -283,17 +282,17 @@ export default function ReportChatAssistant({
             </div>
           </div>
 
-          <div className="bg-slate-50 p-4 sm:p-6 lg:p-8">
+          <div className="bg-slate-50 p-3 sm:p-5 lg:p-6 xl:p-8">
             <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 bg-white p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="border-b border-slate-200 bg-white p-4 sm:p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
                         <Bot className="h-5 w-5" />
                       </span>
                       <div>
-                        <p className="text-base font-black tracking-[-0.02em] text-slate-950">
+                        <p className="text-sm font-black tracking-[-0.02em] text-slate-950 sm:text-base">
                           TrackFlow Review Assistant
                         </p>
                         <p className="mt-0.5 text-xs font-bold text-slate-500">{statusLabel}</p>
@@ -305,21 +304,21 @@ export default function ReportChatAssistant({
                     </p>
                   </div>
 
-                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                  <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
                     <LockKeyhole className="h-3.5 w-3.5" />
                     Private report
                   </div>
                 </div>
               </div>
 
-              <div className="max-h-[440px] min-h-[320px] space-y-4 overflow-y-auto bg-slate-50 p-5">
+              <div className="max-h-[62vh] min-h-[300px] space-y-4 overflow-y-auto bg-slate-50 p-3 sm:min-h-[340px] sm:p-5 lg:max-h-[480px]">
                 {messages.map((message) => (
                   <div
                     key={message.id}
                     className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[92%] rounded-[1.25rem] px-4 py-3 text-sm font-semibold leading-7 shadow-sm ${
+                      className={`max-w-[94%] rounded-[1.25rem] px-4 py-3 text-sm font-semibold leading-7 shadow-sm sm:max-w-[88%] ${
                         message.role === "user"
                           ? "bg-blue-600 text-white shadow-blue-600/10"
                           : "border border-slate-200 bg-white text-slate-700"
@@ -339,22 +338,22 @@ export default function ReportChatAssistant({
                 <div ref={scrollRef} />
               </div>
 
-              <div className="border-t border-slate-200 bg-white p-5">
-                <div className="mb-4 flex flex-wrap gap-2">
+              <div className="border-t border-slate-200 bg-white p-4 sm:p-5">
+                <div className="mb-4 grid gap-2 sm:flex sm:flex-wrap">
                   {suggestedQuestions.map((item) => (
                     <button
                       key={item}
                       type="button"
                       onClick={() => void submitQuestion(item)}
                       disabled={isSending || isDisabled}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-black text-slate-600 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:rounded-full sm:text-center"
                     >
                       {item}
                     </button>
                   ))}
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex gap-3">
+                <form onSubmit={handleSubmit} className="flex gap-2 sm:gap-3">
                   <label htmlFor="trackflow-report-chat-question" className="sr-only">
                     Ask a question about this tracking review
                   </label>
@@ -389,7 +388,7 @@ export default function ReportChatAssistant({
                     </p>
                     <a
                       href={ctaHref}
-                      className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600"
+                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 sm:w-auto"
                     >
                       {ctaText}
                       <MessageCircle className="h-4 w-4" />

@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.46-master-project-context  
+Version: v18.48-secure-report-streaming-chat-assistant  
 Last updated: 2026-05-25  
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -43,6 +43,7 @@ Local dashboard / lead list
 → PDF + OG image + preview image uploaded to Vercel Blob
 → Vercel /api/trackflow/reports/register saves slim report data in Firestore
 → Client opens /tracking-review/{domainSlug}/{token}
+→ Optional report-aware Gemini assistant streams secure-page answers from saved report context
 → LinkedIn/email outreach sends secure report URL, not direct PDF URL
 ```
 
@@ -133,6 +134,58 @@ email_draft
 rawGeminiResponse
 raw network debug data
 full audit JSON unless explicitly needed
+```
+
+
+### 3.5 Secure Report Chat Assistant
+
+Secure report pages may include a Gemini-powered “Ask about this review” assistant. This assistant must be **report-aware and evidence-safe**, not a general unrestricted chatbot.
+
+Correct scope:
+
+```text
+Secure page only: /tracking-review/{domainSlug}/{token}
+Answer from saved report context + general tracking explanations
+Stream answers through a Node.js API route, not Edge runtime by default
+Explain findings, proof points, recommendations, verification plan, access needs, and next steps
+Use Gemini 2.5 Flash by default
+Use smart report-based fallback if Gemini has a temporary non-quota error
+Disable input and show CTA only when quota/rate limit or hard report access error is reached
+Optionally save chat history to Supabase, not Firestore
+```
+
+The assistant must not:
+
+```text
+Invent evidence
+Claim account-level truth
+Claim tracking is broken
+Claim revenue loss is proven
+Confirm Google Ads/GA4/CRM/server-side results without access
+Run as a generic full-site chatbot by default
+Save chat messages inside audit_reports
+```
+
+Storage rule:
+
+```text
+Firestore remains slim for secure report rendering.
+Chat messages must not be saved inside audit_reports.
+Supabase may store chat sessions/messages for review and follow-up.
+If Supabase is not configured, the chatbot should still answer but silently skip chat-history logging.
+```
+
+Runtime rule:
+
+```text
+Use app/api/trackflow/report-chat/route.ts with:
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+Reason:
+- Firebase Admin is Node-runtime safe.
+- Edge runtime can break Firebase Admin / Node-only dependencies.
+- Node.js streaming keeps the client experience smooth without changing the report storage system.
 ```
 
 ### 3.4 PDF Pagination Rule
@@ -744,6 +797,192 @@ Use this file when:
 - public page returns 404/500
 - LinkedIn preview uses wrong metadata
 
+
+### 6.7 `app/api/trackflow/report-chat/route.ts`
+
+Secure report chat API route.
+
+Owns:
+
+- receiving secure-page client questions
+- loading the report by `audit_reports/{token}` from Firestore
+- calling the report-aware Gemini helper
+- returning quota-safe/fallback responses
+- optionally logging questions and answers to Supabase
+
+Use this file when:
+
+- secure page chat does not answer
+- Gemini quota fallback does not disable the input
+- Supabase chat logs are missing
+- report-specific chat answers are not evidence-safe
+
+### 6.8 `app/components/trackflow/ReportChatAssistant.tsx`
+
+Client-side secure page chat UI component.
+
+Owns:
+
+- “Ask about this review” chat box
+- client-side session/visitor IDs
+- per-session question limit
+- disabled-input fallback UI
+- CTA handoff when AI is unavailable or limited
+
+Use this file when:
+
+- chat UI is missing/broken
+- input does not disable after quota/session limit
+- CTA fallback wording/layout needs improvement
+- secure page chat UX needs changes
+
+### 6.9 `lib/trackflow-ai/report-chat.ts`
+
+Server-side Gemini report-chat helper.
+
+Owns:
+
+- building a slim report context from Firestore report fields
+- strict evidence-safe Gemini prompt
+- Gemini API call using `GEMINI_MODEL`, default `gemini-2.5-flash`
+- short client-friendly answer generation
+- quota/rate-limit error propagation
+
+Use this file when:
+
+- chat answers are too long/aggressive
+- Gemini invents evidence
+- evidence-safe wording needs tightening
+- Gemini model/config needs changing
+
+### 6.10 `lib/supabase-admin.ts`
+
+Server-only Supabase REST helper for optional chat logging.
+
+Owns:
+
+- checking Supabase server logging config
+- inserting chat rows via service-role key from server routes only
+
+Use this file when:
+
+- Supabase chat logs are not saving
+- Supabase table name or REST insert behavior changes
+
+### 6.11 `supabase/trackflow_report_chat.sql`
+
+Optional Supabase schema for secure report chat history.
+
+Owns:
+
+- `trackflow_report_chat_messages` table
+- indexes for report token and session lookup
+- RLS enabled; inserts should use server-side service role only
+
+
+### 6.5.1 `app/components/trackflow/ReportChatAssistant.tsx`
+
+Client component for the secure report chat UI.
+
+Owns:
+
+- premium “Ask about this review” card
+- suggested questions
+- streaming answer rendering
+- session id stored in browser localStorage
+- quota/disabled state
+- fallback CTA when assistant is unavailable
+
+Use this file when:
+
+- chatbot UI looks unprofessional
+- streaming text display is broken
+- suggested questions need changes
+- input disabled / CTA fallback behavior needs improvement
+
+### 6.5.2 `app/api/trackflow/report-chat/route.ts`
+
+Node.js streaming API route for secure report chat.
+
+Owns:
+
+- validating report token/domain slug
+- reading slim report context from Firestore
+- calling Gemini streaming API
+- returning streamed text/plain response
+- smart report-based fallback on non-quota Gemini errors
+- quota/rate-limit fallback behavior
+- optional Supabase chat logging
+
+Important runtime decision:
+
+```ts
+export const runtime = "nodejs";
+export const maxDuration = 60;
+```
+
+Do not switch this route to Edge unless Firebase Admin usage is removed or replaced with an Edge-safe report-context source.
+
+### 6.5.3 `lib/trackflow-ai/report-chat.ts`
+
+Server-side helper for secure report chat.
+
+Owns:
+
+- report-context extraction from Firestore document
+- strict prompt construction
+- evidence-safe fallback answer
+- Gemini SSE streaming parser
+- quota/rate-limit error detection
+- unsafe phrase filtering
+
+Use this file when:
+
+- chatbot answer wording is unsafe
+- chatbot invents evidence
+- chatbot answers outside report scope
+- fallback answer needs improvement
+- Gemini model/prompt behavior needs tuning
+
+### 6.5.4 `lib/supabase-admin.ts`
+
+Optional Supabase REST logging helper.
+
+Owns:
+
+- creating chat session id
+- saving chat session metadata
+- saving user/assistant messages
+- silently skipping logs if Supabase env vars or tables are missing
+
+This file intentionally uses REST `fetch` instead of `@supabase/supabase-js` to avoid adding a required dependency.
+
+Expected optional Supabase tables:
+
+```sql
+create table if not exists trackflow_report_chat_sessions (
+  id text primary key,
+  report_token text,
+  domain_slug text,
+  domain text,
+  company_name text,
+  source text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists trackflow_report_chat_messages (
+  id bigserial primary key,
+  session_id text,
+  report_token text,
+  role text,
+  content text,
+  mode text,
+  status text,
+  created_at timestamptz default now()
+);
+```
+
 ### 6.6 `app/api/export/sheet/route.ts`
 
 Google Sheet queue/staging bridge.
@@ -766,11 +1005,17 @@ Google Sheet is **not** the client-facing report database. Firestore is the clie
 
 ## 7. Firestore Collections and Storage
 
-Known current collections:
+Known current Firestore collections:
 
 ```text
 audit_reports/{token}
 audit_report_domains/{domainSlug or normalized domain}
+```
+
+Optional Supabase table for chat history:
+
+```text
+trackflow_report_chat_messages
 ```
 
 Expected saved fields include:
@@ -814,6 +1059,15 @@ rawGeminiResponse
 raw audit JSON
 full observed network logs
 internal debug payloads
+secure page chatbot messages inside audit_reports
+```
+
+Chat history policy:
+
+```text
+Save full client questions/assistant answers to Supabase only when explicitly configured.
+Do not store chatbot history in audit_reports.
+If Gemini quota/rate limit is reached, disable chat input and show manual verification CTA.
 ```
 
 Storage policy:
@@ -873,6 +1127,12 @@ BREVO_WEBHOOK_SECRET=...
 REPLY_WEBHOOK_SECRET=...
 UNSUBSCRIBE_SECRET=...
 ALLOWED_ADMIN_EMAILS=you@example.com
+
+# Secure report chat assistant
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 ### 8.4 Google Sheet / Service Account
@@ -950,6 +1210,7 @@ Before sending to a client:
 | PDF recommendations repetitive | `reports.py`, `gemini_client.py`, sample PDF |
 | Screenshot missing/wrong/caption bad | `evidence_capture.py`, `audit.py`, sample PDF/screenshot |
 | Secure page content wrong | `secure_page.py`, `reports.ts`, `report-normalizers.ts`, secure page screenshot |
+| Secure report chatbot timeout/error | `app/api/trackflow/report-chat/route.ts`, `lib/trackflow-ai/report-chat.ts`, Vercel function logs, Gemini env vars |
 | Secure page does not open | `reports.ts`, `report-normalizers.ts`, `[domainSlug]/[token]/page.tsx`, Firestore document screenshot |
 | Secure page register fails | `app/api/export/blob-reports/route.ts`, `lib/trackflow-api/reports.ts`, `app/api/trackflow/[...action]/route.ts` |
 | Firestore stores too much data | `report-normalizers.ts`, `reports.ts` |
@@ -1023,6 +1284,9 @@ Before sending to a client:
 - **v18.44** — PDF client presentation polish.
 - **v18.45** — LinkedIn/manual audit Create Secure Page button.
 - **v18.46** — this master context README consolidating Python, Next.js, secure report, Blob, Firestore, PDF, OG, LinkedIn, and email automation context.
+- **v18.47** — secure report Gemini assistant concept: report-aware Q&A, Supabase logging option, Firestore slim storage preserved.
+- **v18.48** — professional Node.js streaming chat assistant: Firebase Admin-safe runtime, Gemini streaming, smart report fallback, quota CTA fallback, optional Supabase REST logging.
+- **v18.47** — secure report Gemini chat assistant plan/files: report-aware assistant on private tracking-review pages, quota fallback, optional Supabase chat-history logging, Firestore remains slim.
 
 ---
 
@@ -1053,13 +1317,23 @@ Before sending to a client:
    - business impact.
    - verification plan.
    - PDF preview/download.
+   - optional report-aware chat assistant.
    - CTA.
 
 5. Database should stay slim:
    - PDF/OG/secure page fields only.
    - no raw email/LinkedIn copy unless intentionally added.
+   - no chatbot history in `audit_reports`; use Supabase for chat logs if needed.
 
 6. README should be updated with every future patch.
+
+7. Secure report chatbot should stay:
+   - secure-page only by default.
+   - report-aware, not a generic site chatbot.
+   - Node.js streaming route by default.
+   - smart fallback on temporary Gemini errors.
+   - hard disabled CTA fallback only for quota/rate-limit or report access errors.
+   - no chat messages saved to Firestore.
 
 ---
 

@@ -598,7 +598,7 @@ function LinkButton({
       href={href}
       target={target}
       rel={rel}
-      className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-center text-sm font-black transition focus:outline-none focus:ring-4 sm:w-auto ${styles}`}
+      className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-black transition focus:outline-none focus:ring-4 ${styles}`}
     >
       {children}
     </a>
@@ -674,7 +674,7 @@ function SectionCard({
   }[tone];
 
   return (
-    <section className={`rounded-[1.75rem] border p-5 shadow-sm sm:p-6 ${toneClass}`}>
+    <section className={`rounded-[1.75rem] border p-6 shadow-sm ${toneClass}`}>
       <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
         {label}
       </p>
@@ -990,32 +990,28 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="absolute bottom-[-10rem] left-[-8rem] h-80 w-80 rounded-full bg-slate-100 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-8 sm:px-6 sm:pb-14 sm:pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-20 lg:pt-16">
+        <div className="relative mx-auto grid max-w-7xl gap-10 px-4 pb-14 pt-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-20 lg:pt-16">
           <div>
             <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
               Private tracking review
             </div>
 
-            <h1 className="mt-6 max-w-4xl break-words text-3xl font-black leading-[0.98] tracking-[-0.045em] text-slate-950 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-6 max-w-4xl break-words text-4xl font-black leading-[0.95] tracking-[-0.055em] text-slate-950 sm:text-5xl lg:text-6xl">
               {headline}
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-600 sm:mt-6 sm:text-lg sm:leading-8">
+            <p className="mt-6 max-w-2xl text-base font-semibold leading-8 text-slate-600 sm:text-lg">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
               {domain ? <span> · {domain}</span> : null}. {pageSubheadline}
             </p>
 
-            <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <LinkButton href="#findings" variant="dark">
                 View findings
               </LinkButton>
 
               <LinkButton href="#pdf-report" variant="secondary">
                 View PDF report
-              </LinkButton>
-
-              <LinkButton href="#ask-this-review" variant="secondary">
-                Ask about this review
               </LinkButton>
             </div>
 
@@ -1090,7 +1086,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
       <section
         id="findings"
-        className="mx-auto grid max-w-7xl scroll-mt-24 gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-16"
+        className="mx-auto grid max-w-7xl gap-6 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-16"
       >
         <div className="space-y-6">
           <SectionCard label="Main finding" tone="blue">
@@ -1122,7 +1118,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </SectionCard>
         </div>
 
-        <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <SectionCard label="Recommended next step" tone="amber">
             <BulletList items={recommendations} marker="green" />
           </SectionCard>
@@ -1135,7 +1131,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </SectionCard>
 
-          <section id="pdf-report" className="scroll-mt-24 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+          <section id="pdf-report" className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 p-6">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
                 Full PDF report
@@ -1157,18 +1153,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
 
             <div className="bg-slate-100 p-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:hidden">
-                <p className="text-sm font-black text-slate-950">PDF preview is available</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  For the best mobile experience, open the audit document in a new tab or download it directly.
-                </p>
-              </div>
-
               <iframe
                 title="TrackFlow Pro audit PDF preview"
                 src={previewHref}
                 loading="lazy"
-                className="hidden h-[520px] w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[560px]"
+                className="h-[520px] w-full rounded-2xl border border-slate-200 bg-white"
               />
             </div>
 
@@ -1215,14 +1204,14 @@ export default async function ReportPage({ params }: ReportPageProps) {
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
               <a
                 href={ctaHref}
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 sm:w-auto lg:w-full"
+                className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
               >
                 {ctaText}
               </a>
 
               <a
                 href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`}
-                className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20 sm:w-auto lg:w-full"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
               >
                 Reply by Email
               </a>
