@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.78-dashboard-analytics-panel-split-stage-5
+Version: v18.83-dashboard-leads-panel-split-stage-10
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -557,6 +557,134 @@ Google Postmaster loading still uses the existing useFollowupAdmin hook through 
 Sender performance still uses ACTIVE_SENDERS and cached leads; no Firestore/API behavior should change.
 Do not split Outreach, Automation, Cleanup, Sheet, or Leads in the same patch.
 Continue visual panel extraction one panel at a time only after the previous patch builds and works locally.
+```
+
+
+### 3.21 Dashboard Cleanup Panel Modularization Rule
+
+The dashboard cleanup tab has been split into its own visual panel after the scheduled, overview, and analytics panel splits.
+
+Current stage-6 structure:
+
+```text
+page.tsx
+→ still owns cleanup API actions, auth headers, Zustand state wiring, and existing cleanup behavior
+
+CleanupPanel.tsx
+→ cleanup bucket tabs, candidate summary cards, cleanup action buttons, policy/status display, candidate table, selection UI, and source/safety display helpers
+```
+
+Important decisions:
+
+```text
+Do not change cleanup API route URLs while extracting the panel.
+Do not change delete/skip/protect behavior, sheetMode behavior, selectedCleanupIds state, leadCleanup Zustand state, or refreshLeads behavior.
+Keep destructive cleanup actions owned by page.tsx for now and pass them into CleanupPanel as props.
+CleanupPanel should live beside page.tsx and be imported with ./CleanupPanel.
+```
+
+
+### 3.22 Dashboard Automation Panel Modularization Rule
+
+The dashboard automation/follow-up editor tab has been split into its own visual panel after the scheduled, overview, analytics, and cleanup panel splits were stable.
+
+Current stage-7 structure:
+
+```text
+page.tsx
+→ still owns dashboard shell, tab routing, local outreach compose state, Firestore config loading/saving, follow-up state wiring, and existing automation behavior
+
+AutomationPanel.tsx
+→ automation/follow-up visual panel, service tabs, follow-up step tabs, delay/limit controls, dry-run preview display, variant editor cards, variant lead preview, and save button UI
+
+hooks/useFollowupAdmin.ts
+→ still owns follow-up summary loading, dry-run action, and Postmaster health action
+```
+
+Important decisions:
+
+```text
+Do not redesign the automation UI while extracting the panel.
+Do not change follow-up config Firestore document shape, API route URLs, cron behavior, dry-run behavior, variant distribution logic, or safety policy.
+Keep load/save logic and state wiring in page.tsx for now, and pass current values/actions into AutomationPanel as props.
+AutomationPanel should live beside page.tsx and be imported with ./AutomationPanel.
+Outreach composer, Sheet queue, and Leads table should remain unsplit until the automation panel builds and works locally.
+```
+
+
+### 3.23 Dashboard Sheet Queue Panel Modularization Rule
+
+The dashboard Google Sheet queue tab has been split into its own visual panel after the scheduled, overview, analytics, cleanup, and automation panel splits were stable.
+
+Current stage-8 structure:
+
+```text
+page.tsx
+→ still owns dashboard shell, tab routing, local outreach compose state, Sheet loading/updating/queueing/sync action logic, and existing Sheet behavior
+
+SheetQueuePanel.tsx
+→ Google Sheet queue visual panel, Sheet lead summary cards, filter controls, ready/select UI, report readiness display, queue buttons, and Sheet lead table
+```
+
+Important decisions:
+
+```text
+Do not redesign the Sheet queue UI while extracting the panel.
+Do not change Sheet API route URLs, request payloads, Google Sheet column names, readiness rules, queue behavior, or tracking sync behavior.
+Keep Sheet load/update/queue/sync action logic and state wiring in page.tsx for now, and pass current values/actions into SheetQueuePanel as props.
+SheetQueuePanel should live beside page.tsx and be imported with ./SheetQueuePanel.
+Outreach composer and Leads table should remain unsplit until the Sheet queue panel builds and works locally.
+```
+
+
+### 3.24 Dashboard Outreach Panel Modularization Rule
+
+The dashboard outreach composer tab has been split into its own visual panel after the Sheet queue panel built and worked locally.
+
+Current stage-9 structure:
+
+```text
+page.tsx
+→ still owns dashboard shell, tab routing, local outreach compose state, duplicate/cooldown checks, draft persistence, sender/template handoff, validation, and send/schedule action logic
+
+OutreachPanel.tsx
+→ outreach visual panel, sender account cards, report link box, duplicate/cooldown/draft warnings, professional email composer, WYSIWYG editor, merge-tag/link buttons, signature toggle, schedule/send controls, live preview, and quality checklist
+```
+
+Important decisions:
+
+```text
+Do not redesign the outreach composer while extracting the panel.
+Do not change Brevo/API route URLs, request payloads, sender selection behavior, duplicate/cooldown safety, report-link validation, draft localStorage behavior, or schedule/send behavior.
+Keep send/validate/template/draft/state logic in page.tsx for now, and pass current values/actions into OutreachPanel as props.
+OutreachPanel should live beside page.tsx and be imported with ./OutreachPanel.
+The dashboard copy inside OutreachPanel must stay English-only.
+Leads table should remain unsplit until the outreach panel builds and works locally.
+```
+
+
+### 3.25 Dashboard Leads Panel Modularization Rule
+
+The dashboard lead management tab has been split into its own visual panel after the outreach composer panel built and worked locally.
+
+Current stage-10 structure:
+
+```text
+page.tsx
+→ still owns dashboard shell, tab routing, lead cache/store wiring, bulk action handlers, archive/trash/restore/permanent-delete action logic, selected lead drawer, and existing lead behavior
+
+LeadsPanel.tsx
+→ lead management visual panel, lead view/month/status/service/search filters, bulk action bar, select-all row selection, lead table, engagement summary cells, and row action buttons
+```
+
+Important decisions:
+
+```text
+Do not redesign the Leads tab while extracting the panel.
+Do not change lead API route URLs, request payloads, Firestore fields, cache behavior, archive/trash/restore/permanent-delete behavior, or selectedLeadIds state.
+Keep bulk action logic, destructive lead actions, selected lead drawer, and Zustand state wiring in page.tsx for now, and pass current values/actions into LeadsPanel as props.
+LeadsPanel should live beside page.tsx and be imported with ./LeadsPanel.
+The lead drawer can be split later as a separate safer step after LeadsPanel builds and works locally.
 ```
 
 ### 3.6 Secure Report Responsive UX Rule
@@ -1912,6 +2040,93 @@ The drawer feels like it is part of the page instead of a true side modal.
 
 ## 11. Version History Summary
 
+
+
+### v18.83 Dashboard Leads Panel Split Stage 10
+
+The lead management tab UI was moved out of `page.tsx` into `LeadsPanel.tsx` without changing lead cache, filtering, selection, archive/trash/restore, or permanent-delete behavior.
+
+Changed files:
+
+```text
+page.tsx
+LeadsPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+LeadsPanel owns only the visual UI: lead filters, summary cards, bulk action bar, lead table, selection checkboxes, engagement cells, and row action buttons.
+`page.tsx` still owns lead-store wiring, refresh/fetch-more calls, selectedLeadIds state, bulk action handlers, destructive lead action handlers, and the selected lead drawer.
+No API URLs, Firestore fields, request payloads, Zustand state shape, archive/trash/restore/permanent-delete behavior, or lead drawer behavior should change.
+The lead drawer remains in page.tsx and can be split later in a separate patch if needed.
+```
+
+
+### v18.82 Dashboard Outreach Panel Split Stage 9
+
+The outreach composer tab UI was moved out of `page.tsx` into `OutreachPanel.tsx` without changing send, schedule, duplicate, cooldown, or draft behavior.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+OutreachPanel owns only the visual UI: sender cards, report link inputs, duplicate/cooldown/draft warnings, composer fields, WYSIWYG editor, signature toggle, schedule/send controls, live preview, and quality checklist.
+`page.tsx` still owns local outreach state, draft restore/save, duplicate/contact-memory checks, template selection, merge-tag insertion, validation, and send/schedule action handlers.
+No Brevo/API URLs, request payloads, sender config, report-link validation, duplicate/cooldown safety, Firestore fields, Sheet behavior, or stored dashboard state should change.
+The visible draft auto-save helper text is now English-only.
+```
+
+
+### v18.81 Dashboard Sheet Queue Panel Split Stage 8
+
+The Google Sheet queue tab UI was moved out of `page.tsx` into `SheetQueuePanel.tsx` without changing Sheet loading, queueing, or tracking-sync behavior.
+
+Changed files:
+
+```text
+page.tsx
+SheetQueuePanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+SheetQueuePanel owns only the Google Sheet visual UI: summary cards, filters, refresh/queue/sync buttons, readiness status, report link display, and lead table.
+`page.tsx` still owns Sheet API calls, auth headers, local outreach form handoff, selected row state, queue/sync action handlers, and Zustand state wiring.
+No Sheet API URLs, request payloads, Google Sheet columns, readiness rules, queue behavior, Firestore tracking sync behavior, or stored dashboard state should change.
+The split is intentionally small because Sheet queue sends can affect real outreach.
+```
+
+### v18.79 Dashboard Cleanup Panel Split Stage 6
+
+The cleanup tab UI was moved out of `page.tsx` into `CleanupPanel.tsx` without changing cleanup action behavior.
+
+Changed files:
+
+```text
+page.tsx
+CleanupPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+CleanupPanel owns only the cleanup visual UI: bucket tabs, summary cards, action buttons, policy/status display, and cleanup candidate table.
+`page.tsx` still owns auth headers, cleanup API calls, delete/skip/protect action handlers, Zustand state wiring, and lead refresh behavior.
+No cleanup API URLs, request payloads, Firestore fields, Sheet behavior, or contact_memory footprint behavior changed.
+The split is intentionally small because cleanup actions are destructive and should remain stable while the dashboard is being modularized.
+```
 
 ### v18.78 Dashboard Analytics Panel Split Stage 5
 

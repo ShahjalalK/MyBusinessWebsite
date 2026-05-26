@@ -1,46 +1,41 @@
-# Replace and Test — v18.78 Dashboard Analytics Panel Split Stage 5
+# v18.83 Dashboard Leads Panel Split Stage 10
 
-Replace these files in the same dashboard folder where your current `page.tsx` lives:
+Replace these files in the same dashboard folder where your email automation `page.tsx` lives:
 
 ```text
 page.tsx
-AnalyticsPanel.tsx
+LeadsPanel.tsx
 PROJECT_CONTEXT_README.md
 ```
 
-Keep the existing files already added in previous stages:
+## What changed
 
 ```text
-OverviewPanel.tsx
-ScheduledPanel.tsx
-types.ts
-constants.ts
-utils.ts
-sheet-readiness.ts
-followup-utils.ts
-hooks/useScheduledEmails.ts
-hooks/useSystemStatus.ts
-hooks/useFollowupAdmin.ts
+Leads tab visual UI moved to LeadsPanel.tsx
+page.tsx still owns lead actions, bulk actions, selected lead drawer, and store wiring
+No API URL, Firestore field, Zustand state, or destructive action behavior changed
 ```
 
-After replacing, run:
+## Test
+
+Run:
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Test checklist:
+Then test:
 
 ```text
-1. Dashboard opens normally.
-2. Overview tab still works.
-3. Scheduled tab still works.
-4. Analytics tab opens.
-5. Open/Click/Reply/Bounce cards display.
-6. Load Postmaster button works or shows the same status as before.
-7. Sender Performance cards display correctly.
-8. Lead drawer still opens from other tabs.
+1. Open dashboard
+2. Open Leads tab
+3. Change Active / Archived / Trash / All view
+4. Change month/status/service filters
+5. Search by email/company
+6. Select/unselect rows and select-all
+7. Open a lead drawer by clicking a row
+8. Test Archive / Restore / Move to Trash only on safe test leads
+9. Permanent delete only on fake/test records
+10. Confirm Overview, Sheet Leads, Outreach, Scheduled, Cleanup, Automation, and Analytics still open
 ```
-
-This patch only moves the analytics tab UI into `AnalyticsPanel.tsx`. It does not change API routes, Firestore fields, Sheet columns, Brevo behavior, sender config, or stored Zustand state.

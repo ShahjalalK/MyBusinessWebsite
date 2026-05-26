@@ -15,12 +15,9 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
-  Briefcase,
-  Building2,
   CheckCircle,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
   Clock,
   Database,
   ExternalLink,
@@ -28,7 +25,6 @@ import {
   Globe,
   FileText,
   Eye,
-  Sparkles,
   Layers,
   Link2,
   Type,
@@ -37,18 +33,14 @@ import {
   Mail,
   MessageSquare,
   MousePointer2,
-  Plus,
   RefreshCw,
   Save,
   Send,
   Settings2,
   ShieldCheck,
-  Target,
   Timer,
   Trash2,
-  UserPlus,
   X,
-  Zap,
 } from "lucide-react";
 import {
   Editor,
@@ -87,14 +79,11 @@ import type {
   TriggerMode,
   Variant,
 } from "./types";
-import { ACTIVE_STATUSES, OUTREACH_DRAFT_KEY, SERVICE_NAMES, STEPS } from "./constants";
+import { OUTREACH_DRAFT_KEY, SERVICE_NAMES } from "./constants";
 import {
   applyMergeTags,
-  countLinksFromHtml,
-  countWordsFromHtml,
   emailStatsDocId,
   formatDate,
-  getFollowupRiskLabel,
   getRecentMonthOptions,
   isEmailPatternValid,
   makeNameFromEmail,
@@ -103,7 +92,6 @@ import {
   normalizeSheetService,
   sanitizePreviewHtml,
   stripHtml,
-  toDateTimeLocalInput,
   toMillis,
   todayKeyDhaka,
 } from "./utils";
@@ -129,12 +117,11 @@ import { useFollowupAdmin } from "./hooks/useFollowupAdmin";
 import ScheduledPanel from "./ScheduledPanel";
 import OverviewPanel from "./OverviewPanel";
 import AnalyticsPanel from "./AnalyticsPanel";
-
-const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
-  { id: "Email Signature", icon: <MousePointer2 size={16} /> },
-  { id: "Google Ads", icon: <Target size={16} /> },
-  { id: "Server Side Tracking", icon: <Database size={16} /> },
-];
+import CleanupPanel from "./CleanupPanel";
+import AutomationPanel from "./AutomationPanel";
+import SheetQueuePanel from "./SheetQueuePanel";
+import OutreachPanel from "./OutreachPanel";
+import LeadsPanel from "./LeadsPanel";
 
 const MAILING_ADDRESS =
   process.env.NEXT_PUBLIC_TRACKFLOW_MAILING_ADDRESS ||
@@ -1163,22 +1150,6 @@ export default function DashboardPage() {
   };
 
 
-  const cleanupBuckets: { id: CleanupBucket; label: string; note: string }[] = [
-    { id: "due", label: "Due Now", note: "Safe no-reply candidates ready for cleanup" },
-    { id: "cold", label: "Cold No Reply", note: "No open/click after 45+ days" },
-    { id: "warm", label: "Warm No Reply", note: "Open/click but no reply after 90+ days" },
-    { id: "replied", label: "1 Year Review", note: "Replied/interested leads for manual review" },
-    { id: "protected", label: "Protected", note: "Suppression/do-not-contact candidates" },
-    { id: "upcoming", label: "Upcoming", note: "Not due yet, but scheduled by policy" },
-  ];
-
-  const formatSourceLabel = (sourceKind?: string, source?: string) => {
-    if (sourceKind === "sheet") return "Sheet Lead";
-    if (sourceKind === "test") return "Test Email";
-    if (String(source || "").includes("google_sheet")) return "Sheet Lead";
-    return "Cold Email";
-  };
-
   const loadCleanupCandidates = async (bucket: CleanupBucket = leadCleanup.bucket as CleanupBucket, force = false) => {
     if (!force && leadCleanup.loadedAt && leadCleanup.bucket === bucket && Date.now() - leadCleanup.loadedAt < 60_000) return;
 
@@ -1852,719 +1823,86 @@ export default function DashboardPage() {
     );
   };
 
-  const renderStatCard = (label: string, value: number | string, icon: ReactNode, tone = "blue") => {
-    const toneClass =
-      tone === "green"
-        ? "bg-green-50 text-green-600"
-        : tone === "orange"
-        ? "bg-orange-50 text-orange-600"
-        : tone === "red"
-        ? "bg-red-50 text-red-600"
-        : "bg-blue-50 text-blue-600";
+  const renderSheetLeads = () => (
+    <SheetQueuePanel
+      sheetLeads={sheetLeads}
+      sheetStatus={sheetStatus}
+      sheetLeadFilter={sheetLeadFilter}
+      sheetApprovalFilter={sheetApprovalFilter}
+      sheetSendFilter={sheetSendFilter}
+      sheetLoading={sheetLoading}
+      selectedSheetRows={selectedSheetRows}
+      sending={sending}
+      activeSender={activeSender}
+      hasCachedLeads={leads.length > 0}
+      setSheetLeadFilter={setSheetLeadFilter}
+      setSheetApprovalFilter={setSheetApprovalFilter}
+      setSheetSendFilter={setSheetSendFilter}
+      setSending={setSending}
+      setSheetStatus={setSheetStatus}
+      loadSheetLeads={loadSheetLeads}
+      sendSelectedSheetLeads={sendSelectedSheetLeads}
+      syncSheetTrackingFromFirestore={syncSheetTrackingFromFirestore}
+      toggleAllVisibleSheetRows={toggleAllVisibleSheetRows}
+      toggleSheetRow={toggleSheetRow}
+      fillOutreachFromSheet={fillOutreachFromSheet}
+      queueSheetLead={queueSheetLead}
+    />
+  );
 
-    return (
-      <div className="bg-white rounded-[30px] border border-gray-100 p-6 shadow-sm">
-        <div className={`w-12 h-12 rounded-2xl ${toneClass} flex items-center justify-center mb-5`}>{icon}</div>
-        <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</p>
-      </div>
-    );
-  };
-
-
-
-  const renderSheetLeads = () => {
-    const approvedReady = sheetLeads.filter((lead) => getSheetReadiness(lead).ready).length;
-
-    const selectedReady = sheetLeads.filter((lead) => selectedSheetRows.includes(Number(lead.rowNumber)) && getSheetReadiness(lead).ready).length;
-
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {renderStatCard("Sheet Leads", sheetLeads.length, <FileText size={22} />)}
-          {renderStatCard("Qualified Ready", approvedReady, <CheckCircle2 size={22} />, "green")}
-          {renderStatCard("Selected", selectedReady, <MousePointer2 size={22} />, "orange")}
-          {renderStatCard("Active Sender", activeSender ? activeSender.email.split("@")[0] : "N/A", <Mail size={22} />)}
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-[30px] p-5 shadow-sm">
-          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-black text-gray-900 uppercase tracking-tighter">Google Sheet Hot Leads</h2>
-              <p className="text-sm text-gray-500 font-semibold mt-1">
-                System-scored Hot/Good leads from your Python audit engine. Approval is optional; Send Status controls outreach.
-              </p>
-              {sheetStatus && <p className="text-xs font-bold text-blue-600 mt-2">{sheetStatus}</p>}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={sheetLeadFilter}
-                onChange={(e: any) => setSheetLeadFilter(e.target.value)}
-                className="px-4 py-3 rounded-2xl border border-gray-100 text-xs font-black uppercase"
-              >
-                <option value="Qualified">Hot + Good</option>
-                <option value="Hot Lead">Hot Lead</option>
-                <option value="Good Lead">Good Lead</option>
-                <option value="Maybe Check">Maybe Check</option>
-                <option value="Low Priority">Low Priority</option>
-                <option value="All">All Lead Status</option>
-              </select>
-
-              <select
-                value={sheetApprovalFilter}
-                onChange={(e: any) => setSheetApprovalFilter(e.target.value)}
-                className="px-4 py-3 rounded-2xl border border-gray-100 text-xs font-black uppercase"
-              >
-                <option value="All">All Approval</option>
-                <option value="System Qualified">System Qualified</option>
-                <option value="Manual Approved">Manual Approved</option>
-                <option value="Approved">Approved</option>
-                <option value="Pending Review">Pending Review</option>
-              </select>
-
-              <select
-                value={sheetSendFilter}
-                onChange={(e: any) => setSheetSendFilter(e.target.value)}
-                className="px-4 py-3 rounded-2xl border border-gray-100 text-xs font-black uppercase"
-              >
-                <option value="Not Sent">Not Sent</option>
-                <option value="Sent">Sent</option>
-                <option value="Scheduled">Scheduled</option>
-                <option value="Failed">Failed</option>
-                <option value="All">All Send Status</option>
-              </select>
-
-              <button
-                type="button"
-                onClick={() => loadSheetLeads(true)}
-                disabled={sheetLoading}
-                className="px-4 py-3 rounded-2xl bg-gray-900 text-white text-xs font-black uppercase flex items-center gap-2 disabled:opacity-50"
-              >
-                {sheetLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
-              </button>
-
-              <button
-                type="button"
-                onClick={sendSelectedSheetLeads}
-                disabled={sending || selectedSheetRows.length === 0 || !activeSender}
-                className="px-4 py-3 rounded-2xl bg-green-600 text-white text-xs font-black uppercase flex items-center gap-2 disabled:opacity-50"
-              >
-                {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Queue Selected
-              </button>
-
-              <button
-                type="button"
-                onClick={syncSheetTrackingFromFirestore}
-                disabled={sheetLoading || leads.length === 0}
-                className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-xs font-black uppercase flex items-center gap-2 disabled:opacity-50"
-              >
-                <RefreshCw size={14} /> Sync Tracking
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-[35px] shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="p-4">
-                    <input
-                      type="checkbox"
-                      checked={
-                        sheetLeads.length > 0 &&
-                        sheetLeads
-                          .filter((lead) => getSheetReadiness(lead).ready)
-                          .every((lead) => selectedSheetRows.includes(Number(lead.rowNumber)))
-                      }
-                      onChange={toggleAllVisibleSheetRows}
-                    />
-                  </th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Issue</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Score</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-50">
-                {sheetLeads.map((lead) => {
-                  const rowNumber = Number(lead.rowNumber);
-                  const isSelected = selectedSheetRows.includes(rowNumber);
-                  const readiness = getSheetReadiness(lead);
-                  const reportReady = isSheetReportReady(lead);
-                  const reportStatus = getSheetReportStatus(lead);
-
-                  return (
-                    <tr key={rowNumber} className={isSelected ? "bg-blue-50/50" : "hover:bg-gray-50/50"}>
-                      <td className="p-4 align-top">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={!readiness.ready}
-                          onChange={() => toggleSheetRow(rowNumber)}
-                        />
-                      </td>
-
-                      <td className="p-4 align-top min-w-[280px]">
-                        <p className="font-black text-gray-900">{sheetValue(lead, "Business Name") || "Unnamed Lead"}</p>
-                        <p className="text-xs text-gray-500 font-semibold mt-1">{sheetValue(lead, "Final Email") || "No email"}</p>
-                        <a
-                          href={normalizeOptionalUrl(sheetValue(lead, "Website URL")) || "#"}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-600 font-bold inline-flex items-center gap-1 mt-1"
-                        >
-                          {sheetValue(lead, "Website URL") || "No website"} <ExternalLink size={12} />
-                        </a>
-                        <div className={`mt-3 rounded-2xl border px-3 py-2 ${reportStatus.tone}`}>
-                          {reportReady ? (
-                            <a
-                              href={normalizeOptionalUrl(sheetValue(lead, "Report URL")) || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block text-xs font-black"
-                            >
-                              {reportStatus.label} <ExternalLink size={12} className="inline" />
-                            </a>
-                          ) : (
-                            <p className="text-xs font-black">{reportStatus.label}</p>
-                          )}
-                          <p className="mt-1 text-[10px] font-bold opacity-80">{reportStatus.note}</p>
-                        </div>
-                      </td>
-
-                      <td className="p-4 align-top min-w-[320px]">
-                        <p className="text-sm font-bold text-gray-700 line-clamp-2">
-                          {sheetValue(lead, "Main Issue") || "No issue summary"}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-2 line-clamp-2">{sheetValue(lead, "Proof Points")}</p>
-                      </td>
-
-                      <td className="p-4 align-top">
-                        <span className="px-3 py-1 rounded-full bg-orange-50 text-orange-600 text-xs font-black">
-                          {sheetValue(lead, "Audit Score") || "N/A"}
-                        </span>
-                        <p className="text-[10px] font-black text-gray-400 uppercase mt-2">{sheetValue(lead, "Lead Label")}</p>
-                      </td>
-
-                      <td className="p-4 align-top">
-                        <p className="text-xs font-black text-green-600 uppercase">{sheetValue(lead, "Approval Status") || "Pending"}</p>
-                        <p className="text-xs font-black text-blue-600 uppercase mt-1">{sheetValue(lead, "Send Status") || "Not Sent"}</p>
-                        <p className="text-[10px] text-gray-400 font-bold mt-1">
-                          Open {sheetValue(lead, "Open Count") || "0"} / Click {sheetValue(lead, "Click Count") || "0"}
-                        </p>
-                        <p className={`mt-2 rounded-xl px-3 py-2 text-[9px] font-black uppercase leading-4 ${readiness.ready ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-                          {readiness.ready ? "Ready to queue" : readiness.note}
-                        </p>
-                      </td>
-
-                      <td className="p-4 align-top">
-                        <div className="flex flex-col gap-2 min-w-[160px]">
-                          <button
-                            type="button"
-                            onClick={() => fillOutreachFromSheet(lead)}
-                            className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase"
-                          >
-                            Load Editor
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!window.confirm(`Queue row ${rowNumber} for cron sending?`)) return;
-                              setSending(true);
-                              try {
-                                await queueSheetLead(lead);
-                                setSheetStatus(`Row ${rowNumber} queued. Cron will send it.`);
-                                await loadSheetLeads(true);
-                              } catch (error: any) {
-                                window.alert(error.message || "Queue failed.");
-                              } finally {
-                                setSending(false);
-                              }
-                            }}
-                            disabled={sending || !readiness.ready || !activeSender}
-                            className="px-3 py-2 rounded-xl bg-green-50 text-green-700 text-[10px] font-black uppercase disabled:opacity-50"
-                          >
-                            Queue Send
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {sheetLeads.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-gray-400 font-bold">
-                      No Sheet leads found for this filter.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderOutreach = () => {
-    const senderCount = activeSender ? senderCounts[activeSender.email] || 0 : 0;
-    const remaining = activeSender ? Math.max(activeSender.limit - senderCount, 0) : 0;
-    const usagePercent = activeSender ? Math.min(Math.round((senderCount / activeSender.limit) * 100), 100) : 0;
-    const senderTone = usagePercent >= 90 ? "text-red-600 bg-red-50" : usagePercent >= 70 ? "text-orange-600 bg-orange-50" : "text-green-600 bg-green-50";
-    const safeReportUrl = normalizeOptionalUrl(reportUrl);
-    const previewMessage = applyMergeTags(message, {
-      name: clientName,
-      company: companyName,
-      website,
-      service: selectedService || undefined,
-    });
-    const sanitizedPreviewMessage = sanitizePreviewHtml(previewMessage);
-
-    const qualityChecks = [
-      { label: "Valid recipient email", ok: isEmailPatternValid(email) },
-      { label: "Sender selected", ok: Boolean(activeSender) },
-      { label: "Service selected", ok: Boolean(selectedService) },
-      { label: "Subject added", ok: Boolean(subject.trim()) },
-      { label: "Message body ready", ok: Boolean(stripHtml(message)) },
-      { label: "Links kept minimal", ok: totalLinkCount <= 2 },
-      { label: "Secure /r report link valid or empty", ok: !reportUrl.trim() || Boolean(safeReportUrl && isSecureReportUrl(safeReportUrl)) },
-      { label: "No duplicate lead", ok: !duplicateLead || allowDuplicateSend },
-      { label: "Cooldown memory cleared/overridden", ok: !contactMemoryWarning || allowCooldownOverride },
-    ];
-
-    return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-4 lg:p-5">
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-center">
-            <div className="xl:col-span-3">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selected Sender</p>
-              <p className="mt-1 text-sm font-black text-gray-900 truncate">{activeSender?.name || "No Sender"}</p>
-              <p className="text-[10px] font-bold text-gray-400 truncate">{activeSender?.email || "Select sender"}</p>
-            </div>
-
-            <div className="xl:col-span-2 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-gray-50 p-3">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Sent</p>
-                <p className="text-xl font-black text-gray-900">{senderCount}</p>
-              </div>
-              <div className="rounded-2xl bg-gray-50 p-3">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Left</p>
-                <p className="text-xl font-black text-gray-900">{remaining}</p>
-              </div>
-            </div>
-
-            <div className="xl:col-span-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Health</p>
-              <span className={`mt-1 inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase ${senderTone}`}>
-                {usagePercent >= 90 ? "Limit Warning" : usagePercent >= 70 ? "Warming" : "Healthy"}
-              </span>
-            </div>
-
-            <div className="xl:col-span-5">
-              <div className="rounded-[24px] bg-blue-50/60 border border-blue-100 p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText size={15} className="text-blue-600" />
-                  <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Audit PDF / Report Link</p>
-                  <span className="ml-auto text-[9px] font-black text-blue-400 uppercase">Optional</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Paste secure /r/[token] report link here"
-                    className="md:col-span-3 w-full p-3 bg-white rounded-2xl outline-none border border-blue-100 focus:border-blue-500 text-xs font-bold"
-                    value={reportUrl}
-                    onChange={(e: any) => setReportUrl(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Link text"
-                    className="md:col-span-2 w-full p-3 bg-white rounded-2xl outline-none border border-blue-100 focus:border-blue-500 text-xs font-bold"
-                    value={reportButtonText}
-                    onChange={(e: any) => setReportButtonText(e.target.value)}
-                  />
-                </div>
-                <p className="text-[9px] font-bold text-blue-400 mt-2">
-                  Only secure TrackFlow /r/[token] links are allowed. Direct PDF, Drive, localhost, and audit engine links are blocked.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {(checkingDuplicate || duplicateLead || contactMemoryWarning || lastDraftSavedAt) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {lastDraftSavedAt && (
-              <div className="bg-white rounded-[24px] border border-green-100 p-4 shadow-sm flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center">
-                  <Save size={17} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-black text-gray-900">Draft Auto-Saved</p>
-                  <p className="text-[10px] font-bold text-gray-400">Last saved at {lastDraftSavedAt}. Refresh হলেও draft restore হবে।</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={resetOutreachForm}
-                  className="ml-auto rounded-xl border border-green-100 bg-white px-3 py-2 text-[9px] font-black uppercase text-green-700 hover:bg-green-50"
-                >
-                  Clear Draft
-                </button>
-              </div>
-            )}
-
-            {checkingDuplicate && (
-              <div className="bg-white rounded-[24px] border border-blue-100 p-4 shadow-sm flex items-center gap-3">
-                <Loader2 size={18} className="animate-spin text-blue-600" />
-                <p className="text-xs font-black text-blue-600 uppercase">Checking duplicate email...</p>
-              </div>
-            )}
-
-            {duplicateLead && (
-              <div className="bg-red-50 rounded-[24px] border border-red-100 p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white text-red-600 flex items-center justify-center">
-                    <AlertCircle size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-black text-red-700 uppercase">Duplicate Lead Warning</p>
-                    <p className="text-[11px] font-bold text-red-600 mt-1">
-                      This email already exists. Status: {duplicateLead.status || "N/A"} • Service: {duplicateLead.service || "N/A"} • Created: {formatDate(duplicateLead.createdAt)}
-                    </p>
-                    <label className="mt-3 flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={allowDuplicateSend}
-                        onChange={(e: any) => setAllowDuplicateSend(e.target.checked)}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-[10px] font-black text-red-700 uppercase">
-                        I checked this lead — Send Anyway
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {contactMemoryWarning && (
-              <div className="bg-amber-50 rounded-[24px] border border-amber-100 p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white text-amber-600 flex items-center justify-center">
-                    <Clock size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-black text-amber-700 uppercase">Cooldown Memory Warning</p>
-                    <p className="text-[11px] font-bold text-amber-700 mt-1">
-                      This email was contacted before. Outcome: {contactMemoryWarning.lastOutcome || "previous_contact"}
-                      {contactMemoryWarning.lastContactedAt ? ` • Last contacted: ${formatDate(contactMemoryWarning.lastContactedAt)}` : ""}
-                      {contactMemoryWarning.cooldownUntil ? ` • Cooldown until: ${formatDate(contactMemoryWarning.cooldownUntil)}` : ""}
-                    </p>
-                    <p className="text-[10px] font-bold text-amber-600 mt-1">
-                      Open: {contactMemoryWarning.openCount || 0} • Click: {contactMemoryWarning.clickCount || 0}
-                      {contactMemoryWarning.companyName ? ` • ${contactMemoryWarning.companyName}` : ""}
-                    </p>
-                    <label className="mt-3 flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={allowCooldownOverride}
-                        onChange={(e: any) => setAllowCooldownOverride(e.target.checked)}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-[10px] font-black text-amber-700 uppercase">
-                        I reviewed the footprint — Override cooldown and send
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          <div className="xl:col-span-3 space-y-5">
-            <div className="bg-white rounded-[35px] border border-gray-100 p-5 shadow-sm">
-              <h2 className="text-sm font-black text-gray-900 uppercase tracking-tighter mb-4 flex items-center gap-2">
-                <Mail size={16} className="text-blue-600" /> Sender Accounts
-              </h2>
-
-              <div className="space-y-3">
-                {ACTIVE_SENDERS.map((sender) => {
-                  const count = senderCounts[sender.email] || 0;
-                  const isActive = selectedSender === sender.id;
-                  const percent = Math.min((count / sender.limit) * 100, 100);
-                  const isLimitReached = count >= sender.limit;
-
-                  return (
-                    <button
-                      type="button"
-                      key={sender.id}
-                      onClick={() => handleSenderChange(sender.id)}
-                      className={`w-full p-4 rounded-3xl border-2 text-left transition-all duration-300 ${
-                        isActive ? "border-blue-500 bg-blue-50/40 shadow-lg" : "border-gray-100 bg-gray-50/60 hover:border-blue-200"
-                      } ${isLimitReached ? "opacity-60 grayscale" : ""}`}
-                    >
-                      <div className="flex justify-between gap-3 mb-3">
-                        <div className="min-w-0">
-                          <p className={`font-black text-xs truncate ${isActive ? "text-blue-700" : "text-gray-900"}`}>
-                            {sender.name || makeNameFromEmail(sender.email)}
-                          </p>
-                          <p className="font-bold text-[10px] text-gray-400 truncate">{sender.email}</p>
-                        </div>
-                        <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isLimitReached ? "bg-red-100 text-red-600" : "bg-white text-gray-500"}`}>
-                          {count}/{sender.limit}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                        <div className={`h-full ${percent >= 90 ? "bg-red-500" : percent >= 70 ? "bg-orange-500" : "bg-blue-500"}`} style={{ width: `${percent}%` }} />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="xl:col-span-5 bg-white p-6 lg:p-8 rounded-[35px] shadow-xl border border-gray-50">
-            <div className="flex items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Professional Email Composer</h2>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Clean body, cursor tags, direct send</p>
-              </div>
-              <Type className="text-blue-600" size={22} />
-            </div>
-
-            <form onSubmit={handleSendEmail} className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  placeholder="Prospect Name"
-                  required
-                  className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium"
-                  value={clientName}
-                  onChange={(e: any) => setClientName(e.target.value)}
-                />
-                <input
-                  type="text"
-                  placeholder="Company Name"
-                  className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium"
-                  value={companyName}
-                  onChange={(e: any) => setCompanyName(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <input
-                    type="email"
-                    placeholder="Target Email"
-                    required
-                    className={`w-full p-4 bg-gray-50 rounded-2xl outline-none border transition-all font-medium ${
-                      emailError ? "border-red-400 bg-red-50" : "border-transparent focus:border-blue-500"
-                    }`}
-                    value={email}
-                    onChange={(e: any) => {
-                      setEmail(e.target.value);
-                      setEmailError("");
-                    }}
-                  />
-                  {emailError && (
-                    <div className="flex items-center gap-1 text-red-500 text-[10px] font-black mt-2 ml-2 uppercase tracking-tight">
-                      <AlertCircle size={12} /> {emailError}
-                    </div>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="Website Link"
-                  className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-medium"
-                  value={website}
-                  onChange={(e: any) => setWebsite(e.target.value)}
-                />
-              </div>
-
-              <select
-                required
-                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-gray-700"
-                value={selectedService}
-                onChange={(e: any) => handleServiceChange(e.target.value as ServiceId)}
-              >
-                <option value="" disabled>Select Targeted Service</option>
-                {SERVICE_NAMES.map((service) => <option key={service} value={service}>{service}</option>)}
-              </select>
-
-              <input
-                type="text"
-                placeholder="Subject Line"
-                required
-                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg"
-                value={subject}
-                onChange={(e: any) => setSubject(e.target.value)}
-              />
-
-              <div className="rounded-[30px] border border-gray-100 bg-[#fbfcff] p-3">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <div className="flex flex-wrap gap-2">
-                    {(["{name}", "{company}", "{website}", "{service}"] as const).map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => insertMergeTag(tag)}
-                        className="px-3 py-1.5 bg-white border border-blue-100 text-blue-700 rounded-xl text-[10px] font-black uppercase hover:bg-blue-50"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addTextLink}
-                      className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-[10px] font-black uppercase hover:bg-gray-50 flex items-center gap-1"
-                    >
-                      <Link2 size={12} /> Insert Link
-                    </button>
-                  </div>
-
-                  <div className="flex gap-2 text-[9px] font-black uppercase">
-                    <span className="px-2 py-1 rounded-lg bg-white text-gray-400 border border-gray-100">{wordCount} Words</span>
-                    <span className={`px-2 py-1 rounded-lg border ${totalLinkCount > 2 ? "bg-red-50 text-red-500 border-red-100" : "bg-white text-gray-400 border-gray-100"}`}>
-                      {totalLinkCount} Links
-                    </span>
-                  </div>
-                </div>
-
-                <div ref={editorRef} className="modern-editor-wrapper rounded-[26px] border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-white shadow-sm">
-                  <EditorProvider>
-                    <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
-                      <BtnBold /> <BtnItalic /> <BtnUnderline />
-                      <span className="w-px h-6 bg-gray-200 mx-1"></span>
-                      <BtnNumberedList /> <BtnBulletList />
-                      <span className="w-px h-6 bg-gray-200 mx-1"></span>
-                      <button type="button" onClick={addTextLink} className="p-1.5 hover:bg-blue-50 rounded-md border border-gray-200 flex items-center justify-center transition-all">
-                        <Link2 size={16} className="text-gray-600" />
-                      </button>
-                      <BtnClearFormatting />
-                    </Toolbar>
-                    <Editor
-                      value={message}
-                      onChange={(e: any) => setMessage(e.target.value)}
-                      className="min-h-[340px] p-6 bg-white outline-none text-gray-800 font-medium email-editor-content"
-                    />
-                  </EditorProvider>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-3xl p-4 border border-gray-100">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black text-gray-900">Include Clean Signature</p>
-                    <p className="text-[10px] font-bold text-gray-400">Text/table signature will show the real inbox: {MAIN_INBOX_EMAIL} for replies.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIncludeSignature((prev) => !prev)}
-                    className={`w-14 h-8 rounded-full p-1 transition-all ${includeSignature ? "bg-blue-600" : "bg-gray-300"}`}
-                  >
-                    <span className={`block w-6 h-6 rounded-full bg-white transition-all ${includeSignature ? "translate-x-6" : "translate-x-0"}`} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule Later</span>
-                  <input
-                    type="datetime-local"
-                    min={minDateTime}
-                    className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl outline-none font-bold text-sm border-2 border-blue-100"
-                    value={scheduledTime}
-                    onChange={(e: any) => setScheduledTime(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={!canSend}
-                  className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  {sending ? <Loader2 className="animate-spin" /> : <><Send size={20} /> Send Outreach</>}
-                </button>
-              </div>
-
-              {sendStatus && (
-                <div className="text-center text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-4 flex justify-center items-center gap-2">
-                  <CheckCircle2 size={14} /> {sendStatus}
-                </div>
-              )}
-            </form>
-          </div>
-
-          <div className="xl:col-span-4 space-y-5">
-            <div className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-xl sticky top-6">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-black text-gray-900 uppercase tracking-tighter flex items-center gap-2">
-                  <Eye size={18} className="text-blue-600" /> Live Preview
-                </h2>
-                <span className="text-[9px] font-black text-gray-400 uppercase">Email View</span>
-              </div>
-
-              <div className="rounded-[28px] border border-gray-200 overflow-hidden bg-white">
-                <div className="bg-gray-50 border-b border-gray-100 p-4 space-y-2">
-                  <p className="text-[10px] font-bold text-gray-500"><b>From:</b> {activeSender ? `${activeSender.name} <${activeSender.email}>` : "No sender"}</p>
-                  <p className="text-[10px] font-bold text-gray-500"><b>Reply-To:</b> {MAIN_INBOX_EMAIL}</p>
-                  <p className="text-[10px] font-bold text-gray-500"><b>To:</b> {email || "client@example.com"}</p>
-                  <p className="text-[10px] font-bold text-gray-500"><b>Subject:</b> {subject || "Subject preview"}</p>
-                </div>
-
-                <div className="p-5 text-sm leading-7 text-gray-800">
-                  {stripHtml(previewMessage) ? (
-                    <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewMessage }} />
-                  ) : (
-                    <p className="text-gray-400 italic">Write your email body to preview here...</p>
-                  )}
-
-                  {safeReportUrl && (
-                    <div className="mt-5 text-sm">
-                      Short audit note: <span className="text-blue-600 font-bold underline">{reportButtonText || "View short audit note"}</span>
-                    </div>
-                  )}
-
-                  {includeSignature ? (
-                    <div dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "full") }} />
-                  ) : (
-                    <p className="mt-5 text-[10px] font-black text-gray-400 uppercase">Signature hidden</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-5 bg-gray-50 rounded-[28px] p-4 border border-gray-100">
-                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Quality Checklist</h3>
-                <div className="space-y-2">
-                  {qualityChecks.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-bold text-gray-500">{item.label}</span>
-                      {item.ok ? <CheckCircle2 size={14} className="text-green-500" /> : <AlertCircle size={14} className="text-orange-400" />}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center gap-2 text-[10px] text-gray-400 font-bold leading-relaxed">
-                <FileText size={14} />
-                Report link is optional. If empty, no extra HTML will be added to the email body.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderOutreach = () => (
+    <OutreachPanel
+      activeSender={activeSender}
+      senderCounts={senderCounts}
+      selectedSender={selectedSender}
+      email={email}
+      setEmail={setEmail}
+      clientName={clientName}
+      setClientName={setClientName}
+      companyName={companyName}
+      setCompanyName={setCompanyName}
+      website={website}
+      setWebsite={setWebsite}
+      subject={subject}
+      setSubject={setSubject}
+      message={message}
+      setMessage={setMessage}
+      scheduledTime={scheduledTime}
+      setScheduledTime={setScheduledTime}
+      selectedService={selectedService}
+      emailError={emailError}
+      setEmailError={setEmailError}
+      sending={sending}
+      sendStatus={sendStatus}
+      includeSignature={includeSignature}
+      setIncludeSignature={setIncludeSignature}
+      reportUrl={reportUrl}
+      setReportUrl={setReportUrl}
+      reportButtonText={reportButtonText}
+      setReportButtonText={setReportButtonText}
+      duplicateLead={duplicateLead}
+      checkingDuplicate={checkingDuplicate}
+      allowDuplicateSend={allowDuplicateSend}
+      setAllowDuplicateSend={setAllowDuplicateSend}
+      contactMemoryWarning={contactMemoryWarning}
+      allowCooldownOverride={allowCooldownOverride}
+      setAllowCooldownOverride={setAllowCooldownOverride}
+      lastDraftSavedAt={lastDraftSavedAt}
+      minDateTime={minDateTime}
+      editorRef={editorRef}
+      wordCount={wordCount}
+      totalLinkCount={totalLinkCount}
+      canSend={canSend}
+      mainInboxEmail={MAIN_INBOX_EMAIL}
+      handleSenderChange={handleSenderChange}
+      handleServiceChange={handleServiceChange}
+      insertMergeTag={insertMergeTag}
+      addTextLink={addTextLink}
+      resetOutreachForm={resetOutreachForm}
+      handleSendEmail={handleSendEmail}
+      buildPreviewSignature={buildPreviewSignature}
+    />
+  );
 
 
   const renderScheduledEmails = () => (
@@ -2584,700 +1922,77 @@ export default function DashboardPage() {
     />
   );
 
-  const renderLeads = () => {
-    const allLoadedSelected = filteredLeads.length > 0 && filteredLeads.every((lead) => selectedLeadIds.includes(lead.id));
-    const selectedCount = selectedLeadIds.length;
+  const renderLeads = () => (
+    <LeadsPanel
+      leads={leads}
+      filteredLeads={filteredLeads}
+      selectedLeadIds={selectedLeadIds}
+      leadView={leadView}
+      selectedMonth={selectedMonth}
+      leadStatusFilter={leadStatusFilter}
+      activeService={activeService}
+      searchTerm={searchTerm}
+      loading={loading}
+      loadingMoreLeads={loadingMoreLeads}
+      hasMoreLeads={hasMoreLeads}
+      monthOptions={monthOptions}
+      bulkActionLoading={bulkActionLoading}
+      bulkActionStatus={bulkActionStatus}
+      setLeadView={setLeadView}
+      setSelectedMonth={setSelectedMonth}
+      setLeadStatusFilter={setLeadStatusFilter}
+      setActiveService={setActiveService}
+      setSearchTerm={setSearchTerm}
+      setSelectedLeadIds={setSelectedLeadIds}
+      setSelectedLead={setSelectedLead}
+      refreshLeads={refreshLeads}
+      fetchMoreLeads={fetchMoreLeads}
+      applyLeadBulkAction={applyLeadBulkAction}
+      handleMarkAsReplied={handleMarkAsReplied}
+      handleArchiveLead={handleArchiveLead}
+      handleRestoreLead={handleRestoreLead}
+      handleDelete={handleDelete}
+      handlePermanentDeleteLead={handlePermanentDeleteLead}
+    />
+  );
 
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-center">
-          <div>
-            <h1 className="text-3xl font-black tracking-tighter text-gray-900">Lead Management</h1>
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Professional archive, trash, restore, and cleanup control</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter })}
-              disabled={loading}
-              className="px-4 py-3 rounded-2xl bg-black text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh latest 20
-            </button>
-            <button
-              type="button"
-              onClick={fetchMoreLeads}
-              disabled={loadingMoreLeads || !hasMoreLeads}
-              className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-600 text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
-            >
-              <ChevronDown size={14} /> {hasMoreLeads ? (loadingMoreLeads ? "Loading..." : "See more 20") : "All loaded"}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {renderStatCard("Loaded", leads.length, <Mail size={22} />)}
-          {renderStatCard("Filtered", filteredLeads.length, <Database size={22} />, "blue")}
-          {renderStatCard("Selected", selectedCount, <CheckCircle2 size={22} />, "green")}
-          {renderStatCard("View", leadView.toUpperCase(), <Layers size={22} />, "orange")}
-        </div>
-
-        <div className="bg-white rounded-[28px] border border-gray-100 p-5 shadow-sm space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <select value={leadView} onChange={(e: any) => setLeadView(e.target.value as LeadViewFilter)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-              <option value="trash">Trash</option>
-              <option value="all">All</option>
-            </select>
-            <select value={selectedMonth} onChange={(e: any) => setSelectedMonth(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
-              <option value="All">All Months</option>
-              {monthOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <select value={leadStatusFilter} onChange={(e: any) => setLeadStatusFilter(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
-              <option value="All">All Status</option>
-              {["scheduled", "sent", "opened", "clicked", "replied", "bounced", "spam", "unsubscribed", "cancelled", "finished"].map((status) => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-            <select value={activeService} onChange={(e: any) => setActiveService(e.target.value)} className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none uppercase">
-              <option value="All">All Services</option>
-              {SERVICE_NAMES.map((service) => <option key={service} value={service}>{service}</option>)}
-            </select>
-            <input type="text" placeholder="Search email/company..." className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black outline-none" value={searchTerm} onChange={(e: any) => setSearchTerm(e.target.value)} />
-          </div>
-
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-gray-50">
-            <div>
-              <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Bulk actions</p>
-              <p className="text-[10px] font-bold text-gray-400 mt-1">
-                {selectedCount} selected. Archive keeps history and stops automation. Trash is soft delete. Permanent delete is only for test/fake records.
-                {bulkActionStatus ? ` ${bulkActionStatus}` : ""}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button disabled={!selectedCount || bulkActionLoading} onClick={() => applyLeadBulkAction("archive")} className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 text-[9px] font-black uppercase disabled:opacity-40">Archive</button>
-              <button disabled={!selectedCount || bulkActionLoading} onClick={() => applyLeadBulkAction("restore")} className="px-4 py-2 rounded-xl bg-green-50 text-green-600 text-[9px] font-black uppercase disabled:opacity-40">Restore</button>
-              <button disabled={!selectedCount || bulkActionLoading} onClick={() => applyLeadBulkAction("trash")} className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-[9px] font-black uppercase disabled:opacity-40">Move to trash</button>
-              <button disabled={!selectedCount || bulkActionLoading} onClick={() => applyLeadBulkAction("delete_permanent")} className="px-4 py-2 rounded-xl bg-red-50 text-red-600 text-[9px] font-black uppercase disabled:opacity-40">Permanent delete</button>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[30px] shadow-xl border border-gray-50 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50/50">
-                <tr>
-                  <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                    <input
-                      type="checkbox"
-                      checked={allLoadedSelected}
-                      onChange={(e: any) => {
-                        if (e.target.checked) {
-                          setSelectedLeadIds(Array.from(new Set([...selectedLeadIds, ...filteredLeads.map((lead) => lead.id)])));
-                        } else {
-                          const filteredIds = new Set(filteredLeads.map((lead) => lead.id));
-                          setSelectedLeadIds(selectedLeadIds.filter((id: string) => !filteredIds.has(id)));
-                        }
-                      }}
-                    />
-                  </th>
-                  <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Lead Information</th>
-                  <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Sender</th>
-                  <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
-                  <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Engagement</th>
-                  <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-50">
-                {filteredLeads.map((lead) => {
-                  const checked = selectedLeadIds.includes(lead.id);
-                  return (
-                    <tr key={lead.id} onClick={() => setSelectedLead(lead)} className="hover:bg-blue-50/20 cursor-pointer group transition-all">
-                      <td className="p-5" onClick={(e: any) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e: any) => {
-                            if (e.target.checked) setSelectedLeadIds(Array.from(new Set([...selectedLeadIds, lead.id])));
-                            else setSelectedLeadIds(selectedLeadIds.filter((id: string) => id !== lead.id));
-                          }}
-                        />
-                      </td>
-                      <td className="p-5">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-gray-900 uppercase italic tracking-tighter group-hover:text-blue-600 leading-none">{lead.name || "Unknown"}</span>
-                            {isHotLead(lead) && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[8px] font-black flex items-center gap-1"><Flame size={10} /> HOT</span>}
-                            {lead.archived === true && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px] font-black">ARCHIVED</span>}
-                            {lead.deleted === true && <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded text-[8px] font-black">TRASH</span>}
-                          </div>
-                          <span className="text-[9px] text-gray-400 font-bold mt-1 uppercase">{lead.company_name || "No Company"}</span>
-                          <span className="text-[10px] text-gray-300 font-bold">{lead.email || lead.emailLower}</span>
-                        </div>
-                      </td>
-
-                      <td className="p-5">
-                        <p className="text-[10px] text-gray-600 font-black">{lead.sender_name || "Sender"}</p>
-                        <p className="text-[9px] text-gray-400 font-bold">{lead.sender_email || "N/A"}</p>
-                      </td>
-
-                      <td className="p-5 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${lead.status === "replied" ? "bg-green-100 text-green-600" : "bg-blue-50 text-blue-500"}`}>{lead.status || "unknown"}</span>
-                          <span className="text-[9px] font-bold text-gray-400 italic">{formatDate(lead.createdAt)}</span>
-                        </div>
-                      </td>
-
-                      <td className="p-5 text-center">
-                        <div className="inline-flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-2xl border border-gray-100">
-                          <div><span className="text-xs font-black text-gray-900">{lead.open_count || 0}</span><span className="block text-[8px] font-black text-gray-400 uppercase">Open</span></div>
-                          <div><span className="text-xs font-black text-gray-900">{lead.click_count || 0}</span><span className="block text-[8px] font-black text-gray-400 uppercase">Click</span></div>
-                        </div>
-                      </td>
-
-                      <td className="p-5 text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={(e: any) => e.stopPropagation()}>
-                          {lead.status !== "replied" && lead.deleted !== true && (
-                            <button onClick={(e: any) => handleMarkAsReplied(lead.id, e)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Mark as Replied"><CheckCircle size={16} /></button>
-                          )}
-                          {lead.archived !== true && lead.deleted !== true && (
-                            <button onClick={(e: any) => handleArchiveLead(lead.id, e)} className="p-3 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Archive lead"><Database size={16} /></button>
-                          )}
-                          {(lead.archived === true || lead.deleted === true) && (
-                            <button onClick={(e: any) => handleRestoreLead(lead.id, e)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Restore lead"><RefreshCw size={16} /></button>
-                          )}
-                          {lead.deleted !== true && (
-                            <button onClick={(e: any) => handleDelete(lead.id, e)} className="p-3 text-gray-300 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all" title="Move to trash"><Trash2 size={16} /></button>
-                          )}
-                          {lead.deleted === true && (
-                            <button onClick={(e: any) => handlePermanentDeleteLead(lead.id, e)} className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Permanent delete"><X size={16} /></button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {filteredLeads.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-xs font-black text-gray-400 uppercase">No leads found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="p-5 border-t border-gray-50 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase">{filteredLeads.length} filtered from {leads.length} cached lead(s)</p>
-            <button type="button" onClick={fetchMoreLeads} disabled={loadingMoreLeads || !hasMoreLeads} className="px-5 py-3 rounded-2xl bg-gray-900 text-white text-[10px] font-black uppercase disabled:bg-gray-200 disabled:text-gray-400 flex items-center gap-2">
-              <ChevronDown size={14} /> {hasMoreLeads ? (loadingMoreLeads ? "Loading more..." : "See more leads") : "No more leads"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderFollowups = () => {
-    return (
-      <div className="space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
-            {SERVICE_LIST.map((service) => (
-              <button
-                key={service.id}
-                type="button"
-                onClick={() => {
-                  setActiveFollowupService(service.id);
-                  setActiveFollowupStep("step1");
-                  setShowVariantLeads(null);
-                }}
-                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs transition-all ${
-                  activeFollowupService === service.id ? "bg-black text-white" : "text-gray-400 hover:bg-gray-50"
-                }`}
-              >
-                {service.icon} {service.id}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => loadFollowupConfig(true)}
-            className="flex items-center gap-2 px-5 py-4 bg-white text-gray-500 rounded-[22px] font-black text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-all border border-gray-100"
-          >
-            {followupLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} REFRESH CONFIG
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
-            {STEPS.map((step, idx) => (
-              <button
-                key={step}
-                type="button"
-                onClick={() => {
-                  setActiveFollowupStep(step);
-                  setShowVariantLeads(null);
-                }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[10px] tracking-tighter transition-all ${
-                  activeFollowupStep === step ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:bg-gray-50"
-                }`}
-              >
-                <Layers size={14} /> F-{idx + 1}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
-            <Clock size={18} className="text-blue-500" />
-            <input
-              type="number"
-              min="1"
-              value={days}
-              onChange={(e: any) =>
-                updateCurrentStep({
-                  ...currentStepData,
-                  delay: (parseInt(e.target.value, 10) || 1) * 1440,
-                })
-              }
-              className="w-12 bg-blue-50 rounded-xl py-1.5 text-center text-sm font-black text-blue-700 outline-none"
-            />
-            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Days Gap</span>
-          </div>
-
-          <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
-            <Zap size={18} className="text-orange-500" />
-            <input
-              type="number"
-              min="1"
-              value={dailyFollowupLimit}
-              onChange={(e: any) => {
-                setDailyFollowupLimit(parseInt(e.target.value, 10) || 1);
-                setHasUnsavedChanges(true);
-              }}
-              className="w-16 bg-orange-50 rounded-xl py-1.5 text-center text-sm font-black text-orange-700 outline-none"
-            />
-            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Daily Limit</span>
-          </div>
-
-          <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
-            <Timer size={18} className="text-purple-500" />
-            <input
-              type="number"
-              min="1"
-              max="20"
-              value={followupBatchPerRun}
-              onChange={(e: any) => {
-                setFollowupBatchPerRun(Math.max(1, Math.min(parseInt(e.target.value, 10) || 1, 20)));
-                setHasUnsavedChanges(true);
-              }}
-              className="w-16 bg-purple-50 rounded-xl py-1.5 text-center text-sm font-black text-purple-700 outline-none"
-            />
-            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Per Run</span>
-          </div>
-
-          <div className="flex items-center gap-3 bg-white px-6 py-3 rounded-3xl border border-gray-100 shadow-sm">
-            <ShieldCheck size={18} className="text-green-500" />
-            <select
-              value={triggerMode}
-              onChange={(e: any) => {
-                setTriggerMode(e.target.value as TriggerMode);
-                setHasUnsavedChanges(true);
-              }}
-              className="bg-green-50 rounded-xl py-1.5 px-3 text-sm font-black text-green-700 outline-none"
-            >
-              <option value="open_required">Open/click required</option>
-            </select>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              updateCurrentStep({
-                ...currentStepData,
-                variants: [...currentVariants, { id: `V${Date.now()}`, content: "" }],
-              })
-            }
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[22px] font-black text-xs hover:bg-blue-700 shadow-lg active:scale-95 transition-all"
-          >
-            <Plus size={18} /> ADD VARIANT
-          </button>
-        </div>
-
-        <div className="p-5 rounded-[28px] bg-white border border-gray-100 shadow-sm">
-          <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
-            Eligible leads for {activeFollowupService} / {activeFollowupStep.toUpperCase()}:{" "}
-            <span className="text-blue-600">{currentFollowupLeads.length}</span>
-          </p>
-          <p className="text-[11px] text-gray-400 mt-2 font-bold">
-            Current mode: Follow up only when the lead opened or clicked. No-reply-only follow-up is disabled by safety policy.
-          </p>
-        </div>
-
-        <div className="p-5 rounded-[28px] bg-slate-950 text-white border border-slate-800 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-white">Server Dry-run Preview</p>
-              <p className="text-[11px] text-slate-300 mt-2 font-bold">
-                This uses the same due-query path as the cron: nextFollowupStatus=scheduled and nextFollowupAt ≤ now. Make sure the Firestore composite index is deployed.
-              </p>
-              {dryRunStatus && <p className="text-[10px] text-blue-200 mt-2 font-black uppercase">{dryRunStatus}</p>}
-            </div>
-            <button
-              type="button"
-              onClick={loadFollowupDryRun}
-              disabled={dryRunLoading}
-              className="px-5 py-3 rounded-2xl bg-white text-slate-900 font-black text-xs uppercase flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {dryRunLoading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />} Dry-run now
-            </button>
-          </div>
-
-          {dryRunRows.length > 0 && (
-            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900">
-              {dryRunRows.slice(0, 12).map((row) => (
-                <div key={row.leadId} className="p-3 border-b border-slate-800 last:border-0 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] font-black text-white">{row.email}</p>
-                    <p className="text-[9px] text-slate-400 uppercase font-bold">{row.company || row.name || "No company"} · {row.service} · F-{row.nextFollowupNumber}</p>
-                  </div>
-                  <div className="text-[9px] text-emerald-300 font-black uppercase max-w-md truncate">
-                    {(row.reasons || []).join(" · ")}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {currentVariants.map((variant, index) => {
-            const vIndex = validCurrentVariants.findIndex((v) => v.id === variant.id);
-            const targetEmails =
-              vIndex === -1 || validCurrentVariants.length === 0
-                ? []
-                : currentFollowupLeads.filter((_, idx) => idx % validCurrentVariants.length === vIndex);
-
-            return (
-              <div key={variant.id} className="bg-white rounded-[40px] shadow-xl border border-gray-50 flex flex-col overflow-hidden">
-                <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
-                  <span className="text-[10px] font-black px-4 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-widest">
-                    VARIATION {index + 1}
-                  </span>
-                  <button type="button" onClick={() => removeVariant(variant.id)} className="text-gray-300 hover:text-red-500">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-
-                <div className="p-6 flex-1 flex flex-col space-y-4">
-                  <div className="modern-editor-wrapper rounded-3xl border-2 border-gray-100 overflow-hidden bg-gray-50">
-                    <EditorProvider>
-                      <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
-                        <BtnBold /> <BtnItalic /> <BtnClearFormatting />
-                        <div className="ml-auto flex gap-1 flex-wrap">
-                          <button type="button" onClick={() => appendMergeTag(variant.id, "{name}")} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase">
-                            <UserPlus size={12} className="inline mr-1" /> {"{Name}"}
-                          </button>
-                          <button type="button" onClick={() => appendMergeTag(variant.id, "{company}")} className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase">
-                            <Building2 size={12} className="inline mr-1" /> {"{Company}"}
-                          </button>
-                          <button type="button" onClick={() => appendMergeTag(variant.id, "{website}")} className="px-3 py-1 bg-slate-700 text-white rounded-lg text-[9px] font-black uppercase">
-                            {"{Website}"}
-                          </button>
-                          <button type="button" onClick={() => appendMergeTag(variant.id, "{service}")} className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase">
-                            {"{Service}"}
-                          </button>
-                        </div>
-                      </Toolbar>
-                      <Editor
-                        value={variant.content || ""}
-                        onChange={(e: any) => updateVariantContent(variant.id, e.target.value)}
-                        className="min-h-[250px] p-5 outline-none text-gray-800 email-editor-content"
-                      />
-                    </EditorProvider>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-[9px] font-black uppercase">
-                    <span className="px-2 py-1 rounded-lg bg-white text-gray-400 border border-gray-100">
-                      {countWordsFromHtml(variant.content)} Words
-                    </span>
-                    <span className={`px-2 py-1 rounded-lg border ${countLinksFromHtml(variant.content) > 1 ? "bg-red-50 text-red-500 border-red-100" : "bg-white text-gray-400 border-gray-100"}`}>
-                      {countLinksFromHtml(variant.content)} Links
-                    </span>
-                    <span className={`px-2 py-1 rounded-lg border ${getFollowupRiskLabel(variant.content).tone}`}>
-                      {getFollowupRiskLabel(variant.content).label}
-                    </span>
-                    <span className="px-2 py-1 rounded-lg bg-slate-50 text-slate-500 border border-slate-100">
-                      Compact signature auto-added
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowVariantLeads(showVariantLeads === variant.id ? null : variant.id)}
-                    className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-[22px] border border-gray-100"
-                  >
-                    <span className="text-[10px] font-black text-gray-600 uppercase flex items-center gap-2">
-                      <Mail size={14} className="text-blue-500" /> Active Leads ({targetEmails.length})
-                    </span>
-                    {showVariantLeads === variant.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-
-                  {showVariantLeads === variant.id && (
-                    <div className="mt-2 max-h-40 overflow-y-auto p-2 bg-white rounded-xl border border-gray-100">
-                      {targetEmails.length === 0 ? (
-                        <p className="text-center py-4 text-gray-400 text-[10px] font-bold uppercase">No matching leads in this step</p>
-                      ) : (
-                        targetEmails.map((lead) => (
-                          <div key={lead.id} className="flex flex-col p-2 border-b last:border-0 hover:bg-blue-50">
-                            <div className="flex justify-between gap-2">
-                              <span className="text-[11px] font-bold text-gray-700 truncate">{lead.email || lead.emailLower}</span>
-                              <span className="text-[9px] text-blue-500 font-black whitespace-nowrap">
-                                O: {lead.open_count || 0} / C: {lead.click_count || 0}
-                              </span>
-                            </div>
-                            <span className="text-[8px] text-gray-400 font-bold uppercase mt-1">
-                              Status: {lead.status} | Step: {lead.follow_up_count || 0}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="sticky bottom-8 left-0 w-full max-w-md mx-auto px-6 z-50">
-          <button
-            type="button"
-            onClick={saveFollowupSettings}
-            disabled={followupSaving || !hasUnsavedChanges}
-            className={`w-full p-5 rounded-[30px] font-black text-base shadow-2xl transition-all flex items-center justify-center gap-3 border-4 border-white ${
-              hasUnsavedChanges ? "bg-blue-600 text-white scale-105 shadow-blue-300" : "bg-gray-200 text-gray-400"
-            }`}
-          >
-            {followupSaving ? <Loader2 className="animate-spin" /> : <><Save size={20} /> SAVE FOLLOW-UP SETTINGS</>}
-          </button>
-        </div>
-      </div>
-    );
-  };
+  const renderFollowups = () => (
+    <AutomationPanel
+      activeFollowupService={activeFollowupService}
+      activeFollowupStep={activeFollowupStep}
+      followupLoading={followupLoading}
+      days={days}
+      currentStepData={currentStepData}
+      currentVariants={currentVariants}
+      validCurrentVariants={validCurrentVariants}
+      currentFollowupLeads={currentFollowupLeads}
+      dailyFollowupLimit={dailyFollowupLimit}
+      followupBatchPerRun={followupBatchPerRun}
+      triggerMode={triggerMode}
+      dryRunStatus={dryRunStatus}
+      dryRunLoading={dryRunLoading}
+      dryRunRows={dryRunRows}
+      showVariantLeads={showVariantLeads}
+      followupSaving={followupSaving}
+      hasUnsavedChanges={hasUnsavedChanges}
+      setActiveFollowupService={setActiveFollowupService}
+      setActiveFollowupStep={setActiveFollowupStep}
+      setShowVariantLeads={setShowVariantLeads}
+      loadFollowupConfig={loadFollowupConfig}
+      updateCurrentStep={updateCurrentStep}
+      setDailyFollowupLimit={setDailyFollowupLimit}
+      setHasUnsavedChanges={setHasUnsavedChanges}
+      setFollowupBatchPerRun={setFollowupBatchPerRun}
+      setTriggerMode={setTriggerMode}
+      loadFollowupDryRun={loadFollowupDryRun}
+      removeVariant={removeVariant}
+      appendMergeTag={appendMergeTag}
+      updateVariantContent={updateVariantContent}
+      saveFollowupSettings={saveFollowupSettings}
+    />
+  );
 
 
-  const renderCleanupManager = () => {
-    const selectedCount = selectedCleanupIds.length;
-    const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
-    const sheetLinkedCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.sheetLinked).length;
-
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-center">
-          <div>
-            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
-              <ShieldCheck size={14} /> Lead Cleanup Manager
-            </p>
-            <h1 className="text-3xl font-black tracking-tighter text-gray-900">Full Delete + Footprint Memory</h1>
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">
-              Manual cleanup button. Full lead data can be removed from Firebase + Sheet while a small contact_memory footprint remains.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={runManualCleanupRefresh}
-              disabled={leadCleanup.loading || leadCleanup.actionLoading}
-              className="px-4 py-3 rounded-2xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2"
-            >
-              <RefreshCw size={14} className={leadCleanup.loading || leadCleanup.actionLoading ? "animate-spin" : ""} /> Manual Check
-            </button>
-            <button
-              type="button"
-              onClick={() => loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true)}
-              disabled={leadCleanup.loading || leadCleanup.actionLoading}
-              className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-50 flex items-center gap-2"
-            >
-              <Database size={14} /> Refresh
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {renderStatCard("Candidates", leadCleanup.rows.length, <Database size={22} />)}
-          {renderStatCard("Eligible", eligibleCount, <CheckCircle2 size={22} />, "green")}
-          {renderStatCard("Selected", selectedCount, <MousePointer2 size={22} />, "orange")}
-          {renderStatCard("Sheet Linked", sheetLinkedCount, <FileText size={22} />, "blue")}
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-[30px] p-5 shadow-sm space-y-4">
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-            <div className="flex flex-wrap gap-2">
-              {cleanupBuckets.map((bucket) => (
-                <button
-                  key={bucket.id}
-                  type="button"
-                  onClick={() => {
-                    setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket: bucket.id }));
-                    loadCleanupCandidates(bucket.id, true);
-                  }}
-                  className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${
-                    leadCleanup.bucket === bucket.id ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
-                  }`}
-                  title={bucket.note}
-                >
-                  {bucket.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={leadCleanup.actionLoading || selectedCount === 0}
-                onClick={() => deleteSelectedCleanupWithMemory("delete")}
-                className="px-4 py-3 rounded-2xl bg-red-600 text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
-              >
-                <Trash2 size={14} /> Delete Both + Memory
-              </button>
-              <button
-                type="button"
-                disabled={leadCleanup.actionLoading || selectedCount === 0}
-                onClick={() => deleteSelectedCleanupWithMemory("mark")}
-                className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
-              >
-                Delete Firebase + Mark Sheet
-              </button>
-              <button
-                type="button"
-                disabled={leadCleanup.actionLoading || selectedCount === 0}
-                onClick={() => skipSelectedCleanup(30)}
-                className="px-4 py-3 rounded-2xl bg-amber-50 text-amber-700 text-[10px] font-black uppercase disabled:opacity-40"
-              >
-                Skip 30 Days
-              </button>
-              <button
-                type="button"
-                disabled={leadCleanup.actionLoading || selectedCount === 0}
-                onClick={protectSelectedCleanup}
-                className="px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 text-[10px] font-black uppercase disabled:opacity-40"
-              >
-                Protect
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-            Rules: Cold no-reply leads are due after {leadCleanup.policy?.coldNoReplyDeleteDays || 45} days. Warm open/click no-reply leads are due after {leadCleanup.policy?.warmNoReplyDeleteDays || 90} days. Replied leads are review-only after {leadCleanup.policy?.repliedReviewDays || 365} days. Queued/processing leads are blocked from hard delete.
-          </div>
-
-          {(leadCleanup.status || leadCleanup.error) && (
-            <p className={`text-[10px] font-black uppercase tracking-widest ${leadCleanup.error ? "text-red-600" : "text-gray-400"}`}>
-              {leadCleanup.error || leadCleanup.status}
-            </p>
-          )}
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-[35px] shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="p-4">
-                    <input
-                      type="checkbox"
-                      checked={leadCleanup.rows.length > 0 && leadCleanup.rows.every((row) => selectedCleanupIds.includes(row.leadId))}
-                      onChange={(e: any) => {
-                        setSelectedCleanupIds(e.target.checked ? leadCleanup.rows.map((row: CleanupCandidate) => row.leadId) : []);
-                      }}
-                    />
-                  </th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Source</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Outcome</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Timeline</th>
-                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Safety</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-50">
-                {leadCleanup.loading && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-blue-600 font-black uppercase">
-                      Loading cleanup candidates...
-                    </td>
-                  </tr>
-                )}
-
-                {!leadCleanup.loading &&
-                  leadCleanup.rows.map((row: CleanupCandidate) => {
-                    const checked = selectedCleanupIds.includes(row.leadId);
-                    return (
-                      <tr key={row.leadId} className={checked ? "bg-blue-50/50" : "hover:bg-gray-50/50"}>
-                        <td className="p-4 align-top">
-                          <input type="checkbox" checked={checked} onChange={() => toggleCleanupCandidate(row.leadId)} />
-                        </td>
-                        <td className="p-4 align-top min-w-[280px]">
-                          <p className="font-black text-gray-900">{row.company || row.name || "Unnamed lead"}</p>
-                          <p className="text-xs text-gray-500 font-semibold mt-1">{row.email}</p>
-                          {row.website && (
-                            <a href={normalizeOptionalUrl(row.website) || "#"} target="_blank" rel="noreferrer" className="text-xs text-blue-600 font-bold inline-flex items-center gap-1 mt-1">
-                              Open website <ExternalLink size={12} />
-                            </a>
-                          )}
-                        </td>
-                        <td className="p-4 align-top">
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${row.sheetLinked ? "bg-blue-50 text-blue-600" : row.sourceKind === "test" ? "bg-purple-50 text-purple-600" : "bg-gray-100 text-gray-600"}`}>
-                            {formatSourceLabel(row.sourceKind, row.source)}
-                          </span>
-                          {row.sheetRowNumber ? <p className="text-[10px] font-bold text-gray-400 mt-2">Sheet Row #{row.sheetRowNumber}</p> : <p className="text-[10px] font-bold text-gray-400 mt-2">Sheet not linked</p>}
-                        </td>
-                        <td className="p-4 align-top min-w-[220px]">
-                          <p className="text-xs font-black text-gray-900 uppercase">{row.outcome || "unknown"}</p>
-                          <p className="text-[10px] font-bold text-gray-400 mt-1">{row.reason}</p>
-                          <p className="text-[10px] font-black text-blue-600 mt-2">Open {row.openCount || 0} · Click {row.clickCount || 0} · F{row.followUpCount || 0}</p>
-                        </td>
-                        <td className="p-4 align-top min-w-[220px]">
-                          <p className="text-xs font-black text-gray-900">{row.daysOld || 0} days old</p>
-                          <p className="text-[10px] font-bold text-gray-400 mt-1">Last: {row.lastContactedAt ? formatDate(row.lastContactedAt) : "N/A"}</p>
-                          <p className="text-[10px] font-bold text-gray-400 mt-1">Due: {row.dueAt ? formatDate(row.dueAt) : "N/A"}</p>
-                        </td>
-                        <td className="p-4 align-top min-w-[220px]">
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${row.eligible && !row.protectedLead ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-700"}`}>
-                            {row.eligible && !row.protectedLead ? "Safe cleanup due" : row.protectedLead ? "Protected/review" : "Not due"}
-                          </span>
-                          <p className="text-[10px] font-bold text-gray-400 mt-2">
-                            Memory: {row.memoryMonths || row.cooldownMonths || 0} months
-                          </p>
-                          {(row.blockedReasons || []).length > 0 && (
-                            <p className="text-[10px] font-bold text-red-500 mt-2">{(row.blockedReasons || []).join(", ")}</p>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                {!leadCleanup.loading && leadCleanup.rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-gray-400 font-bold">
-                      No cleanup candidates found for this bucket.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
 
   const renderLeadDrawer = () => (
@@ -3527,7 +2242,20 @@ export default function DashboardPage() {
           {activeTab === "outreach" && renderOutreach()}
           {activeTab === "scheduled" && renderScheduledEmails()}
           {activeTab === "leads" && renderLeads()}
-          {activeTab === "cleanup" && renderCleanupManager()}
+          {activeTab === "cleanup" && (
+            <CleanupPanel
+              leadCleanup={leadCleanup}
+              selectedCleanupIds={selectedCleanupIds}
+              setSelectedCleanupIds={setSelectedCleanupIds}
+              setLeadCleanup={setLeadCleanup}
+              loadCleanupCandidates={loadCleanupCandidates}
+              runManualCleanupRefresh={runManualCleanupRefresh}
+              deleteSelectedCleanupWithMemory={deleteSelectedCleanupWithMemory}
+              skipSelectedCleanup={skipSelectedCleanup}
+              protectSelectedCleanup={protectSelectedCleanup}
+              toggleCleanupCandidate={toggleCleanupCandidate}
+            />
+          )}
           {activeTab === "automation" && renderFollowups()}
           {activeTab === "analytics" && (
             <AnalyticsPanel
