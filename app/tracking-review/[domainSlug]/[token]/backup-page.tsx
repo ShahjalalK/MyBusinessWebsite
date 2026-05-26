@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
-import ReportChatAssistant from "@/app/components/trackflow/ReportChatAssistant";
 
 export const dynamic = "force-dynamic";
 
@@ -1173,16 +1172,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </section>
         </aside>
       </section>
-
-
-      <ReportChatAssistant
-        token={token}
-        domainSlug={domainSlug}
-        companyName={companyName}
-        headline={headline}
-        ctaHref={ctaHref}
-        ctaText={ctaText}
-      />
 
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 lg:p-10">
