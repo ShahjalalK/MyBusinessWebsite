@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.74-dashboard-helper-split-stage-1
+Version: v18.75-dashboard-actions-hook-split-stage-2
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -438,6 +438,38 @@ Do not change API routes, Firestore fields, Sheet columns, Brevo behavior, or st
 Split visual panels later, one panel at a time, only after helper files build cleanly.
 ```
 
+
+
+
+### 3.18 Dashboard Action Hook Modularization Rule
+
+The email automation dashboard action logic is being split after the helper extraction stage.
+
+Current stage-2 structure:
+
+```text
+page.tsx
+→ still owns the main dashboard component, UI rendering, tab layout, local compose state, and existing behavior
+
+hooks/useScheduledEmails.ts
+→ scheduled-email loading, edit modal population, scheduled edit save, scheduled cancel, and send-soon actions
+
+hooks/useSystemStatus.ts
+→ Firebase usage summary loading, TrackFlow API health loading, and system cleanup actions
+
+hooks/useFollowupAdmin.ts
+→ follow-up summary loading, follow-up dry-run preview, and Google Postmaster health loading
+```
+
+Important decisions:
+
+```text
+Do not redesign UI while extracting action hooks.
+Do not change API route URLs, request payloads, response handling, Firestore fields, Sheet columns, or Brevo behavior.
+Keep hooks in the dashboard folder under hooks/ and import them from page.tsx with relative paths.
+Each hook should receive existing Zustand state/setters from page.tsx so stored dashboard behavior remains unchanged.
+Split visual panels later, one panel at a time, after action hooks build cleanly.
+```
 
 ### 3.6 Secure Report Responsive UX Rule
 
@@ -1831,6 +1863,30 @@ Load follow-up summary
 Load cleanup candidates
 Confirm Sheet readiness labels still appear
 Confirm no TypeScript import errors from the new helper files
+```
+
+
+### v18.75 Dashboard Action Hook Split Stage 2
+
+The dashboard was split further by moving scheduled-email actions, system health/usage actions, and follow-up admin actions into dedicated hooks without changing UI behavior.
+
+Changed files:
+
+```text
+page.tsx
+hooks/useScheduledEmails.ts
+hooks/useSystemStatus.ts
+hooks/useFollowupAdmin.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The dashboard visual layout was intentionally not redesigned in this stage.
+Existing API URLs, request payloads, Firestore fields, Sheet columns, Brevo behavior, and stored Zustand state are preserved.
+The main page.tsx still owns tab rendering and local compose state.
+New hooks are responsible only for action/loading logic and receive the existing state/setters from page.tsx.
 ```
 
 ### v18.73 TrackFlow API Modularization Stage 1

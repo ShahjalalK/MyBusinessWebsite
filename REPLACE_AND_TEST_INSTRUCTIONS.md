@@ -1,15 +1,18 @@
-# TrackFlow Pro v18.74 Dashboard Helper Split Stage 1
+# v18.75 Dashboard Action Hook Split Stage 2
 
-## What changed
-
-This patch keeps the dashboard UI and behavior the same, but moves non-UI helper logic out of the giant dashboard page file.
-
-## Files to replace/add
-
-Put these files in the same folder as your current email automation dashboard `page.tsx`:
+Replace these files in the same dashboard folder that contains your current `page.tsx`:
 
 ```text
 page.tsx
+hooks/useScheduledEmails.ts
+hooks/useSystemStatus.ts
+hooks/useFollowupAdmin.ts
+PROJECT_CONTEXT_README.md
+```
+
+Keep your existing stage-1 helper files in the same folder:
+
+```text
 types.ts
 constants.ts
 utils.ts
@@ -17,46 +20,25 @@ sheet-readiness.ts
 followup-utils.ts
 ```
 
-Also replace the project README:
+This patch intentionally does not change dashboard UI, API routes, Firestore fields, Sheet columns, Brevo behavior, or report storage.
 
-```text
-PROJECT_CONTEXT_README.md
-```
-
-## Important
-
-The updated `page.tsx` imports helpers with relative imports:
-
-```ts
-import type { ... } from "./types";
-import { ... } from "./utils";
-```
-
-So the helper files must be beside `page.tsx`.
-
-## Test
-
-After replacing files:
+After replacing, run:
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Then check:
+Test checklist:
 
 ```text
-1. Dashboard opens
-2. Overview tab loads
-3. Sheet queue tab loads
-4. Outreach composer opens and draft restore works
-5. Scheduled emails tab loads
-6. Leads tab filters work
-7. Cleanup tab loads candidates
-8. Automation tab loads follow-up config/summary
-9. Analytics tab loads usage
+1. Open dashboard and switch tabs.
+2. Scheduled tab loads scheduled emails.
+3. Edit scheduled email, save it, cancel one test item if safe, and send-soon if safe.
+4. Overview/Analytics loads Firebase usage summary.
+5. Overview/Automation loads system health.
+6. Automation follow-up summary loads.
+7. Follow-up dry-run works.
+8. Postmaster health button still works or shows the same configured/not-configured message.
+9. Existing lead bulk actions still work.
 ```
-
-## Notes
-
-No API route, Firestore field, Sheet column, Brevo behavior, or dashboard panel layout was intentionally changed in this stage.

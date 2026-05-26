@@ -123,6 +123,9 @@ import {
   makeDefaultStep,
   mergeWithDefaultConfig,
 } from "./followup-utils";
+import { useScheduledEmails } from "./hooks/useScheduledEmails";
+import { useSystemStatus } from "./hooks/useSystemStatus";
+import { useFollowupAdmin } from "./hooks/useFollowupAdmin";
 
 const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
   { id: "Email Signature", icon: <MousePointer2 size={16} /> },
@@ -674,39 +677,23 @@ export default function DashboardPage() {
   }, []);
 
 
-  const loadScheduledEmails = async (force = false) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setScheduledStatus("Please login again to load scheduled emails.");
-      return;
-    }
-
-    if (!force && scheduledLoadedAt && scheduledEmails.length >= 0) {
-      setScheduledStatus(`Cached ${scheduledEmails.length} scheduled email(s). Use refresh if needed.`);
-      return;
-    }
-
-    try {
-      setScheduledLoading(true);
-      setScheduledStatus("Loading scheduled emails...");
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/scheduled-emails?status=scheduled&limit=100", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Scheduled email load failed");
-      setScheduledEmails(Array.isArray(data.rows) ? data.rows : []);
-      setScheduledLoadedAt(Date.now());
-      setScheduledStatus(`Loaded ${data.count || 0} scheduled email(s).`);
-    } catch (error: any) {
-      console.error("Scheduled emails load error:", error);
-      setScheduledEmails([]);
-      setScheduledStatus(`Scheduled email load failed: ${error.message || "Unknown error"}`);
-    } finally {
-      setScheduledLoading(false);
-    }
-  };
+  const {
+    loadScheduledEmails,
+    openScheduledEditor,
+    saveScheduledEdit,
+    cancelScheduledEmail,
+    sendScheduledSoon,
+  } = useScheduledEmails({
+    scheduledEmails,
+    scheduledLoadedAt,
+    scheduledEdit,
+    setScheduledEmails,
+    setScheduledLoadedAt,
+    setScheduledStatus,
+    setScheduledLoading,
+    setScheduledEdit,
+    setScheduledSaving,
+  });
 
   useEffect(() => {
     if (activeTab === "scheduled") {
@@ -714,177 +701,22 @@ export default function DashboardPage() {
     }
   }, [activeTab, sendStatus]);
 
-  const openScheduledEditor = (lead: Lead) => {
-    setScheduledEdit({
-      leadId: lead.id,
-      email: String(lead.email || lead.emailLower || ""),
-      clientName: String(lead.name || ""),
-      companyName: String(lead.company_name || ""),
-      website: String(lead.website || ""),
-      businessType: String(lead.business_type || ""),
-      subject: String(lead.subject || ""),
-      message: String(lead.message || ""),
-      scheduledTime: toDateTimeLocalInput(lead.scheduledAt),
-      selectedService: SERVICE_NAMES.includes(lead.service as ServiceId) ? (lead.service as ServiceId) : "Google Ads",
-      selectedSender: String(lead.sender_id || ACTIVE_SENDERS.find((sender: any) => sender.email === lead.sender_email)?.id || ACTIVE_SENDERS[0]?.id || ""),
-      includeSignature: lead.include_signature !== false,
-      reportUrl: String(lead.reportUrl || ""),
-      reportButtonText: String(lead.reportButtonText || "View short audit note"),
-    });
-  };
-
-  const saveScheduledEdit = async () => {
-    if (!scheduledEdit) return;
-    const currentUser = auth.currentUser;
-    if (!currentUser) return window.alert("Please login again.");
-
-    if (!isEmailPatternValid(scheduledEdit.email.trim())) return window.alert("Please enter a valid recipient email.");
-    if (!scheduledEdit.subject.trim()) return window.alert("Subject is required.");
-    if (!stripHtml(scheduledEdit.message)) return window.alert("Message body cannot be empty.");
-    if (scheduledEdit.reportUrl?.trim() && (!normalizeOptionalUrl(scheduledEdit.reportUrl) || !isSecureReportUrl(scheduledEdit.reportUrl))) {
-      return window.alert("Scheduled email report URL must be the secure TrackFlow /r/[token] page.");
-    }
-    if (!scheduledEdit.scheduledTime) return window.alert("Scheduled time is required.");
-
-    try {
-      setScheduledSaving(true);
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/scheduled-emails", {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          leadId: scheduledEdit.leadId,
-          email: scheduledEdit.email,
-          clientName: scheduledEdit.clientName,
-          companyName: scheduledEdit.companyName,
-          website: scheduledEdit.website,
-          businessType: scheduledEdit.businessType,
-          subject: scheduledEdit.subject,
-          message: scheduledEdit.message,
-          scheduledAt: new Date(scheduledEdit.scheduledTime).toISOString(),
-          selectedService: scheduledEdit.selectedService,
-          senderId: scheduledEdit.selectedSender,
-          includeSignature: scheduledEdit.includeSignature,
-          reportUrl: scheduledEdit.reportUrl,
-          reportButtonText: scheduledEdit.reportButtonText,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Scheduled email update failed");
-      setScheduledEdit(null);
-      setScheduledStatus("Scheduled email updated successfully.");
-      await loadScheduledEmails(true);
-    } catch (error: any) {
-      console.error("Scheduled email update error:", error);
-      window.alert(error.message || "Scheduled email update failed.");
-    } finally {
-      setScheduledSaving(false);
-    }
-  };
-
-  const cancelScheduledEmail = async (leadId: string) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return window.alert("Please login again.");
-    if (!window.confirm("Cancel this scheduled email? It will not be sent.")) return;
-
-    try {
-      setScheduledSaving(true);
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/trackflow/send-email?leadId=${encodeURIComponent(leadId)}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Cancel failed");
-      setScheduledStatus("Scheduled email cancelled.");
-      setScheduledEdit(null);
-      await loadScheduledEmails(true);
-    } catch (error: any) {
-      console.error("Scheduled email cancel error:", error);
-      window.alert(error.message || "Scheduled email cancel failed.");
-    } finally {
-      setScheduledSaving(false);
-    }
-  };
-
-  const sendScheduledSoon = async (leadId: string) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return window.alert("Please login again.");
-    if (!window.confirm("Move this email to the immediate send queue? It will send on the next scheduled-initials cron run.")) return;
-
-    try {
-      setScheduledSaving(true);
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/scheduled-emails", {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ leadId, action: "send_soon" }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Send-soon update failed");
-      setScheduledStatus("Email moved to immediate send queue. Scheduled-initials cron will send it on the next run.");
-      setScheduledEdit(null);
-      await loadScheduledEmails(true);
-    } catch (error: any) {
-      console.error("Scheduled send-soon error:", error);
-      window.alert(error.message || "Send-soon update failed.");
-    } finally {
-      setScheduledSaving(false);
-    }
-  };
-
-  const loadFollowupSummary = async (force = false) => {
-    if (!force && followupSummary.loadedAt && Date.now() - followupSummary.loadedAt < 60_000) return;
-
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setFollowupSummary((current) => ({ ...current, error: "Please login again.", loading: false }));
-      return;
-    }
-
-    try {
-      setFollowupSummary((current) => ({ ...current, loading: true, error: "" }));
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/automation/followups/summary", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Follow-up summary failed");
-
-      setFollowupSummary({
-        loading: false,
-        error: "",
-        loadedAt: Date.now(),
-        sentToday: Number(data.sentToday || 0),
-        dailyLimit: Number(data.dailyLimit || dailyFollowupLimit || 50),
-        batchPerRun: Number(data.batchPerRun || followupBatchPerRun || 5),
-        remainingToday: Number(data.remainingToday ?? Math.max(0, Number(data.dailyLimit || dailyFollowupLimit || 50) - Number(data.sentToday || 0))),
-        maxThisRun: Number(data.maxThisRun ?? Math.min(Number(data.batchPerRun || followupBatchPerRun || 5), Math.max(0, Number(data.dailyLimit || dailyFollowupLimit || 50) - Number(data.sentToday || 0)))),
-        dueNow: Number(data.dueNow || 0),
-        scheduled: Number(data.scheduled || 0),
-        waitingFirstOpen: Number(data.waitingFirstOpen || 0),
-        waitingNewEngagement: Number(data.waitingNewEngagement || 0),
-        templateBlocked: Number(data.templateBlocked || 0),
-        failedRetry: Number(data.failedRetry || 0),
-        failedFinal: Number(data.failedFinal || 0),
-        blocked: Number(data.blocked || 0),
-      });
-    } catch (error: any) {
-      console.error("Follow-up summary error:", error);
-      setFollowupSummary((current) => ({
-        ...current,
-        loading: false,
-        error: error.message || "Follow-up summary failed",
-      }));
-    }
-  };
+  const {
+    loadFollowupSummary,
+    loadFollowupDryRun,
+    loadPostmasterHealth,
+  } = useFollowupAdmin({
+    followupSummary,
+    dailyFollowupLimit,
+    followupBatchPerRun,
+    setFollowupSummary,
+    setDryRunLoading,
+    setDryRunStatus,
+    setDryRunRows,
+    setPostmasterLoading,
+    setPostmasterStatus,
+    setPostmasterHealth,
+  });
 
   useEffect(() => {
     if (activeTab === "overview" || activeTab === "automation") {
@@ -893,147 +725,21 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-
-  const loadFirebaseUsage = async (force = false) => {
-    if (!force && firebaseUsage.loadedAt && Date.now() - firebaseUsage.loadedAt < 60_000) return;
-
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setFirebaseUsage((current) => ({ ...current, error: "Please login again.", loading: false }));
-      return;
-    }
-
-    try {
-      setFirebaseUsage((current) => ({ ...current, loading: true, error: "" }));
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/system/usage-summary", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Usage summary failed");
-
-      setFirebaseUsage({
-        loading: false,
-        error: "",
-        loadedAt: Date.now(),
-        usage: {
-          estimatedReadsToday: Number(data.usage?.estimatedReadsToday || 0),
-          estimatedWritesToday: Number(data.usage?.estimatedWritesToday || 0),
-          estimatedDeletesToday: Number(data.usage?.estimatedDeletesToday || 0),
-          estimatedStorageMb: Number(data.usage?.estimatedStorageMb || 0),
-          readPercent: Number(data.usage?.readPercent || 0),
-          writePercent: Number(data.usage?.writePercent || 0),
-          deletePercent: Number(data.usage?.deletePercent || 0),
-          storagePercent: Number(data.usage?.storagePercent || 0),
-        },
-        quota: {
-          readsPerDay: Number(data.quota?.readsPerDay || 50000),
-          writesPerDay: Number(data.quota?.writesPerDay || 20000),
-          deletesPerDay: Number(data.quota?.deletesPerDay || 20000),
-          storageMb: Number(data.quota?.storageMb || 1024),
-        },
-        counts: {
-          leadCount: Number(data.counts?.leadCount || 0),
-          activeLeadCount: Number(data.counts?.activeLeadCount || 0),
-          archivedLeadCount: Number(data.counts?.archivedLeadCount || 0),
-          trashedLeadCount: Number(data.counts?.trashedLeadCount || 0),
-          emailEventCount: Number(data.counts?.emailEventCount || 0),
-          suppressionCount: Number(data.counts?.suppressionCount || 0),
-          initialSentToday: Number(data.counts?.initialSentToday || 0),
-          followupSentToday: Number(data.counts?.followupSentToday || 0),
-          eventsToday: Number(data.counts?.eventsToday || 0),
-        },
-        note: String(data.note || ""),
-      });
-    } catch (error: any) {
-      console.error("Firebase usage summary error:", error);
-      setFirebaseUsage((current) => ({ ...current, loading: false, error: error.message || "Usage summary failed" }));
-    }
-  };
-
-  const loadSystemHealth = async (force = false, deep = false) => {
-    if (!force && systemHealth.loadedAt && Date.now() - systemHealth.loadedAt < 60_000) return;
-
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setSystemHealth((current) => ({ ...current, loading: false, error: "Please login again.", status: "error" }));
-      return;
-    }
-
-    try {
-      setSystemHealth((current) => ({ ...current, loading: true, error: "" }));
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/trackflow/admin/health${deep ? "?deep=true" : ""}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "System health check failed");
-
-      setSystemHealth({
-        loading: false,
-        error: "",
-        loadedAt: Date.now(),
-        status: data.switches?.automationPaused ? "paused" : data.status || "ok",
-        service: String(data.service || data.mode || "TrackFlowPro API"),
-        deep: Boolean(data.deep),
-        env: data.env || {},
-        switches: {
-          ...(data.switches || {}),
-          ...(data.drivePdfCleanup ? { drivePdfCleanup: data.drivePdfCleanup } : {}),
-        },
-        checks: data.checks || data.cronStatus || {},
-        followupConfigSource: data.followupConfigSource || data.admin?.followupConfigSource || "",
-        followupConfigSavedInFirestore: Boolean(data.followupConfigSavedInFirestore || data.admin?.followupConfigSavedInFirestore),
-        followupDailyLimit: Number(data.followupDailyLimit || data.admin?.followupDailyLimit || 0),
-        followupBatchPerRun: Number(data.followupBatchPerRun || data.admin?.followupBatchPerRun || 0),
-      } as any);
-    } catch (error: any) {
-      console.error("System health check error:", error);
-      setSystemHealth((current) => ({
-        ...current,
-        loading: false,
-        error: error?.message || "System health check failed",
-        status: "error",
-      }));
-    }
-  };
-
-  const runSystemCleanup = async (action: string, days = 30) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return window.alert("Please login again.");
-    const labelMap: Record<string, string> = {
-      archive_replied: `Archive replied leads older than ${days} days?`,
-      archive_finished: `Archive finished/bounced/unsubscribed leads older than ${days} days?`,
-      trash_test_leads: "Move detected test/fake leads to trash?",
-      delete_old_events: `Delete email event logs older than ${days} days? This cannot be restored.`,
-    };
-    if (!window.confirm(labelMap[action] || "Run cleanup action?")) return;
-
-    try {
-      setCleanupLoading(true);
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/system/cleanup", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action, days }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Cleanup failed");
-      window.alert(data.message || "Cleanup completed.");
-      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
-      await loadFirebaseUsage(true);
-    } catch (error: any) {
-      console.error("System cleanup error:", error);
-      window.alert(error.message || "Cleanup failed.");
-    } finally {
-      setCleanupLoading(false);
-    }
-  };
+  const {
+    loadFirebaseUsage,
+    loadSystemHealth,
+    runSystemCleanup,
+  } = useSystemStatus({
+    firebaseUsage,
+    systemHealth,
+    setFirebaseUsage,
+    setSystemHealth,
+    setCleanupLoading,
+    refreshLeads,
+    leadView,
+    selectedMonth,
+    leadStatusFilter,
+  });
 
   const applyLeadBulkAction = async (action: BulkLeadAction, idsInput?: string[]) => {
     const ids = idsInput && idsInput.length ? idsInput : selectedLeadIds;
@@ -1112,95 +818,6 @@ export default function DashboardPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
-
-  const loadFollowupDryRun = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      window.alert("Please login again.");
-      return;
-    }
-
-    try {
-      setDryRunLoading(true);
-      setDryRunStatus("Loading dry-run preview...");
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/automation/followups/dry-run?limit=50&includeBlocked=false&mode=due", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Dry-run failed");
-      setDryRunRows(Array.isArray(data.rows) ? data.rows : []);
-      setDryRunStatus(`Dry-run ready: ${data.eligibleCount || 0} eligible lead(s). Checked ${data.checked || 0}.`);
-    } catch (error: any) {
-      console.error("Follow-up dry-run error:", error);
-      setDryRunRows([]);
-      setDryRunStatus(`Dry-run failed: ${error.message || "Unknown error"}`);
-    } finally {
-      setDryRunLoading(false);
-    }
-  };
-
-
-  const loadPostmasterHealth = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      window.alert("Please login again.");
-      return;
-    }
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort("Postmaster request timeout"), 60000);
-
-    try {
-      setPostmasterLoading(true);
-      setPostmasterStatus("Loading Google Postmaster health...");
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/trackflow/postmaster/health?daysBack=1&maxLookback=3", {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-        cache: "no-store",
-      });
-
-      const responseText = await response.text();
-      let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        data = {
-          success: false,
-          error: `Postmaster API did not return JSON. Status: ${response.status}`,
-        };
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Postmaster health failed");
-      }
-
-      setPostmasterHealth(data);
-
-      if (!data.configured) {
-        setPostmasterStatus("Postmaster API not configured yet.");
-      } else if (data.authError || data.needsCredentialRefresh) {
-        setPostmasterStatus(data.message || "Postmaster OAuth credentials need to be refreshed.");
-      } else if (data.noData) {
-        setPostmasterStatus(data.message || "Postmaster connected, but no traffic data is available yet.");
-      } else {
-        setPostmasterStatus(`Postmaster health loaded for ${data.date || "latest available date"}.`);
-      }
-    } catch (error: any) {
-      console.error("Postmaster health error:", error);
-      setPostmasterHealth(null);
-
-      if (error?.name === "AbortError") {
-        setPostmasterStatus("Postmaster request timed out. The dashboard is still safe; try again after refreshing credentials or increasing Google API response time.");
-      } else {
-        setPostmasterStatus(`Postmaster failed: ${error.message || "Unknown error"}`);
-      }
-    } finally {
-      window.clearTimeout(timeout);
-      setPostmasterLoading(false);
-    }
-  };
 
   const analytics = useMemo(() => {
     const total = leads.length;
