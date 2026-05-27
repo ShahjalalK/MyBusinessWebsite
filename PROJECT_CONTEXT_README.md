@@ -1,10 +1,39 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.92-cleanup-contact-badge-stage-14f-a
+Version: v18.93-bulk-secure-report-cleanup-stage-14f-b
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
+
+
+## Latest Update — v18.93 Bulk Secure Report Cleanup
+
+Stage 14F-B adds manual bulk cleanup from the dashboard:
+
+```text
+Cleanup tab
+→ select multiple secure reports with checkboxes
+→ Preview selected
+→ Archive selected reports / Remove files from selected / Delete selected test data
+```
+
+Backend endpoint:
+
+```text
+POST /api/trackflow/cleanup/reports/bulk
+```
+
+Safety rules:
+
+```text
+Preview can run for selected reports without changing data.
+Confirmed bulk cleanup processes reports one by one.
+One missing PDF/image/Sheet row does not stop the remaining selected reports.
+Hard/test delete still requires DELETE_REPORT_ASSETS.
+No-memory contact delete remains blocked when outreach history is detected.
+```
+
 
 ## 1. Project Goal
 

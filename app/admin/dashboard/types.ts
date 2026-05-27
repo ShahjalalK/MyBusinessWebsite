@@ -309,6 +309,19 @@ export type ReportAssetCleanupState = {
   steps: ReportCleanupStep[];
 };
 
+export type BulkSecureReportCleanupRow = {
+  token: string;
+  dryRun?: boolean;
+  success?: boolean;
+  failedCount?: number;
+  warningCount?: number;
+  jobId?: string;
+  error?: string;
+  manifest?: ReportCleanupManifest;
+  steps?: ReportCleanupStep[];
+  [key: string]: any;
+};
+
 export type SecureReportFilter = "all" | "active" | "expired" | "viewed" | "no_view" | "cleaned" | "test";
 export type SecureReportContactStatus =
   | "not_contacted"
@@ -370,5 +383,12 @@ export type SecureReportListState = {
   search: string;
   filter: SecureReportFilter;
   selectedToken: string;
+  selectedTokens: string[];
   rows: SecureReportRow[];
+  bulkLoading: boolean;
+  bulkError: string;
+  bulkStatus: string;
+  bulkRows: BulkSecureReportCleanupRow[];
+  bulkFailedCount: number;
+  bulkCompletedCount: number;
 };

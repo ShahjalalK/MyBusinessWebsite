@@ -102,6 +102,7 @@ const {
   handleSecureReportsList,
   handleReportCleanupPreview,
   handleReportCleanup,
+  handleBulkReportCleanup,
   handleExpiredReportCleanupCron,
 } = createReportCleanupHandlers({
   ApiError,
@@ -8019,6 +8020,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     if (action === "cleanup/protect") return await handleCleanupProtect(req);
     if (action === "cleanup/manual-run") return await handleCleanupManualRun(req);
     if (action === "cleanup/report") return await handleReportCleanup(req);
+    if (action === "cleanup/reports/bulk") return await handleBulkReportCleanup(req);
     if (action === "unsubscribe") return await handleUnsubscribePost(req);
 
     return json({ success: false, error: `Unknown POST action: ${action}` }, 404);

@@ -55,6 +55,8 @@ type CleanupPanelProps = {
   loadSecureReports: (force?: boolean) => Promise<void>;
   selectSecureReportForCleanup: (report: SecureReportRow) => void;
   viewSecureReportLead: (report: SecureReportRow) => void;
+  toggleSecureReportSelection: (token: string) => void;
+  runBulkReportCleanup: (dryRun?: boolean) => Promise<void>;
 };
 
 const CLEANUP_BUCKETS: CleanupBucketOption[] = [
@@ -336,6 +338,8 @@ export default function CleanupPanel({
   loadSecureReports,
   selectSecureReportForCleanup,
   viewSecureReportLead,
+  toggleSecureReportSelection,
+  runBulkReportCleanup,
 }: CleanupPanelProps) {
   const selectedCount = selectedCleanupIds.length;
   const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
@@ -358,6 +362,17 @@ export default function CleanupPanel({
     .filter((report) => secureReportMatchesFilter(report, secureReports.filter))
     .filter((report) => secureReportMatchesSearch(report, secureReports.search))
     .slice(0, 50);
+  const selectedReportTokens = secureReports.selectedTokens || [];
+  const selectedReportCount = selectedReportTokens.length;
+  const allVisibleReportsSelected =
+    filteredSecureReports.length > 0 && filteredSecureReports.every((report) => selectedReportTokens.includes(report.token));
+  const bulkReportActionDisabled = Boolean(secureReports.bulkLoading || selectedReportCount === 0);
+  const selectedReportActionLabel =
+    reportAssetCleanup.mode === "hard"
+      ? "Delete Selected Test Data"
+      : reportAssetCleanup.mode === "assets_only"
+        ? "Remove Files From Selected"
+        : "Archive Selected Reports";
 
   const handleBucketSelect = (bucket: CleanupBucket) => {
     setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket }));
@@ -460,6 +475,82 @@ export default function CleanupPanel({
             </select>
           </div>
 
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-2xl bg-white border border-gray-100 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setSecureReports((prev) => ({
+                    ...prev,
+                    selectedTokens: allVisibleReportsSelected
+                      ? (prev.selectedTokens || []).filter((token) => !filteredSecureReports.some((report) => report.token === token))
+                      : Array.from(new Set([...(prev.selectedTokens || []), ...filteredSecureReports.map((report) => report.token)])),
+                    bulkError: "",
+                    bulkStatus: "",
+                  }))
+                }
+                disabled={!filteredSecureReports.length || secureReports.bulkLoading}
+                className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 text-[10px] font-black uppercase disabled:opacity-50"
+              >
+                {allVisibleReportsSelected ? "Unselect visible" : "Select visible"}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSecureReports((prev) => ({
+                    ...prev,
+                    selectedTokens: [],
+                    selectedToken: "",
+                    bulkError: "",
+                    bulkStatus: "",
+                    bulkRows: [],
+                    bulkFailedCount: 0,
+                    bulkCompletedCount: 0,
+                  }))
+                }
+                disabled={!selectedReportCount || secureReports.bulkLoading}
+                className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 text-gray-600 text-[10px] font-black uppercase disabled:opacity-50"
+              >
+                Clear selected
+              </button>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {selectedReportCount} selected
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => runBulkReportCleanup(true)}
+                disabled={bulkReportActionDisabled}
+                className="px-3 py-2 rounded-xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                {secureReports.bulkLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Preview selected
+              </button>
+              <button
+                type="button"
+                onClick={() => runBulkReportCleanup(false)}
+                disabled={bulkReportActionDisabled || (reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS")}
+                className="px-3 py-2 rounded-xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:bg-gray-300 inline-flex items-center gap-1"
+              >
+                <Trash2 size={12} /> {selectedReportActionLabel}
+              </button>
+            </div>
+          </div>
+
+          {(secureReports.bulkStatus || secureReports.bulkError) && (
+            <div className={`rounded-2xl border p-3 text-xs font-bold ${secureReports.bulkError ? "bg-amber-50 border-amber-100 text-amber-700" : "bg-emerald-50 border-emerald-100 text-emerald-700"}`}>
+              <p className="text-[10px] font-black uppercase tracking-widest">
+                {secureReports.bulkError || secureReports.bulkStatus}
+              </p>
+              {secureReports.bulkRows?.length ? (
+                <p className="mt-1 text-[10px] font-bold opacity-80">
+                  {secureReports.bulkRows.length} report(s) processed · {secureReports.bulkFailedCount || 0} need review
+                </p>
+              ) : null}
+            </div>
+          )}
+
           {(secureReports.status || secureReports.error) && (
             <p className={`text-[10px] font-black uppercase tracking-widest ${secureReports.error ? "text-red-600" : "text-gray-400"}`}>
               {secureReports.error || secureReports.status}
@@ -473,12 +564,22 @@ export default function CleanupPanel({
               </div>
             ) : filteredSecureReports.length ? (
               filteredSecureReports.map((report) => {
-                const selected = secureReports.selectedToken === report.token || reportAssetCleanup.input.includes(report.token);
+                const bulkSelected = selectedReportTokens.includes(report.token);
+                const selected = bulkSelected || secureReports.selectedToken === report.token || reportAssetCleanup.input.includes(report.token);
                 return (
                   <div
                     key={report.token}
-                    className={`rounded-2xl border p-4 bg-white grid grid-cols-1 xl:grid-cols-[1.35fr_0.75fr_0.75fr_0.75fr_auto] gap-3 items-center ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"}`}
+                    className={`rounded-2xl border p-4 bg-white grid grid-cols-1 xl:grid-cols-[auto_1.35fr_0.75fr_0.75fr_0.75fr_auto] gap-3 items-center ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"}`}
                   >
+                    <label className="inline-flex items-center justify-start xl:justify-center">
+                      <input
+                        type="checkbox"
+                        checked={bulkSelected}
+                        onChange={() => toggleSecureReportSelection(report.token)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        aria-label={`Select ${report.companyName || report.domain || report.token}`}
+                      />
+                    </label>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-black text-gray-900 truncate">{report.companyName || report.domain || "Untitled report"}</p>

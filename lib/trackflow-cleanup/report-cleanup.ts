@@ -201,6 +201,22 @@ function getReportTokenFromAny(...values: any[]): string {
   return "";
 }
 
+function normalizeBulkReportTokens(value: any, maxItems = 25): string[] {
+  const rawItems = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[\n,|;]/g) : [];
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+
+  for (const item of rawItems) {
+    const token = getReportTokenFromAny(extractReportTokenFromUrl(item), item);
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    tokens.push(token);
+    if (tokens.length >= maxItems) break;
+  }
+
+  return tokens;
+}
+
 function extractReportTokenFromUrl(value: any): string {
   const raw = clean(value);
   if (!raw) return "";
@@ -1496,6 +1512,130 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
     }, failedCount ? 207 : 200);
   }
 
+
+  async function handleBulkReportCleanup(req: Request) {
+    const adminUser: any = await deps.requireAdmin(req);
+    const body = (await readJson(req)) || {};
+    const tokens = normalizeBulkReportTokens(body.tokens || body.reportTokens || body.report_tokens, 25);
+
+    if (!tokens.length) {
+      throw new ApiError("Select at least one secure report to clean.", 400);
+    }
+
+    const mode = parseMode(body.mode || "soft");
+    const leadMode = parseLeadMode(body.leadMode || body.lead_mode || "none");
+    const sheetMode = parseSheetMode(body.sheetMode || body.sheet_mode || "mark");
+    const dryRun = body.dryRun !== false;
+    const actor = cleanEmail(adminUser.email || "admin") || "admin";
+
+    if (!dryRun && !isConfirmed(body, mode)) {
+      throw new ApiError(
+        mode === "hard"
+          ? "Confirmation required. Send confirm: DELETE_REPORT_ASSETS."
+          : "Confirmation required. Send confirm: CLEANUP_REPORT_ASSETS.",
+        400,
+      );
+    }
+
+    const rows: AnyRecord[] = [];
+    let completedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+
+    for (const token of tokens) {
+      try {
+        const { manifest, report, lead } = await buildCleanupManifest(token);
+
+        if (dryRun) {
+          const steps = dryRunSteps(manifest, mode, leadMode, sheetMode);
+          const rowFailedCount = steps.filter((step) => step.status === "error").length;
+          const rowWarningCount = steps.filter((step) => step.status === "warning").length;
+
+          rows.push({
+            token,
+            dryRun: true,
+            success: rowFailedCount === 0,
+            failedCount: rowFailedCount,
+            warningCount: rowWarningCount,
+            manifest,
+            steps,
+          });
+
+          if (rowFailedCount) failedCount += 1;
+          else skippedCount += 1;
+          continue;
+        }
+
+        const result = await runCleanup({
+          manifest,
+          report,
+          lead,
+          mode,
+          leadMode,
+          sheetMode,
+          actor,
+          deps,
+        });
+
+        const rowFailedCount = result.steps.filter((step) => step.status === "error").length;
+        const rowWarningCount = result.steps.filter((step) => step.status === "warning").length;
+
+        rows.push({
+          token,
+          dryRun: false,
+          success: rowFailedCount === 0,
+          failedCount: rowFailedCount,
+          warningCount: rowWarningCount,
+          jobId: result.jobId,
+          manifest,
+          steps: result.steps,
+        });
+
+        if (rowFailedCount) failedCount += 1;
+        else completedCount += 1;
+      } catch (error: any) {
+        failedCount += 1;
+        rows.push({
+          token,
+          dryRun,
+          success: false,
+          failedCount: 1,
+          error: safeError(error),
+          steps: [
+            normalizeCleanupStep({
+              service: "cleanup",
+              action: "bulk_report_cleanup",
+              status: "error",
+              target: token,
+              error: safeError(error),
+              message: "This report could not be processed, but the remaining selected reports continued.",
+            }),
+          ],
+        });
+      }
+    }
+
+    return json(
+      {
+        success: failedCount === 0,
+        action: "cleanup/reports/bulk",
+        dryRun,
+        mode,
+        leadMode,
+        sheetMode,
+        count: rows.length,
+        completedCount,
+        skippedCount,
+        failedCount,
+        message: dryRun
+          ? `Previewed ${rows.length} selected secure report(s). No records were changed.`
+          : `Processed ${rows.length} selected secure report(s).`,
+        rows,
+      },
+      failedCount ? 207 : 200,
+    );
+  }
+
   async function handleExpiredReportCleanupCron(req: Request) {
     await deps.requireCronSecret(req);
 
@@ -1603,6 +1743,7 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
     handleSecureReportsList,
     handleReportCleanupPreview,
     handleReportCleanup,
+    handleBulkReportCleanup,
     handleExpiredReportCleanupCron,
   };
 }

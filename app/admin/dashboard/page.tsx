@@ -200,7 +200,14 @@ function emptySecureReportListState(): SecureReportListState {
     search: "",
     filter: "all",
     selectedToken: "",
+    selectedTokens: [],
     rows: [],
+    bulkLoading: false,
+    bulkError: "",
+    bulkStatus: "",
+    bulkRows: [],
+    bulkFailedCount: 0,
+    bulkCompletedCount: 0,
   };
 }
 
@@ -1235,14 +1242,18 @@ export default function DashboardPage() {
 
       const rows = Array.isArray(data.rows) ? (data.rows as SecureReportRow[]) : [];
 
-      setSecureReports((prev) => ({
-        ...prev,
-        loading: false,
-        error: "",
-        status: data.message || (rows.length ? `Loaded ${rows.length} secure report(s).` : "No secure reports found yet."),
-        loadedAt: Date.now(),
-        rows,
-      }));
+      setSecureReports((prev) => {
+        const availableTokens = new Set(rows.map((row) => row.token));
+        return {
+          ...prev,
+          loading: false,
+          error: "",
+          status: data.message || (rows.length ? `Loaded ${rows.length} secure report(s).` : "No secure reports found yet."),
+          loadedAt: Date.now(),
+          rows,
+          selectedTokens: (prev.selectedTokens || []).filter((token) => availableTokens.has(token)),
+        };
+      });
     } catch (error: any) {
       console.error("Secure reports load error:", error);
       setSecureReports((prev) => ({
@@ -1256,7 +1267,11 @@ export default function DashboardPage() {
 
   const selectSecureReportForCleanup = (report: SecureReportRow) => {
     const input = report.reportUrl || report.token;
-    setSecureReports((prev) => ({ ...prev, selectedToken: report.token }));
+    setSecureReports((prev) => ({
+      ...prev,
+      selectedToken: report.token,
+      selectedTokens: prev.selectedTokens?.includes(report.token) ? prev.selectedTokens : [...(prev.selectedTokens || []), report.token],
+    }));
     setReportAssetCleanup((prev) => ({
       ...prev,
       input,
@@ -1286,6 +1301,115 @@ export default function DashboardPage() {
     }
 
     setActiveTab("leads");
+  };
+
+  const toggleSecureReportSelection = (token: string) => {
+    const cleanToken = String(token || "").trim();
+    if (!cleanToken) return;
+
+    setSecureReports((prev) => {
+      const selectedTokens = prev.selectedTokens || [];
+      const nextSelectedTokens = selectedTokens.includes(cleanToken)
+        ? selectedTokens.filter((item) => item !== cleanToken)
+        : [...selectedTokens, cleanToken];
+
+      return {
+        ...prev,
+        selectedTokens: nextSelectedTokens,
+        selectedToken: nextSelectedTokens.length === 1 ? nextSelectedTokens[0] : prev.selectedToken,
+        bulkError: "",
+        bulkStatus: "",
+      };
+    });
+  };
+
+  const runBulkReportCleanup = async (dryRun = true) => {
+    const tokens = Array.from(new Set((secureReports.selectedTokens || []).filter(Boolean)));
+
+    if (!tokens.length) {
+      window.alert("Select at least one secure report first.");
+      return;
+    }
+
+    if (!dryRun && reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
+      window.alert("Type DELETE_REPORT_ASSETS before deleting selected test data.");
+      return;
+    }
+
+    if (!dryRun) {
+      const actionName =
+        reportAssetCleanup.mode === "hard"
+          ? "Delete Selected Test Data"
+          : reportAssetCleanup.mode === "assets_only"
+            ? "Remove Files From Selected"
+            : "Archive Selected Reports";
+
+      const contactModeNote =
+        reportAssetCleanup.leadMode === "delete_no_memory"
+          ? " No-memory contact delete will only run for contacts with no outreach history."
+          : reportAssetCleanup.leadMode === "delete"
+            ? " A tiny safety memory will be kept when needed."
+            : "";
+
+      if (!window.confirm(`${actionName} will process ${tokens.length} selected report(s).${contactModeNote} Continue?`)) return;
+    }
+
+    setSecureReports((prev) => ({
+      ...prev,
+      bulkLoading: true,
+      bulkError: "",
+      bulkStatus: dryRun ? "Previewing selected reports..." : "Running selected cleanup action...",
+      bulkRows: [],
+      bulkFailedCount: 0,
+      bulkCompletedCount: 0,
+    }));
+
+    try {
+      const response = await fetch("/api/trackflow/cleanup/reports/bulk", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({
+          tokens,
+          mode: reportAssetCleanup.mode,
+          leadMode: reportAssetCleanup.leadMode,
+          sheetMode: reportAssetCleanup.sheetMode,
+          dryRun,
+          confirm: dryRun ? undefined : reportAssetCleanup.mode === "hard" ? "DELETE_REPORT_ASSETS" : "CLEANUP_REPORT_ASSETS",
+        }),
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok && response.status !== 207) throw new Error(data.error || data.message || "Bulk report cleanup failed.");
+      if (!data.success && response.status !== 207) throw new Error(data.error || data.message || "Bulk report cleanup failed.");
+
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      const failedCount = Number(data.failedCount || 0);
+      const completedCount = Number(data.completedCount || 0);
+
+      setSecureReports((prev) => ({
+        ...prev,
+        bulkLoading: false,
+        bulkError: failedCount ? `${failedCount} selected report(s) need review.` : "",
+        bulkStatus: data.message || (dryRun ? "Selected cleanup preview ready." : "Selected cleanup completed."),
+        bulkRows: rows,
+        bulkFailedCount: failedCount,
+        bulkCompletedCount: completedCount,
+      }));
+
+      if (!dryRun) {
+        await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
+        await loadSecureReports(true);
+        await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
+      }
+    } catch (error: any) {
+      console.error("Bulk report cleanup error:", error);
+      setSecureReports((prev) => ({
+        ...prev,
+        bulkLoading: false,
+        bulkError: error?.message || "Bulk report cleanup failed.",
+        bulkStatus: "",
+      }));
+    }
   };
 
   const buildReportCleanupQuery = () => {
@@ -2550,6 +2674,8 @@ export default function DashboardPage() {
               loadSecureReports={loadSecureReports}
               selectSecureReportForCleanup={selectSecureReportForCleanup}
               viewSecureReportLead={viewSecureReportLead}
+              toggleSecureReportSelection={toggleSecureReportSelection}
+              runBulkReportCleanup={runBulkReportCleanup}
             />
           )}
           {activeTab === "automation" && renderFollowups()}
