@@ -1,42 +1,39 @@
-# Replace and Test — v18.91 Resilient Delete Flow
+# TrackFlow Pro v18.92 — Cleanup Contact Badge Stage 14F-A
 
-Replace these files in your Next.js project:
+Replace these files in your project:
 
 ```text
 app/api/trackflow/[...action]/route.ts
 lib/trackflow-cleanup/report-cleanup.ts
-app/dashboard/.../page.tsx
-app/dashboard/.../CleanupPanel.tsx
-app/dashboard/.../types.ts
+page.tsx
+CleanupPanel.tsx
+types.ts
 PROJECT_CONTEXT_README.md
 ```
 
-## Test order
-
-1. Run:
+## Test
 
 ```bash
 npm run build
 npm run dev
 ```
 
-2. Open Dashboard → Cleanup tab.
-3. Click Refresh Reports.
-4. Select a test secure report.
-5. Click Preview first.
-6. Run Archive Report on one test record.
-7. Then test Delete Test Data on a fake/test record only.
-
-## Expected behavior
-
-If a file was already deleted manually, cleanup should not stop:
+Then test:
 
 ```text
-PDF missing        → already removed / skipped safely
-Preview missing    → already removed / skipped safely
-Supabase not set   → skipped safely
-Sheet row missing  → skipped safely
-Cleanup job issue  → logged, but cleanup response still returns
+Dashboard → Cleanup tab
+Refresh Reports
+Check the new Contact badge on each secure report
+Click View in Leads for a contacted/email row
+Select a test report
+Preview
+Archive Report or Delete Test Data only after preview is correct
 ```
 
-If “Delete test contact, no memory” is used on a contacted lead, it should show a clear needs-review message instead of a 500 error.
+Expected behavior:
+
+```text
+Cleanup tab shows a simple contact badge: Not contacted / Email sent / Email opened / Email clicked / Replied / LinkedIn sent.
+Detailed open/click/reply history remains in the Leads tab.
+View in Leads switches to the Leads tab and fills the search box with the linked contact/report value.
+```

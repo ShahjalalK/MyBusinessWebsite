@@ -54,6 +54,7 @@ type CleanupPanelProps = {
   setSecureReports: (value: SecureReportListState | ((prev: SecureReportListState) => SecureReportListState)) => void;
   loadSecureReports: (force?: boolean) => Promise<void>;
   selectSecureReportForCleanup: (report: SecureReportRow) => void;
+  viewSecureReportLead: (report: SecureReportRow) => void;
 };
 
 const CLEANUP_BUCKETS: CleanupBucketOption[] = [
@@ -228,6 +229,31 @@ function secureReportStatusTone(report: SecureReportRow): string {
   return "bg-violet-50 text-violet-700 border-violet-100";
 }
 
+function secureReportContactLabel(report: SecureReportRow): string {
+  return report.contactStatusLabel || (report.contacted ? "Contacted" : "Not contacted");
+}
+
+function secureReportContactTone(report: SecureReportRow): string {
+  const status = String(report.contactStatus || "").toLowerCase();
+  if (["email_clicked", "replied"].includes(status)) return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (status === "email_opened") return "bg-blue-50 text-blue-700 border-blue-100";
+  if (["email_sent", "linkedin_sent", "contacted"].includes(status)) return "bg-indigo-50 text-indigo-700 border-indigo-100";
+  if (["bounced", "unsubscribed", "not_interested"].includes(status)) return "bg-amber-50 text-amber-700 border-amber-100";
+  if (report.leadId && report.linkedLeadFound === false) return "bg-red-50 text-red-700 border-red-100";
+  return "bg-gray-50 text-gray-500 border-gray-100";
+}
+
+function secureReportContactNote(report: SecureReportRow): string {
+  if (report.leadId && report.linkedLeadFound === false) return "Lead not found";
+  if (report.sentAt) return `Sent ${formatDate(report.sentAt)}`;
+  if (report.lastEngagedAt) return `Engaged ${formatDate(report.lastEngagedAt)}`;
+  if (Number(report.openCount || 0) || Number(report.clickCount || 0)) {
+    return `${Number(report.openCount || 0)} open · ${Number(report.clickCount || 0)} click`;
+  }
+  if (report.contactReason) return String(report.contactReason).replace(/_/g, " ");
+  return report.contacted ? "Outreach history found" : "Safe as test/no outreach";
+}
+
 function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReportFilter): boolean {
   if (filter === "all") return true;
   if (filter === "active") return !isSecureReportCleaned(report) && !isSecureReportExpired(report);
@@ -254,6 +280,8 @@ function secureReportMatchesSearch(report: SecureReportRow, search: string): boo
     report.reportUrl,
     report.source,
     report.cleanupStatus,
+    report.contactStatus,
+    report.contactStatusLabel,
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query));
@@ -307,6 +335,7 @@ export default function CleanupPanel({
   setSecureReports,
   loadSecureReports,
   selectSecureReportForCleanup,
+  viewSecureReportLead,
 }: CleanupPanelProps) {
   const selectedCount = selectedCleanupIds.length;
   const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
@@ -395,7 +424,7 @@ export default function CleanupPanel({
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saved secure reports</p>
-              <p className="text-sm font-bold text-gray-600 mt-1">Select a report from Firestore. The URL/token field below will fill automatically.</p>
+              <p className="text-sm font-bold text-gray-600 mt-1">Select a report from Firestore. Contact badges help you avoid deleting outreach history by mistake.</p>
             </div>
             <button
               type="button"
@@ -448,7 +477,7 @@ export default function CleanupPanel({
                 return (
                   <div
                     key={report.token}
-                    className={`rounded-2xl border p-4 bg-white grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr_0.8fr_auto] gap-3 items-center ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"}`}
+                    className={`rounded-2xl border p-4 bg-white grid grid-cols-1 xl:grid-cols-[1.35fr_0.75fr_0.75fr_0.75fr_auto] gap-3 items-center ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"}`}
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -462,6 +491,13 @@ export default function CleanupPanel({
                       </div>
                       <p className="text-[11px] font-bold text-gray-400 truncate mt-1">{report.domain || report.domainSlug || report.token}</p>
                       {report.email && <p className="text-[10px] font-bold text-gray-400 truncate mt-1">{report.email}</p>}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</p>
+                      <span className={`inline-flex mt-1 px-2 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportContactTone(report)}`}>
+                        {secureReportContactLabel(report)}
+                      </span>
+                      <p className="text-[10px] font-bold text-gray-400 mt-1 truncate">{secureReportContactNote(report)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</p>
@@ -485,6 +521,15 @@ export default function CleanupPanel({
                         >
                           Open <ExternalLink size={11} />
                         </a>
+                      )}
+                      {(report.leadId || report.email) && (
+                        <button
+                          type="button"
+                          onClick={() => viewSecureReportLead(report)}
+                          className="px-3 py-2 rounded-xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase"
+                        >
+                          View in Leads
+                        </button>
                       )}
                       <button
                         type="button"

@@ -1271,6 +1271,23 @@ export default function DashboardPage() {
     }));
   };
 
+  const viewSecureReportLead = (report: SecureReportRow) => {
+    const searchValue = String(report.email || report.leadId || report.domain || report.companyName || "").trim();
+    if (searchValue) setSearchTerm(searchValue);
+    setActiveService("All");
+    setActiveStep("All");
+    setSelectedMonth("All");
+    setLeadStatusFilter("All");
+    setLeadView("all" as LeadViewFilter);
+
+    if (report.leadId) {
+      const foundLead = leads.find((lead) => lead.id === report.leadId);
+      if (foundLead) setSelectedLead(foundLead);
+    }
+
+    setActiveTab("leads");
+  };
+
   const buildReportCleanupQuery = () => {
     const input = reportAssetCleanup.input.trim();
     const params = new URLSearchParams({
@@ -2532,6 +2549,7 @@ export default function DashboardPage() {
               setSecureReports={setSecureReports}
               loadSecureReports={loadSecureReports}
               selectSecureReportForCleanup={selectSecureReportForCleanup}
+              viewSecureReportLead={viewSecureReportLead}
             />
           )}
           {activeTab === "automation" && renderFollowups()}

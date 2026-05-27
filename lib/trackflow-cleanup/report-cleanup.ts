@@ -1107,12 +1107,131 @@ function normalizeReportChannel(data: AnyRecord): "email" | "linkedin" | "manual
   return "unknown";
 }
 
+function normalizeContactStatusLabel(status: string): string {
+  if (status === "replied") return "Replied";
+  if (status === "not_interested") return "Not interested";
+  if (status === "unsubscribed") return "Unsubscribed";
+  if (status === "bounced") return "Bounced";
+  if (status === "email_clicked") return "Email clicked";
+  if (status === "email_opened") return "Email opened";
+  if (status === "email_sent") return "Email sent";
+  if (status === "linkedin_sent") return "LinkedIn sent";
+  if (status === "contacted") return "Contacted";
+  if (status === "not_contacted") return "Not contacted";
+  return "Unknown";
+}
+
+function buildContactSummaryFromRecord(record: AnyRecord, channel: "email" | "linkedin" | "manual" | "unknown"): AnyRecord {
+  const statusText = firstCleanString(record.status, record.leadStatus, record.lead_status, record.replyStatus, record.reply_status).toLowerCase();
+  const sourceText = firstCleanString(record.source, record.outreachSource, record.outreach_source, record.channel, record.outreachChannel, record.outreach_channel).toLowerCase();
+  const isLinkedIn = channel === "linkedin" || sourceText.includes("linkedin");
+  const isEmail = channel === "email" || sourceText.includes("email") || sourceText.includes("brevo") || sourceText.includes("cold");
+
+  const openCount = numericLeadValue(record.open_count || record.openCount || record["Open Count"]);
+  const clickCount = numericLeadValue(record.click_count || record.clickCount || record["Click Count"]);
+  const followUpCount = numericLeadValue(record.follow_up_count || record.followUpCount);
+  const sentAt = toIso(record.sentAt || record.sent_at || record.emailSentAt || record.email_sent_at || record.lastSentAt || record.last_sent_at);
+  const lastEngagedAt = toIso(
+    record.lastEngagedAt ||
+      record.last_engaged_at ||
+      record.lastOpenedAt ||
+      record.last_opened_at ||
+      record.lastClickedAt ||
+      record.last_clicked_at,
+  );
+  const lastOpenedAt = toIso(record.lastOpenedAt || record.last_opened_at);
+  const lastClickedAt = toIso(record.lastClickedAt || record.last_clicked_at);
+  const leadContactHistory = detectLeadContactHistory(record);
+
+  let contactStatus = "not_contacted";
+  let contactReason = leadContactHistory.reason || "";
+
+  if (["replied", "interested"].includes(statusText)) {
+    contactStatus = "replied";
+    contactReason = contactReason || `status:${statusText}`;
+  } else if (statusText === "not_interested") {
+    contactStatus = "not_interested";
+    contactReason = contactReason || "status:not_interested";
+  } else if (statusText === "unsubscribed" || statusText === "spam") {
+    contactStatus = "unsubscribed";
+    contactReason = contactReason || `status:${statusText}`;
+  } else if (statusText === "bounced") {
+    contactStatus = "bounced";
+    contactReason = contactReason || "status:bounced";
+  } else if (clickCount > 0 || statusText === "clicked") {
+    contactStatus = "email_clicked";
+    contactReason = contactReason || "click_count";
+  } else if (openCount > 0 || statusText === "opened") {
+    contactStatus = "email_opened";
+    contactReason = contactReason || "open_count";
+  } else if (isLinkedIn && (leadContactHistory.contacted || sentAt || statusText === "sent")) {
+    contactStatus = "linkedin_sent";
+    contactReason = contactReason || "linkedin_outreach";
+  } else if (isEmail && (leadContactHistory.contacted || sentAt || statusText === "sent")) {
+    contactStatus = "email_sent";
+    contactReason = contactReason || "email_outreach";
+  } else if (leadContactHistory.contacted) {
+    contactStatus = "contacted";
+    contactReason = contactReason || "outreach_history";
+  }
+
+  return {
+    contacted: contactStatus !== "not_contacted",
+    contactStatus,
+    contactStatusLabel: normalizeContactStatusLabel(contactStatus),
+    contactReason,
+    openCount,
+    clickCount,
+    followUpCount,
+    sentAt,
+    lastEngagedAt,
+    lastOpenedAt,
+    lastClickedAt,
+  };
+}
+
+async function enrichSecureReportListRowWithLead(row: AnyRecord): Promise<AnyRecord> {
+  const leadId = cleanId(row.leadId);
+  if (!leadId) return row;
+
+  try {
+    const leadSnap = await adminDb.collection("outreach_leads").doc(leadId).get();
+    if (!leadSnap.exists) {
+      return {
+        ...row,
+        linkedLeadFound: false,
+      };
+    }
+
+    const lead = { ...asRecord(leadSnap.data()), id: leadSnap.id };
+    const leadSummary = buildContactSummaryFromRecord(lead, row.channel || "unknown");
+
+    return {
+      ...row,
+      ...leadSummary,
+      linkedLeadFound: true,
+      leadId: leadSnap.id,
+      email: row.email || firstCleanString(lead.emailLower, lead.email_lower, lead.email),
+      companyName: row.companyName || firstCleanString(lead.company_name, lead.companyName),
+      domain: row.domain || firstCleanString(lead.website, lead.websiteUrl, lead.website_url),
+    };
+  } catch (error) {
+    return {
+      ...row,
+      linkedLeadFound: false,
+      leadLookupError: safeError(error),
+    };
+  }
+}
+
 function buildSecureReportListRow(doc: any): AnyRecord {
   const data = asRecord(typeof doc.data === "function" ? doc.data() : {});
   const token = firstCleanString(data.token, data.reportToken, data.report_token, doc.id);
   const domain = firstCleanString(data.normalizedDomain, data.normalized_domain, data.domain, data.websiteUrl, data.website, data.website_url);
   const domainSlug = normalizeSlug(firstCleanString(data.domainSlug, data.domain_slug, domain, data.companyName, data.company_name, "website"));
   const reportUrl = buildPublicReportUrl(token, domainSlug, firstCleanString(data.reportUrl, data.report_url));
+  const channel = normalizeReportChannel(data);
+  const contactSummary = buildContactSummaryFromRecord(data, channel);
   const viewedCount = Number(data.reportViewCount || data.report_view_count || data.pageViewCount || data.viewCount || 0) || 0;
   const pdfDownloadCount = Number(data.pdfDownloadCount || data.pdf_download_count || data.downloadCount || 0) || 0;
   const ctaClickCount = Number(data.ctaClickCount || data.cta_click_count || data.clickCount || 0) || 0;
@@ -1136,7 +1255,8 @@ function buildSecureReportListRow(doc: any): AnyRecord {
     companyName: firstCleanString(data.companyName, data.company_name, data.businessName, data.business_name),
     email: firstCleanString(data.emailLower, data.email_lower, data.email, data.finalEmail, data.final_email),
     source: firstCleanString(data.source, data.audit_source, data.outreachSource, data.outreach_source),
-    channel: normalizeReportChannel(data),
+    channel,
+    ...contactSummary,
     createdAt: toIso(data.createdAt || data.created_at),
     updatedAt: toIso(data.updatedAt || data.updated_at),
     pdfExpiresAt: toIso(data.pdfExpiresAt || data.pdf_expires_at),
@@ -1176,6 +1296,8 @@ function secureReportMatchesListSearch(row: AnyRecord, search: string): boolean 
     row.reportUrl,
     row.source,
     row.cleanupStatus,
+    row.contactStatus,
+    row.contactStatusLabel,
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query));
@@ -1269,9 +1391,13 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
         .get();
     }
 
-    const rows = snap.docs
+    const baseRows = snap.docs
       .map((doc) => buildSecureReportListRow(doc))
-      .filter((row) => row.token)
+      .filter((row) => row.token);
+
+    const enrichedRows = await Promise.all(baseRows.map((row) => enrichSecureReportListRowWithLead(row)));
+
+    const rows = enrichedRows
       .filter((row) => secureReportMatchesListFilter(row, filter))
       .filter((row) => secureReportMatchesListSearch(row, search))
       .sort((a, b) => secureReportSortMs(b) - secureReportSortMs(a));

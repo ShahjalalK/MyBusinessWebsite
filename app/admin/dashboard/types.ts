@@ -310,6 +310,18 @@ export type ReportAssetCleanupState = {
 };
 
 export type SecureReportFilter = "all" | "active" | "expired" | "viewed" | "no_view" | "cleaned" | "test";
+export type SecureReportContactStatus =
+  | "not_contacted"
+  | "email_sent"
+  | "email_opened"
+  | "email_clicked"
+  | "linkedin_sent"
+  | "contacted"
+  | "replied"
+  | "not_interested"
+  | "bounced"
+  | "unsubscribed"
+  | "unknown";
 
 export type SecureReportRow = {
   token: string;
@@ -334,6 +346,19 @@ export type SecureReportRow = {
   viewedCount?: number;
   pdfDownloadCount?: number;
   ctaClickCount?: number;
+  contacted?: boolean;
+  contactStatus?: SecureReportContactStatus;
+  contactStatusLabel?: string;
+  contactReason?: string;
+  linkedLeadFound?: boolean;
+  leadLookupError?: string;
+  sentAt?: string;
+  lastEngagedAt?: string;
+  lastOpenedAt?: string;
+  lastClickedAt?: string;
+  openCount?: number;
+  clickCount?: number;
+  followUpCount?: number;
   [key: string]: any;
 };
 

@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.91-resilient-delete-flow-stage-14e
+Version: v18.92-cleanup-contact-badge-stage-14f-a
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -3090,3 +3090,46 @@ page.tsx
 CleanupPanel.tsx
 → contact/sheet labels are simplified for operator-friendly dashboard use
 ```
+
+### 3.31 Dashboard Cleanup Contact Badge Rule
+
+The cleanup dashboard should not duplicate the full Leads tab, but it must show enough contact status to prevent unsafe delete decisions.
+
+Required behavior:
+
+```text
+Cleanup tab secure report list
+→ shows a small contact badge for each secure report
+→ Not contacted means test/no outreach data is safe for no-memory cleanup
+→ Email sent/opened/clicked/replied means safety memory should be kept
+→ LinkedIn sent/manual contact should be visible without requiring the Leads tab
+→ detailed tracking history remains in the Leads tab
+→ View in Leads button opens the detailed lead view/filter
+```
+
+Important decisions:
+
+```text
+Cleanup tab = cleanup decision view
+Leads tab = detailed email/open/click/reply tracking view
+Do not show every tracking event in Cleanup tab.
+Do show enough warning before Archive/Delete Test Data.
+The secure reports list endpoint may enrich rows from linked outreach_leads when leadId is available.
+```
+
+Current stage-14F-A structure:
+
+```text
+lib/trackflow-cleanup/report-cleanup.ts
+→ secure reports list rows include contactStatus, contactStatusLabel, contactReason, sent/open/click summary, and linkedLeadFound
+
+page.tsx
+→ Cleanup tab can jump to Leads tab with a matching search value via View in Leads
+
+CleanupPanel.tsx
+→ secure report rows show Contact badge and View in Leads action
+
+types.ts
+→ SecureReportContactStatus and contact summary fields added to SecureReportRow
+```
+
