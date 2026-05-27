@@ -1,30 +1,43 @@
-# TrackFlow Pro v18.86 — Manual Report Cleanup Controls
+# TrackFlow Pro v18.87 — Cleanup UI Simplification Stage 14A
 
-## Replace these files
-
-Place these files in the email automation dashboard route folder where the current `page.tsx`, `CleanupPanel.tsx`, and `types.ts` live:
+Replace these files in the email automation dashboard folder:
 
 ```text
 page.tsx
 CleanupPanel.tsx
-types.ts
 PROJECT_CONTEXT_README.md
 ```
 
+`types.ts` is included as a safe reference copy. It is unchanged from your uploaded version.
+
 ## What changed
 
-- Added a **Report Asset Cleanup** section to the existing Cleanup tab.
-- Added manual preview/dry-run support for a report token or secure report URL.
-- Added confirmed soft/assets/hard cleanup controls.
-- Added per-service cleanup step results for B2, Blob, Supabase, Firestore, Google Sheet, and linked lead cleanup.
-- Existing lead cleanup candidate actions remain unchanged.
+- The Cleanup tab now uses simple operator-friendly labels:
+  - Preview
+  - Archive Report
+  - Remove Files Only
+  - Delete Test Data
+- Technical words such as B2, Blob, Supabase, Firestore, manifest, soft, hard, and assets_only are hidden from the main workflow.
+- Cleanup result rows are shown as human-readable items:
+  - PDF file
+  - Preview image
+  - Chat history
+  - Secure report
+  - Sheet row
+  - Linked lead
+- Technical cleanup details remain available under “Show technical details”.
+- Old lead cleanup is clearly separated from secure report cleanup.
 
-## Safety defaults
+## What did not change
 
-- Preview cleanup does not delete anything.
-- Soft cleanup is the default recommendation.
-- Hard cleanup requires typing `DELETE_REPORT_ASSETS` before the button unlocks.
-- The UI calls `/api/trackflow/cleanup/report`; it does not depend on local-only export routes.
+- Backend cleanup routes
+- API URLs
+- Firestore fields
+- Sheet fields
+- B2/Blob/Supabase cleanup logic
+- Cron cleanup behavior
+- Lead cleanup behavior
+- Dashboard stored state shape
 
 ## Test checklist
 
@@ -33,12 +46,16 @@ npm run build
 npm run dev
 ```
 
-Then test in the Cleanup tab:
+Then test:
 
-1. Paste a test secure report URL or report token.
-2. Click **Preview Cleanup**.
-3. Confirm the manifest shows the expected B2 PDF key, Blob targets, report token, lead, and Sheet row.
-4. Run **Soft Cleanup** on a fake/test report only.
-5. Check Firestore `cleanup_jobs` for the job log.
-6. Check the step table for any warning/error rows.
-7. Use **Hard Cleanup** only for fake/test data.
+```text
+1. Open Cleanup tab
+2. Paste a test secure report URL or token
+3. Click Preview
+4. Confirm the summary is easy to understand
+5. Run Archive Report only on test data first
+6. Use Delete Test Data only for fake/test reports
+7. Check Old Lead Cleanup buttons and filters
+```
+
+If a build error appears, send the exact terminal error.

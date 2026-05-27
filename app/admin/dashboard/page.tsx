@@ -1194,7 +1194,7 @@ export default function DashboardPage() {
   const previewReportAssetCleanup = async () => {
     const input = reportAssetCleanup.input.trim();
     if (!input) {
-      window.alert("Paste a report token or secure report URL first.");
+      window.alert("Paste a secure report URL or token first.");
       return;
     }
 
@@ -1202,7 +1202,7 @@ export default function DashboardPage() {
       ...prev,
       loading: true,
       error: "",
-      status: "Previewing cleanup plan...",
+      status: "Previewing what will happen...",
       dryRun: true,
       jobId: "",
       failedCount: 0,
@@ -1222,7 +1222,7 @@ export default function DashboardPage() {
         ...prev,
         loading: false,
         error: "",
-        status: `Preview ready. ${Array.isArray(data.steps) ? data.steps.length : 0} cleanup step(s) planned.`,
+        status: "Preview ready. Review the summary before running an action.",
         dryRun: true,
         lastPreviewAt: Date.now(),
         manifest: data.manifest || null,
@@ -1244,19 +1244,21 @@ export default function DashboardPage() {
   const runReportAssetCleanup = async () => {
     const input = reportAssetCleanup.input.trim();
     if (!input) {
-      window.alert("Paste a report token or secure report URL first.");
+      window.alert("Paste a secure report URL or token first.");
       return;
     }
 
     if (reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
-      window.alert("Type DELETE_REPORT_ASSETS before running hard cleanup.");
+      window.alert("Type DELETE_REPORT_ASSETS before deleting test data.");
       return;
     }
 
     const confirmMessage =
       reportAssetCleanup.mode === "hard"
-        ? "Hard cleanup will delete report records and selected linked data. Use this only for test data. Continue?"
-        : "Confirmed cleanup will delete/mark the report assets according to the selected modes. Continue?";
+        ? "Delete Test Data will remove report records and selected linked data. Use this only for fake/test records. Continue?"
+        : reportAssetCleanup.mode === "assets_only"
+          ? "Remove Files Only will remove the PDF, preview image, and chat history but keep saved records. Continue?"
+          : "Archive Report will remove report files, make the secure page inactive, and keep a small safety history. Continue?";
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -1264,7 +1266,7 @@ export default function DashboardPage() {
       ...prev,
       loading: true,
       error: "",
-      status: "Running confirmed report cleanup...",
+      status: "Running selected cleanup action...",
       dryRun: false,
       jobId: "",
       failedCount: 0,
@@ -1292,8 +1294,8 @@ export default function DashboardPage() {
       setReportAssetCleanup((prev) => ({
         ...prev,
         loading: false,
-        error: failedCount ? `${failedCount} cleanup step(s) need attention. Review the step table below.` : "",
-        status: failedCount ? "Cleanup completed with warnings/errors." : "Cleanup completed successfully.",
+        error: failedCount ? `${failedCount} item(s) need attention. Review the summary below.` : "",
+        status: failedCount ? "Cleanup finished, but a few items need review." : "Cleanup completed successfully.",
         dryRun: false,
         lastPreviewAt: Date.now(),
         manifest: data.manifest || prev.manifest,

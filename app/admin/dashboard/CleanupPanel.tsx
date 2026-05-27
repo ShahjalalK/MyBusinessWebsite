@@ -2,7 +2,6 @@
 
 import React, { type ReactNode } from "react";
 import {
-  AlertTriangle,
   CheckCircle2,
   Database,
   ExternalLink,
@@ -52,32 +51,43 @@ type CleanupPanelProps = {
 
 const CLEANUP_BUCKETS: CleanupBucketOption[] = [
   { id: "due", label: "Due Now", note: "Safe no-reply candidates ready for cleanup" },
-  { id: "cold", label: "Cold No Reply", note: "No open/click after 45+ days" },
-  { id: "warm", label: "Warm No Reply", note: "Open/click but no reply after 90+ days" },
-  { id: "replied", label: "1 Year Review", note: "Replied/interested leads for manual review" },
+  { id: "cold", label: "No Reply", note: "No open/click after the cleanup waiting period" },
+  { id: "warm", label: "Viewed, No Reply", note: "Opened/clicked but no reply after the review period" },
+  { id: "replied", label: "Needs Review", note: "Replied/interested leads for manual review" },
   { id: "protected", label: "Protected", note: "Suppression/do-not-contact candidates" },
   { id: "upcoming", label: "Upcoming", note: "Not due yet, but scheduled by policy" },
 ];
 
 const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
-  { id: "soft", label: "Soft Cleanup", note: "Delete assets and mark the report cleaned. Recommended for normal cleanup." },
-  { id: "assets_only", label: "Assets Only", note: "Delete PDF/image/chat assets but keep lead/report records marked as cleaned." },
-  { id: "hard", label: "Hard Delete", note: "Delete report records. Use only for test data or after careful review." },
+  {
+    id: "soft",
+    label: "Archive Report",
+    note: "Recommended. Removes report files, makes the secure page inactive, and keeps a small history record.",
+  },
+  {
+    id: "assets_only",
+    label: "Remove Files Only",
+    note: "Removes the PDF, preview image, and chat history, but keeps the report and lead records.",
+  },
+  {
+    id: "hard",
+    label: "Delete Test Data",
+    note: "Deletes report records too. Use only for fake/test data or a carefully reviewed delete request.",
+  },
 ];
 
 const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string }> = [
-  { id: "none", label: "Do not touch lead" },
-  { id: "archive", label: "Archive lead" },
-  { id: "trash", label: "Move lead to trash" },
-  { id: "delete", label: "Delete lead + keep memory" },
+  { id: "none", label: "Keep lead unchanged" },
+  { id: "archive", label: "Archive linked lead" },
+  { id: "trash", label: "Move linked lead to trash" },
+  { id: "delete", label: "Delete test lead, keep safety memory" },
 ];
 
 const REPORT_SHEET_MODES: Array<{ id: ReportAssetCleanupSheetMode; label: string }> = [
   { id: "mark", label: "Mark Sheet cleaned" },
   { id: "clear", label: "Clear report fields" },
-  { id: "skip", label: "Skip Sheet" },
+  { id: "skip", label: "Do not update Sheet" },
 ];
-
 
 function formatSourceLabel(sourceKind?: string, source?: string) {
   if (sourceKind === "sheet") return "Sheet Lead";
@@ -102,6 +112,66 @@ function formatCleanupTarget(step: ReportCleanupStep): string {
   if (targets.length) return `${targets.length} target(s)`;
   if (ids.length) return `${ids.length} index id(s)`;
   return "—";
+}
+
+function reportStepLabel(step: ReportCleanupStep): string {
+  const service = String(step.service || "").toLowerCase();
+  const action = String(step.action || "").toLowerCase();
+
+  if (service.includes("backblaze") || action.includes("pdf")) return "PDF file";
+  if (service.includes("blob") || action.includes("preview")) return "Preview image";
+  if (service.includes("supabase") || action.includes("chat")) return "Chat history";
+  if (service.includes("google_sheet")) return "Sheet row";
+  if (action.includes("domain")) return "Report lookup";
+  if (action.includes("lead")) return "Linked lead";
+  if (action.includes("report")) return "Secure report";
+  if (service.includes("firestore")) return "Saved record";
+
+  return step.service ? step.service.replace(/_/g, " ") : "Cleanup step";
+}
+
+function reportStepActionLabel(step: ReportCleanupStep): string {
+  const action = String(step.action || "").toLowerCase();
+
+  if (action.includes("delete_pdf")) return "Remove file";
+  if (action.includes("delete_preview")) return "Remove image";
+  if (action.includes("delete_report_chat")) return "Remove chat";
+  if (action.includes("delete_report_document")) return "Delete record";
+  if (action.includes("mark_report_cleaned")) return "Archive report";
+  if (action.includes("cleanup_domain") || action.includes("delete_domain")) return "Update lookup";
+  if (action.includes("clear_report_fields")) return "Clear Sheet fields";
+  if (action.includes("mark_cleanup")) return "Mark cleaned";
+  if (action.includes("archive_lead")) return "Archive lead";
+  if (action.includes("trash_lead")) return "Move to trash";
+  if (action.includes("delete_lead")) return "Delete lead";
+
+  return step.action ? step.action.replace(/_/g, " ") : "Cleanup";
+}
+
+function reportStepStatusLabel(status: ReportCleanupStep["status"]): string {
+  if (status === "planned") return "Will update";
+  if (status === "ok") return "Done";
+  if (status === "warning") return "Skipped";
+  if (status === "error") return "Needs review";
+  return "Not needed";
+}
+
+function reportStepMessage(step: ReportCleanupStep): string {
+  if (step.error) return step.error;
+  if (step.message) return step.message;
+
+  if (step.status === "planned") return "This will run after you confirm.";
+  if (step.status === "ok") return "Completed.";
+  if (step.status === "skipped") return "Nothing needed for this item.";
+  if (step.status === "warning") return "Skipped safely. Check details if needed.";
+  if (step.status === "error") return "This item needs attention.";
+  return "—";
+}
+
+function reportModeActionLabel(mode: ReportAssetCleanupMode): string {
+  if (mode === "assets_only") return "Remove Files Only";
+  if (mode === "hard") return "Delete Test Data";
+  return "Archive Report";
 }
 
 function StatCard({
@@ -161,6 +231,11 @@ export default function CleanupPanel({
   const hardConfirmReady = reportAssetCleanup.mode !== "hard" || reportAssetCleanup.confirmText.trim().toUpperCase() === "DELETE_REPORT_ASSETS";
   const reportCleanupCanRun = !reportCleanupDisabled && hardConfirmReady;
   const manifest = reportAssetCleanup.manifest;
+  const activeReportMode = REPORT_CLEANUP_MODES.find((mode) => mode.id === reportAssetCleanup.mode) || REPORT_CLEANUP_MODES[0];
+  const actionLabel = reportModeActionLabel(reportAssetCleanup.mode);
+  const needsAttentionCount = reportAssetCleanup.steps.filter((step) => step.status === "warning" || step.status === "error").length;
+  const doneCount = reportAssetCleanup.steps.filter((step) => step.status === "ok").length;
+  const plannedCount = reportAssetCleanup.steps.filter((step) => step.status === "planned").length;
 
   const handleBucketSelect = (bucket: CleanupBucket) => {
     setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket }));
@@ -172,11 +247,11 @@ export default function CleanupPanel({
       <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-center">
         <div>
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
-            <ShieldCheck size={14} /> Lead Cleanup Manager
+            <ShieldCheck size={14} /> Cleanup Center
           </p>
-          <h1 className="text-3xl font-black tracking-tighter text-gray-900">Full Delete + Footprint Memory</h1>
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">
-            Manual cleanup button. Full lead data can be removed from Firebase + Sheet while a small contact_memory footprint remains.
+          <h1 className="text-3xl font-black tracking-tighter text-gray-900">Clean old reports and outreach leads</h1>
+          <p className="text-gray-500 text-sm font-semibold mt-2 max-w-3xl">
+            Manage secure report files, expired audit links, and old no-reply leads from one place. Start with preview, then choose the safe action.
           </p>
         </div>
 
@@ -187,7 +262,7 @@ export default function CleanupPanel({
             disabled={leadCleanup.loading || leadCleanup.actionLoading}
             className="px-4 py-3 rounded-2xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2"
           >
-            <RefreshCw size={14} className={leadCleanup.loading || leadCleanup.actionLoading ? "animate-spin" : ""} /> Manual Check
+            <RefreshCw size={14} className={leadCleanup.loading || leadCleanup.actionLoading ? "animate-spin" : ""} /> Check Leads
           </button>
           <button
             type="button"
@@ -201,45 +276,44 @@ export default function CleanupPanel({
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Candidates" value={leadCleanup.rows.length} icon={<Database size={22} />} />
-        <StatCard label="Eligible" value={eligibleCount} icon={<CheckCircle2 size={22} />} tone="green" />
+        <StatCard label="Lead rows" value={leadCleanup.rows.length} icon={<Database size={22} />} />
+        <StatCard label="Ready" value={eligibleCount} icon={<CheckCircle2 size={22} />} tone="green" />
         <StatCard label="Selected" value={selectedCount} icon={<MousePointer2 size={22} />} tone="orange" />
-        <StatCard label="Sheet Linked" value={sheetLinkedCount} icon={<FileText size={22} />} tone="blue" />
+        <StatCard label="Sheet linked" value={sheetLinkedCount} icon={<FileText size={22} />} tone="blue" />
       </div>
-
 
       <div className="bg-white border border-gray-100 rounded-[35px] p-5 shadow-sm space-y-5">
         <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-black text-violet-600 uppercase tracking-widest flex items-center gap-2">
-              <ShieldCheck size={14} /> Report Asset Cleanup
+              <ShieldCheck size={14} /> Secure Report Cleanup
             </p>
-            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Secure Report / PDF / Preview Cleanup</h2>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1 max-w-3xl">
-              Paste a secure report URL or report token. Preview first, then run a confirmed cleanup from the deployed TrackFlow API.
+            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Clean a report link or PDF</h2>
+            <p className="text-sm text-gray-500 font-semibold mt-2 max-w-3xl">
+              Paste a secure report URL or token. Preview shows exactly what will happen before any file or record changes.
             </p>
           </div>
-          <div className="rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-2">
-            <AlertTriangle size={14} /> Dry-run first
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
+            <CheckCircle2 size={14} /> Preview first
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.75fr_0.75fr_0.75fr] gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr] gap-3">
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Report token or secure page URL</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Secure report URL or token</label>
             <input
               type="text"
               value={reportAssetCleanup.input}
               onChange={(event) =>
                 setReportAssetCleanup((prev) => ({ ...prev, input: event.target.value, error: "", status: "" }))
               }
-              placeholder="https://trackflowpro.com/tracking-review/domain/token or token"
+              placeholder="Paste secure report URL or token"
               className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-sm font-bold text-gray-800 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Cleanup mode</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">What do you want to do?</label>
             <select
               value={reportAssetCleanup.mode}
               onChange={(event) =>
@@ -262,7 +336,7 @@ export default function CleanupPanel({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Lead action</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Linked lead</label>
             <select
               value={reportAssetCleanup.leadMode}
               onChange={(event) =>
@@ -279,7 +353,7 @@ export default function CleanupPanel({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sheet action</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sheet row</label>
             <select
               value={reportAssetCleanup.sheetMode}
               onChange={(event) =>
@@ -296,14 +370,14 @@ export default function CleanupPanel({
           </div>
         </div>
 
-        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 text-[11px] font-bold text-slate-600 leading-relaxed">
-          {REPORT_CLEANUP_MODES.find((mode) => mode.id === reportAssetCleanup.mode)?.note || "Preview first, then run confirmed cleanup."}
-          {reportAssetCleanup.mode === "hard" ? " Hard cleanup requires typing DELETE_REPORT_ASSETS before the action button unlocks." : " Soft cleanup is recommended for normal report expiry."}
+        <div className={`rounded-2xl border p-4 text-[12px] font-bold leading-relaxed ${reportAssetCleanup.mode === "hard" ? "bg-red-50 border-red-100 text-red-700" : "bg-blue-50 border-blue-100 text-blue-700"}`}>
+          <span className="font-black">{activeReportMode.label}:</span> {activeReportMode.note}
+          {reportAssetCleanup.mode === "soft" && " This is the safest normal action for expired or unused report links."}
         </div>
 
         {reportAssetCleanup.mode === "hard" && (
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
-            <label className="block text-[10px] font-black text-red-600 uppercase tracking-widest">Hard cleanup confirmation</label>
+            <label className="block text-[10px] font-black text-red-600 uppercase tracking-widest">Delete test data confirmation</label>
             <input
               type="text"
               value={reportAssetCleanup.confirmText}
@@ -311,6 +385,9 @@ export default function CleanupPanel({
               placeholder="Type DELETE_REPORT_ASSETS"
               className="w-full px-4 py-3 rounded-2xl bg-white border border-red-100 text-sm font-black text-red-700 outline-none"
             />
+            <p className="text-[11px] font-bold text-red-500">
+              Use this only for fake/test reports or when you are fully sure the saved report record should be removed.
+            </p>
           </div>
         )}
 
@@ -321,27 +398,25 @@ export default function CleanupPanel({
             onClick={previewReportAssetCleanup}
             className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
           >
-            {reportAssetCleanup.loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Preview Cleanup
+            {reportAssetCleanup.loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Preview
           </button>
           <button
             type="button"
             disabled={!reportCleanupCanRun}
             onClick={runReportAssetCleanup}
-            className={`px-4 py-3 rounded-2xl text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2 ${
-              reportAssetCleanup.mode === "hard" ? "bg-red-600" : "bg-slate-950"
-            }`}
+            className={`px-4 py-3 rounded-2xl text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2 ${reportAssetCleanup.mode === "hard" ? "bg-red-600" : "bg-slate-950"}`}
           >
-            <Trash2 size={14} /> {reportAssetCleanup.mode === "hard" ? "Run Hard Cleanup" : "Run Confirmed Cleanup"}
+            <Trash2 size={14} /> {actionLabel}
           </button>
           {reportAssetCleanup.jobId && (
             <span className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">
-              Job: {reportAssetCleanup.jobId.slice(0, 12)}
+              Cleanup saved
             </span>
           )}
         </div>
 
         {(reportAssetCleanup.status || reportAssetCleanup.error) && (
-          <p className={`text-[10px] font-black uppercase tracking-widest ${reportAssetCleanup.error ? "text-red-600" : "text-gray-400"}`}>
+          <p className={`text-[11px] font-black uppercase tracking-widest ${reportAssetCleanup.error ? "text-red-600" : "text-gray-500"}`}>
             {reportAssetCleanup.error || reportAssetCleanup.status}
           </p>
         )}
@@ -349,18 +424,18 @@ export default function CleanupPanel({
         {manifest && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Report</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Secure report</p>
               <p className="text-sm font-black text-gray-900 mt-1">{manifest.reportFound ? "Found" : "Not found"}</p>
-              <p className="text-[10px] font-bold text-gray-400 mt-1 break-all">{manifest.reportToken || "No token"}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1 break-all">{manifest.normalizedDomain || manifest.domainSlug || manifest.reportToken || "No domain found"}</p>
             </div>
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">B2 PDF</p>
-              <p className="text-sm font-black text-gray-900 mt-1">{manifest.b2PdfKey ? "Key found" : "No key"}</p>
-              <p className="text-[10px] font-bold text-gray-400 mt-1 break-all">{manifest.b2PdfKey || "—"}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PDF file</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.b2PdfKey ? "Ready to remove" : "No PDF file found"}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1">{manifest.pdfExpiresAt ? `Expires: ${formatDate(manifest.pdfExpiresAt)}` : "No expiry date"}</p>
             </div>
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Blob images</p>
-              <p className="text-sm font-black text-gray-900 mt-1">{manifest.blobImageTargets?.length || 0} target(s)</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Preview image</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.blobImageTargets?.length || 0} item(s)</p>
               {manifest.reportUrl && normalizeOptionalUrl(manifest.reportUrl || "") && (
                 <a href={normalizeOptionalUrl(manifest.reportUrl || "") || "#"} target="_blank" rel="noreferrer" className="text-[10px] font-black text-blue-600 inline-flex items-center gap-1 mt-1">
                   Open report <ExternalLink size={11} />
@@ -368,8 +443,8 @@ export default function CleanupPanel({
               )}
             </div>
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead / Sheet</p>
-              <p className="text-sm font-black text-gray-900 mt-1">{manifest.leadFound ? "Lead found" : "No lead"}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Linked lead</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.leadFound ? "Found" : "No lead linked"}</p>
               <p className="text-[10px] font-bold text-gray-400 mt-1">Sheet row: {manifest.sheetRowNumber || "—"}</p>
             </div>
           </div>
@@ -377,35 +452,44 @@ export default function CleanupPanel({
 
         {reportAssetCleanup.steps.length > 0 && (
           <div className="border border-gray-100 rounded-[28px] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Service</th>
-                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Action</th>
-                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Target</th>
-                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Message</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
+            <div className="bg-gray-50 border-b border-gray-100 p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cleanup summary</p>
+                <p className="text-sm font-bold text-gray-700">
+                  {plannedCount > 0 ? `${plannedCount} item(s) ready after confirmation` : `${doneCount} item(s) completed`}
+                  {needsAttentionCount > 0 ? ` · ${needsAttentionCount} item(s) need review` : ""}
+                </p>
+              </div>
+              <details className="text-[10px] font-black text-gray-500 uppercase">
+                <summary className="cursor-pointer">Show technical details</summary>
+                <div className="mt-3 max-w-full overflow-x-auto rounded-2xl bg-white border border-gray-100 p-3 text-left normal-case font-mono text-[10px] text-gray-500">
                   {reportAssetCleanup.steps.map((step, index) => (
-                    <tr key={`${step.service}-${step.action}-${index}`}>
-                      <td className="p-4 text-xs font-black text-gray-900 uppercase">{step.service.replace(/_/g, " ")}</td>
-                      <td className="p-4 text-xs font-bold text-gray-600">{step.action.replace(/_/g, " ")}</td>
-                      <td className="p-4">
-                        <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase ${reportStepTone(step)}`}>{step.status}</span>
-                      </td>
-                      <td className="p-4 text-[10px] font-bold text-gray-400 max-w-[260px] truncate" title={formatCleanupTarget(step)}>
-                        {formatCleanupTarget(step)}
-                      </td>
-                      <td className="p-4 text-[11px] font-bold text-gray-500 max-w-[420px]">
-                        {step.error || step.message || "—"}
-                      </td>
-                    </tr>
+                    <div key={`${step.service}-${step.action}-technical-${index}`} className="py-1 border-b border-gray-50 last:border-0">
+                      {step.service} · {step.action} · {step.status} · {formatCleanupTarget(step)}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </details>
+            </div>
+
+            <div className="divide-y divide-gray-50">
+              {reportAssetCleanup.steps.map((step, index) => (
+                <div key={`${step.service}-${step.action}-${index}`} className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_0.7fr_0.7fr_1.6fr] gap-3 items-start">
+                  <div>
+                    <p className="text-xs font-black text-gray-900">{reportStepLabel(step)}</p>
+                    <p className="text-[10px] font-bold text-gray-400 mt-1">{reportStepActionLabel(step)}</p>
+                  </div>
+                  <div>
+                    <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase ${reportStepTone(step)}`}>
+                      {reportStepStatusLabel(step.status)}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold text-gray-400 truncate" title={formatCleanupTarget(step)}>
+                    {formatCleanupTarget(step)}
+                  </p>
+                  <p className="text-[11px] font-bold text-gray-500">{reportStepMessage(step)}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -413,38 +497,32 @@ export default function CleanupPanel({
 
       <div className="bg-white border border-gray-100 rounded-[30px] p-5 shadow-sm space-y-4">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2">
-            {CLEANUP_BUCKETS.map((bucket) => (
-              <button
-                key={bucket.id}
-                type="button"
-                onClick={() => handleBucketSelect(bucket.id)}
-                className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${
-                  activeBucket === bucket.id ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
-                }`}
-                title={bucket.note}
-              >
-                {bucket.label}
-              </button>
-            ))}
+          <div>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <Database size={14} /> Old Lead Cleanup
+            </p>
+            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Review old no-reply leads</h2>
+            <p className="text-sm text-gray-500 font-semibold mt-2">
+              Select leads that are safe to archive, skip, or protect. This is separate from secure report file cleanup above.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               disabled={isActionDisabled}
-              onClick={() => deleteSelectedCleanupWithMemory("delete")}
-              className="px-4 py-3 rounded-2xl bg-red-600 text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
+              onClick={() => deleteSelectedCleanupWithMemory("mark")}
+              className="px-4 py-3 rounded-2xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
             >
-              <Trash2 size={14} /> Delete Both + Memory
+              <Trash2 size={14} /> Archive Selected
             </button>
             <button
               type="button"
               disabled={isActionDisabled}
-              onClick={() => deleteSelectedCleanupWithMemory("mark")}
+              onClick={() => deleteSelectedCleanupWithMemory("delete")}
               className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
             >
-              Delete Firebase + Mark Sheet
+              Delete From Sheet Too
             </button>
             <button
               type="button"
@@ -465,8 +543,22 @@ export default function CleanupPanel({
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          {CLEANUP_BUCKETS.map((bucket) => (
+            <button
+              key={bucket.id}
+              type="button"
+              onClick={() => handleBucketSelect(bucket.id)}
+              className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${activeBucket === bucket.id ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"}`}
+              title={bucket.note}
+            >
+              {bucket.label}
+            </button>
+          ))}
+        </div>
+
         <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-          Rules: Cold no-reply leads are due after {leadCleanup.policy?.coldNoReplyDeleteDays || 45} days. Warm open/click no-reply leads are due after {leadCleanup.policy?.warmNoReplyDeleteDays || 90} days. Replied leads are review-only after {leadCleanup.policy?.repliedReviewDays || 365} days. Queued/processing leads are blocked from hard delete.
+          Recommended: archive old no-reply leads first. Use protect for important contacts or anyone who should not be cleaned automatically.
         </div>
 
         {(leadCleanup.status || leadCleanup.error) && (

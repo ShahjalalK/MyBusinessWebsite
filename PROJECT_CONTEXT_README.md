@@ -1,7 +1,7 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.86-dashboard-manual-report-cleanup-controls-stage-13
-Last updated: 2026-05-26
+Version: v18.87-dashboard-cleanup-ui-simplification-stage-14a
+Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
@@ -769,6 +769,40 @@ Hard cleanup request:
 ```
 
 Do not run hard cleanup on real client reports until dry-run output has been reviewed.
+
+### 3.27 Dashboard Cleanup UI Simplification Rule
+
+The cleanup backend can manage B2 PDFs, Vercel Blob preview images, Supabase chat history, Firestore report records, Google Sheet rows, and linked outreach leads, but the dashboard UI should present this in simple operator language.
+
+Current stage-14A structure:
+
+```text
+CleanupPanel.tsx
+→ simplified operator-facing cleanup UI labels, friendly report cleanup summary, human-readable step result cards, and technical details hidden behind a collapsible section
+
+page.tsx
+→ keeps existing cleanup endpoint calls, but uses clearer status/confirmation text for Preview, Archive Report, Remove Files Only, and Delete Test Data
+
+types.ts
+→ existing report cleanup state/types remain unchanged
+```
+
+Important decisions:
+
+```text
+Do not show technical terms like B2, Blob, Supabase, Firestore, manifest, soft, hard, or assets_only as the primary operator language.
+Use simple labels:
+- Preview
+- Archive Report
+- Remove Files Only
+- Delete Test Data
+
+Archive Report is the recommended default for expired or unused secure reports.
+Delete Test Data remains locked behind DELETE_REPORT_ASSETS and should be used only for fake/test records or carefully reviewed delete requests.
+Technical cleanup details remain available inside "Show technical details" for debugging, but the main UI should stay easy to understand.
+Do not change backend cleanup behavior, API URLs, Firestore fields, Sheet fields, or cron behavior as part of UI simplification.
+```
+
 
 ### 3.6 Secure Report Responsive UX Rule
 
@@ -2122,6 +2156,43 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+### v18.87 Dashboard Cleanup UI Simplification Stage 14A
+
+The cleanup dashboard was simplified so the operator does not need to understand storage/database internals before cleaning old test reports or no-reply leads.
+
+Changed files:
+
+```text
+page.tsx
+CleanupPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Backend cleanup behavior did not change.
+The UI now uses simple labels: Preview, Archive Report, Remove Files Only, and Delete Test Data.
+Technical labels such as soft/hard/assets_only, B2, Blob, Supabase, Firestore, and manifest are hidden from the main workflow.
+Cleanup result steps are shown as human-readable cards: PDF file, Preview image, Chat history, Secure report, Sheet row, Linked lead.
+Technical step details remain available under "Show technical details" for debugging.
+Old lead cleanup was renamed and simplified so it is clearly separate from secure report file cleanup.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+Open Cleanup tab
+Paste a test secure report URL/token
+Click Preview
+Confirm the summary is easy to understand
+Run Archive Report only on test data first
+Use Delete Test Data only with fake/test reports
+```
 
 
 ### v18.86 Dashboard Manual Report Cleanup Controls Stage 13
