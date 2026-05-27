@@ -1,0 +1,18 @@
+Replace these files in your project:
+
+app/api/export/blob-reports/route.ts
+lib/trackflow-api/report-normalizers.ts
+lib/trackflow-api/reports.ts
+app/components/LeadList.tsx
+app/components/LeadList/types.ts
+PROJECT_CONTEXT_README.md
+
+Then run:
+
+npm run build
+npm run dev
+
+Test:
+1. Create one search lead secure report. Confirm Firestore audit_reports/{token} has outreachChannel=email and leadSource=python_search.
+2. Create one LinkedIn/manual secure report. Confirm Firestore audit_reports/{token} has outreachChannel=linkedin and leadSource=linkedin_audit.
+3. Confirm no emailCopy/linkedinMessageCopy is saved in audit_reports.

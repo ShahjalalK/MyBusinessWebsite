@@ -1,10 +1,57 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.93-bulk-secure-report-cleanup-stage-14f-b
+Version: v18.94-outreach-channel-save-stage-14g
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
+
+## Latest Update — v18.94 Outreach Channel Save Stage 14G
+
+Stage 14G makes secure report registration save a small, explicit outreach workflow identity for each report so the dashboard does not have to guess whether a report belongs to email outreach or LinkedIn outreach.
+
+Changed files:
+
+```text
+app/api/export/blob-reports/route.ts
+lib/trackflow-api/report-normalizers.ts
+lib/trackflow-api/reports.ts
+app/components/LeadList.tsx
+app/components/LeadList/types.ts
+PROJECT_CONTEXT_README.md
+```
+
+Saved report fields:
+
+```text
+sourceType: search | linkedin | manual | unknown
+outreachChannel: email | linkedin | manual | unknown
+leadSource: python_search | linkedin_audit | manual_audit | unknown
+emailValid
+emailOutreachAllowed
+linkedinOutreachAllowed
+auditSource
+sourceContext
+linkedinProfileUrl
+linkedinCompanyUrl
+linkedinContactName
+```
+
+Routing rule:
+
+```text
+Search/Python report → Send Email workflow
+LinkedIn/manual report → LinkedIn Outreach workflow
+```
+
+Important decisions:
+
+```text
+Do not save full email copy or LinkedIn message copy in Firestore.
+Google Sheet remains the source for email copy and review status.
+Firestore only stores tiny workflow/channel flags needed to route reports safely.
+LinkedIn reports stay LinkedIn-first even if a valid email is later found, unless the operator manually moves the lead to email outreach.
+```
 
 
 ## Latest Update — v18.93 Bulk Secure Report Cleanup

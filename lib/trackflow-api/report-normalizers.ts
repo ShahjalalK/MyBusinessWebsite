@@ -124,6 +124,128 @@ export function firstCleanString(...values: any[]): string {
   return "";
 }
 
+
+type ReportSourceType = "search" | "linkedin" | "manual" | "unknown";
+type ReportOutreachChannel = "email" | "linkedin" | "manual" | "unknown";
+
+function cleanLowerString(...values: any[]): string {
+  return firstCleanString(...values).toLowerCase();
+}
+
+function normalizeWorkflowText(value: any, fallback = ""): string {
+  return String(value || fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function isValidEmailAddress(value: any): boolean {
+  const email = normalizeEmail(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function optionalBoolean(...values: any[]): boolean | null {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return value > 0;
+    const text = cleanLowerString(value);
+    if (!text) continue;
+    if (["1", "true", "yes", "y", "allowed", "allow", "enabled", "enable"].includes(text)) return true;
+    if (["0", "false", "no", "n", "blocked", "block", "disabled", "disable"].includes(text)) return false;
+  }
+  return null;
+}
+
+function normalizeReportWorkflow(body: AnyRecord, normalizedEmail: string): AnyRecord {
+  const rawSource = firstCleanString(body.source, body.audit_source, body.auditSource, body.source_context, body.sourceContext);
+  const auditSource = firstCleanString(body.auditSource, body.audit_source, body.sourceAuditType, body.source_audit_type, rawSource);
+  const sourceContext = firstCleanString(body.sourceContext, body.source_context, body.auditContextSource, body.audit_context_source, auditSource);
+  const sourceText = [
+    body.source,
+    body.sourceType,
+    body.source_type,
+    body.outreachChannel,
+    body.outreach_channel,
+    body.leadSource,
+    body.lead_source,
+    body.auditSource,
+    body.audit_source,
+    body.sourceContext,
+    body.source_context,
+  ]
+    .map((value) => cleanLowerString(value))
+    .filter(Boolean)
+    .join(" ");
+
+  const linkedinProfileUrl = sanitizeOptionalUrl(firstCleanString(body.linkedinProfileUrl, body.linkedin_profile_url, body.linkedinUrl, body.linkedin_url));
+  const linkedinCompanyUrl = sanitizeOptionalUrl(firstCleanString(body.linkedinCompanyUrl, body.linkedin_company_url, body.linkedinCompanyPageUrl, body.linkedin_company_page_url));
+  const linkedinContactName = firstCleanString(body.linkedinContactName, body.linkedin_contact_name, body.linkedinContact, body.linkedin_contact);
+  const hasLinkedInContext = Boolean(linkedinProfileUrl || linkedinCompanyUrl || linkedinContactName || sourceText.includes("linkedin"));
+
+  const explicitSourceType = normalizeWorkflowText(body.sourceType || body.source_type);
+  const sourceType: ReportSourceType =
+    explicitSourceType === "linkedin" || explicitSourceType === "search" || explicitSourceType === "manual" || explicitSourceType === "unknown"
+      ? (explicitSourceType as ReportSourceType)
+      : hasLinkedInContext
+        ? "linkedin"
+        : sourceText.includes("search") || sourceText.includes("lead_row") || sourceText.includes("selected_export") || sourceText.includes("python")
+          ? "search"
+          : sourceText.includes("manual")
+            ? "manual"
+            : "unknown";
+
+  const explicitChannel = normalizeWorkflowText(body.outreachChannel || body.outreach_channel);
+  const outreachChannel: ReportOutreachChannel =
+    explicitChannel === "email" || explicitChannel === "linkedin" || explicitChannel === "manual" || explicitChannel === "unknown"
+      ? (explicitChannel as ReportOutreachChannel)
+      : sourceType === "linkedin"
+        ? "linkedin"
+        : sourceType === "search"
+          ? "email"
+          : sourceType === "manual"
+            ? "manual"
+            : isValidEmailAddress(normalizedEmail)
+              ? "email"
+              : "unknown";
+
+  const explicitLeadSource = normalizeWorkflowText(body.leadSource || body.lead_source);
+  const leadSource = explicitLeadSource || (sourceType === "linkedin" ? "linkedin_audit" : sourceType === "search" ? "python_search" : sourceType === "manual" ? "manual_audit" : "unknown");
+
+  const emailValid = optionalBoolean(body.emailValid, body.email_valid, body.validEmail, body.valid_email) ?? isValidEmailAddress(normalizedEmail);
+  const emailOutreachAllowed =
+    optionalBoolean(body.emailOutreachAllowed, body.email_outreach_allowed, body.emailAllowed, body.email_allowed) ??
+    (outreachChannel === "email" && emailValid);
+  const linkedinOutreachAllowed =
+    optionalBoolean(body.linkedinOutreachAllowed, body.linkedin_outreach_allowed, body.linkedinAllowed, body.linkedin_allowed) ??
+    outreachChannel === "linkedin";
+
+  return {
+    sourceType,
+    source_type: sourceType,
+    outreachChannel,
+    outreach_channel: outreachChannel,
+    leadSource,
+    lead_source: leadSource,
+    emailValid,
+    email_valid: emailValid,
+    emailOutreachAllowed,
+    email_outreach_allowed: emailOutreachAllowed,
+    linkedinOutreachAllowed,
+    linkedin_outreach_allowed: linkedinOutreachAllowed,
+    auditSource,
+    audit_source: auditSource,
+    sourceContext,
+    source_context: sourceContext,
+    linkedinProfileUrl,
+    linkedin_profile_url: linkedinProfileUrl,
+    linkedinCompanyUrl,
+    linkedin_company_url: linkedinCompanyUrl,
+    linkedinContactName,
+    linkedin_contact_name: linkedinContactName,
+  };
+}
+
 export function normalizeStringArray(value: any, maxItems = 8): string[] {
   const rawItems = Array.isArray(value)
     ? value
@@ -749,6 +871,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   );
 
   const email = normalizeEmail(body.email || body.finalEmail || body.final_email || "");
+  const workflow = normalizeReportWorkflow(body, email);
   const leadId = firstCleanString(body.leadId, body.firestoreLeadId, body.firestore_lead_id);
   const sheetRowNumber = Number(body.sheetRowNumber || body.sheet_row_number || 0) || null;
   const pdfExpiresAt = getReportTimestamp(body.pdfExpiresAt || body.pdf_expires_at || body.expiresAt || body.expires_at, 45);
@@ -858,6 +981,28 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     leadId,
     sheetRowNumber,
     source: firstCleanString(body.source, "python_blob_export"),
+    sourceType: workflow.sourceType,
+    source_type: workflow.source_type,
+    outreachChannel: workflow.outreachChannel,
+    outreach_channel: workflow.outreach_channel,
+    leadSource: workflow.leadSource,
+    lead_source: workflow.lead_source,
+    emailValid: workflow.emailValid,
+    email_valid: workflow.email_valid,
+    emailOutreachAllowed: workflow.emailOutreachAllowed,
+    email_outreach_allowed: workflow.email_outreach_allowed,
+    linkedinOutreachAllowed: workflow.linkedinOutreachAllowed,
+    linkedin_outreach_allowed: workflow.linkedin_outreach_allowed,
+    auditSource: workflow.auditSource,
+    audit_source: workflow.audit_source,
+    sourceContext: workflow.sourceContext,
+    source_context: workflow.source_context,
+    linkedinProfileUrl: workflow.linkedinProfileUrl,
+    linkedin_profile_url: workflow.linkedin_profile_url,
+    linkedinCompanyUrl: workflow.linkedinCompanyUrl,
+    linkedin_company_url: workflow.linkedin_company_url,
+    linkedinContactName: workflow.linkedinContactName,
+    linkedin_contact_name: workflow.linkedin_contact_name,
     auditId: firstCleanString(body.auditId, body.audit_id, body.sourceAuditId, body.source_audit_id),
     storageProvider: firstCleanString(
       body.storageProvider,
