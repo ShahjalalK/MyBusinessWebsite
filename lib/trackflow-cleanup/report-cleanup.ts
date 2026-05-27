@@ -55,6 +55,10 @@ function clean(value: unknown, fallback = ""): string {
   return text || fallback;
 }
 
+function asRecord(value: unknown): AnyRecord {
+  return value && typeof value === "object" ? (value as AnyRecord) : {};
+}
+
 function cleanId(value: unknown, maxLength = 96): string {
   return clean(value)
     .replace(/[^a-zA-Z0-9_-]/g, "")
@@ -285,7 +289,7 @@ function getReportB2Key(report: AnyRecord, lead: AnyRecord): string {
 async function getLeadByIdOrReportToken(leadId: string, reportToken: string): Promise<{ id: string; data: AnyRecord } | null> {
   if (leadId) {
     const snap = await adminDb.collection("outreach_leads").doc(leadId).get();
-    if (snap.exists) return { id: snap.id, data: snap.data() || {} };
+    if (snap.exists) return { id: snap.id, data: asRecord(snap.data()) };
   }
 
   if (!reportToken) return null;
@@ -295,7 +299,7 @@ async function getLeadByIdOrReportToken(leadId: string, reportToken: string): Pr
     const snap = await adminDb.collection("outreach_leads").where(field, "==", reportToken).limit(1).get();
     if (!snap.empty) {
       const doc = snap.docs[0];
-      return { id: doc.id, data: doc.data() || {} };
+      return { id: doc.id, data: asRecord(doc.data()) };
     }
   }
 
@@ -329,7 +333,8 @@ async function collectDomainIndexIds(report: AnyRecord, token: string): Promise<
 
 async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupManifest; report: AnyRecord; lead: AnyRecord }> {
   const reportSnap = await adminDb.collection("audit_reports").doc(token).get();
-  const report = reportSnap.exists ? (reportSnap.data() || {}) : {};
+  const reportFound = Boolean(reportSnap.exists);
+  const report: AnyRecord = reportFound ? asRecord(reportSnap.data()) : {};
 
   const leadId = firstCleanString(
     report.leadId,
@@ -341,26 +346,28 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
   );
 
   const leadResult = await getLeadByIdOrReportToken(leadId, token);
-  const lead = leadResult ? { id: leadResult.id, ...leadResult.data } : {};
+  const leadFound = Boolean(leadResult);
+  const lead: AnyRecord = leadResult ? { ...asRecord(leadResult.data), id: leadResult.id } : {};
 
   const domainSlug = normalizeSlug(report.domainSlug || report.domain_slug || report.domain || report.websiteUrl || lead.website || "website");
   const normalizedDomain = normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website, lead.website);
   const domainIndexIds = await collectDomainIndexIds(report, token);
+  const sheetRowNumber = Number(report.sheetRowNumber || report.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
 
   const manifest: CleanupManifest = {
     reportToken: token,
-    reportFound: reportSnap.exists,
+    reportFound,
     domainSlug,
     normalizedDomain,
-    reportUrl: firstCleanString(report.reportUrl, report.report_url, lead.reportUrl),
+    reportUrl: firstCleanString(report.reportUrl, report.report_url, lead.reportUrl, lead.report_url),
     leadId: firstCleanString(lead.id, leadId),
-    leadFound: Boolean(leadResult),
-    emailLower: cleanEmail(lead.emailLower || lead.email || report.emailLower || report.email),
-    sheetRowNumber: Number(report.sheetRowNumber || lead.sheetRowNumber || 0) || null,
+    leadFound,
+    emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || report.emailLower || report.email_lower || report.email),
+    sheetRowNumber,
     b2PdfKey: getReportB2Key(report, lead),
     blobImageTargets: collectBlobImageTargets(report, lead),
     domainIndexIds,
-    pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt),
+    pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
     cleanupStatus: firstCleanString(report.cleanupStatus, report.cleanup_status),
   };
 
