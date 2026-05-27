@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.83-dashboard-leads-panel-split-stage-10
+Version: v18.85-deployed-cron-cleanup-stage-12
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -686,6 +686,89 @@ Keep bulk action logic, destructive lead actions, selected lead drawer, and Zust
 LeadsPanel should live beside page.tsx and be imported with ./LeadsPanel.
 The lead drawer can be split later as a separate safer step after LeadsPanel builds and works locally.
 ```
+
+
+
+### 3.26 Report Cleanup Foundation Rule
+
+The report cleanup system must be staged and safe because TrackFlow stores related data across several services.
+
+Current stage-11 structure:
+
+```text
+lib/trackflow-cleanup/report-cleanup.ts
+→ report cleanup manifest builder, dry-run preview, manual confirmed cleanup, cleanup_jobs logging, B2/Blob/Supabase/Firestore/Sheet/lead cleanup orchestration
+
+lib/trackflow-storage/b2.ts
+→ existing Backblaze B2 read/upload helpers plus deletePdfFromB2/deleteB2Object
+
+lib/supabase-admin.ts
+→ optional report-chat logging plus deleteReportChatHistory for report cleanup
+
+app/api/trackflow/[...action]/route.ts
+→ dispatches:
+   GET  /api/trackflow/cleanup/report?token=...
+   POST /api/trackflow/cleanup/report
+   GET  /api/trackflow/cron/cleanup-expired-reports
+```
+
+Important safety decisions:
+
+```text
+Dry run is the default. POST cleanup does not delete anything unless dryRun:false is sent.
+Real cleanup requires an explicit confirmation string:
+- soft/assets cleanup: CLEANUP_REPORT_ASSETS
+- hard cleanup: DELETE_REPORT_ASSETS
+
+Firestore audit_reports/{token} is read first and not deleted until B2/Blob/Supabase references are collected.
+cleanup_jobs/{jobId} records real cleanup runs and step-by-step results.
+B2 and Blob cleanup is idempotent: missing objects are treated as already cleaned when possible.
+Supabase chat cleanup is optional and skipped when Supabase server env is not configured.
+Sheet cleanup can mark or clear report-related fields.
+Lead cleanup is opt-in through leadMode: none/archive/trash/delete.
+When leadMode:"delete" is used, a tiny contact_memory footprint is saved before the lead document is removed.
+Cron cleanup is foundation-only and returns a dry-run list first; confirmed delete mode should be enabled later after manual report cleanup works safely.
+```
+
+Recommended manual cleanup request:
+
+```json
+{
+  "token": "REPORT_TOKEN",
+  "mode": "soft",
+  "leadMode": "archive",
+  "sheetMode": "mark",
+  "dryRun": true
+}
+```
+
+Confirmed cleanup request:
+
+```json
+{
+  "token": "REPORT_TOKEN",
+  "mode": "soft",
+  "leadMode": "archive",
+  "sheetMode": "mark",
+  "dryRun": false,
+  "confirm": "CLEANUP_REPORT_ASSETS"
+}
+```
+
+Hard cleanup request:
+
+```json
+{
+  "token": "REPORT_TOKEN",
+  "mode": "hard",
+  "leadMode": "trash",
+  "sheetMode": "clear",
+  "dryRun": false,
+  "confirm": "DELETE_REPORT_ASSETS"
+}
+```
+
+Do not run hard cleanup on real client reports until dry-run output has been reviewed.
 
 ### 3.6 Secure Report Responsive UX Rule
 
@@ -2039,6 +2122,89 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+### v18.85 Deployed Cron Cleanup Stage 12
+
+Cleanup was adjusted so Cronjob.org and production cleanup never depend on local-only routes such as `app/api/export/blob-reports/route.ts` or `app/api/export/sheet/route.ts`. The deployed Vercel `/api/trackflow/...` route now owns cleanup execution with server-side helpers.
+
+Changed files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+lib/trackflow-cleanup/sheet-cleanup.ts
+lib/supabase-admin.ts
+lib/trackflow-storage/b2.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Cronjob.org should call only the deployed Vercel endpoint: /api/trackflow/cron/cleanup-expired-reports.
+Cron cleanup must not call localhost, app/api/export/blob-reports/route.ts, or app/api/export/sheet/route.ts.
+B2 PDF deletion uses the deployed B2 helper and deployed B2 ENV values.
+Vercel Blob OG/preview deletion uses deployed BLOB_READ_WRITE_TOKEN when configured; otherwise it safely skips image deletion.
+Supabase chat cleanup uses deployed SUPABASE_SERVICE_ROLE_KEY when configured; otherwise it safely skips chat cleanup.
+Google Sheet cleanup uses direct deployed Google Sheets service-account ENV through lib/trackflow-cleanup/sheet-cleanup.ts; it does not call the local Sheet export route.
+Cron real cleanup requires dryRun=false plus confirm=CLEANUP_EXPIRED_REPORTS and does not allow hard cleanup.
+Hard cleanup remains manual-only through POST /api/trackflow/cleanup/report with confirm=DELETE_REPORT_ASSETS.
+```
+
+Test checklist:
+
+```text
+npm run build
+GET /api/trackflow/cleanup/report?token=TEST_TOKEN
+GET /api/trackflow/cron/cleanup-expired-reports?dryRun=true&limit=5 with CRON_SECRET
+GET /api/trackflow/cron/cleanup-expired-reports?dryRun=false&confirm=CLEANUP_EXPIRED_REPORTS&limit=1 with CRON_SECRET only after dry-run output is checked
+Confirm no localhost route is required for cleanup.
+```
+
+
+### v18.84 Report Cleanup Foundation Stage 11
+
+A staged cleanup foundation was added so TrackFlow report data can be safely cleaned across B2, Vercel Blob, Supabase, Firestore, Sheet rows, and linked outreach leads.
+
+Changed files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+lib/supabase-admin.ts
+lib/trackflow-storage/b2.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Default cleanup mode is dry-run; no delete/update happens unless dryRun:false is explicitly sent.
+Confirmed cleanup requires a clear confirmation string so accidental destructive requests are blocked.
+The cleanup manifest is built before deleting anything, so B2 keys, Blob image targets, report token, domain indexes, Sheet row, and lead references are captured first.
+Real cleanup writes cleanup_jobs/{jobId} with each service step and status.
+B2 PDF deletion uses the existing private Backblaze B2 helper.
+Vercel Blob cleanup targets only likely Blob preview/OG image URLs or pathnames, not arbitrary URLs.
+Supabase chat cleanup is optional and skipped cleanly when Supabase server env is not configured.
+Lead cleanup remains opt-in through leadMode and saves contact_memory before full lead delete.
+Cron cleanup is dry-run/foundation-only in this stage.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+GET /api/trackflow/cleanup/report?token=TEST_TOKEN
+POST /api/trackflow/cleanup/report with dryRun:true
+Review the returned manifest and planned steps
+Use only a fake/test report for dryRun:false
+Confirm cleanup_jobs entry appears after confirmed cleanup
+Confirm secure report is marked cleaned/deleted as expected
+Confirm B2/Blob/Supabase steps report skipped/ok/error clearly
+```
+
 
 
 

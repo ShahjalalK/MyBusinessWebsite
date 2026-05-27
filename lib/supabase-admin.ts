@@ -130,6 +130,120 @@ async function getRows<T>({ table, query }: { table: string; query: string }): P
   }
 }
 
+
+async function deleteRows({
+  table,
+  query,
+}: {
+  table: string;
+  query: string;
+}): Promise<{ attempted: boolean; ok: boolean; status?: number; error?: string }> {
+  if (!isConfigured()) return { attempted: false, ok: true };
+
+  const cleanTable = safeTableName(table);
+  if (!cleanTable) return { attempted: false, ok: true, error: "invalid_table" };
+
+  const url = `${getBaseUrl()}/rest/v1/${cleanTable}${query.startsWith("?") ? query : `?${query}`}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "content-type": "application/json",
+        prefer: "return=minimal",
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return {
+        attempted: true,
+        ok: false,
+        status: response.status,
+        error: text.slice(0, 500) || `Supabase delete failed with HTTP ${response.status}`,
+      };
+    }
+
+    return { attempted: true, ok: true, status: response.status };
+  } catch (error: any) {
+    return {
+      attempted: true,
+      ok: false,
+      error: String(error?.message || error || "Supabase delete failed"),
+    };
+  }
+}
+
+export type DeleteReportChatHistoryResult = {
+  configured: boolean;
+  dryRun: boolean;
+  reportToken: string;
+  messages: { attempted: boolean; ok: boolean; status?: number; error?: string };
+  sessions: { attempted: boolean; ok: boolean; status?: number; error?: string };
+};
+
+export async function deleteReportChatHistory(input: {
+  reportToken: string;
+  dryRun?: boolean;
+}): Promise<DeleteReportChatHistoryResult> {
+  const reportToken = cleanId(input.reportToken);
+  const dryRun = input.dryRun !== false;
+
+  const skipped = { attempted: false, ok: true };
+
+  if (!reportToken) {
+    return {
+      configured: isConfigured(),
+      dryRun,
+      reportToken: "",
+      messages: { ...skipped, error: "missing_report_token" },
+      sessions: { ...skipped, error: "missing_report_token" },
+    };
+  }
+
+  if (!isConfigured()) {
+    return {
+      configured: false,
+      dryRun,
+      reportToken,
+      messages: skipped,
+      sessions: skipped,
+    };
+  }
+
+  if (dryRun) {
+    return {
+      configured: true,
+      dryRun: true,
+      reportToken,
+      messages: skipped,
+      sessions: skipped,
+    };
+  }
+
+  const encodedToken = encodeURIComponent(reportToken);
+
+  const messages = await deleteRows({
+    table: CHAT_MESSAGES_TABLE,
+    query: `report_token=eq.${encodedToken}`,
+  });
+
+  const sessions = await deleteRows({
+    table: CHAT_SESSIONS_TABLE,
+    query: `report_token=eq.${encodedToken}`,
+  });
+
+  return {
+    configured: true,
+    dryRun: false,
+    reportToken,
+    messages,
+    sessions,
+  };
+}
+
 export function createChatSessionId(value?: unknown): string {
   const raw = String(value || "").trim();
   return isUuid(raw) ? raw : randomUUID();

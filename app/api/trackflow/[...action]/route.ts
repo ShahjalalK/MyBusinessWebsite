@@ -41,6 +41,7 @@ import { getActiveContactMemoryWarning } from "@/lib/trackflow-email/contact-mem
 import { addEmailEvent } from "@/lib/trackflow-email/email-events";
 import { getSenderFromBody, getSenderFromLead, mapSharedSender } from "@/lib/trackflow-email/sender-selection";
 import { addSuppression, isSuppressed } from "@/lib/trackflow-email/suppression";
+import { createReportCleanupHandlers } from "@/lib/trackflow-cleanup/report-cleanup";
 import {
   BRAND_WEBSITE,
   BRAND_WEBSITE_LABEL,
@@ -95,6 +96,19 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TFP_REPORT_REGISTER_DEBUG_VERSION = "v18.26-og-register-debug-2026-05-23";
+
+
+const {
+  handleReportCleanupPreview,
+  handleReportCleanup,
+  handleExpiredReportCleanupCron,
+} = createReportCleanupHandlers({
+  ApiError,
+  requireAdmin,
+  requireCronSecret,
+  readJson,
+  json,
+});
 
 
 type SenderConfig = {
@@ -8003,6 +8017,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     if (action === "cleanup/skip") return await handleCleanupSkip(req);
     if (action === "cleanup/protect") return await handleCleanupProtect(req);
     if (action === "cleanup/manual-run") return await handleCleanupManualRun(req);
+    if (action === "cleanup/report") return await handleReportCleanup(req);
     if (action === "unsubscribe") return await handleUnsubscribePost(req);
 
     return json({ success: false, error: `Unknown POST action: ${action}` }, 404);
@@ -8035,6 +8050,8 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "leads") return await handleLeadsGet(req);
     if (action === "system/usage-summary") return await handleUsageSummary(req);
     if (action === "cleanup/candidates") return await handleCleanupCandidates(req);
+    if (action === "cleanup/report") return await handleReportCleanupPreview(req);
+    if (action === "cron/cleanup-expired-reports") return await handleExpiredReportCleanupCron(req);
 
     if (action === "health" || action === "") return await handleTrackflowHealth(req);
 
