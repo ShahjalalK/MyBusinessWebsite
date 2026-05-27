@@ -139,9 +139,9 @@ function reportStepLabel(step: ReportCleanupStep): string {
   if (service.includes("backblaze") || action.includes("pdf")) return "PDF file";
   if (service.includes("blob") || action.includes("preview")) return "Preview image";
   if (service.includes("supabase") || action.includes("chat")) return "Chat history";
-  if (service.includes("google_sheet")) return "Sheet row";
+  if (service.includes("google_sheet")) return "Spreadsheet row";
   if (action.includes("domain")) return "Report lookup";
-  if (action.includes("lead")) return "Linked lead";
+  if (action.includes("lead")) return "Contact record";
   if (action.includes("report")) return "Secure report";
   if (service.includes("firestore")) return "Saved record";
 
@@ -656,9 +656,9 @@ export default function CleanupPanel({
               )}
             </div>
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Linked lead</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact record</p>
               <p className="text-sm font-black text-gray-900 mt-1">{manifest.leadFound ? "Found" : "No lead linked"}</p>
-              <p className="text-[10px] font-bold text-gray-400 mt-1">Sheet row: {manifest.sheetRowNumber || "—"}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1">Spreadsheet row: {manifest.sheetRowNumber || "—"}</p>
             </div>
           </div>
         )}

@@ -1191,6 +1191,20 @@ export default function DashboardPage() {
     return headers;
   };
 
+  const readTrackflowJson = async (response: Response) => {
+    const text = await response.text();
+    if (!text) return {};
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {
+        success: false,
+        error: response.ok ? "TrackFlow API returned an unreadable response." : text.slice(0, 500) || response.statusText,
+      };
+    }
+  };
+
 
 
   const loadSecureReports = async (force = false) => {
@@ -1214,7 +1228,7 @@ export default function DashboardPage() {
         cache: "no-store",
       });
 
-      const data = await response.json();
+      const data = await readTrackflowJson(response);
       if (!response.ok || !data.success) {
         throw new Error(data.error || data.message || "Secure reports could not be loaded.");
       }
@@ -1295,8 +1309,8 @@ export default function DashboardPage() {
         headers: await getAuthHeaders(),
         cache: "no-store",
       });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || "Report cleanup preview failed");
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Report cleanup preview failed");
 
       setReportAssetCleanup((prev) => ({
         ...prev,
@@ -1373,9 +1387,9 @@ export default function DashboardPage() {
           confirm: reportAssetCleanup.mode === "hard" ? "DELETE_REPORT_ASSETS" : "CLEANUP_REPORT_ASSETS",
         }),
       });
-      const data = await response.json();
-      if (!response.ok && response.status !== 207) throw new Error(data.error || "Report cleanup failed");
-      if (!data.success && response.status !== 207) throw new Error(data.error || "Report cleanup failed");
+      const data = await readTrackflowJson(response);
+      if (!response.ok && response.status !== 207) throw new Error(data.error || data.message || "Report cleanup failed");
+      if (!data.success && response.status !== 207) throw new Error(data.error || data.message || "Report cleanup failed");
 
       const failedCount = Number(data.failedCount || 0);
       setReportAssetCleanup((prev) => ({

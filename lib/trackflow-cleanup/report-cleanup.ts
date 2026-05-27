@@ -148,6 +148,43 @@ function safeError(error: any): string {
   return String(error?.message || error || "Unknown error").slice(0, 700);
 }
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)).filter((item) => item !== undefined) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return value;
+
+    const output: AnyRecord = {};
+    for (const [key, item] of Object.entries(value as AnyRecord)) {
+      if (item === undefined) continue;
+      output[key] = stripUndefinedDeep(item);
+    }
+    return output as T;
+  }
+
+  return value;
+}
+
+function normalizeCleanupStep(step: CleanupStep): CleanupStep {
+  return stripUndefinedDeep(step);
+}
+
+function isAlreadyMissingError(error: any): boolean {
+  const text = safeError(error).toLowerCase();
+  return (
+    text.includes("not found") ||
+    text.includes("not_found") ||
+    text.includes("nosuchkey") ||
+    text.includes("no such key") ||
+    text.includes("404") ||
+    text.includes("does not exist") ||
+    text.includes("object_missing")
+  );
+}
+
 function firstCleanString(...values: any[]): string {
   for (const value of values) {
     const text = clean(value);
@@ -522,6 +559,16 @@ async function deleteB2PdfStep(manifest: CleanupManifest): Promise<CleanupStep> 
       message: deleted ? "B2 PDF deleted." : "B2 PDF was already missing.",
     };
   } catch (error: any) {
+    if (isAlreadyMissingError(error)) {
+      return {
+        service: "backblaze_b2",
+        action: "delete_pdf",
+        status: "ok",
+        target: manifest.b2PdfKey,
+        message: "B2 PDF was already removed.",
+      };
+    }
+
     return {
       service: "backblaze_b2",
       action: "delete_pdf",
@@ -557,6 +604,16 @@ async function deleteBlobImagesStep(manifest: CleanupManifest): Promise<CleanupS
       details: { targets: manifest.blobImageTargets },
     };
   } catch (error: any) {
+    if (isAlreadyMissingError(error)) {
+      return {
+        service: "vercel_blob",
+        action: "delete_preview_images",
+        status: "ok",
+        message: "Preview image was already removed.",
+        details: { targets: manifest.blobImageTargets },
+      };
+    }
+
     return {
       service: "vercel_blob",
       action: "delete_preview_images",
@@ -890,34 +947,58 @@ async function createCleanupJob(input: {
   actor: string;
   manifest: CleanupManifest;
 }): Promise<string> {
-  const ref = adminDb.collection("cleanup_jobs").doc();
-  await ref.set({
-    type: "report_cleanup",
-    reportToken: input.token,
-    mode: input.mode,
-    leadMode: input.leadMode,
-    sheetMode: input.sheetMode,
-    actor: input.actor,
-    status: "processing",
-    manifest: input.manifest,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  return ref.id;
+  try {
+    const ref = adminDb.collection("cleanup_jobs").doc();
+    await ref.set(stripUndefinedDeep({
+      type: "report_cleanup",
+      reportToken: input.token,
+      mode: input.mode,
+      leadMode: input.leadMode,
+      sheetMode: input.sheetMode,
+      actor: input.actor,
+      status: "processing",
+      manifest: input.manifest,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }));
+    return ref.id;
+  } catch (error: any) {
+    console.error("Report cleanup job creation failed:", safeError(error));
+    return "";
+  }
 }
 
 async function finishCleanupJob(jobId: string, status: "completed" | "completed_with_errors", steps: CleanupStep[]): Promise<void> {
   if (!jobId) return;
-  await adminDb.collection("cleanup_jobs").doc(jobId).set(
-    {
-      status,
-      steps,
-      failedCount: steps.filter((step) => step.status === "error").length,
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    const cleanSteps = steps.map(normalizeCleanupStep);
+    await adminDb.collection("cleanup_jobs").doc(jobId).set(
+      stripUndefinedDeep({
+        status,
+        steps: cleanSteps,
+        failedCount: cleanSteps.filter((step) => step.status === "error").length,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }),
+      { merge: true },
+    );
+  } catch (error: any) {
+    console.error("Report cleanup job finish failed:", safeError(error));
+  }
+}
+
+async function runCleanupStep(label: string, action: () => Promise<CleanupStep>): Promise<CleanupStep> {
+  try {
+    return normalizeCleanupStep(await action());
+  } catch (error: any) {
+    return {
+      service: "cleanup",
+      action: label,
+      status: "error",
+      error: safeError(error),
+      message: "This cleanup step failed, but the remaining steps continued.",
+    };
+  }
 }
 
 function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: LeadCleanupMode, sheetMode: SheetCleanupMode): CleanupStep[] {
@@ -985,18 +1066,19 @@ async function runCleanup(input: {
 
   const steps: CleanupStep[] = [];
 
-  steps.push(await deleteB2PdfStep(input.manifest));
-  steps.push(await deleteBlobImagesStep(input.manifest));
-  steps.push(await deleteSupabaseChatStep(input.manifest));
-  steps.push(await cleanupFirestoreReportStep(input.manifest, input.mode, input.actor));
-  steps.push(await cleanupDomainIndexStep(input.manifest, input.mode, input.actor));
-  steps.push(await writeSheetCleanupStep(input.manifest, input.sheetMode, input.mode, input.actor));
-  steps.push(await cleanupLeadStep(input.manifest, input.lead, input.leadMode, input.actor));
+  steps.push(await runCleanupStep("delete_pdf", () => deleteB2PdfStep(input.manifest)));
+  steps.push(await runCleanupStep("delete_preview_images", () => deleteBlobImagesStep(input.manifest)));
+  steps.push(await runCleanupStep("delete_report_chat", () => deleteSupabaseChatStep(input.manifest)));
+  steps.push(await runCleanupStep("cleanup_report_document", () => cleanupFirestoreReportStep(input.manifest, input.mode, input.actor)));
+  steps.push(await runCleanupStep("cleanup_domain_indexes", () => cleanupDomainIndexStep(input.manifest, input.mode, input.actor)));
+  steps.push(await runCleanupStep("cleanup_sheet_row", () => writeSheetCleanupStep(input.manifest, input.sheetMode, input.mode, input.actor)));
+  steps.push(await runCleanupStep("cleanup_contact_record", () => cleanupLeadStep(input.manifest, input.lead, input.leadMode, input.actor)));
 
-  const failedCount = steps.filter((step) => step.status === "error").length;
-  await finishCleanupJob(jobId, failedCount ? "completed_with_errors" : "completed", steps);
+  const cleanSteps = steps.map(normalizeCleanupStep);
+  const failedCount = cleanSteps.filter((step) => step.status === "error").length;
+  await finishCleanupJob(jobId, failedCount ? "completed_with_errors" : "completed", cleanSteps);
 
-  return { jobId, steps };
+  return { jobId, steps: cleanSteps };
 }
 
 function appBaseUrl(): string {

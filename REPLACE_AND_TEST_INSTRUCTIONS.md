@@ -1,31 +1,42 @@
-# TrackFlow Pro v18.90 — Delete Test Contact, No Memory
+# Replace and Test — v18.91 Resilient Delete Flow
 
-Replace these files carefully:
+Replace these files in your Next.js project:
 
-- app/api/trackflow/[...action]/route.ts
-- lib/trackflow-cleanup/report-cleanup.ts
-- page.tsx
-- CleanupPanel.tsx
-- types.ts
-- PROJECT_CONTEXT_README.md
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+app/dashboard/.../page.tsx
+app/dashboard/.../CleanupPanel.tsx
+app/dashboard/.../types.ts
+PROJECT_CONTEXT_README.md
+```
 
-What changed:
-- Added a new contact cleanup option: `delete_no_memory`
-- Dashboard label: "Delete test contact, no memory"
-- If a contact has no outreach history, it can be deleted without creating contact_memory.
-- If a contact has outreach history, no-memory delete is blocked and the dashboard will show a review message.
-- Archive/trash cleanup only creates contact_memory when outreach history exists.
-- Existing keep-safety-memory delete remains available for contacted leads.
+## Test order
 
-Recommended test:
-1. npm run build
-2. npm run dev
-3. Dashboard → Cleanup tab
-4. Select a test secure report
-5. Contact record → Delete test contact, no memory
-6. Preview first
-7. If preview says safe, run Delete Test Data on fake/test data only
+1. Run:
 
-Safe rule:
-- Not contacted = delete fully, no footprint.
-- Contacted by email/LinkedIn = delete/cleanup with tiny safety memory.
+```bash
+npm run build
+npm run dev
+```
+
+2. Open Dashboard → Cleanup tab.
+3. Click Refresh Reports.
+4. Select a test secure report.
+5. Click Preview first.
+6. Run Archive Report on one test record.
+7. Then test Delete Test Data on a fake/test record only.
+
+## Expected behavior
+
+If a file was already deleted manually, cleanup should not stop:
+
+```text
+PDF missing        → already removed / skipped safely
+Preview missing    → already removed / skipped safely
+Supabase not set   → skipped safely
+Sheet row missing  → skipped safely
+Cleanup job issue  → logged, but cleanup response still returns
+```
+
+If “Delete test contact, no memory” is used on a contacted lead, it should show a clear needs-review message instead of a 500 error.

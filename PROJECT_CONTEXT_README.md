@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.90-delete-test-contact-no-memory-stage-14d
+Version: v18.91-resilient-delete-flow-stage-14e
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -3045,4 +3045,48 @@ LeadList feels too crowded
 Row action area is hard to understand
 Manual LinkedIn audit panel is confusing
 Dashboard UX needs desktop polish without changing audit logic
+```
+
+
+### 3.30 Dashboard Resilient Report Cleanup Rule
+
+The cleanup dashboard must not stop the whole delete/archive flow because one optional external file or log is already missing.
+
+Required behavior:
+
+```text
+Dashboard report cleanup
+→ tries every cleanup step independently
+→ missing B2 PDF becomes Already removed / skipped safely
+→ missing Vercel Blob preview image becomes Already removed / skipped safely
+→ missing Supabase chat becomes Nothing to remove / skipped safely
+→ missing Google Sheet row becomes Skipped safely
+→ Firestore report/contact cleanup continues when optional storage cleanup fails
+→ cleanup_jobs logging must not crash the cleanup response
+```
+
+Important decisions:
+
+```text
+A single missing optional asset must not return Internal Server Error.
+All cleanup step results should be saved without undefined Firestore fields.
+If cleanup_jobs logging fails, the cleanup action should still return the step results.
+Not contacted = Delete test contact, no memory is allowed.
+Contacted = no-memory delete is blocked; use Delete contact, keep safety memory.
+```
+
+Current stage-14E structure:
+
+```text
+lib/trackflow-cleanup/report-cleanup.ts
+→ stripUndefinedDeep for Firestore-safe cleanup_jobs payloads
+→ independent runCleanupStep wrapper for each external cleanup step
+→ B2/Blob already-missing errors become completed cleanup steps
+→ cleanup job create/finish failures are logged but do not crash the dashboard
+
+page.tsx
+→ cleanup API response parsing is more resilient when the server returns non-JSON error text
+
+CleanupPanel.tsx
+→ contact/sheet labels are simplified for operator-friendly dashboard use
 ```
