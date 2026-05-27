@@ -71,6 +71,7 @@ import type {
   FollowupSummaryState,
   Lead,
   MainTab,
+  ReportAssetCleanupState,
   ScheduledEditState,
   ServiceId,
   SheetLead,
@@ -164,6 +165,30 @@ function emptyFirebaseUsageState(): FirebaseUsageState {
   };
 }
 
+function emptyReportAssetCleanupState(): ReportAssetCleanupState {
+  return {
+    input: "",
+    mode: "soft",
+    leadMode: "archive",
+    sheetMode: "mark",
+    loading: false,
+    error: "",
+    status: "",
+    dryRun: true,
+    confirmText: "",
+    jobId: "",
+    failedCount: 0,
+    lastPreviewAt: null,
+    manifest: null,
+    steps: [],
+  };
+}
+
+function looksLikeReportUrl(value: string): boolean {
+  const text = String(value || "").trim();
+  return /^https?:\/\//i.test(text) || text.includes("/tracking-review/") || text.includes("/r/");
+}
+
 
 function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "full" | "compact" = "full") {
   if (!sender) return "";
@@ -225,6 +250,7 @@ export default function DashboardPage() {
   } = useLeadStore();
   const leads = cachedLeads as Lead[];
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [reportAssetCleanup, setReportAssetCleanup] = useState<ReportAssetCleanupState>(() => emptyReportAssetCleanupState());
 
   const {
     // Lead screen UI state kept in Zustand so filter/selection state survives tab switches.
@@ -1149,6 +1175,145 @@ export default function DashboardPage() {
     return headers;
   };
 
+
+
+  const buildReportCleanupQuery = () => {
+    const input = reportAssetCleanup.input.trim();
+    const params = new URLSearchParams({
+      mode: reportAssetCleanup.mode,
+      leadMode: reportAssetCleanup.leadMode,
+      sheetMode: reportAssetCleanup.sheetMode,
+    });
+
+    if (looksLikeReportUrl(input)) params.set("reportUrl", input);
+    else params.set("token", input);
+
+    return params;
+  };
+
+  const previewReportAssetCleanup = async () => {
+    const input = reportAssetCleanup.input.trim();
+    if (!input) {
+      window.alert("Paste a report token or secure report URL first.");
+      return;
+    }
+
+    setReportAssetCleanup((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+      status: "Previewing cleanup plan...",
+      dryRun: true,
+      jobId: "",
+      failedCount: 0,
+    }));
+
+    try {
+      const params = buildReportCleanupQuery();
+      const response = await fetch(`/api/trackflow/cleanup/report?${params.toString()}`, {
+        method: "GET",
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Report cleanup preview failed");
+
+      setReportAssetCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        error: "",
+        status: `Preview ready. ${Array.isArray(data.steps) ? data.steps.length : 0} cleanup step(s) planned.`,
+        dryRun: true,
+        lastPreviewAt: Date.now(),
+        manifest: data.manifest || null,
+        steps: Array.isArray(data.steps) ? data.steps : [],
+        jobId: "",
+        failedCount: 0,
+      }));
+    } catch (error: any) {
+      console.error("Report cleanup preview error:", error);
+      setReportAssetCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        error: error?.message || "Report cleanup preview failed.",
+        status: "",
+      }));
+    }
+  };
+
+  const runReportAssetCleanup = async () => {
+    const input = reportAssetCleanup.input.trim();
+    if (!input) {
+      window.alert("Paste a report token or secure report URL first.");
+      return;
+    }
+
+    if (reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
+      window.alert("Type DELETE_REPORT_ASSETS before running hard cleanup.");
+      return;
+    }
+
+    const confirmMessage =
+      reportAssetCleanup.mode === "hard"
+        ? "Hard cleanup will delete report records and selected linked data. Use this only for test data. Continue?"
+        : "Confirmed cleanup will delete/mark the report assets according to the selected modes. Continue?";
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setReportAssetCleanup((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+      status: "Running confirmed report cleanup...",
+      dryRun: false,
+      jobId: "",
+      failedCount: 0,
+    }));
+
+    try {
+      const inputIsUrl = looksLikeReportUrl(input);
+      const response = await fetch("/api/trackflow/cleanup/report", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({
+          ...(inputIsUrl ? { reportUrl: input } : { token: input }),
+          mode: reportAssetCleanup.mode,
+          leadMode: reportAssetCleanup.leadMode,
+          sheetMode: reportAssetCleanup.sheetMode,
+          dryRun: false,
+          confirm: reportAssetCleanup.mode === "hard" ? "DELETE_REPORT_ASSETS" : "CLEANUP_REPORT_ASSETS",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok && response.status !== 207) throw new Error(data.error || "Report cleanup failed");
+      if (!data.success && response.status !== 207) throw new Error(data.error || "Report cleanup failed");
+
+      const failedCount = Number(data.failedCount || 0);
+      setReportAssetCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        error: failedCount ? `${failedCount} cleanup step(s) need attention. Review the step table below.` : "",
+        status: failedCount ? "Cleanup completed with warnings/errors." : "Cleanup completed successfully.",
+        dryRun: false,
+        lastPreviewAt: Date.now(),
+        manifest: data.manifest || prev.manifest,
+        steps: Array.isArray(data.steps) ? data.steps : [],
+        jobId: String(data.jobId || ""),
+        failedCount,
+      }));
+
+      await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
+    } catch (error: any) {
+      console.error("Report cleanup run error:", error);
+      setReportAssetCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        error: error?.message || "Report cleanup failed.",
+        status: "",
+      }));
+    }
+  };
 
   const loadCleanupCandidates = async (bucket: CleanupBucket = leadCleanup.bucket as CleanupBucket, force = false) => {
     if (!force && leadCleanup.loadedAt && leadCleanup.bucket === bucket && Date.now() - leadCleanup.loadedAt < 60_000) return;
@@ -2254,6 +2419,10 @@ export default function DashboardPage() {
               skipSelectedCleanup={skipSelectedCleanup}
               protectSelectedCleanup={protectSelectedCleanup}
               toggleCleanupCandidate={toggleCleanupCandidate}
+              reportAssetCleanup={reportAssetCleanup}
+              setReportAssetCleanup={setReportAssetCleanup}
+              previewReportAssetCleanup={previewReportAssetCleanup}
+              runReportAssetCleanup={runReportAssetCleanup}
             />
           )}
           {activeTab === "automation" && renderFollowups()}

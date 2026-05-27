@@ -2,17 +2,29 @@
 
 import React, { type ReactNode } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   Database,
   ExternalLink,
   FileText,
+  Loader2,
   MousePointer2,
   RefreshCw,
+  Search,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
 
-import type { CleanupBucket, CleanupCandidate, CleanupState } from "./types";
+import type {
+  CleanupBucket,
+  CleanupCandidate,
+  CleanupState,
+  ReportAssetCleanupLeadMode,
+  ReportAssetCleanupMode,
+  ReportAssetCleanupSheetMode,
+  ReportAssetCleanupState,
+  ReportCleanupStep,
+} from "./types";
 import { formatDate, normalizeOptionalUrl } from "./utils";
 
 type CleanupBucketOption = {
@@ -32,6 +44,10 @@ type CleanupPanelProps = {
   skipSelectedCleanup: (days?: number) => Promise<void>;
   protectSelectedCleanup: () => Promise<void>;
   toggleCleanupCandidate: (leadId: string) => void;
+  reportAssetCleanup: ReportAssetCleanupState;
+  setReportAssetCleanup: (value: ReportAssetCleanupState | ((prev: ReportAssetCleanupState) => ReportAssetCleanupState)) => void;
+  previewReportAssetCleanup: () => Promise<void>;
+  runReportAssetCleanup: () => Promise<void>;
 };
 
 const CLEANUP_BUCKETS: CleanupBucketOption[] = [
@@ -43,11 +59,49 @@ const CLEANUP_BUCKETS: CleanupBucketOption[] = [
   { id: "upcoming", label: "Upcoming", note: "Not due yet, but scheduled by policy" },
 ];
 
+const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
+  { id: "soft", label: "Soft Cleanup", note: "Delete assets and mark the report cleaned. Recommended for normal cleanup." },
+  { id: "assets_only", label: "Assets Only", note: "Delete PDF/image/chat assets but keep lead/report records marked as cleaned." },
+  { id: "hard", label: "Hard Delete", note: "Delete report records. Use only for test data or after careful review." },
+];
+
+const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string }> = [
+  { id: "none", label: "Do not touch lead" },
+  { id: "archive", label: "Archive lead" },
+  { id: "trash", label: "Move lead to trash" },
+  { id: "delete", label: "Delete lead + keep memory" },
+];
+
+const REPORT_SHEET_MODES: Array<{ id: ReportAssetCleanupSheetMode; label: string }> = [
+  { id: "mark", label: "Mark Sheet cleaned" },
+  { id: "clear", label: "Clear report fields" },
+  { id: "skip", label: "Skip Sheet" },
+];
+
+
 function formatSourceLabel(sourceKind?: string, source?: string) {
   if (sourceKind === "sheet") return "Sheet Lead";
   if (sourceKind === "test") return "Test Email";
   if (String(source || "").includes("google_sheet")) return "Sheet Lead";
   return "Cold Email";
+}
+
+function reportStepTone(step: ReportCleanupStep): string {
+  if (step.status === "ok") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (step.status === "warning") return "bg-amber-50 text-amber-700 border-amber-100";
+  if (step.status === "error") return "bg-red-50 text-red-700 border-red-100";
+  if (step.status === "planned") return "bg-blue-50 text-blue-700 border-blue-100";
+  return "bg-gray-50 text-gray-600 border-gray-100";
+}
+
+function formatCleanupTarget(step: ReportCleanupStep): string {
+  if (step.target) return step.target;
+  const details = step.details || {};
+  const targets = Array.isArray(details.targets) ? details.targets : [];
+  const ids = Array.isArray(details.ids) ? details.ids : [];
+  if (targets.length) return `${targets.length} target(s)`;
+  if (ids.length) return `${ids.length} index id(s)`;
+  return "—";
 }
 
 function StatCard({
@@ -90,6 +144,10 @@ export default function CleanupPanel({
   skipSelectedCleanup,
   protectSelectedCleanup,
   toggleCleanupCandidate,
+  reportAssetCleanup,
+  setReportAssetCleanup,
+  previewReportAssetCleanup,
+  runReportAssetCleanup,
 }: CleanupPanelProps) {
   const selectedCount = selectedCleanupIds.length;
   const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
@@ -98,6 +156,11 @@ export default function CleanupPanel({
   const activeBucket = leadCleanup.bucket as CleanupBucket;
   const allVisibleRowsSelected = leadCleanup.rows.length > 0 && leadCleanup.rows.every((row: CleanupCandidate) => selectedCleanupIds.includes(row.leadId));
   const isActionDisabled = Boolean(leadCleanup.actionLoading || selectedCount === 0);
+  const reportCleanupInput = reportAssetCleanup.input.trim();
+  const reportCleanupDisabled = reportAssetCleanup.loading || !reportCleanupInput;
+  const hardConfirmReady = reportAssetCleanup.mode !== "hard" || reportAssetCleanup.confirmText.trim().toUpperCase() === "DELETE_REPORT_ASSETS";
+  const reportCleanupCanRun = !reportCleanupDisabled && hardConfirmReady;
+  const manifest = reportAssetCleanup.manifest;
 
   const handleBucketSelect = (bucket: CleanupBucket) => {
     setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket }));
@@ -142,6 +205,210 @@ export default function CleanupPanel({
         <StatCard label="Eligible" value={eligibleCount} icon={<CheckCircle2 size={22} />} tone="green" />
         <StatCard label="Selected" value={selectedCount} icon={<MousePointer2 size={22} />} tone="orange" />
         <StatCard label="Sheet Linked" value={sheetLinkedCount} icon={<FileText size={22} />} tone="blue" />
+      </div>
+
+
+      <div className="bg-white border border-gray-100 rounded-[35px] p-5 shadow-sm space-y-5">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black text-violet-600 uppercase tracking-widest flex items-center gap-2">
+              <ShieldCheck size={14} /> Report Asset Cleanup
+            </p>
+            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Secure Report / PDF / Preview Cleanup</h2>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1 max-w-3xl">
+              Paste a secure report URL or report token. Preview first, then run a confirmed cleanup from the deployed TrackFlow API.
+            </p>
+          </div>
+          <div className="rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-2">
+            <AlertTriangle size={14} /> Dry-run first
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.75fr_0.75fr_0.75fr] gap-3">
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Report token or secure page URL</label>
+            <input
+              type="text"
+              value={reportAssetCleanup.input}
+              onChange={(event) =>
+                setReportAssetCleanup((prev) => ({ ...prev, input: event.target.value, error: "", status: "" }))
+              }
+              placeholder="https://trackflowpro.com/tracking-review/domain/token or token"
+              className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-sm font-bold text-gray-800 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Cleanup mode</label>
+            <select
+              value={reportAssetCleanup.mode}
+              onChange={(event) =>
+                setReportAssetCleanup((prev) => ({
+                  ...prev,
+                  mode: event.target.value as ReportAssetCleanupMode,
+                  confirmText: "",
+                  error: "",
+                  status: "",
+                }))
+              }
+              className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
+            >
+              {REPORT_CLEANUP_MODES.map((mode) => (
+                <option key={mode.id} value={mode.id}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Lead action</label>
+            <select
+              value={reportAssetCleanup.leadMode}
+              onChange={(event) =>
+                setReportAssetCleanup((prev) => ({ ...prev, leadMode: event.target.value as ReportAssetCleanupLeadMode, error: "", status: "" }))
+              }
+              className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
+            >
+              {REPORT_LEAD_MODES.map((mode) => (
+                <option key={mode.id} value={mode.id}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sheet action</label>
+            <select
+              value={reportAssetCleanup.sheetMode}
+              onChange={(event) =>
+                setReportAssetCleanup((prev) => ({ ...prev, sheetMode: event.target.value as ReportAssetCleanupSheetMode, error: "", status: "" }))
+              }
+              className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
+            >
+              {REPORT_SHEET_MODES.map((mode) => (
+                <option key={mode.id} value={mode.id}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 text-[11px] font-bold text-slate-600 leading-relaxed">
+          {REPORT_CLEANUP_MODES.find((mode) => mode.id === reportAssetCleanup.mode)?.note || "Preview first, then run confirmed cleanup."}
+          {reportAssetCleanup.mode === "hard" ? " Hard cleanup requires typing DELETE_REPORT_ASSETS before the action button unlocks." : " Soft cleanup is recommended for normal report expiry."}
+        </div>
+
+        {reportAssetCleanup.mode === "hard" && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
+            <label className="block text-[10px] font-black text-red-600 uppercase tracking-widest">Hard cleanup confirmation</label>
+            <input
+              type="text"
+              value={reportAssetCleanup.confirmText}
+              onChange={(event) => setReportAssetCleanup((prev) => ({ ...prev, confirmText: event.target.value }))}
+              placeholder="Type DELETE_REPORT_ASSETS"
+              className="w-full px-4 py-3 rounded-2xl bg-white border border-red-100 text-sm font-black text-red-700 outline-none"
+            />
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={reportCleanupDisabled}
+            onClick={previewReportAssetCleanup}
+            className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
+          >
+            {reportAssetCleanup.loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Preview Cleanup
+          </button>
+          <button
+            type="button"
+            disabled={!reportCleanupCanRun}
+            onClick={runReportAssetCleanup}
+            className={`px-4 py-3 rounded-2xl text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2 ${
+              reportAssetCleanup.mode === "hard" ? "bg-red-600" : "bg-slate-950"
+            }`}
+          >
+            <Trash2 size={14} /> {reportAssetCleanup.mode === "hard" ? "Run Hard Cleanup" : "Run Confirmed Cleanup"}
+          </button>
+          {reportAssetCleanup.jobId && (
+            <span className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">
+              Job: {reportAssetCleanup.jobId.slice(0, 12)}
+            </span>
+          )}
+        </div>
+
+        {(reportAssetCleanup.status || reportAssetCleanup.error) && (
+          <p className={`text-[10px] font-black uppercase tracking-widest ${reportAssetCleanup.error ? "text-red-600" : "text-gray-400"}`}>
+            {reportAssetCleanup.error || reportAssetCleanup.status}
+          </p>
+        )}
+
+        {manifest && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Report</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.reportFound ? "Found" : "Not found"}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1 break-all">{manifest.reportToken || "No token"}</p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">B2 PDF</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.b2PdfKey ? "Key found" : "No key"}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1 break-all">{manifest.b2PdfKey || "—"}</p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Blob images</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.blobImageTargets?.length || 0} target(s)</p>
+              {manifest.reportUrl && normalizeOptionalUrl(manifest.reportUrl || "") && (
+                <a href={normalizeOptionalUrl(manifest.reportUrl || "") || "#"} target="_blank" rel="noreferrer" className="text-[10px] font-black text-blue-600 inline-flex items-center gap-1 mt-1">
+                  Open report <ExternalLink size={11} />
+                </a>
+              )}
+            </div>
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead / Sheet</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.leadFound ? "Lead found" : "No lead"}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1">Sheet row: {manifest.sheetRowNumber || "—"}</p>
+            </div>
+          </div>
+        )}
+
+        {reportAssetCleanup.steps.length > 0 && (
+          <div className="border border-gray-100 rounded-[28px] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Service</th>
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Action</th>
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Target</th>
+                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Message</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {reportAssetCleanup.steps.map((step, index) => (
+                    <tr key={`${step.service}-${step.action}-${index}`}>
+                      <td className="p-4 text-xs font-black text-gray-900 uppercase">{step.service.replace(/_/g, " ")}</td>
+                      <td className="p-4 text-xs font-bold text-gray-600">{step.action.replace(/_/g, " ")}</td>
+                      <td className="p-4">
+                        <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase ${reportStepTone(step)}`}>{step.status}</span>
+                      </td>
+                      <td className="p-4 text-[10px] font-bold text-gray-400 max-w-[260px] truncate" title={formatCleanupTarget(step)}>
+                        {formatCleanupTarget(step)}
+                      </td>
+                      <td className="p-4 text-[11px] font-bold text-gray-500 max-w-[420px]">
+                        {step.error || step.message || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-gray-100 rounded-[30px] p-5 shadow-sm space-y-4">

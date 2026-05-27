@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.85-deployed-cron-cleanup-stage-12
+Version: v18.86-dashboard-manual-report-cleanup-controls-stage-13
 Last updated: 2026-05-26
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -2122,6 +2122,34 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+### v18.86 Dashboard Manual Report Cleanup Controls Stage 13
+
+The dashboard cleanup tab now includes a manual Report Asset Cleanup control so individual secure reports can be previewed and cleaned without waiting for cron.
+
+Changed files:
+
+```text
+page.tsx
+CleanupPanel.tsx
+types.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Manual report cleanup lives in the existing Cleanup tab, beside the lead cleanup manager.
+The first button is always Preview Cleanup, which calls GET /api/trackflow/cleanup/report and does not delete anything.
+Confirmed cleanup calls POST /api/trackflow/cleanup/report with dryRun:false and the required confirmation string.
+Soft cleanup remains the recommended default: mode=soft, leadMode=archive, sheetMode=mark.
+Hard cleanup is locked behind the typed confirmation DELETE_REPORT_ASSETS and should be used only for test data or carefully reviewed cases.
+The UI shows the cleanup manifest and per-service step results for B2, Blob, Supabase, Firestore, Google Sheet, and lead cleanup.
+Existing lead cleanup candidate actions were not changed.
+No local-only export routes are used by this manual cleanup UI; it calls deployed TrackFlow cleanup endpoints.
+```
+
 
 
 ### v18.85 Deployed Cron Cleanup Stage 12

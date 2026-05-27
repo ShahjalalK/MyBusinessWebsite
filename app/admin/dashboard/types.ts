@@ -256,3 +256,54 @@ export type ContactMemoryWarning = {
 };
 
 export type BulkLeadAction = "archive" | "restore" | "trash" | "delete_permanent";
+
+export type ReportAssetCleanupMode = "soft" | "hard" | "assets_only";
+export type ReportAssetCleanupLeadMode = "none" | "archive" | "trash" | "delete";
+export type ReportAssetCleanupSheetMode = "skip" | "mark" | "clear";
+export type ReportCleanupStepStatus = "planned" | "skipped" | "ok" | "warning" | "error";
+
+export type ReportCleanupStep = {
+  service: string;
+  action: string;
+  status: ReportCleanupStepStatus;
+  target?: string;
+  message?: string;
+  error?: string;
+  details?: Record<string, any>;
+};
+
+export type ReportCleanupManifest = {
+  reportToken?: string;
+  reportFound?: boolean;
+  domainSlug?: string;
+  normalizedDomain?: string;
+  reportUrl?: string;
+  leadId?: string;
+  leadFound?: boolean;
+  emailLower?: string;
+  sheetRowNumber?: number | null;
+  b2PdfKey?: string;
+  blobImageTargets?: string[];
+  domainIndexIds?: string[];
+  pdfExpiresAt?: string;
+  cleanupStatus?: string;
+  [key: string]: any;
+};
+
+export type ReportAssetCleanupState = {
+  input: string;
+  mode: ReportAssetCleanupMode;
+  leadMode: ReportAssetCleanupLeadMode;
+  sheetMode: ReportAssetCleanupSheetMode;
+  loading: boolean;
+  error: string;
+  status: string;
+  dryRun: boolean;
+  confirmText: string;
+  jobId: string;
+  failedCount: number;
+  lastPreviewAt: number | null;
+  manifest: ReportCleanupManifest | null;
+  steps: ReportCleanupStep[];
+};
+
