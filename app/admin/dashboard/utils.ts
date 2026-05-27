@@ -161,3 +161,151 @@ export function applyMergeTags(html: string, data: { name?: string; company?: st
     .replace(/{website}/g, data.website || "your website")
     .replace(/{service}/g, data.service || "our service");
 }
+
+export function decodeHtmlEntities(value: string) {
+  let text = String(value || "");
+
+  for (let i = 0; i < 2; i += 1) {
+    const before = text;
+
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      const textarea = document.createElement("textarea");
+      textarea.innerHTML = text;
+      text = textarea.value;
+    } else {
+      text = text
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'");
+    }
+
+    if (text === before) break;
+  }
+
+  return text.replace(/\u00a0/g, " ");
+}
+
+function escapeHtmlForEditor(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function plainTextFromHtmlish(value: string) {
+  return stripHtml(
+    decodeHtmlEntities(value)
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      .replace(/<\/p\s*>/gi, "\n")
+      .replace(/<\/div\s*>/gi, "\n")
+      .replace(/<\/li\s*>/gi, "\n"),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasHtmlTags(value: string) {
+  return /<[a-z][\s\S]*>/i.test(decodeHtmlEntities(value));
+}
+
+function looksLikeEmailBody(value: string) {
+  const decoded = decodeHtmlEntities(value);
+  const plain = plainTextFromHtmlish(decoded);
+
+  if (!plain) return false;
+  if (hasHtmlTags(decoded)) return true;
+  if (/\n{2,}/.test(decoded) || decoded.split(/\r?\n/).length >= 3) return true;
+  if (plain.length > 160) return true;
+  if (/\b(hi|hello|dear)\b[\s,!.:-]/i.test(plain)) return true;
+  if (/\b(regards|best regards|thanks|thank you)\b/i.test(plain)) return true;
+  if (/\b(view|open|review)\b.{0,80}\b(report|audit|tracking review)\b/i.test(plain)) return true;
+
+  return false;
+}
+
+function looksLikeEmailSubject(value: string) {
+  const plain = plainTextFromHtmlish(value);
+  return Boolean(plain && plain.length <= 150 && !looksLikeEmailBody(value));
+}
+
+function extractSubjectLine(value: string) {
+  const decoded = decodeHtmlEntities(value);
+  const match = decoded.match(/^\s*(?:email\s*)?subject\s*[:\-]\s*(.+)$/im);
+  if (!match) return "";
+
+  return plainTextFromHtmlish(match[1] || "")
+    .replace(/^subject\s*[:\-]\s*/i, "")
+    .slice(0, 180)
+    .trim();
+}
+
+function removeSubjectAndBodyLabels(value: string) {
+  return decodeHtmlEntities(value)
+    .replace(/^\s*(?:email\s*)?subject\s*[:\-].*?(?:\r?\n|$)/im, "")
+    .replace(/^\s*(?:email\s*)?(?:body|message)\s*[:\-]\s*/im, "")
+    .trim();
+}
+
+export function normalizeEmailSubjectForComposer(value: string) {
+  const extracted = extractSubjectLine(value);
+  const plain = plainTextFromHtmlish(extracted || value)
+    .replace(/^\s*(?:email\s*)?subject\s*[:\-]\s*/i, "")
+    .replace(/^\s*(?:email\s*)?(?:body|message)\s*[:\-]\s*/i, "")
+    .trim();
+
+  return plain.replace(/\s+/g, " ").slice(0, 180).trim();
+}
+
+export function normalizeEmailBodyHtmlForComposer(value: string) {
+  const decoded = removeSubjectAndBodyLabels(value);
+  if (!plainTextFromHtmlish(decoded)) return "";
+
+  if (hasHtmlTags(decoded)) {
+    return sanitizePreviewHtml(decoded) || decoded;
+  }
+
+  return decoded
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtmlForEditor(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+}
+
+export function normalizeSheetEmailCopy(subjectValue: string, bodyValue: string) {
+  let rawSubject = decodeHtmlEntities(subjectValue || "").trim();
+  let rawBody = decodeHtmlEntities(bodyValue || "").trim();
+
+  // Some Sheet rows can be shifted or can store the full generated email in the subject column.
+  // If the subject column looks like a full message and the body column looks like a short subject, swap them safely.
+  if (looksLikeEmailBody(rawSubject) && looksLikeEmailSubject(rawBody)) {
+    const originalSubject = rawSubject;
+    rawSubject = rawBody;
+    rawBody = originalSubject;
+  }
+
+  const extractedSubject = extractSubjectLine(rawSubject) || extractSubjectLine(rawBody);
+  const subjectCandidate = extractedSubject || rawSubject;
+  const subject = looksLikeEmailBody(subjectCandidate) && !extractedSubject
+    ? ""
+    : normalizeEmailSubjectForComposer(subjectCandidate);
+
+  let bodySource = rawBody;
+  if (!plainTextFromHtmlish(bodySource) && looksLikeEmailBody(rawSubject)) {
+    bodySource = rawSubject;
+  }
+
+  // If the body column only contains a short subject but the subject column has a full email, use the full email as body.
+  if (looksLikeEmailSubject(rawBody) && looksLikeEmailBody(rawSubject)) {
+    bodySource = rawSubject;
+  }
+
+  return {
+    subject,
+    bodyHtml: normalizeEmailBodyHtmlForComposer(bodySource),
+  };
+}

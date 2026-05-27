@@ -92,6 +92,8 @@ import {
   makeNameFromEmail,
   monthKeyFromMillis,
   normalizeOptionalUrl,
+  normalizeSheetEmailCopy,
+  normalizeEmailSubjectForComposer,
   normalizeSheetService,
   sanitizePreviewHtml,
   stripHtml,
@@ -1129,6 +1131,8 @@ export default function DashboardPage() {
     e.preventDefault();
 
     const currentMessage = syncEditorMessage();
+    const currentSubject = normalizeEmailSubjectForComposer(subject);
+    if (currentSubject !== subject) setSubject(currentSubject);
     if (!validateOutreachForm(currentMessage) || !activeSender) return;
 
     const currentUser = auth.currentUser;
@@ -1148,7 +1152,7 @@ export default function DashboardPage() {
 
       if (sheetRowNumberForSend) {
         await patchSheetLead(sheetRowNumberForSend, {
-          "Email Subject": subject,
+          "Email Subject": currentSubject,
           "Email Body": currentMessage,
           "Approval Status": "Approved",
           "Send Status": scheduledAtISO ? "Scheduling" : "Sending",
@@ -1166,7 +1170,7 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           email,
-          subject,
+          subject: currentSubject,
           message: currentMessage,
           service: selectedService,
           clientName,
@@ -1203,7 +1207,7 @@ export default function DashboardPage() {
         if (sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
-              "Email Subject": subject,
+              "Email Subject": currentSubject,
               "Email Body": currentMessage,
               "Approval Status": "Approved",
               "Send Status": scheduledAtISO ? "Scheduled" : "Sent",
@@ -2028,8 +2032,10 @@ export default function DashboardPage() {
   const fillOutreachFromSheet = (lead: SheetLead) => {
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const readiness = getSheetReadiness(lead);
-    const subjectFromSheet = sheetValue(lead, "Email Subject");
-    const bodyFromSheet = sheetValue(lead, "Email Body");
+    const emailCopy = normalizeSheetEmailCopy(
+      sheetValue(lead, "Email Subject"),
+      sheetValue(lead, "Email Body"),
+    );
 
     setSelectedOutreachSheetRow(Number(lead.rowNumber) || null);
     setAllowDuplicateSend(false);
@@ -2039,14 +2045,14 @@ export default function DashboardPage() {
     setCompanyName(sheetValue(lead, "Business Name"));
     setWebsite(sheetValue(lead, "Website URL"));
     setBusinessType(sheetValue(lead, "Lead Label") || sheetValue(lead, "Lead Status"));
-    setSubject(subjectFromSheet);
-    setMessage(bodyFromSheet);
+    setSubject(emailCopy.subject);
+    setMessage(emailCopy.bodyHtml);
     setSelectedService(service);
     setReportUrl(sheetValue(lead, "Report URL"));
     setReportButtonText("View short audit note");
     setSendStatus(
       readiness.ready
-        ? `Loaded row ${lead.rowNumber}. Verified sheet lead is ready for outreach.`
+        ? `Loaded row ${lead.rowNumber}. Review the subject/body before sending.`
         : `Loaded row ${lead.rowNumber}, but do not send yet: ${readiness.note}.`
     );
     setActiveTab("outreach");
@@ -2065,8 +2071,9 @@ export default function DashboardPage() {
 
     const finalEmail = sheetValue(lead, "Final Email");
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
-    const subjectFromSheet = sheetValue(lead, "Email Subject");
-    const bodyFromSheet = sheetValue(lead, "Email Body");
+    const emailCopy = normalizeSheetEmailCopy(sheetValue(lead, "Email Subject"), sheetValue(lead, "Email Body"));
+    const subjectFromSheet = emailCopy.subject;
+    const bodyFromSheet = emailCopy.bodyHtml;
     const reportFromSheet = normalizeOptionalUrl(sheetValue(lead, "Report URL"));
 
     await patchSheetLead(lead.rowNumber, {
