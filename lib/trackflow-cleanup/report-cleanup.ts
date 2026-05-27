@@ -850,6 +850,133 @@ async function runCleanup(input: {
   return { jobId, steps };
 }
 
+function appBaseUrl(): string {
+  return clean(process.env.NEXT_PUBLIC_APP_URL || process.env.TRACKFLOW_APP_URL || "https://trackflowpro.com").replace(/\/+$/, "");
+}
+
+function buildPublicReportUrl(token: string, domainSlug: string, explicitUrl?: string): string {
+  const cleanUrl = clean(explicitUrl);
+  if (cleanUrl) return cleanUrl;
+  const base = appBaseUrl();
+  return `${base}/tracking-review/${encodeURIComponent(domainSlug || "website")}/${encodeURIComponent(token)}`;
+}
+
+function boolFromAny(value: any): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  const text = clean(value).toLowerCase();
+  return ["1", "true", "yes", "y", "viewed", "downloaded", "clicked", "done"].includes(text);
+}
+
+function normalizeReportChannel(data: AnyRecord): "email" | "linkedin" | "manual" | "unknown" {
+  const sourceText = firstCleanString(data.channel, data.outreachChannel, data.outreach_channel, data.source, data.audit_source).toLowerCase();
+  if (sourceText.includes("linkedin")) return "linkedin";
+  if (sourceText.includes("email") || sourceText.includes("brevo") || sourceText.includes("cold")) return "email";
+  if (sourceText.includes("manual")) return "manual";
+  return "unknown";
+}
+
+function buildSecureReportListRow(doc: any): AnyRecord {
+  const data = asRecord(typeof doc.data === "function" ? doc.data() : {});
+  const token = firstCleanString(data.token, data.reportToken, data.report_token, doc.id);
+  const domain = firstCleanString(data.normalizedDomain, data.normalized_domain, data.domain, data.websiteUrl, data.website, data.website_url);
+  const domainSlug = normalizeSlug(firstCleanString(data.domainSlug, data.domain_slug, domain, data.companyName, data.company_name, "website"));
+  const reportUrl = buildPublicReportUrl(token, domainSlug, firstCleanString(data.reportUrl, data.report_url));
+  const viewedCount = Number(data.reportViewCount || data.report_view_count || data.pageViewCount || data.viewCount || 0) || 0;
+  const pdfDownloadCount = Number(data.pdfDownloadCount || data.pdf_download_count || data.downloadCount || 0) || 0;
+  const ctaClickCount = Number(data.ctaClickCount || data.cta_click_count || data.clickCount || 0) || 0;
+  const lastActivityAt = toIso(
+    data.lastActivityAt ||
+      data.last_activity_at ||
+      data.lastReportViewedAt ||
+      data.last_report_viewed_at ||
+      data.lastPdfDownloadedAt ||
+      data.last_pdf_downloaded_at ||
+      data.lastCtaClickedAt ||
+      data.last_cta_clicked_at ||
+      data.updatedAt,
+  );
+
+  return {
+    token,
+    reportUrl,
+    domain: domain || domainSlug || "website",
+    domainSlug,
+    companyName: firstCleanString(data.companyName, data.company_name, data.businessName, data.business_name),
+    email: firstCleanString(data.emailLower, data.email_lower, data.email, data.finalEmail, data.final_email),
+    source: firstCleanString(data.source, data.audit_source, data.outreachSource, data.outreach_source),
+    channel: normalizeReportChannel(data),
+    createdAt: toIso(data.createdAt || data.created_at),
+    updatedAt: toIso(data.updatedAt || data.updated_at),
+    pdfExpiresAt: toIso(data.pdfExpiresAt || data.pdf_expires_at),
+    lastActivityAt,
+    reportPageViewed: boolFromAny(data.reportPageViewed || data.report_page_viewed) || viewedCount > 0,
+    pdfDownloaded: boolFromAny(data.pdfDownloaded || data.pdf_downloaded) || pdfDownloadCount > 0,
+    ctaClicked: boolFromAny(data.ctaClicked || data.cta_clicked) || ctaClickCount > 0,
+    cleanupStatus: firstCleanString(data.cleanupStatus, data.cleanup_status),
+    active: data.active === undefined ? true : data.active !== false,
+    leadId: firstCleanString(data.leadId, data.lead_id, data.firestoreLeadId, data.firestore_lead_id, data.outreachLeadId, data.outreach_lead_id),
+    sheetRowNumber: Number(data.sheetRowNumber || data.sheet_row_number || 0) || null,
+    viewedCount,
+    pdfDownloadCount,
+    ctaClickCount,
+  };
+}
+
+function secureReportSortMs(row: AnyRecord): number {
+  return Math.max(
+    toMillis(row.lastActivityAt),
+    toMillis(row.updatedAt),
+    toMillis(row.createdAt),
+    toMillis(row.pdfExpiresAt),
+  );
+}
+
+function secureReportMatchesListSearch(row: AnyRecord, search: string): boolean {
+  const query = clean(search).toLowerCase();
+  if (!query) return true;
+
+  return [
+    row.domain,
+    row.domainSlug,
+    row.companyName,
+    row.email,
+    row.token,
+    row.reportUrl,
+    row.source,
+    row.cleanupStatus,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(query));
+}
+
+function isSecureReportCleaned(row: AnyRecord): boolean {
+  const status = clean(row.cleanupStatus).toLowerCase();
+  return (
+    !row.active ||
+    ["assets_cleaned", "soft_cleaned", "hard_cleaned", "report_deleted", "deleted", "cleaned"].includes(status)
+  );
+}
+
+function isSecureReportExpired(row: AnyRecord): boolean {
+  const expiresMs = toMillis(row.pdfExpiresAt);
+  return Boolean(expiresMs && expiresMs <= Date.now());
+}
+
+function secureReportMatchesListFilter(row: AnyRecord, filter: string): boolean {
+  if (!filter || filter === "all") return true;
+  if (filter === "active") return !isSecureReportCleaned(row) && !isSecureReportExpired(row);
+  if (filter === "expired") return isSecureReportExpired(row);
+  if (filter === "viewed") return Boolean(row.reportPageViewed || row.pdfDownloaded || row.ctaClicked);
+  if (filter === "no_view") return !row.reportPageViewed && !row.pdfDownloaded && !row.ctaClicked && !isSecureReportCleaned(row);
+  if (filter === "cleaned") return isSecureReportCleaned(row);
+  if (filter === "test") {
+    const haystack = [row.source, row.companyName, row.domain, row.email, row.cleanupStatus].join(" ").toLowerCase();
+    return haystack.includes("test") || haystack.includes("demo") || haystack.includes("fake");
+  }
+  return true;
+}
+
 export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
   const { ApiError, json, readJson } = deps;
 
@@ -883,6 +1010,49 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
       manifest,
       steps: dryRunSteps(manifest, mode, leadMode, sheetMode),
     };
+  }
+
+
+  async function handleSecureReportsList(req: Request) {
+    await deps.requireAdmin(req);
+
+    const url = new URL(req.url);
+    const maxLimit = 200;
+    const requestedLimit = Number(url.searchParams.get("limit") || 100);
+    const limitCount = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 100, maxLimit));
+    const search = clean(url.searchParams.get("search") || "");
+    const filter = clean(url.searchParams.get("filter") || "all").toLowerCase();
+
+    let snap;
+
+    try {
+      snap = await adminDb
+        .collection("audit_reports")
+        .orderBy("updatedAt", "desc")
+        .limit(limitCount)
+        .get();
+    } catch (error) {
+      snap = await adminDb
+        .collection("audit_reports")
+        .limit(limitCount)
+        .get();
+    }
+
+    const rows = snap.docs
+      .map((doc) => buildSecureReportListRow(doc))
+      .filter((row) => row.token)
+      .filter((row) => secureReportMatchesListFilter(row, filter))
+      .filter((row) => secureReportMatchesListSearch(row, search))
+      .sort((a, b) => secureReportSortMs(b) - secureReportSortMs(a));
+
+    return json({
+      success: true,
+      action: "cleanup/reports",
+      count: rows.length,
+      limit: limitCount,
+      rows,
+      message: rows.length ? `Loaded ${rows.length} secure report(s).` : "No secure reports found.",
+    });
   }
 
   async function handleReportCleanupPreview(req: Request) {
@@ -1073,6 +1243,7 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
 
 
   return {
+    handleSecureReportsList,
     handleReportCleanupPreview,
     handleReportCleanup,
     handleExpiredReportCleanupCron,

@@ -99,6 +99,7 @@ const TFP_REPORT_REGISTER_DEBUG_VERSION = "v18.26-og-register-debug-2026-05-23";
 
 
 const {
+  handleSecureReportsList,
   handleReportCleanupPreview,
   handleReportCleanup,
   handleExpiredReportCleanupCron,
@@ -8050,6 +8051,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "leads") return await handleLeadsGet(req);
     if (action === "system/usage-summary") return await handleUsageSummary(req);
     if (action === "cleanup/candidates") return await handleCleanupCandidates(req);
+    if (action === "cleanup/reports") return await handleSecureReportsList(req);
     if (action === "cleanup/report") return await handleReportCleanupPreview(req);
     if (action === "cron/cleanup-expired-reports") return await handleExpiredReportCleanupCron(req);
 

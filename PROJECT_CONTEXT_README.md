@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.88-dashboard-secure-reports-list-cleanup-stage-14b
+Version: v18.89-admin-api-secure-reports-list-stage-14c
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -2156,6 +2156,46 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+### v18.89 Admin API Secure Reports List Stage 14C
+
+The dashboard secure report list no longer reads `audit_reports` directly from the client-side Firebase SDK. This fixes Firestore `Missing or insufficient permissions` errors without weakening security rules.
+
+Changed files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+page.tsx
+CleanupPanel.tsx
+types.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Do not loosen Firestore security rules for audit_reports.
+The dashboard calls GET /api/trackflow/cleanup/reports with the signed-in admin ID token.
+The deployed TrackFlow API uses requireAdmin and Firebase Admin SDK to read audit_reports.
+The API returns only safe list fields needed by the dashboard, not private B2 credentials or raw audit payloads.
+The existing cleanup actions still use GET /api/trackflow/cleanup/report and POST /api/trackflow/cleanup/report.
+CleanupPanel UI behavior stays simple: Refresh Reports, Select, Preview, Archive Report, Remove Files Only, Delete Test Data.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+Cleanup tab → Refresh Reports
+Confirm the secure report list loads without Firestore permission errors
+Select a test report
+Preview cleanup
+Archive Report only after preview output looks correct
+```
+
 
 
 
