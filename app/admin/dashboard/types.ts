@@ -129,6 +129,14 @@ export type SheetLead = {
 };
 
 
+
+export type SendEmailDrawerFilter = "all" | "ready" | "needs_review";
+
+export type SendEmailDrawerLead = SheetLead & {
+  queueStatus?: "ready" | "needs_review";
+  queueNote?: string;
+};
+
 export type ScheduledEditState = {
   leadId: string;
   email: string;

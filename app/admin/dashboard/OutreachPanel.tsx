@@ -1,18 +1,22 @@
 "use client";
 
-import React, { type FormEvent, type RefObject } from "react";
+import React, { type FormEvent, type RefObject, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  ChevronLeft,
   Eye,
   FileText,
   Link2,
   Loader2,
   Mail,
+  RefreshCw,
   Save,
+  Search,
   Send,
   Type,
+  X,
 } from "lucide-react";
 import {
   Editor,
@@ -27,7 +31,7 @@ import {
 } from "react-simple-wysiwyg";
 import { ACTIVE_SENDERS, type SenderAccount } from "../../../lib/senders";
 
-import type { ContactMemoryWarning, Lead, ServiceId } from "./types";
+import type { ContactMemoryWarning, Lead, ServiceId, SheetLead, SendEmailDrawerFilter } from "./types";
 import { SERVICE_NAMES } from "./constants";
 import {
   applyMergeTags,
@@ -38,7 +42,7 @@ import {
   sanitizePreviewHtml,
   stripHtml,
 } from "./utils";
-import { isSecureReportUrl } from "./sheet-readiness";
+import { getSheetEmailQueueStatus, getSheetReadiness, isSecureReportUrl, isSheetEmailOutreachCandidate, sheetValue } from "./sheet-readiness";
 
 type SetState<T> = (value: T | ((current: T) => T)) => void;
 
@@ -87,6 +91,12 @@ type OutreachPanelProps = {
   totalLinkCount: number;
   canSend: boolean;
   mainInboxEmail: string;
+  sheetLeads: SheetLead[];
+  sheetLoading: boolean;
+  sheetStatus: string;
+  selectedOutreachSheetRow: number | null;
+  loadSheetLeads: (force?: boolean) => Promise<void>;
+  fillOutreachFromSheet: (lead: SheetLead) => void;
   handleSenderChange: (senderId: string) => void;
   handleServiceChange: (service: ServiceId) => void;
   insertMergeTag: (tag: MergeTag) => void;
@@ -139,6 +149,12 @@ export default function OutreachPanel({
   totalLinkCount,
   canSend,
   mainInboxEmail,
+  sheetLeads,
+  sheetLoading,
+  sheetStatus,
+  selectedOutreachSheetRow,
+  loadSheetLeads,
+  fillOutreachFromSheet,
   handleSenderChange,
   handleServiceChange,
   insertMergeTag,
@@ -172,8 +188,200 @@ export default function OutreachPanel({
       { label: "Cooldown memory cleared/overridden", ok: !contactMemoryWarning || allowCooldownOverride },
     ];
 
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [drawerFilter, setDrawerFilter] = useState<SendEmailDrawerFilter>("all");
+    const [drawerSearch, setDrawerSearch] = useState("");
+
+    const emailQueueRows = useMemo(() => {
+      const search = drawerSearch.trim().toLowerCase();
+      return sheetLeads
+        .filter(isSheetEmailOutreachCandidate)
+        .map((lead) => {
+          const readiness = getSheetReadiness(lead);
+          const status = getSheetEmailQueueStatus(lead);
+          return {
+            lead,
+            readiness,
+            status,
+            queueStatus: readiness.ready ? "ready" : "needs_review",
+          } as const;
+        })
+        .filter((item) => drawerFilter === "all" || item.queueStatus === drawerFilter)
+        .filter((item) => {
+          if (!search) return true;
+          const haystack = [
+            sheetValue(item.lead, "Business Name"),
+            sheetValue(item.lead, "Final Email"),
+            sheetValue(item.lead, "Website URL"),
+            sheetValue(item.lead, "Email Subject"),
+            String(item.lead.rowNumber || ""),
+          ].join(" ").toLowerCase();
+          return haystack.includes(search);
+        })
+        .slice(0, 80);
+    }, [drawerFilter, drawerSearch, sheetLeads]);
+
+    const readyCount = useMemo(
+      () => sheetLeads.filter(isSheetEmailOutreachCandidate).filter((lead) => getSheetReadiness(lead).ready).length,
+      [sheetLeads],
+    );
+    const needsReviewCount = useMemo(
+      () => sheetLeads.filter(isSheetEmailOutreachCandidate).filter((lead) => !getSheetReadiness(lead).ready).length,
+      [sheetLeads],
+    );
+
+    const openDrawer = () => {
+      setDrawerOpen(true);
+      void loadSheetLeads(false);
+    };
+
+    const handleDrawerLeadSelect = (lead: SheetLead) => {
+      fillOutreachFromSheet(lead);
+      setDrawerOpen(false);
+    };
+
     return (
       <div className="space-y-6">
+        <button
+          type="button"
+          onClick={openDrawer}
+          className="fixed right-3 top-1/2 z-40 flex -translate-y-1/2 items-center gap-2 rounded-l-3xl rounded-r-xl border border-blue-100 bg-blue-600 px-3 py-4 text-xs font-black uppercase tracking-widest text-white shadow-2xl transition-all hover:bg-blue-700"
+          aria-label="Open ready email leads drawer"
+        >
+          <ChevronLeft size={16} />
+          <span className="hidden [writing-mode:vertical-rl] sm:inline">Ready Leads</span>
+          <span className="rounded-full bg-white/20 px-2 py-1 text-[10px]">{readyCount}</span>
+        </button>
+
+        {drawerOpen && (
+          <div className="fixed inset-0 z-50">
+            <button
+              type="button"
+              className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Close ready email leads drawer backdrop"
+            />
+            <aside className="absolute right-0 top-0 flex h-full w-full max-w-[430px] flex-col border-l border-slate-200 bg-white shadow-2xl">
+              <div className="border-b border-slate-100 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Send Email Queue</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950">Ready Email Leads</h3>
+                    <p className="mt-1 text-xs font-bold leading-relaxed text-slate-500">
+                      Pick one lead, review the email in the composer, then send or schedule. LinkedIn-first reports stay out of this list.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerOpen(false)}
+                    className="rounded-2xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+                    aria-label="Close ready email leads drawer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl bg-emerald-50 p-3">
+                    <p className="text-[9px] font-black uppercase text-emerald-600">Ready</p>
+                    <p className="text-2xl font-black text-emerald-700">{readyCount}</p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 p-3">
+                    <p className="text-[9px] font-black uppercase text-amber-600">Needs review</p>
+                    <p className="text-2xl font-black text-amber-700">{needsReviewCount}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  {(["all", "ready", "needs_review"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setDrawerFilter(filter)}
+                      className={`rounded-full px-3 py-2 text-[10px] font-black uppercase ${
+                        drawerFilter === filter ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      }`}
+                    >
+                      {filter === "needs_review" ? "Review" : filter}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => loadSheetLeads(true)}
+                    disabled={sheetLoading}
+                    className="ml-auto rounded-full border border-slate-200 px-3 py-2 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {sheetLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                  <Search size={14} className="text-slate-400" />
+                  <input
+                    value={drawerSearch}
+                    onChange={(event) => setDrawerSearch(event.target.value)}
+                    placeholder="Search business, email, website, row..."
+                    className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none placeholder:text-slate-400"
+                  />
+                </div>
+
+                {sheetStatus && <p className="mt-2 text-[10px] font-bold text-slate-400">{sheetStatus}</p>}
+              </div>
+
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {sheetLoading && emailQueueRows.length === 0 ? (
+                  <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-sm font-black text-blue-700">
+                    Loading ready email leads...
+                  </div>
+                ) : emailQueueRows.length === 0 ? (
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5 text-sm font-bold text-slate-500">
+                    No email-ready Sheet leads found for this filter. Refresh the Sheet queue or check approval/report status.
+                  </div>
+                ) : (
+                  emailQueueRows.map(({ lead, readiness, status, queueStatus }) => {
+                    const selected = Number(selectedOutreachSheetRow || 0) === Number(lead.rowNumber || 0);
+                    return (
+                      <button
+                        key={lead.rowNumber}
+                        type="button"
+                        onClick={() => handleDrawerLeadSelect(lead)}
+                        className={`w-full rounded-3xl border p-4 text-left transition-all hover:border-blue-200 hover:bg-blue-50/40 ${
+                          selected ? "border-blue-300 bg-blue-50 shadow-sm" : "border-slate-100 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-950">
+                              {sheetValue(lead, "Business Name") || `Sheet row ${lead.rowNumber}`}
+                            </p>
+                            <p className="mt-1 truncate text-[11px] font-bold text-slate-500">{sheetValue(lead, "Final Email")}</p>
+                            <p className="truncate text-[10px] font-bold text-slate-400">{sheetValue(lead, "Website URL")}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-black uppercase ${status.tone}`}>
+                            {status.label}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-[9px] font-black uppercase">
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">Row {lead.rowNumber}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">
+                            {sheetValue(lead, "Service Type") || "Google Ads"}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500">
+                            {sheetValue(lead, "Approval Status") || "No approval"}
+                          </span>
+                        </div>
+                        <p className={`mt-3 text-[10px] font-bold leading-relaxed ${queueStatus === "ready" ? "text-emerald-600" : "text-amber-600"}`}>
+                          {readiness.ready ? "Ready to open in composer." : readiness.note}
+                        </p>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </aside>
+          </div>
+        )}
+
         <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-4 lg:p-5">
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-center">
             <div className="xl:col-span-3">
@@ -370,6 +578,11 @@ export default function OutreachPanel({
               <div>
                 <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Professional Email Composer</h2>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Clean body, cursor tags, direct send</p>
+                {selectedOutreachSheetRow ? (
+                  <p className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase text-blue-700">
+                    Loaded from Sheet row {selectedOutreachSheetRow}
+                  </p>
+                ) : null}
               </div>
               <Type className="text-blue-600" size={22} />
             </div>
@@ -526,7 +739,7 @@ export default function OutreachPanel({
                   disabled={!canSend}
                   className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  {sending ? <Loader2 className="animate-spin" /> : <><Send size={20} /> Send Outreach</>}
+                  {sending ? <Loader2 className="animate-spin" /> : <><Send size={20} /> {scheduledTime ? "Schedule Email" : "Send Now"}</>}
                 </button>
               </div>
 

@@ -1,10 +1,49 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.94-outreach-channel-save-stage-14g
+Version: v18.95-send-email-drawer-stage-15a
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
+
+
+## Latest Update — v18.95 Send Email Drawer Stage 15A
+
+Stage 15A adds a focused one-by-one email review drawer inside the Send Email tab. This is intentionally not a bulk-send workflow.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+sheet-readiness.ts
+types.ts
+utils.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Send Email tab
+→ right-side fixed Ready Leads button only
+→ click opens a slide-out Ready Email Leads drawer
+→ drawer loads Google Sheet email-ready rows
+→ clicking one row fills the composer
+→ operator reviews/edits the subject/body
+→ Send Now or Schedule uses the composer
+→ after send/schedule, the Sheet row is marked Sent/Scheduled and disappears from Ready leads
+```
+
+Important decisions:
+
+```text
+No bulk email send in this tab.
+Email copy remains sourced from Google Sheet.
+Firestore still stores only send/tracking metadata, not full email copy.
+LinkedIn-first rows stay out of the Send Email drawer unless explicitly marked as email sourced.
+The drawer is isolated as a fixed right-side UI so the existing email composer layout stays stable.
+```
 
 ## Latest Update — v18.94 Outreach Channel Save Stage 14G
 

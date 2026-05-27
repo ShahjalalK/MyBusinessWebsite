@@ -88,3 +88,60 @@ export function getSheetReportStatus(lead: SheetLead) {
     tone: "bg-red-50 text-red-700 border-red-100",
   };
 }
+
+export function isSheetEmailOutreachCandidate(lead: SheetLead) {
+  const sendStatus = sheetValue(lead, "Send Status").toLowerCase();
+  const blockedSendStatuses = new Set(["sent", "scheduled", "queued", "sending", "cancelled", "blocked", "do not contact", "unsubscribed", "bounced"]);
+  if (blockedSendStatuses.has(sendStatus)) return false;
+
+  if (!isSheetEmailReady(lead)) return false;
+
+  const emailSource = sheetValue(lead, "Email Source").toLowerCase();
+  const socialPlatform = sheetValue(lead, "Social Platform").toLowerCase();
+  const socialLink = sheetValue(lead, "Social Link").toLowerCase();
+  const leadStatus = sheetValue(lead, "Lead Status").toLowerCase();
+
+  const looksLinkedInOnly =
+    socialPlatform.includes("linkedin") ||
+    socialLink.includes("linkedin.com") ||
+    leadStatus.includes("linkedin");
+
+  const explicitlyEmailSourced =
+    emailSource.includes("email") ||
+    emailSource.includes("search") ||
+    emailSource.includes("website") ||
+    emailSource.includes("google") ||
+    emailSource.includes("verified") ||
+    emailSource.includes("hunter") ||
+    emailSource.includes("apollo");
+
+  // LinkedIn/manual prospects stay out of Send Email unless the operator explicitly marks an email source.
+  if (looksLinkedInOnly && !explicitlyEmailSourced) return false;
+
+  return true;
+}
+
+export function getSheetEmailQueueStatus(lead: SheetLead) {
+  if (!isSheetEmailOutreachCandidate(lead)) {
+    return {
+      label: "Hidden",
+      note: "This row is not part of the email review queue.",
+      tone: "bg-slate-50 text-slate-500 border-slate-100",
+    };
+  }
+
+  const readiness = getSheetReadiness(lead);
+  if (readiness.ready) {
+    return {
+      label: "Ready",
+      note: "Open this lead in the composer and review before sending.",
+      tone: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    };
+  }
+
+  return {
+    label: "Needs review",
+    note: readiness.note,
+    tone: "bg-amber-50 text-amber-700 border-amber-100",
+  };
+}

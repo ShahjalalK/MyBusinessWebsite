@@ -410,6 +410,7 @@ export default function DashboardPage() {
   const [allowCooldownOverride, setAllowCooldownOverride] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
+  const [selectedOutreachSheetRow, setSelectedOutreachSheetRow] = useState<number | null>(null);
 
   const monthOptions = useMemo(() => getRecentMonthOptions(18), []);
 
@@ -419,6 +420,10 @@ export default function DashboardPage() {
   const bodyLinkCount = (message.match(/<a\s/gi) || []).length;
   const reportLinkCount = reportUrl.trim() ? 1 : 0;
   const totalLinkCount = bodyLinkCount + reportLinkCount;
+  const selectedOutreachSheetLead = useMemo(() => {
+    if (!selectedOutreachSheetRow) return null;
+    return sheetLeads.find((lead) => Number(lead.rowNumber) === Number(selectedOutreachSheetRow)) || null;
+  }, [selectedOutreachSheetRow, sheetLeads]);
 
 
   useEffect(() => {
@@ -1064,6 +1069,7 @@ export default function DashboardPage() {
     setAllowDuplicateSend(false);
     setContactMemoryWarning(null);
     setAllowCooldownOverride(false);
+    setSelectedOutreachSheetRow(null);
     window.localStorage.removeItem(OUTREACH_DRAFT_KEY);
     setLastDraftSavedAt("");
   };
@@ -1136,6 +1142,20 @@ export default function DashboardPage() {
     try {
       const token = await currentUser.getIdToken();
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
+      const sheetLeadForSend = selectedOutreachSheetLead;
+      const sheetRowNumberForSend = sheetLeadForSend ? Number(sheetLeadForSend.rowNumber || 0) : 0;
+
+      if (sheetRowNumberForSend) {
+        await patchSheetLead(sheetRowNumberForSend, {
+          "Email Subject": subject,
+          "Email Body": currentMessage,
+          "Approval Status": "Approved",
+          "Send Status": scheduledAtISO ? "Scheduling" : "Sending",
+          "Sender ID": activeSender.id,
+          "Last Synced": new Date().toISOString(),
+          Notes: scheduledAtISO ? "Opened from Send Email drawer and scheduling from composer." : "Opened from Send Email drawer and sending from composer.",
+        });
+      }
 
       const res = await fetch("/api/trackflow/send-email", {
         method: "POST",
@@ -1160,25 +1180,92 @@ export default function DashboardPage() {
           allowDuplicateSend,
           allowCooldownOverride,
           senderId: activeSender.id,
+          ...(sheetLeadForSend
+            ? {
+                reportToken: sheetValue(sheetLeadForSend, "Report Token"),
+                pdfFileId: sheetValue(sheetLeadForSend, "PDF File ID"),
+                pdfViewUrl: sheetValue(sheetLeadForSend, "PDF View URL"),
+                pdfDownloadUrl: sheetValue(sheetLeadForSend, "PDF Download URL"),
+                pdfExpiresAt: sheetValue(sheetLeadForSend, "PDF Expires At"),
+                sheetRowNumber: sheetRowNumberForSend,
+                sheetWebsiteUrl: sheetValue(sheetLeadForSend, "Website URL"),
+                sheetFinalEmail: sheetValue(sheetLeadForSend, "Final Email"),
+                source: "google_sheet_send_email_drawer",
+              }
+            : {}),
         }),
       });
 
       const data = await res.json();
 
       if (data.success) {
+        if (sheetRowNumberForSend) {
+          try {
+            await patchSheetLead(sheetRowNumberForSend, {
+              "Email Subject": subject,
+              "Email Body": currentMessage,
+              "Approval Status": "Approved",
+              "Send Status": scheduledAtISO ? "Scheduled" : "Sent",
+              "Firestore Lead ID": data.leadId || "",
+              "Tracking ID": data.trackingId || "",
+              "Reply Status": "No Reply",
+              "Open Count": "0",
+              "Click Count": "0",
+              "Sender ID": activeSender.id,
+              "Last Synced": new Date().toISOString(),
+              Notes: scheduledAtISO ? "Scheduled from Send Email composer drawer." : "Sent from Send Email composer drawer.",
+            });
+          } catch (sheetError) {
+            console.error("Sheet status update after send failed:", sheetError);
+            setSendStatus("Email sent, but Sheet status update needs review.");
+          }
+        }
         setSendStatus(scheduledAtISO ? "Success! Email Scheduled." : "Success! Outreach Launched.");
         await refreshLeads();
         await loadFollowupSummary(true);
         resetOutreachForm();
       } else if (data.warningOnly && data.code === "cooldown_active") {
+        if (sheetRowNumberForSend) {
+          try {
+            await patchSheetLead(sheetRowNumberForSend, {
+              "Send Status": "Needs Review",
+              "Last Synced": new Date().toISOString(),
+              Notes: "Cooldown warning from Send Email composer drawer. Review the footprint before sending.",
+            });
+          } catch (sheetError) {
+            console.error("Sheet cooldown status update failed:", sheetError);
+          }
+        }
         setContactMemoryWarning(data.contactMemory || null);
         setAllowCooldownOverride(false);
         setSendStatus("Cooldown warning: review and enable override if you still want to send.");
       } else {
+        if (sheetRowNumberForSend) {
+          try {
+            await patchSheetLead(sheetRowNumberForSend, {
+              "Send Status": "Failed",
+              "Last Synced": new Date().toISOString(),
+              Notes: data.error || "Send failed from Send Email composer drawer.",
+            });
+          } catch (sheetError) {
+            console.error("Sheet failure status update failed:", sheetError);
+          }
+        }
         setSendStatus("Failed: " + (data.error || "Unknown Error"));
       }
     } catch (error) {
       console.error(error);
+      if (selectedOutreachSheetLead?.rowNumber) {
+        try {
+          await patchSheetLead(Number(selectedOutreachSheetLead.rowNumber), {
+            "Send Status": "Failed",
+            "Last Synced": new Date().toISOString(),
+            Notes: error instanceof Error ? error.message : "Network error from Send Email composer drawer.",
+          });
+        } catch (sheetError) {
+          console.error("Sheet network failure status update failed:", sheetError);
+        }
+      }
       setSendStatus("Network Error. Check Console.");
     } finally {
       setSending(false);
@@ -1765,7 +1852,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (activeTab === "sheet") {
+    if (activeTab === "sheet" || activeTab === "outreach") {
       loadSheetLeads(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1877,6 +1964,9 @@ export default function DashboardPage() {
     const subjectFromSheet = sheetValue(lead, "Email Subject");
     const bodyFromSheet = sheetValue(lead, "Email Body");
 
+    setSelectedOutreachSheetRow(Number(lead.rowNumber) || null);
+    setAllowDuplicateSend(false);
+    setAllowCooldownOverride(false);
     setEmail(sheetValue(lead, "Final Email"));
     setClientName(sheetValue(lead, "Decision Maker"));
     setCompanyName(sheetValue(lead, "Business Name"));
@@ -2305,6 +2395,12 @@ export default function DashboardPage() {
       totalLinkCount={totalLinkCount}
       canSend={canSend}
       mainInboxEmail={MAIN_INBOX_EMAIL}
+      sheetLeads={sheetLeads}
+      sheetLoading={sheetLoading}
+      sheetStatus={sheetStatus}
+      selectedOutreachSheetRow={selectedOutreachSheetRow}
+      loadSheetLeads={loadSheetLeads}
+      fillOutreachFromSheet={fillOutreachFromSheet}
       handleSenderChange={handleSenderChange}
       handleServiceChange={handleServiceChange}
       insertMergeTag={insertMergeTag}
