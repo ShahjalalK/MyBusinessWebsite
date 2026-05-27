@@ -45,6 +45,35 @@ LinkedIn-first rows stay out of the Send Email drawer unless explicitly marked a
 The drawer is isolated as a fixed right-side UI so the existing email composer layout stays stable.
 ```
 
+
+## Latest Update — v18.95.1 Send Email Drawer UI / Load Fix
+
+This patch fixes the first Send Email drawer UX test.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+sheet-readiness.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The Ready Leads button is now a small floating button, not a large vertical side tab.
+The drawer is a compact fixed right panel below the navbar with its own internal scroll.
+The drawer no longer uses a full-screen backdrop on desktop, so the dashboard is not locked behind a grey overlay.
+Send Email drawer loading is independent from Sheet tab filters, so approval/send/status filters in Sheet Queue cannot hide email-ready leads.
+The drawer force-refreshes when opened.
+If the API-level hasEmail filter returns no rows but the Sheet has rows, the drawer falls back to loading plain Sheet rows and validates them locally.
+Secure report readiness now accepts both /r/{token} and /tracking-review/{domainSlug}/{token}.
+For Send Email review, Report URL + token is enough; PDF fields no longer hide a lead from the drawer because PDF access is handled by the secure report backend.
+```
+
+---
+
 ## Latest Update — v18.94 Outreach Channel Save Stage 14G
 
 Stage 14G makes secure report registration save a small, explicit outreach workflow identity for each report so the dashboard does not have to guess whether a report belongs to email outreach or LinkedIn outreach.

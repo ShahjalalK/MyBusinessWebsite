@@ -232,7 +232,7 @@ export default function OutreachPanel({
 
     const openDrawer = () => {
       setDrawerOpen(true);
-      void loadSheetLeads(false);
+      void loadSheetLeads(true);
     };
 
     const handleDrawerLeadSelect = (lead: SheetLead) => {
@@ -245,23 +245,20 @@ export default function OutreachPanel({
         <button
           type="button"
           onClick={openDrawer}
-          className="fixed right-3 top-1/2 z-40 flex -translate-y-1/2 items-center gap-2 rounded-l-3xl rounded-r-xl border border-blue-100 bg-blue-600 px-3 py-4 text-xs font-black uppercase tracking-widest text-white shadow-2xl transition-all hover:bg-blue-700"
+          className="fixed right-4 bottom-24 z-40 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-100 bg-blue-600 text-white shadow-xl transition-all hover:-translate-y-0.5 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
           aria-label="Open ready email leads drawer"
+          title="Ready email leads"
         >
-          <ChevronLeft size={16} />
-          <span className="hidden [writing-mode:vertical-rl] sm:inline">Ready Leads</span>
-          <span className="rounded-full bg-white/20 px-2 py-1 text-[10px]">{readyCount}</span>
+          <Mail size={18} />
+          {readyCount > 0 ? (
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-black text-white ring-2 ring-white">
+              {readyCount > 99 ? "99+" : readyCount}
+            </span>
+          ) : null}
         </button>
 
         {drawerOpen && (
-          <div className="fixed inset-0 z-50">
-            <button
-              type="button"
-              className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
-              onClick={() => setDrawerOpen(false)}
-              aria-label="Close ready email leads drawer backdrop"
-            />
-            <aside className="absolute right-0 top-0 flex h-full w-full max-w-[430px] flex-col border-l border-slate-200 bg-white shadow-2xl">
+          <aside className="fixed bottom-4 right-4 top-20 z-50 flex w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
               <div className="border-b border-slate-100 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -328,14 +325,14 @@ export default function OutreachPanel({
                 {sheetStatus && <p className="mt-2 text-[10px] font-bold text-slate-400">{sheetStatus}</p>}
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
                 {sheetLoading && emailQueueRows.length === 0 ? (
                   <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5 text-sm font-black text-blue-700">
                     Loading ready email leads...
                   </div>
                 ) : emailQueueRows.length === 0 ? (
                   <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5 text-sm font-bold text-slate-500">
-                    No email-ready Sheet leads found for this filter. Refresh the Sheet queue or check approval/report status.
+                    No email-ready Sheet leads found for this filter. Refresh the drawer. If it still shows 0, check that the Google Sheet rows have Final Email and a secure Report URL.
                   </div>
                 ) : (
                   emailQueueRows.map(({ lead, readiness, status, queueStatus }) => {
@@ -379,7 +376,6 @@ export default function OutreachPanel({
                 )}
               </div>
             </aside>
-          </div>
         )}
 
         <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-4 lg:p-5">

@@ -1064,6 +1064,7 @@ export default function DashboardPage() {
     setMessage("");
     setScheduledTime("");
     setReportUrl("");
+    setSelectedOutreachSheetRow(null);
     setEmailError("");
     setDuplicateLead(null);
     setAllowDuplicateSend(false);
@@ -1851,10 +1852,76 @@ export default function DashboardPage() {
     }
   };
 
+  const loadEmailDrawerSheetLeads = async (force = false) => {
+    const cacheKey = "send_email_drawer_all";
+    if (!force && sheetLoadedAt && sheetCacheKey === cacheKey && sheetLeads.length > 0) {
+      setSheetStatus(`Cached ${sheetLeads.length} email drawer Sheet row(s). Use refresh to reload.`);
+      return;
+    }
+
+    setSheetLoading(true);
+    setSheetStatus("Loading email review queue from Google Sheet...");
+
+    const fetchSheetRows = async (hasEmailFilter: boolean) => {
+      const params = new URLSearchParams();
+      params.set("limit", "500");
+      if (hasEmailFilter) params.set("hasEmail", "true");
+
+      const headers = await getAuthHeaders();
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 20000);
+      const response = await fetch(`/api/trackflow/sheets/leads?${params.toString()}`, {
+        headers,
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeout);
+
+      const text = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Sheet API did not return JSON. Status: ${response.status}`);
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || `Sheet lead loading failed. Status: ${response.status}`);
+      }
+
+      return data;
+    };
+
+    try {
+      let data = await fetchSheetRows(true);
+      let rows = Array.isArray(data.leads) ? data.leads : [];
+
+      // Some older Sheet rows may not pass the API-level hasEmail filter because their
+      // email data was saved before the current header mapping. Fall back to a plain
+      // Sheet load so the drawer can still show rows that the UI can validate locally.
+      if (rows.length === 0 && Number(data.totalRows || 0) > 0) {
+        data = await fetchSheetRows(false);
+        rows = Array.isArray(data.leads) ? data.leads : [];
+      }
+
+      setSheetLeads(rows);
+      setSelectedSheetRows([]);
+      setSheetLoadedAt(Date.now());
+      setSheetCacheKey(cacheKey);
+      setSheetStatus(`Loaded ${rows.length} Sheet row(s) for Send Email review.`);
+    } catch (error: any) {
+      console.error("Send Email drawer Sheet load error:", error);
+      setSheetStatus(`Send Email drawer load failed: ${error.message || "Unknown error"}`);
+    } finally {
+      setSheetLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (activeTab === "sheet" || activeTab === "outreach") {
+    if (activeTab === "sheet") {
       loadSheetLeads(false);
     }
+    // The Send Email tab loads its drawer queue independently so Sheet tab filters
+    // cannot accidentally hide ready email leads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, sheetLeadFilter, sheetApprovalFilter, sheetSendFilter]);
 
@@ -2399,7 +2466,7 @@ export default function DashboardPage() {
       sheetLoading={sheetLoading}
       sheetStatus={sheetStatus}
       selectedOutreachSheetRow={selectedOutreachSheetRow}
-      loadSheetLeads={loadSheetLeads}
+      loadSheetLeads={loadEmailDrawerSheetLeads}
       fillOutreachFromSheet={fillOutreachFromSheet}
       handleSenderChange={handleSenderChange}
       handleServiceChange={handleServiceChange}

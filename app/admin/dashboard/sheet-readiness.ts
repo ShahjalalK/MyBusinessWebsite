@@ -13,6 +13,20 @@ export function isSheetMessageReady(lead: SheetLead) {
   return Boolean(stripHtml(sheetValue(lead, "Email Body"))) && Boolean(sheetValue(lead, "Email Subject"));
 }
 
+function extractReportTokenFromUrl(value: string) {
+  const url = normalizeOptionalUrl(value);
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts[0] === "r" && parts[1]) return parts[1];
+    if (parts[0] === "tracking-review" && parts[2]) return parts[2];
+  } catch {}
+
+  return "";
+}
+
 export function isSecureReportUrl(value: string) {
   const url = normalizeOptionalUrl(value);
   if (!url) return false;
@@ -27,8 +41,9 @@ export function isSecureReportUrl(value: string) {
     if (lower.includes("drive.google.com") || lower.includes("googleusercontent.com")) return false;
     if (/\.pdf(?:$|[?#])/i.test(parsed.pathname + parsed.search)) return false;
 
-    // Client-facing email/report links must be branded token pages, not raw files.
-    return /^\/r\/[a-z0-9_-]{16,96}\/?$/i.test(parsed.pathname);
+    // Client-facing links may use either the short /r/{token} page or
+    // the full /tracking-review/{domainSlug}/{token} page. Direct file links stay blocked.
+    return Boolean(extractReportTokenFromUrl(url));
   } catch {
     return false;
   }
@@ -36,11 +51,11 @@ export function isSecureReportUrl(value: string) {
 
 export function isSheetReportReady(lead: SheetLead) {
   const reportUrl = sheetValue(lead, "Report URL");
-  const reportToken = sheetValue(lead, "Report Token");
-  const pdfFileId = sheetValue(lead, "PDF File ID");
-  const pdfViewUrl = sheetValue(lead, "PDF View URL");
-  const pdfDownloadUrl = sheetValue(lead, "PDF Download URL");
-  return Boolean(isSecureReportUrl(reportUrl) && reportToken && pdfFileId && (pdfViewUrl || pdfDownloadUrl));
+  const reportToken = sheetValue(lead, "Report Token") || extractReportTokenFromUrl(reportUrl);
+
+  // For Send Email review, the secure report page URL + token is enough.
+  // PDF/B2 details can be checked on the secure page backend and should not hide a ready lead from the drawer.
+  return Boolean(isSecureReportUrl(reportUrl) && reportToken);
 }
 
 export function isSheetApprovalReady(lead: SheetLead) {
