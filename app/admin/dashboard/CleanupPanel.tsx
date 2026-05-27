@@ -23,6 +23,9 @@ import type {
   ReportAssetCleanupSheetMode,
   ReportAssetCleanupState,
   ReportCleanupStep,
+  SecureReportFilter,
+  SecureReportListState,
+  SecureReportRow,
 } from "./types";
 import { formatDate, normalizeOptionalUrl } from "./utils";
 
@@ -47,6 +50,10 @@ type CleanupPanelProps = {
   setReportAssetCleanup: (value: ReportAssetCleanupState | ((prev: ReportAssetCleanupState) => ReportAssetCleanupState)) => void;
   previewReportAssetCleanup: () => Promise<void>;
   runReportAssetCleanup: () => Promise<void>;
+  secureReports: SecureReportListState;
+  setSecureReports: (value: SecureReportListState | ((prev: SecureReportListState) => SecureReportListState)) => void;
+  loadSecureReports: (force?: boolean) => Promise<void>;
+  selectSecureReportForCleanup: (report: SecureReportRow) => void;
 };
 
 const CLEANUP_BUCKETS: CleanupBucketOption[] = [
@@ -87,6 +94,16 @@ const REPORT_SHEET_MODES: Array<{ id: ReportAssetCleanupSheetMode; label: string
   { id: "mark", label: "Mark Sheet cleaned" },
   { id: "clear", label: "Clear report fields" },
   { id: "skip", label: "Do not update Sheet" },
+];
+
+const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = [
+  { id: "all", label: "All reports" },
+  { id: "active", label: "Active" },
+  { id: "expired", label: "Expired" },
+  { id: "viewed", label: "Viewed" },
+  { id: "no_view", label: "No view" },
+  { id: "cleaned", label: "Cleaned" },
+  { id: "test", label: "Test" },
 ];
 
 function formatSourceLabel(sourceKind?: string, source?: string) {
@@ -174,6 +191,72 @@ function reportModeActionLabel(mode: ReportAssetCleanupMode): string {
   return "Archive Report";
 }
 
+function secureReportChannelLabel(channel?: SecureReportRow["channel"]): string {
+  if (channel === "linkedin") return "LinkedIn";
+  if (channel === "email") return "Email";
+  if (channel === "manual") return "Manual";
+  return "Report";
+}
+
+function isSecureReportCleaned(report: SecureReportRow): boolean {
+  const status = String(report.cleanupStatus || "").toLowerCase();
+  return status.includes("clean") || status.includes("delete") || report.active === false;
+}
+
+function isSecureReportExpired(report: SecureReportRow): boolean {
+  if (!report.pdfExpiresAt) return false;
+  const ms = Date.parse(report.pdfExpiresAt);
+  return Number.isFinite(ms) && ms <= Date.now();
+}
+
+function secureReportStatusLabel(report: SecureReportRow): string {
+  if (isSecureReportCleaned(report)) return "Cleaned";
+  if (report.ctaClicked || report.pdfDownloaded) return "High intent";
+  if (report.reportPageViewed) return "Viewed";
+  if (isSecureReportExpired(report)) return "Expired";
+  return "Active";
+}
+
+function secureReportStatusTone(report: SecureReportRow): string {
+  const status = secureReportStatusLabel(report);
+  if (status === "High intent") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (status === "Viewed") return "bg-blue-50 text-blue-700 border-blue-100";
+  if (status === "Expired") return "bg-amber-50 text-amber-700 border-amber-100";
+  if (status === "Cleaned") return "bg-gray-50 text-gray-500 border-gray-100";
+  return "bg-violet-50 text-violet-700 border-violet-100";
+}
+
+function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReportFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "active") return !isSecureReportCleaned(report) && !isSecureReportExpired(report);
+  if (filter === "expired") return isSecureReportExpired(report);
+  if (filter === "viewed") return Boolean(report.reportPageViewed || report.pdfDownloaded || report.ctaClicked);
+  if (filter === "no_view") return !report.reportPageViewed && !report.pdfDownloaded && !report.ctaClicked && !isSecureReportCleaned(report);
+  if (filter === "cleaned") return isSecureReportCleaned(report);
+  if (filter === "test") {
+    const haystack = [report.source, report.companyName, report.domain, report.email, report.cleanupStatus].join(" ").toLowerCase();
+    return haystack.includes("test") || haystack.includes("demo") || haystack.includes("fake");
+  }
+  return true;
+}
+
+function secureReportMatchesSearch(report: SecureReportRow, search: string): boolean {
+  const query = search.trim().toLowerCase();
+  if (!query) return true;
+  return [
+    report.domain,
+    report.domainSlug,
+    report.companyName,
+    report.email,
+    report.token,
+    report.reportUrl,
+    report.source,
+    report.cleanupStatus,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(query));
+}
+
 function StatCard({
   label,
   value,
@@ -218,6 +301,10 @@ export default function CleanupPanel({
   setReportAssetCleanup,
   previewReportAssetCleanup,
   runReportAssetCleanup,
+  secureReports,
+  setSecureReports,
+  loadSecureReports,
+  selectSecureReportForCleanup,
 }: CleanupPanelProps) {
   const selectedCount = selectedCleanupIds.length;
   const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
@@ -236,6 +323,10 @@ export default function CleanupPanel({
   const needsAttentionCount = reportAssetCleanup.steps.filter((step) => step.status === "warning" || step.status === "error").length;
   const doneCount = reportAssetCleanup.steps.filter((step) => step.status === "ok").length;
   const plannedCount = reportAssetCleanup.steps.filter((step) => step.status === "planned").length;
+  const filteredSecureReports = secureReports.rows
+    .filter((report) => secureReportMatchesFilter(report, secureReports.filter))
+    .filter((report) => secureReportMatchesSearch(report, secureReports.search))
+    .slice(0, 50);
 
   const handleBucketSelect = (bucket: CleanupBucket) => {
     setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket }));
@@ -295,6 +386,120 @@ export default function CleanupPanel({
           </div>
           <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
             <CheckCircle2 size={14} /> Preview first
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-gray-100 bg-gray-50 p-4 space-y-4">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saved secure reports</p>
+              <p className="text-sm font-bold text-gray-600 mt-1">Select a report from Firestore. The URL/token field below will fill automatically.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadSecureReports(true)}
+              disabled={secureReports.loading}
+              className="px-4 py-3 rounded-2xl bg-white border border-gray-100 text-gray-700 text-[10px] font-black uppercase disabled:opacity-50 flex items-center gap-2"
+            >
+              <RefreshCw size={14} className={secureReports.loading ? "animate-spin" : ""} /> Refresh Reports
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-3">
+            <div className="relative">
+              <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={secureReports.search}
+                onChange={(event) => setSecureReports((prev) => ({ ...prev, search: event.target.value }))}
+                placeholder="Search by domain, company, email, or token"
+                className="w-full pl-10 pr-4 py-3 rounded-2xl bg-white border border-gray-100 text-sm font-bold text-gray-800 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200"
+              />
+            </div>
+            <select
+              value={secureReports.filter}
+              onChange={(event) => setSecureReports((prev) => ({ ...prev, filter: event.target.value as SecureReportFilter }))}
+              className="w-full px-4 py-3 rounded-2xl bg-white border border-gray-100 text-xs font-black text-gray-700 outline-none"
+            >
+              {SECURE_REPORT_FILTERS.map((filter) => (
+                <option key={filter.id} value={filter.id}>
+                  {filter.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {(secureReports.status || secureReports.error) && (
+            <p className={`text-[10px] font-black uppercase tracking-widest ${secureReports.error ? "text-red-600" : "text-gray-400"}`}>
+              {secureReports.error || secureReports.status}
+            </p>
+          )}
+
+          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+            {secureReports.loading && !secureReports.rows.length ? (
+              <div className="rounded-2xl bg-white border border-gray-100 p-5 text-sm font-bold text-gray-500 flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin" /> Loading saved secure reports...
+              </div>
+            ) : filteredSecureReports.length ? (
+              filteredSecureReports.map((report) => {
+                const selected = secureReports.selectedToken === report.token || reportAssetCleanup.input.includes(report.token);
+                return (
+                  <div
+                    key={report.token}
+                    className={`rounded-2xl border p-4 bg-white grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr_0.8fr_auto] gap-3 items-center ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-black text-gray-900 truncate">{report.companyName || report.domain || "Untitled report"}</p>
+                        <span className="px-2 py-1 rounded-full bg-gray-50 border border-gray-100 text-[9px] font-black text-gray-500 uppercase">
+                          {secureReportChannelLabel(report.channel)}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportStatusTone(report)}`}>
+                          {secureReportStatusLabel(report)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-bold text-gray-400 truncate mt-1">{report.domain || report.domainSlug || report.token}</p>
+                      {report.email && <p className="text-[10px] font-bold text-gray-400 truncate mt-1">{report.email}</p>}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</p>
+                      <p className="text-xs font-bold text-gray-700 mt-1">
+                        {report.ctaClicked ? "CTA clicked" : report.pdfDownloaded ? "PDF downloaded" : report.reportPageViewed ? "Page viewed" : "No view yet"}
+                      </p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-1">{report.lastActivityAt ? formatDate(report.lastActivityAt) : "No activity date"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</p>
+                      <p className="text-xs font-bold text-gray-700 mt-1">{report.pdfExpiresAt ? formatDate(report.pdfExpiresAt) : "No expiry"}</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-1">{report.cleanupStatus || "Not cleaned"}</p>
+                    </div>
+                    <div className="flex flex-wrap xl:justify-end gap-2">
+                      {report.reportUrl && normalizeOptionalUrl(report.reportUrl) && (
+                        <a
+                          href={normalizeOptionalUrl(report.reportUrl) || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-2 rounded-xl bg-gray-50 text-gray-500 text-[10px] font-black uppercase inline-flex items-center gap-1"
+                        >
+                          Open <ExternalLink size={11} />
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => selectSecureReportForCleanup(report)}
+                        className="px-3 py-2 rounded-xl bg-slate-950 text-white text-[10px] font-black uppercase"
+                      >
+                        Select
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-2xl bg-white border border-gray-100 p-5 text-sm font-bold text-gray-500">
+                No saved secure reports match this filter. Try Refresh Reports or change the search/filter.
+              </div>
+            )}
           </div>
         </div>
 

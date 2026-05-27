@@ -307,3 +307,41 @@ export type ReportAssetCleanupState = {
   steps: ReportCleanupStep[];
 };
 
+export type SecureReportFilter = "all" | "active" | "expired" | "viewed" | "no_view" | "cleaned" | "test";
+
+export type SecureReportRow = {
+  token: string;
+  reportUrl: string;
+  domain: string;
+  domainSlug: string;
+  companyName?: string;
+  email?: string;
+  source?: string;
+  channel?: "email" | "linkedin" | "manual" | "unknown";
+  createdAt?: string;
+  updatedAt?: string;
+  pdfExpiresAt?: string;
+  lastActivityAt?: string;
+  reportPageViewed?: boolean;
+  pdfDownloaded?: boolean;
+  ctaClicked?: boolean;
+  cleanupStatus?: string;
+  active?: boolean;
+  leadId?: string;
+  sheetRowNumber?: number | null;
+  viewedCount?: number;
+  pdfDownloadCount?: number;
+  ctaClickCount?: number;
+  [key: string]: any;
+};
+
+export type SecureReportListState = {
+  loading: boolean;
+  error: string;
+  status: string;
+  loadedAt: number | null;
+  search: string;
+  filter: SecureReportFilter;
+  selectedToken: string;
+  rows: SecureReportRow[];
+};

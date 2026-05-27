@@ -1,61 +1,41 @@
-# TrackFlow Pro v18.87 — Cleanup UI Simplification Stage 14A
+# Replace and Test — v18.88 Secure Reports List Cleanup
 
-Replace these files in the email automation dashboard folder:
+Replace these files in your email automation dashboard folder:
 
 ```text
 page.tsx
 CleanupPanel.tsx
+types.ts
 PROJECT_CONTEXT_README.md
 ```
 
-`types.ts` is included as a safe reference copy. It is unchanged from your uploaded version.
-
-## What changed
-
-- The Cleanup tab now uses simple operator-friendly labels:
-  - Preview
-  - Archive Report
-  - Remove Files Only
-  - Delete Test Data
-- Technical words such as B2, Blob, Supabase, Firestore, manifest, soft, hard, and assets_only are hidden from the main workflow.
-- Cleanup result rows are shown as human-readable items:
-  - PDF file
-  - Preview image
-  - Chat history
-  - Secure report
-  - Sheet row
-  - Linked lead
-- Technical cleanup details remain available under “Show technical details”.
-- Old lead cleanup is clearly separated from secure report cleanup.
-
-## What did not change
-
-- Backend cleanup routes
-- API URLs
-- Firestore fields
-- Sheet fields
-- B2/Blob/Supabase cleanup logic
-- Cron cleanup behavior
-- Lead cleanup behavior
-- Dashboard stored state shape
-
-## Test checklist
+Then run:
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Then test:
+Test checklist:
 
 ```text
-1. Open Cleanup tab
-2. Paste a test secure report URL or token
-3. Click Preview
-4. Confirm the summary is easy to understand
-5. Run Archive Report only on test data first
-6. Use Delete Test Data only for fake/test reports
-7. Check Old Lead Cleanup buttons and filters
+1. Open the Cleanup tab.
+2. Click Refresh Reports in Secure Report Cleanup.
+3. Confirm saved reports from Firestore audit_reports appear.
+4. Search by domain/company/email/token.
+5. Use filters: All, Active, Expired, Viewed, No view, Cleaned, Test.
+6. Click Select on a saved report.
+7. Confirm the report URL/token field fills automatically.
+8. Click Preview.
+9. Review the cleanup summary.
+10. Run Archive Report only on test data first.
 ```
 
-If a build error appears, send the exact terminal error.
+Notes:
+
+```text
+- Backend cleanup endpoints were not changed in this patch.
+- The list loads from Firestore audit_reports using the dashboard Firebase client.
+- If Firestore rules block audit_reports reads, do not make reports public. Add a small admin-only backend list endpoint later.
+- Delete Test Data is only for fake/test records or carefully reviewed delete requests.
+```

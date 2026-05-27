@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.87-dashboard-cleanup-ui-simplification-stage-14a
+Version: v18.88-dashboard-secure-reports-list-cleanup-stage-14b
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -2156,6 +2156,50 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+
+
+### v18.88 Dashboard Secure Reports List Cleanup Stage 14B
+
+The Cleanup tab can now load saved secure report records from Firestore `audit_reports` so the operator no longer has to manually search for a report token before cleanup.
+
+Changed files:
+
+```text
+page.tsx
+CleanupPanel.tsx
+types.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The cleanup backend endpoints were not changed in this stage.
+Dashboard loads secure report rows client-side from audit_reports with a safe fallback query if ordered loading is unavailable.
+The Secure Report Cleanup card now shows a searchable/filterable saved report list.
+Selecting a saved report automatically fills the cleanup URL/token field.
+Preview remains the first step before any cleanup action.
+Archive Report remains the recommended normal action.
+Delete Test Data remains reserved for fake/test records or carefully reviewed delete requests.
+If Firestore security rules block client-side audit_reports reads, add a small admin-only backend list endpoint later instead of weakening public Firestore rules.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+Open Cleanup tab
+Click Refresh Reports
+Confirm Firestore audit_reports rows appear
+Search/filter reports
+Select one report
+Click Preview
+Confirm the cleanup summary appears
+Run Archive Report only on test data first
+```
 
 
 ### v18.87 Dashboard Cleanup UI Simplification Stage 14A

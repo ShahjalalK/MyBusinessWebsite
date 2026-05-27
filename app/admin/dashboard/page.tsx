@@ -8,6 +8,7 @@ import {
   getDoc,
   getDocs,
   limit,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -72,6 +73,8 @@ import type {
   Lead,
   MainTab,
   ReportAssetCleanupState,
+  SecureReportListState,
+  SecureReportRow,
   ScheduledEditState,
   ServiceId,
   SheetLead,
@@ -189,6 +192,111 @@ function looksLikeReportUrl(value: string): boolean {
   return /^https?:\/\//i.test(text) || text.includes("/tracking-review/") || text.includes("/r/");
 }
 
+function emptySecureReportListState(): SecureReportListState {
+  return {
+    loading: false,
+    error: "",
+    status: "",
+    loadedAt: null,
+    search: "",
+    filter: "all",
+    selectedToken: "",
+    rows: [],
+  };
+}
+
+function cleanReportText(value: any, fallback = ""): string {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function firstReportText(...values: any[]): string {
+  for (const value of values) {
+    const text = cleanReportText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function boolFromReportValue(value: any): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  const text = cleanReportText(value).toLowerCase();
+  return ["1", "true", "yes", "y", "viewed", "downloaded", "clicked", "done"].includes(text);
+}
+
+function isoFromReportValue(value: any): string {
+  const ms = toMillis(value);
+  return ms ? new Date(ms).toISOString() : "";
+}
+
+function reportDomainSlug(value: any): string {
+  return cleanReportText(value, "website")
+    .toLowerCase()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split("/")[0]
+    .split("?")[0]
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "website";
+}
+
+function buildDashboardReportUrl(token: string, domainSlug: string, explicitUrl?: string): string {
+  const cleanUrl = cleanReportText(explicitUrl);
+  if (cleanUrl) return cleanUrl;
+  const origin = typeof window !== "undefined" ? window.location.origin : cleanReportText(process.env.NEXT_PUBLIC_APP_URL, "");
+  return origin ? `${origin.replace(/\/+$/, "")}/tracking-review/${encodeURIComponent(domainSlug || "website")}/${encodeURIComponent(token)}` : "";
+}
+
+function normalizeReportChannel(data: any): SecureReportRow["channel"] {
+  const sourceText = firstReportText(data.channel, data.outreachChannel, data.outreach_channel, data.source, data.audit_source).toLowerCase();
+  if (sourceText.includes("linkedin")) return "linkedin";
+  if (sourceText.includes("email") || sourceText.includes("brevo") || sourceText.includes("cold")) return "email";
+  if (sourceText.includes("manual")) return "manual";
+  return "unknown";
+}
+
+function buildSecureReportRow(docSnap: any): SecureReportRow {
+  const data = (docSnap.data?.() || {}) as any;
+  const token = cleanReportText(data.token || data.reportToken || data.report_token || docSnap.id);
+  const domain = firstReportText(data.normalizedDomain, data.normalized_domain, data.domain, data.websiteUrl, data.website, data.website_url);
+  const domainSlug = reportDomainSlug(firstReportText(data.domainSlug, data.domain_slug, domain, data.companyName, data.company_name, "website"));
+  const reportUrl = buildDashboardReportUrl(token, domainSlug, firstReportText(data.reportUrl, data.report_url));
+  const viewedCount = Number(data.reportViewCount || data.report_view_count || data.pageViewCount || data.viewCount || 0) || 0;
+  const pdfDownloadCount = Number(data.pdfDownloadCount || data.pdf_download_count || data.downloadCount || 0) || 0;
+  const ctaClickCount = Number(data.ctaClickCount || data.cta_click_count || data.clickCount || 0) || 0;
+  const lastActivityAt = isoFromReportValue(
+    data.lastActivityAt || data.last_activity_at || data.lastReportViewedAt || data.last_report_viewed_at || data.lastPdfDownloadedAt || data.last_pdf_downloaded_at || data.lastCtaClickedAt || data.last_cta_clicked_at || data.updatedAt,
+  );
+
+  return {
+    token,
+    reportUrl,
+    domain: domain || domainSlug || "website",
+    domainSlug,
+    companyName: firstReportText(data.companyName, data.company_name, data.businessName, data.business_name),
+    email: firstReportText(data.emailLower, data.email_lower, data.email, data.finalEmail, data.final_email),
+    source: firstReportText(data.source, data.audit_source, data.outreachSource, data.outreach_source),
+    channel: normalizeReportChannel(data),
+    createdAt: isoFromReportValue(data.createdAt || data.created_at),
+    updatedAt: isoFromReportValue(data.updatedAt || data.updated_at),
+    pdfExpiresAt: isoFromReportValue(data.pdfExpiresAt || data.pdf_expires_at),
+    lastActivityAt,
+    reportPageViewed: boolFromReportValue(data.reportPageViewed || data.report_page_viewed) || viewedCount > 0,
+    pdfDownloaded: boolFromReportValue(data.pdfDownloaded || data.pdf_downloaded) || pdfDownloadCount > 0,
+    ctaClicked: boolFromReportValue(data.ctaClicked || data.cta_clicked) || ctaClickCount > 0,
+    cleanupStatus: firstReportText(data.cleanupStatus, data.cleanup_status),
+    active: data.active === undefined ? true : data.active !== false,
+    leadId: firstReportText(data.leadId, data.lead_id, data.firestoreLeadId, data.firestore_lead_id, data.outreachLeadId, data.outreach_lead_id),
+    sheetRowNumber: Number(data.sheetRowNumber || data.sheet_row_number || 0) || null,
+    viewedCount,
+    pdfDownloadCount,
+    ctaClickCount,
+  };
+}
+
 
 function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "full" | "compact" = "full") {
   if (!sender) return "";
@@ -251,6 +359,7 @@ export default function DashboardPage() {
   const leads = cachedLeads as Lead[];
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [reportAssetCleanup, setReportAssetCleanup] = useState<ReportAssetCleanupState>(() => emptyReportAssetCleanupState());
+  const [secureReports, setSecureReports] = useState<SecureReportListState>(() => emptySecureReportListState());
 
   const {
     // Lead screen UI state kept in Zustand so filter/selection state survives tab switches.
@@ -1177,6 +1286,66 @@ export default function DashboardPage() {
 
 
 
+  const loadSecureReports = async (force = false) => {
+    if (!force && secureReports.loadedAt && Date.now() - secureReports.loadedAt < 60_000) return;
+
+    setSecureReports((prev) => ({ ...prev, loading: true, error: "", status: "Loading secure reports..." }));
+
+    try {
+      let snap;
+
+      try {
+        snap = await getDocs(query(collection(db, "audit_reports"), orderBy("updatedAt", "desc"), limit(100)));
+      } catch (orderedError) {
+        console.warn("Secure report ordered load fallback:", orderedError);
+        snap = await getDocs(query(collection(db, "audit_reports"), limit(100)));
+      }
+
+      const rows = snap.docs
+        .map((docSnap: any) => buildSecureReportRow(docSnap))
+        .filter((row: SecureReportRow) => Boolean(row.token))
+        .sort((a: SecureReportRow, b: SecureReportRow) => {
+          const aMs = Math.max(toMillis(a.lastActivityAt), toMillis(a.updatedAt), toMillis(a.createdAt), toMillis(a.pdfExpiresAt));
+          const bMs = Math.max(toMillis(b.lastActivityAt), toMillis(b.updatedAt), toMillis(b.createdAt), toMillis(b.pdfExpiresAt));
+          return bMs - aMs;
+        });
+
+      setSecureReports((prev) => ({
+        ...prev,
+        loading: false,
+        error: "",
+        status: rows.length ? `Loaded ${rows.length} secure report(s).` : "No secure reports found yet.",
+        loadedAt: Date.now(),
+        rows,
+      }));
+    } catch (error: any) {
+      console.error("Secure reports load error:", error);
+      setSecureReports((prev) => ({
+        ...prev,
+        loading: false,
+        error: error?.message || "Secure reports could not be loaded.",
+        status: "",
+      }));
+    }
+  };
+
+  const selectSecureReportForCleanup = (report: SecureReportRow) => {
+    const input = report.reportUrl || report.token;
+    setSecureReports((prev) => ({ ...prev, selectedToken: report.token }));
+    setReportAssetCleanup((prev) => ({
+      ...prev,
+      input,
+      error: "",
+      status: `Selected ${report.domain || report.companyName || report.token}. Preview before running cleanup.`,
+      dryRun: true,
+      confirmText: "",
+      jobId: "",
+      failedCount: 0,
+      manifest: null,
+      steps: [],
+    }));
+  };
+
   const buildReportCleanupQuery = () => {
     const input = reportAssetCleanup.input.trim();
     const params = new URLSearchParams({
@@ -1305,6 +1474,7 @@ export default function DashboardPage() {
       }));
 
       await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
+      await loadSecureReports(true);
       await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
     } catch (error: any) {
       console.error("Report cleanup run error:", error);
@@ -1531,6 +1701,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (activeTab === "cleanup") {
       loadCleanupCandidates(leadCleanup.bucket, false);
+      loadSecureReports(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, leadCleanup.bucket]);
@@ -2425,6 +2596,10 @@ export default function DashboardPage() {
               setReportAssetCleanup={setReportAssetCleanup}
               previewReportAssetCleanup={previewReportAssetCleanup}
               runReportAssetCleanup={runReportAssetCleanup}
+              secureReports={secureReports}
+              setSecureReports={setSecureReports}
+              loadSecureReports={loadSecureReports}
+              selectSecureReportForCleanup={selectSecureReportForCleanup}
             />
           )}
           {activeTab === "automation" && renderFollowups()}
