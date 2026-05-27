@@ -1203,7 +1203,7 @@ async function enrichSecureReportListRowWithLead(row: AnyRecord): Promise<AnyRec
       };
     }
 
-    const lead = { ...asRecord(leadSnap.data()), id: leadSnap.id };
+    const lead: AnyRecord = { ...asRecord(leadSnap.data()), id: leadSnap.id };
     const leadSummary = buildContactSummaryFromRecord(lead, row.channel || "unknown");
 
     return {
