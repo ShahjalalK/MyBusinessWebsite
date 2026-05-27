@@ -1333,12 +1333,19 @@ export default function DashboardPage() {
       return;
     }
 
+    const contactModeNote =
+      reportAssetCleanup.leadMode === "delete_no_memory"
+        ? " The selected contact will be deleted only if no outreach history is found."
+        : reportAssetCleanup.leadMode === "delete"
+          ? " A small safety memory will be kept for the selected contact."
+          : "";
+
     const confirmMessage =
       reportAssetCleanup.mode === "hard"
-        ? "Delete Test Data will remove report records and selected linked data. Use this only for fake/test records. Continue?"
+        ? `Delete Test Data will remove report records and selected linked data. Use this only for fake/test records.${contactModeNote} Continue?`
         : reportAssetCleanup.mode === "assets_only"
-          ? "Remove Files Only will remove the PDF, preview image, and chat history but keep saved records. Continue?"
-          : "Archive Report will remove report files, make the secure page inactive, and keep a small safety history. Continue?";
+          ? `Remove Files Only will remove the PDF, preview image, and chat history but keep saved records.${contactModeNote} Continue?`
+          : `Archive Report will remove report files, make the secure page inactive, and keep a small safety history.${contactModeNote} Continue?`;
 
     if (!window.confirm(confirmMessage)) return;
 

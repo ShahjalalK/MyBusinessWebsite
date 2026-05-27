@@ -84,10 +84,11 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
 ];
 
 const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string }> = [
-  { id: "none", label: "Keep lead unchanged" },
-  { id: "archive", label: "Archive linked lead" },
-  { id: "trash", label: "Move linked lead to trash" },
-  { id: "delete", label: "Delete test lead, keep safety memory" },
+  { id: "none", label: "Keep contact unchanged" },
+  { id: "archive", label: "Archive contact" },
+  { id: "trash", label: "Move contact to trash" },
+  { id: "delete", label: "Delete contact, keep safety memory" },
+  { id: "delete_no_memory", label: "Delete test contact, no memory" },
 ];
 
 const REPORT_SHEET_MODES: Array<{ id: ReportAssetCleanupSheetMode; label: string }> = [
@@ -160,7 +161,8 @@ function reportStepActionLabel(step: ReportCleanupStep): string {
   if (action.includes("mark_cleanup")) return "Mark cleaned";
   if (action.includes("archive_lead")) return "Archive lead";
   if (action.includes("trash_lead")) return "Move to trash";
-  if (action.includes("delete_lead")) return "Delete lead";
+  if (action.includes("delete_lead_no_memory")) return "Delete test contact";
+  if (action.includes("delete_lead")) return "Delete contact";
 
   return step.action ? step.action.replace(/_/g, " ") : "Cleanup";
 }
@@ -541,7 +543,7 @@ export default function CleanupPanel({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Linked lead</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Contact record</label>
             <select
               value={reportAssetCleanup.leadMode}
               onChange={(event) =>
@@ -558,7 +560,7 @@ export default function CleanupPanel({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sheet row</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Spreadsheet row</label>
             <select
               value={reportAssetCleanup.sheetMode}
               onChange={(event) =>
@@ -578,6 +580,12 @@ export default function CleanupPanel({
         <div className={`rounded-2xl border p-4 text-[12px] font-bold leading-relaxed ${reportAssetCleanup.mode === "hard" ? "bg-red-50 border-red-100 text-red-700" : "bg-blue-50 border-blue-100 text-blue-700"}`}>
           <span className="font-black">{activeReportMode.label}:</span> {activeReportMode.note}
           {reportAssetCleanup.mode === "soft" && " This is the safest normal action for expired or unused report links."}
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-[12px] text-gray-600 font-semibold leading-relaxed">
+          <span className="font-black text-gray-900">Contact memory rule:</span>{" "}
+          If a contact was never emailed or messaged, choose <span className="font-black">Delete test contact, no memory</span>. 
+          If outreach was already sent, keep safety memory so the same person is not contacted again by mistake.
         </div>
 
         {reportAssetCleanup.mode === "hard" && (

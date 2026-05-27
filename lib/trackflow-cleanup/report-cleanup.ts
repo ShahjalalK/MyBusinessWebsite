@@ -11,7 +11,7 @@ type ApiErrorInstance = Error & { status: number };
 type ApiErrorConstructor = new (message: string, status?: number) => ApiErrorInstance;
 
 type CleanupMode = "soft" | "hard" | "assets_only";
-type LeadCleanupMode = "none" | "archive" | "trash" | "delete";
+type LeadCleanupMode = "none" | "archive" | "trash" | "delete" | "delete_no_memory";
 
 type StepStatus = "planned" | "skipped" | "ok" | "warning" | "error";
 
@@ -40,6 +40,8 @@ type CleanupManifest = {
   domainIndexIds: string[];
   pdfExpiresAt: string;
   cleanupStatus: string;
+  leadContacted: boolean;
+  leadContactReason: string;
 };
 
 export type ReportCleanupHandlerDeps = {
@@ -306,6 +308,90 @@ async function getLeadByIdOrReportToken(leadId: string, reportToken: string): Pr
   return null;
 }
 
+
+function numericLeadValue(value: any): number {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function arrayHasItems(value: any): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function detectLeadContactHistory(lead: AnyRecord): { contacted: boolean; reason: string } {
+  if (!lead || !Object.keys(lead).length) {
+    return { contacted: false, reason: "" };
+  }
+
+  const status = clean(lead.status || lead.nextFollowupStatus || "").toLowerCase();
+  const contactedStatuses = new Set([
+    "sent",
+    "opened",
+    "clicked",
+    "replied",
+    "interested",
+    "active",
+    "bounced",
+    "spam",
+    "unsubscribed",
+    "not_interested",
+    "finished",
+    "cancelled",
+    "blocked_suppressed",
+  ]);
+
+  if (contactedStatuses.has(status)) {
+    return { contacted: true, reason: `status:${status}` };
+  }
+
+  const sentTime = Math.max(
+    toMillis(lead.sentAt),
+    toMillis(lead.sent_at),
+    toMillis(lead.emailSentAt),
+    toMillis(lead.email_sent_at),
+    toMillis(lead.lastFollowUp),
+    toMillis(lead.last_follow_up),
+    toMillis(lead.lastOpenedAt),
+    toMillis(lead.last_opened_at),
+    toMillis(lead.lastClickedAt),
+    toMillis(lead.last_clicked_at),
+    toMillis(lead.lastEngagedAt),
+    toMillis(lead.last_engaged_at),
+  );
+
+  if (sentTime > 0) {
+    return { contacted: true, reason: "sent_or_engagement_timestamp" };
+  }
+
+  if (
+    numericLeadValue(lead.open_count || lead.openCount) > 0 ||
+    numericLeadValue(lead.click_count || lead.clickCount) > 0 ||
+    numericLeadValue(lead.follow_up_count || lead.followUpCount) > 0
+  ) {
+    return { contacted: true, reason: "engagement_or_followup_count" };
+  }
+
+  if (arrayHasItems(lead.sent_messages) || arrayHasItems(lead.sentMessages)) {
+    return { contacted: true, reason: "sent_messages" };
+  }
+
+  if (arrayHasItems(lead.tracking_history) || arrayHasItems(lead.trackingHistory)) {
+    return { contacted: true, reason: "tracking_history" };
+  }
+
+  if (clean(lead.brevoMessageId || lead.messageId || lead.customMessageId || lead.trackingId)) {
+    return { contacted: true, reason: "message_or_tracking_id" };
+  }
+
+  return { contacted: false, reason: "" };
+}
+
+function shouldSaveContactMemory(leadMode: LeadCleanupMode, manifest: CleanupManifest): boolean {
+  if (leadMode === "none" || leadMode === "delete_no_memory") return false;
+  if (leadMode === "delete") return true;
+  return Boolean(manifest.leadContacted);
+}
+
 async function collectDomainIndexIds(report: AnyRecord, token: string): Promise<string[]> {
   const directIds = uniqueStrings(
     [
@@ -353,6 +439,7 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
   const normalizedDomain = normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website, lead.website);
   const domainIndexIds = await collectDomainIndexIds(report, token);
   const sheetRowNumber = Number(report.sheetRowNumber || report.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
+  const leadContactHistory = detectLeadContactHistory(lead);
 
   const manifest: CleanupManifest = {
     reportToken: token,
@@ -369,6 +456,8 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     domainIndexIds,
     pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
     cleanupStatus: firstCleanString(report.cleanupStatus, report.cleanup_status),
+    leadContacted: leadContactHistory.contacted,
+    leadContactReason: leadContactHistory.reason,
   };
 
   return { manifest, report, lead };
@@ -388,7 +477,7 @@ function parseMode(value: any): CleanupMode {
 
 function parseLeadMode(value: any): LeadCleanupMode {
   const raw = clean(value || "none").toLowerCase();
-  if (["none", "archive", "trash", "delete"].includes(raw)) return raw as LeadCleanupMode;
+  if (["none", "archive", "trash", "delete", "delete_no_memory"].includes(raw)) return raw as LeadCleanupMode;
   return "none";
 }
 
@@ -582,11 +671,11 @@ async function writeContactMemoryForLead(lead: AnyRecord, manifest: CleanupManif
 
 async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadMode: LeadCleanupMode, actor: string): Promise<CleanupStep> {
   if (leadMode === "none") {
-    return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Lead cleanup was skipped by request." };
+    return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup was skipped by request." };
   }
 
   if (!manifest.leadId || !manifest.leadFound) {
-    return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "No linked outreach lead found." };
+    return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "No linked contact record found." };
   }
 
   const ref = adminDb.collection("outreach_leads").doc(manifest.leadId);
@@ -594,7 +683,32 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
   const reason = `report_cleanup_${leadMode}`;
 
   try {
-    await writeContactMemoryForLead(lead, manifest, actor, reason);
+    if (leadMode === "delete_no_memory") {
+      if (manifest.leadContacted) {
+        return {
+          service: "firestore",
+          action: "delete_lead_no_memory",
+          status: "error",
+          target: manifest.leadId,
+          message: "This contact has outreach history, so no-memory delete was blocked. Use the keep-safety-memory delete option instead.",
+          details: { leadContactReason: manifest.leadContactReason || "outreach_history_detected" },
+        };
+      }
+
+      await ref.delete();
+      return {
+        service: "firestore",
+        action: "delete_lead_no_memory",
+        status: "ok",
+        target: manifest.leadId,
+        message: "Test contact deleted. No contact memory was saved because no outreach history was found.",
+      };
+    }
+
+    const memorySaved = shouldSaveContactMemory(leadMode, manifest);
+    if (memorySaved) {
+      await writeContactMemoryForLead(lead, manifest, actor, reason);
+    }
 
     if (leadMode === "delete") {
       await ref.delete();
@@ -603,7 +717,9 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
         action: "delete_lead_keep_memory",
         status: "ok",
         target: manifest.leadId,
-        message: "Lead document deleted after tiny contact memory was saved.",
+        message: memorySaved
+          ? "Contact record deleted after tiny safety memory was saved."
+          : "Contact record deleted.",
       };
     }
 
@@ -622,7 +738,15 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
         { merge: true },
       );
 
-      return { service: "firestore", action: "trash_lead", status: "ok", target: manifest.leadId, message: "Lead moved to trash." };
+      return {
+        service: "firestore",
+        action: "trash_lead",
+        status: "ok",
+        target: manifest.leadId,
+        message: memorySaved
+          ? "Contact moved to trash and safety memory was kept."
+          : "Contact moved to trash. No safety memory was needed because no outreach history was found.",
+      };
     }
 
     await ref.set(
@@ -639,12 +763,19 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
       { merge: true },
     );
 
-    return { service: "firestore", action: "archive_lead", status: "ok", target: manifest.leadId, message: "Lead archived and automation stopped." };
+    return {
+      service: "firestore",
+      action: "archive_lead",
+      status: "ok",
+      target: manifest.leadId,
+      message: memorySaved
+        ? "Contact archived, automation stopped, and safety memory was kept."
+        : "Contact archived and automation stopped. No safety memory was needed because no outreach history was found.",
+    };
   } catch (error: any) {
     return { service: "firestore", action: "lead_cleanup", status: "error", target: manifest.leadId, error: safeError(error) };
   }
 }
-
 async function cleanupFirestoreReportStep(manifest: CleanupManifest, mode: CleanupMode, actor: string): Promise<CleanupStep> {
   if (!manifest.reportFound) {
     return { service: "firestore", action: "cleanup_report_document", status: "skipped", message: "Report document was not found." };
@@ -808,8 +939,26 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
       ? { service: "google_sheet", action: "mark_cleanup", status: "skipped", message: "Sheet cleanup would be skipped." }
       : plannedStep("google_sheet", sheetMode === "clear" ? "clear_report_fields" : "mark_cleanup", String(manifest.sheetRowNumber || ""), "Sheet row would be updated if row number is available."),
     leadMode === "none"
-      ? { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Lead cleanup would be skipped." }
-      : plannedStep("firestore", `${leadMode}_lead`, manifest.leadId, "Linked outreach lead would be cleaned after contact memory is saved."),
+      ? { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup would be skipped." }
+      : leadMode === "delete_no_memory" && manifest.leadContacted
+        ? {
+            service: "firestore",
+            action: "delete_lead_no_memory",
+            status: "warning",
+            target: manifest.leadId,
+            message: "No-memory delete is blocked because this contact has outreach history. Use keep-safety-memory delete instead.",
+            details: { leadContactReason: manifest.leadContactReason || "outreach_history_detected" },
+          }
+        : plannedStep(
+            "firestore",
+            leadMode === "delete_no_memory" ? "delete_lead_no_memory" : `${leadMode}_lead`,
+            manifest.leadId,
+            leadMode === "delete_no_memory"
+              ? "Test contact would be deleted with no safety memory because no outreach history was found."
+              : manifest.leadContacted || leadMode === "delete"
+                ? "Contact record would be cleaned and safety memory would be kept."
+                : "Contact record would be cleaned. No safety memory is needed because no outreach history was found.",
+          ),
   ];
 
   return steps;

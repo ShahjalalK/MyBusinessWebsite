@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.89-admin-api-secure-reports-list-stage-14c
+Version: v18.90-delete-test-contact-no-memory-stage-14d
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -2156,6 +2156,45 @@ The drawer feels like it is part of the page instead of a true side modal.
 ```
 
 ## 11. Version History Summary
+
+
+
+### v18.90 Delete Test Contact With No Memory Stage 14D
+
+The cleanup system now supports deleting an uncontacted test lead/contact without creating a `contact_memory` footprint.
+
+Changed files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+page.tsx
+CleanupPanel.tsx
+types.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+New lead/contact cleanup mode:
+delete_no_memory
+
+Dashboard label:
+Delete test contact, no memory
+
+Use this only when the contact was never emailed or messaged.
+If the linked contact has outreach history, the backend blocks no-memory delete and tells the operator to use the keep-safety-memory option instead.
+Archive/trash cleanup only writes contact_memory when outreach history exists.
+The keep-safety-memory delete option still writes a tiny contact_memory footprint before removing the lead/contact document.
+```
+
+Simple rule:
+
+```text
+Not contacted = delete fully, no footprint needed.
+Contacted by email or LinkedIn = delete/cleanup only with tiny safety memory.
+```
 
 
 ### v18.89 Admin API Secure Reports List Stage 14C
