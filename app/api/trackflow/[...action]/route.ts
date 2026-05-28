@@ -2245,8 +2245,24 @@ type NextFollowupSchedule = {
 };
 
 function getServiceId(value: any): string {
-  const service = String(value || "").trim();
-  return SERVICES.has(service) ? service : "Email Signature";
+  const raw = String(value || "").trim();
+  if (SERVICES.has(raw)) return raw;
+
+  const normalized = raw
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (normalized.includes("signature")) return "Email Signature";
+  if (normalized.includes("server") || normalized.includes("sst") || normalized.includes("side tracking")) {
+    return "Server Side Tracking";
+  }
+  if (normalized.includes("google") || normalized.includes("adwords") || normalized === "ads" || normalized.includes("ppc")) {
+    return "Google Ads";
+  }
+
+  return "Email Signature";
 }
 
 function getFollowupStepConfig(configData: any, service: string, nextFollowupNumber: number) {
@@ -8204,7 +8220,8 @@ type FollowupRescheduleResult = {
   skippedInactive: number;
   skippedWrongStep: number;
   skippedMissingSchedule: number;
-  samples: Array<{ leadId: string; email: string; previousAt?: string; nextAt: string }>;
+  samples: Array<{ leadId: string; email: string; previousAt?: string; nextAt: string; nextAtMs: number }>;
+  updates: Array<{ leadId: string; email: string; previousAt?: string; nextAt: string; nextAtMs: number }>;
 };
 
 function isReschedulableLeadStatus(status: any): boolean {
@@ -8260,11 +8277,12 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
     skippedWrongStep: 0,
     skippedMissingSchedule: 0,
     samples: [],
+    updates: [],
   };
 
   const snap = await adminDb
     .collection("outreach_leads")
-    .where("nextFollowupStatus", "==", "scheduled")
+    .where("status", "in", Array.from(ACTIVE_STATUSES))
     .limit(max)
     .get();
 
@@ -8303,11 +8321,6 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
 
     result.matched += 1;
     const existingMs = toMillis(lead.nextFollowupAt);
-    if (!existingMs) {
-      result.skipped += 1;
-      result.skippedMissingSchedule += 1;
-      continue;
-    }
 
     const nextMs = buildRescheduleTimestampForLead(lead, delayMinutes);
     if (!nextMs) {
@@ -8316,7 +8329,7 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
       continue;
     }
 
-    if (!shouldAllowEarlier && nextMs <= existingMs + 60_000) {
+    if (existingMs && !shouldAllowEarlier && nextMs <= existingMs + 60_000) {
       result.skipped += 1;
       result.skippedEarlier += 1;
       continue;
@@ -8334,13 +8347,19 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
 
     result.updated += 1;
     batchCount += 1;
+    const updateRow = {
+      leadId: docSnap.id,
+      email: lead.emailLower || lead.email || "",
+      previousAt: existingMs ? new Date(existingMs).toISOString() : undefined,
+      nextAt: new Date(nextMs).toISOString(),
+      nextAtMs: nextMs,
+    };
+
     if (result.samples.length < 10) {
-      result.samples.push({
-        leadId: docSnap.id,
-        email: lead.emailLower || lead.email || "",
-        previousAt: existingMs ? new Date(existingMs).toISOString() : undefined,
-        nextAt: new Date(nextMs).toISOString(),
-      });
+      result.samples.push(updateRow);
+    }
+    if (result.updates.length < 100) {
+      result.updates.push(updateRow);
     }
 
     if (batchCount >= 400) await commitBatch();
@@ -8360,6 +8379,101 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
     ...result,
   });
 }
+
+
+async function handleFollowupAutomationCandidates(req: Request) {
+  /**
+   * Automation tab candidate loader.
+   * This does not depend on the cached Leads tab page, so older engaged leads still
+   * appear under the follow-up editor for the correct service/step.
+   */
+  await requireAdmin(req);
+  const url = new URL(req.url);
+  const service = getServiceId(url.searchParams.get("service"));
+  const { stepKey, stepNumber } = normalizeRescheduleStep(url.searchParams.get("step"));
+  const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 200));
+
+  const runtimeConfig = await loadFollowupRuntimeConfig();
+  const stepConfig = runtimeConfig.data?.[service]?.[stepKey];
+  const delayMinutesRaw = Number(stepConfig?.delay || 1440);
+  const delayMinutes = Number.isFinite(delayMinutesRaw) && delayMinutesRaw > 0 ? delayMinutesRaw : 1440;
+
+  const snap = await adminDb
+    .collection("outreach_leads")
+    .where("status", "in", Array.from(ACTIVE_STATUSES))
+    .limit(Math.min(max * 5, 500))
+    .get();
+
+  const rows: any[] = [];
+  let checked = 0;
+  let skippedWrongService = 0;
+  let skippedWrongStep = 0;
+  let skippedNoEngagement = 0;
+  let skippedInactive = 0;
+
+  for (const docSnap of snap.docs) {
+    checked += 1;
+    const lead = { id: docSnap.id, ...docSnap.data() } as LeadData;
+
+    if (lead.stopAutomation === true || lead.archived === true || lead.deleted === true || !isReschedulableLeadStatus(lead.status)) {
+      skippedInactive += 1;
+      continue;
+    }
+
+    if (getServiceId(lead.service) !== service) {
+      skippedWrongService += 1;
+      continue;
+    }
+
+    const followUpCount = Number(lead.follow_up_count || 0);
+    const expectedFollowupCount = stepNumber - 1;
+    const storedStep = Number(lead.nextFollowupStep || 0);
+    if (followUpCount !== expectedFollowupCount || (storedStep && storedStep !== stepNumber)) {
+      skippedWrongStep += 1;
+      continue;
+    }
+
+    const nextMs = buildRescheduleTimestampForLead(lead, delayMinutes);
+    if (!nextMs) {
+      skippedNoEngagement += 1;
+      continue;
+    }
+
+    rows.push({
+      ...serializeManagedLead(docSnap),
+      service,
+      candidateStep: stepNumber,
+      candidateStepKey: stepKey,
+      candidateNextFollowupAt: nextMs,
+      candidateNextFollowupAtIso: new Date(nextMs).toISOString(),
+      candidateDelayMinutes: delayMinutes,
+    });
+
+    if (rows.length >= max) break;
+  }
+
+  rows.sort((a, b) => {
+    const aMs = Number(a.nextFollowupAt || a.candidateNextFollowupAt || 0);
+    const bMs = Number(b.nextFollowupAt || b.candidateNextFollowupAt || 0);
+    return aMs - bMs;
+  });
+
+  return json({
+    success: true,
+    service,
+    step: stepKey,
+    stepNumber,
+    delayMinutes,
+    count: rows.length,
+    checked,
+    skippedWrongService,
+    skippedWrongStep,
+    skippedNoEngagement,
+    skippedInactive,
+    rows,
+  });
+}
+
 
 async function handleAdminHealth(req: Request) {
   await requireAdmin(req);
@@ -8605,6 +8719,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "cron/recover-locks") return await handleCronRecoverLocks(req);
     if (action === "automation/followups/dry-run") return await handleFollowupDryRun(req);
     if (action === "automation/followups/summary") return await handleFollowupSummary(req);
+    if (action === "automation/followups/candidates") return await handleFollowupAutomationCandidates(req);
     if (action === "sender-stats") return await handleSenderStats(req);
     if (action === "postmaster/health") return await handlePostmasterHealth(req);
     if (action === "admin/health") return await handleAdminHealth(req);

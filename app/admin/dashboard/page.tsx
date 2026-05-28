@@ -525,6 +525,7 @@ export default function DashboardPage() {
   const [selectedOutreachSheetRow, setSelectedOutreachSheetRow] = useState<number | null>(null);
   const [leadRefreshLoading, setLeadRefreshLoading] = useState(false);
   const [leadRefreshStatus, setLeadRefreshStatus] = useState("");
+  const [automationFollowupLeads, setAutomationFollowupLeads] = useState<Lead[]>([]);
 
   const monthOptions = useMemo(() => getRecentMonthOptions(18), []);
 
@@ -1159,8 +1160,22 @@ export default function DashboardPage() {
   const days = Math.max(1, Math.floor((currentStepData.delay || 1440) / 1440));
 
   const currentFollowupLeads = useMemo(() => {
-    return leads.filter((lead) => isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode));
-  }, [leads, activeFollowupService, activeFollowupStep, triggerMode]);
+    const merged = new Map<string, Lead>();
+
+    automationFollowupLeads.forEach((lead) => {
+      if (lead?.id && isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode)) {
+        merged.set(lead.id, lead);
+      }
+    });
+
+    leads.forEach((lead) => {
+      if (lead?.id && isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode)) {
+        merged.set(lead.id, { ...lead, ...(merged.get(lead.id) || {}) });
+      }
+    });
+
+    return Array.from(merged.values()).sort((a, b) => toMillis(a.nextFollowupAt) - toMillis(b.nextFollowupAt));
+  }, [automationFollowupLeads, leads, activeFollowupService, activeFollowupStep, triggerMode]);
 
   const updateCurrentStep = (newStepData: StepConfig) => {
     setFollowupConfig((prev: FollowupConfig) => ({
@@ -1586,6 +1601,35 @@ export default function DashboardPage() {
       };
     }
   };
+
+  const loadAutomationFollowupLeads = async () => {
+    const headers = await getAuthHeaders();
+    const params = new URLSearchParams({
+      service: activeFollowupService,
+      step: activeFollowupStep,
+      limit: "100",
+    });
+
+    const response = await fetch(`/api/trackflow/automation/followups/candidates?${params.toString()}`, {
+      headers,
+      cache: "no-store",
+    });
+    const data = await readTrackflowJson(response);
+    if (!response.ok || !data.success) throw new Error(data.error || "Follow-up candidates failed");
+
+    setAutomationFollowupLeads(Array.isArray(data.rows) ? data.rows : []);
+    return data;
+  };
+
+  useEffect(() => {
+    if (activeTab !== "automation") return;
+
+    loadAutomationFollowupLeads().catch((error) => {
+      console.error("Automation follow-up candidates load error:", error);
+      setAutomationFollowupLeads([]);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeFollowupService, activeFollowupStep, followupConfigLoadedAt]);
 
 
 
@@ -2652,6 +2696,19 @@ export default function DashboardPage() {
         }
         rescheduledCount = Number(rescheduleData.updated || 0);
         rescheduleChecked = Number(rescheduleData.checked || 0);
+
+        if (Array.isArray(rescheduleData.updates)) {
+          rescheduleData.updates.forEach((row: any) => {
+            if (!row?.leadId) return;
+            patchLeadInCache(String(row.leadId), {
+              nextFollowupAt: row.nextAtMs || row.nextAt || null,
+              nextFollowupStep: Number(rescheduleData.stepNumber || 0) || undefined,
+              nextFollowupStatus: "scheduled",
+              nextFollowupReason: "rescheduled_after_followup_gap_change",
+            });
+          });
+        }
+
         rescheduleMessage = ` Synced ${rescheduledCount} existing ${activeFollowupService} ${activeFollowupStep.toUpperCase()} lead schedule(s). Checked ${rescheduleChecked}.`;
       } catch (rescheduleError) {
         console.warn("Follow-up reschedule failed:", rescheduleError);
@@ -2674,6 +2731,7 @@ export default function DashboardPage() {
       setTriggerMode("open_required");
       setHasUnsavedChanges(false);
       await loadFollowupSummary(true);
+      await loadAutomationFollowupLeads().catch((candidateRefreshError: any) => console.warn("Follow-up candidate refresh failed:", candidateRefreshError));
       await refreshLeads().catch((refreshError: any) => console.warn("Lead refresh after follow-up save failed:", refreshError));
       window.alert(`✅ Follow-up settings saved.${rescheduleMessage}`);
     } catch (error) {
