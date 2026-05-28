@@ -94,6 +94,7 @@ import {
   normalizeOptionalUrl,
   normalizeSheetEmailCopy,
   normalizeEmailSubjectForComposer,
+  getSafeEmailSubjectForComposer,
   normalizeSheetService,
   sanitizePreviewHtml,
   stripHtml,
@@ -1357,11 +1358,26 @@ export default function DashboardPage() {
     return true;
   };
 
+  const getSheetSubjectSafetyContext = (lead: SheetLead) => {
+    const service = normalizeSheetService(sheetValue(lead, "Service Type"));
+    return {
+      email: sheetValue(lead, "Final Email"),
+      name: sheetValue(lead, "Decision Maker"),
+      company: sheetValue(lead, "Business Name"),
+      website: sheetValue(lead, "Website URL"),
+      service,
+      mainIssue: sheetValue(lead, "Main Issue"),
+      leadLabel: sheetValue(lead, "Lead Label") || sheetValue(lead, "Lead Status"),
+    };
+  };
+
   const handleSendEmail = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const currentMessage = syncEditorMessage();
-    const currentSubject = normalizeEmailSubjectForComposer(subject);
+    const currentSubject = selectedOutreachSheetLead
+      ? getSafeEmailSubjectForComposer(subject, getSheetSubjectSafetyContext(selectedOutreachSheetLead))
+      : normalizeEmailSubjectForComposer(subject);
     if (currentSubject !== subject) setSubject(currentSubject);
     if (!validateOutreachForm(currentMessage) || !activeSender) return;
 
@@ -2296,13 +2312,19 @@ export default function DashboardPage() {
     setSelectedSheetRows(allSelected ? [] : readyRows);
   };
 
+  const getSheetEmailCopyForComposer = (lead: SheetLead) => {
+    const service = normalizeSheetService(sheetValue(lead, "Service Type"));
+    return normalizeSheetEmailCopy(
+      sheetValue(lead, "Email Subject"),
+      sheetValue(lead, "Email Body"),
+      getSheetSubjectSafetyContext(lead),
+    );
+  };
+
   const fillOutreachFromSheet = (lead: SheetLead) => {
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const readiness = getSheetReadiness(lead);
-    const emailCopy = normalizeSheetEmailCopy(
-      sheetValue(lead, "Email Subject"),
-      sheetValue(lead, "Email Body"),
-    );
+    const emailCopy = getSheetEmailCopyForComposer(lead);
 
     setSelectedOutreachSheetRow(Number(lead.rowNumber) || null);
     setAllowDuplicateSend(false);
@@ -2338,7 +2360,7 @@ export default function DashboardPage() {
 
     const finalEmail = sheetValue(lead, "Final Email");
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
-    const emailCopy = normalizeSheetEmailCopy(sheetValue(lead, "Email Subject"), sheetValue(lead, "Email Body"));
+    const emailCopy = getSheetEmailCopyForComposer(lead);
     const subjectFromSheet = emailCopy.subject;
     const bodyFromSheet = emailCopy.bodyHtml;
     const reportFromSheet = normalizeOptionalUrl(sheetValue(lead, "Report URL"));

@@ -356,7 +356,42 @@ export function normalizeEmailBodyHtmlForComposer(value: string) {
     .join("");
 }
 
-export function normalizeSheetEmailCopy(subjectValue: string, bodyValue: string) {
+type EmailSubjectSafetyContext = {
+  email?: string;
+  name?: string;
+  company?: string;
+  website?: string;
+  service?: string;
+  mainIssue?: string;
+  leadLabel?: string;
+};
+
+export function buildFallbackEmailSubject(context: EmailSubjectSafetyContext = {}) {
+  const company = plainTextFromHtmlish(String(context.company || "")).trim();
+  const websiteHost = String(context.website || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+    .split("?")[0]
+    .trim();
+
+  const target = company || websiteHost || "your business";
+  return `Quick tracking note for ${target}`.replace(/\s+/g, " ").slice(0, 180).trim();
+}
+
+export function getSafeEmailSubjectForComposer(value: string, context: EmailSubjectSafetyContext = {}) {
+  const subject = normalizeEmailSubjectForComposer(value);
+  if (isLikelyPlaceholderEmailSubject(subject, context)) return buildFallbackEmailSubject(context);
+  return subject;
+}
+
+export function normalizeSheetEmailCopy(
+  subjectValue: string,
+  bodyValue: string,
+  context: EmailSubjectSafetyContext = {},
+) {
   let rawSubject = decodeHtmlEntities(subjectValue || "").trim();
   let rawBody = decodeHtmlEntities(bodyValue || "").trim();
 
@@ -370,9 +405,11 @@ export function normalizeSheetEmailCopy(subjectValue: string, bodyValue: string)
 
   const extractedSubject = extractSubjectLine(rawSubject) || extractSubjectLine(rawBody);
   const subjectCandidate = extractedSubject || rawSubject;
-  const subject = looksLikeEmailBody(subjectCandidate) && !extractedSubject
+  const normalizedSubject = looksLikeEmailBody(subjectCandidate) && !extractedSubject
     ? ""
     : normalizeEmailSubjectForComposer(subjectCandidate);
+
+  const subject = getSafeEmailSubjectForComposer(normalizedSubject, context);
 
   let bodySource = rawBody;
   if (!plainTextFromHtmlish(bodySource) && looksLikeEmailBody(rawSubject)) {

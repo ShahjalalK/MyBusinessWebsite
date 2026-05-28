@@ -16,7 +16,7 @@ import {
 import type { SenderAccount } from "../../../lib/senders";
 
 import type { SheetLead } from "./types";
-import { normalizeOptionalUrl, stripHtml } from "./utils";
+import { normalizeOptionalUrl, normalizeSheetEmailCopy, normalizeSheetService, stripHtml } from "./utils";
 import {
   getSheetChannelStatus,
   getSheetOutreachChannel,
@@ -188,6 +188,17 @@ export default function SheetQueuePanel({
   const selectedReportUrl = selectedLead ? normalizeOptionalUrl(sheetValue(selectedLead, "Report URL")) : "";
   const selectedWebsiteUrl = selectedLead ? normalizeOptionalUrl(sheetValue(selectedLead, "Website URL")) : "";
   const selectedLinkedInUrl = selectedLead ? normalizeOptionalUrl(sheetValue(selectedLead, "Social Link")) : "";
+  const selectedEmailCopy = selectedLead
+    ? normalizeSheetEmailCopy(sheetValue(selectedLead, "Email Subject"), sheetValue(selectedLead, "Email Body"), {
+        email: sheetValue(selectedLead, "Final Email"),
+        name: sheetValue(selectedLead, "Decision Maker"),
+        company: sheetValue(selectedLead, "Business Name"),
+        website: sheetValue(selectedLead, "Website URL"),
+        service: normalizeSheetService(sheetValue(selectedLead, "Service Type")),
+        mainIssue: sheetValue(selectedLead, "Main Issue"),
+        leadLabel: sheetValue(selectedLead, "Lead Label") || sheetValue(selectedLead, "Lead Status"),
+      })
+    : null;
   const canOpenEmailComposer = selectedLead ? isSheetEmailOutreachCandidate(selectedLead) : false;
   const canUseLinkedIn = selectedLead ? isSheetLinkedInOutreachCandidate(selectedLead) : false;
 
@@ -440,7 +451,7 @@ export default function SheetQueuePanel({
               <div className="grid grid-cols-1 gap-3">
                 <DetailLine label="Main issue" value={sheetValue(selectedLead, "Main Issue") || "No main issue saved"} />
                 <DetailLine label="Proof points" value={truncateText(sheetValue(selectedLead, "Proof Points"), 320) || "No proof points saved"} />
-                <DetailLine label="Email subject" value={sheetValue(selectedLead, "Email Subject") || "No subject saved"} />
+                <DetailLine label="Email subject" value={selectedEmailCopy?.subject || "No safe subject ready"} />
                 <DetailLine label="Email body preview" value={truncateText(stripHtml(sheetValue(selectedLead, "Email Body")), 260) || "No email body saved"} />
               </div>
 

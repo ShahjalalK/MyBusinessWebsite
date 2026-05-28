@@ -1,12 +1,45 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.99-sheet-lead-source-overview
+Version: v18.99.1-sheet-composer-subject-safety
 Last updated: 2026-05-28
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
 
 
+
+## Latest Update — v18.99.1 Sheet-to-Composer Subject Safety Fix
+
+This patch fixes a Send Email composer regression where Sheet tab → Open in Send Email could place role/contact fields such as `Helpdesk`, `Support`, `Info`, or `Possible Contact Person` into the subject field.
+
+Changed files:
+
+```text
+page.tsx
+SheetQueuePanel.tsx
+utils.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Sheet tab → Open in Send Email uses the same safe subject builder as the Send Email drawer.
+Invalid subject-like values are blocked before filling the composer.
+If the Sheet subject is missing or looks like a contact/website/service/audit field, the dashboard uses a safe fallback: Quick tracking note for {company}.
+Email Body still goes only into the editor body, not the subject input.
+The Sheet detail panel also shows the safe composer subject instead of a misleading raw Sheet value.
+```
+
+Important decisions:
+
+```text
+Do not trust a short Sheet value as a subject just because it is in the Email Subject column.
+Contact role words such as helpdesk/support/info/contact/sales must never become the send subject automatically.
+Both Sheet tab and Send Email drawer should share the same normalization path.
+```
+
+---
 ## Latest Update — v18.99 Sheet Lead Source Overview
 
 Stage 15D changes the Sheet tab from an old Sheet-based sending queue into a user-friendly Sheet data review and source overview area.
