@@ -1,17 +1,18 @@
-TrackFlow v18.96 — Smooth Manual Refresh Stage 15B
+Replace these files in your project:
 
-Replace these files:
-- page.tsx
-- LeadsPanel.tsx
-- PROJECT_CONTEXT_README.md
+1. app/api/trackflow/[...action]/route.ts
+2. Dashboard page.tsx
+3. LeadsPanel.tsx
+4. types.ts
+5. PROJECT_CONTEXT_README.md
 
 Then run:
-- npm run build
-- npm run dev
+
+npm run build
+npm run dev
 
 Test:
-1. Open Leads tab and click Refresh latest 20.
-   The full dashboard should not disappear; only the Leads refresh button/status should show loading.
-2. Open Send Email tab and send/schedule a test email.
-   The tab should stay in place without the full command-center loading screen.
-3. Manually refresh Leads when you want latest open/click/sent data.
+- Send a test email and click a tracked link.
+- Open Leads tab and click Refresh latest 20.
+- Click the lead row and confirm the drawer shows Engagement Summary, Follow-up Status, and Recent Activity.
+- Verify firstOpenedAt/firstClickedAt remain the first recorded times while lastOpenedAt/lastClickedAt update after the dedupe window.

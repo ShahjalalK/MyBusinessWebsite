@@ -1,107 +1,153 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.96-smooth-manual-refresh-stage-15b
+Version: v18.97-lead-drawer-engagement-followup-summary
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
 
 
-## Latest Update — v18.96 Smooth Manual Refresh Stage 15B
 
-Stage 15B fixes dashboard UX so manual data refresh and email send no longer replace the whole page with the global loading screen.
+## Latest Update — v18.97 Lead Drawer Engagement + Follow-up Summary
 
-Changed files:
-
-```text
-page.tsx
-LeadsPanel.tsx
-PROJECT_CONTEXT_README.md
-```
-
-Behavior:
-
-```text
-Leads tab → Refresh latest 20
-→ keeps the dashboard shell, tabs, and existing rows visible
-→ shows only a small refresh spinner/status inside Leads tab
-→ does not force a full command-center loading screen
-
-Send Email tab → Send Now / Schedule
-→ keeps the Send Email tab open while sending
-→ patches the local lead cache when the API returns a leadId
-→ no immediate full Leads refresh after every send
-→ operator can still manually refresh Leads when needed
-```
-
-Important decisions:
-
-```text
-No realtime database listener was added.
-Firestore reads remain manual/button-driven.
-The global loading screen is now reserved for the very first empty dashboard load only.
-Lead refresh loading is local to LeadsPanel.
-Email send loading stays local to the composer button/status.
-```
-
-Test checklist:
-
-```text
-npm run build
-npm run dev
-Leads tab → Refresh latest 20 → dashboard should not disappear
-Send Email tab → send/schedule a test email → tab should not reload
-Leads tab → manually refresh when you want updated open/click/sent data
-```
-
----
-
-## Latest Update — v18.95.4 Self-Hosted Email Open/Click Tracking
-
-Stage 15A follow-up fix adds TrackFlow-owned tracking fallback for Send Email messages so open/click updates do not depend only on Brevo webhook delivery.
+Stage 15C makes the Lead tab drawer easier to understand before deciding whether to follow up, archive, or delete a lead.
 
 Changed files:
 
 ```text
 app/api/trackflow/[...action]/route.ts
+page.tsx
+LeadsPanel.tsx
+types.ts
 PROJECT_CONTEXT_README.md
 ```
 
 Behavior:
 
 ```text
-Send Email / scheduled initial / follow-up email
-→ HTML includes a TrackFlow open pixel
-→ report/message links are wrapped with /api/trackflow/track/click
-→ click route records click_count, lastClickedAt, status, follow-up schedule, and Sheet click count
-→ open route records open_count, lastOpenedAt, status, follow-up schedule, and Sheet open count when the mail client loads images
-→ recipient is redirected to the original secure report/link after the click is recorded
+Lead drawer
+→ shows Engagement Summary with meaningful open/click counts
+→ shows first opened / last opened and first clicked / last clicked
+→ shows Follow-up Status with current step, next action time, last follow-up, automation status, and reason
+→ shows Recent Activity capped to the latest 5 useful events
 ```
 
 Important decisions:
 
 ```text
-Brevo webhook support remains in place.
-Self-hosted tracking is an additional fallback and works even if Brevo click/open webhooks are not configured or delayed.
-Open tracking can still be blocked by some email clients, but click tracking should update when the tracked link is clicked.
-The tracking routes are GET endpoints and do not require admin auth because email clients and prospects must be able to load/click them.
-Low-value raw event logs remain controlled by the existing email_events storage flags.
+Do not store a huge open/click event array by default.
+Store firstOpenedAt, lastOpenedAt, firstClickedAt, lastClickedAt, counts, and lastClickedUrl.
+Full low-value tracking history remains optional behind STORE_LOW_VALUE_TRACKING_HISTORY.
+Managed lead API returns only capped recent tracking/sent message rows for the drawer.
+Open/click dedupe still protects Firestore write limits.
+```
+
+---
+
+## Latest Update — v18.95 Send Email Drawer Stage 15A
+
+Stage 15A adds a focused one-by-one email review drawer inside the Send Email tab. This is intentionally not a bulk-send workflow.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+sheet-readiness.ts
+types.ts
+utils.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Send Email tab
+→ right-side fixed Ready Leads button only
+→ click opens a slide-out Ready Email Leads drawer
+→ drawer loads Google Sheet email-ready rows
+→ clicking one row fills the composer
+→ operator reviews/edits the subject/body
+→ Send Now or Schedule uses the composer
+→ after send/schedule, the Sheet row is marked Sent/Scheduled and disappears from Ready leads
+```
+
+Important decisions:
+
+```text
+No bulk email send in this tab.
+Email copy remains sourced from Google Sheet.
+Firestore still stores only send/tracking metadata, not full email copy.
+LinkedIn-first rows stay out of the Send Email drawer unless explicitly marked as email sourced.
+The drawer is isolated as a fixed right-side UI so the existing email composer layout stays stable.
+```
+
+
+## Latest Update — v18.95.1 Send Email Drawer UI / Load Fix
+
+This patch fixes the first Send Email drawer UX test.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+sheet-readiness.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+The Ready Leads button is now a small floating button, not a large vertical side tab.
+The drawer is a compact fixed right panel below the navbar with its own internal scroll.
+The drawer no longer uses a full-screen backdrop on desktop, so the dashboard is not locked behind a grey overlay.
+Send Email drawer loading is independent from Sheet tab filters, so approval/send/status filters in Sheet Queue cannot hide email-ready leads.
+The drawer force-refreshes when opened.
+If the API-level hasEmail filter returns no rows but the Sheet has rows, the drawer falls back to loading plain Sheet rows and validates them locally.
+Secure report readiness now accepts both /r/{token} and /tracking-review/{domainSlug}/{token}.
+For Send Email review, Report URL + token is enough; PDF fields no longer hide a lead from the drawer because PDF access is handled by the secure report backend.
+```
+
+---
+
+## Latest Update — v18.95.2 Send Email Composer Field Normalization
+
+Stage 15A patch follow-up fixes Sheet-to-composer field placement for the Send Email drawer.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+utils.ts
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+When a Sheet row is opened in the Send Email composer, Email Subject must always become plain subject text.
+Email Body must always become editor-ready HTML.
+If the Google Sheet row has shifted fields, escaped HTML, or a full generated email inside the subject column, the dashboard normalizes it before filling the composer.
+Subject inputs strip HTML tags and common Subject:/Body: labels.
+Body inputs decode escaped HTML and render it in the WYSIWYG editor instead of showing raw tags.
+Full email body remains in Google Sheet, not Firestore.
 ```
 
 Test checklist:
 
 ```text
-npm run build
-npm run dev
-Send Email tab → send a test email to a different mailbox
-Inspect the email report link: it should start with /api/trackflow/track/click?...url=...
-Click the report link
-Leads tab → refresh → status should become clicked and click_count should increase
-Open tracking may update after image loading, depending on the recipient email client
+Open Send Email tab
+Open Ready Leads drawer
+Select a row with HTML email body
+Confirm subject field contains only a short plain subject
+Confirm body editor renders formatted email content without visible HTML tags
+Edit and Send/Schedule a test row
+Confirm Sheet Subject/Body update correctly
 ```
 
 ---
-
 
 ## Latest Update — v18.94 Outreach Channel Save Stage 14G
 

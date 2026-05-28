@@ -256,6 +256,115 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
 }
 
 
+type LeadRecentActivityItem = {
+  key: string;
+  label: string;
+  note?: string;
+  time: any;
+  tone: "blue" | "green" | "slate" | "amber";
+};
+
+function hasTime(value: any) {
+  return toMillis(value) > 0;
+}
+
+function formatLeadTime(value: any) {
+  return hasTime(value) ? formatDate(value) : "Not recorded";
+}
+
+function friendlyFollowupReason(value: any) {
+  const reason = String(value || "").trim();
+  if (!reason) return "No follow-up reason recorded yet.";
+
+  const map: Record<string, string> = {
+    open_required: "Waiting for an open or click before the next follow-up.",
+    waiting_for_engagement: "Waiting for new engagement before continuing.",
+    replied: "Lead replied, so automation should stop.",
+    bounced: "Email bounced, so automation is blocked.",
+    unsubscribed: "Lead unsubscribed, so automation is blocked.",
+    spam: "Lead marked spam, so automation is blocked.",
+    archived_by_admin: "Lead was archived by admin.",
+    deleted_by_admin: "Lead was moved to trash by admin.",
+    manually_marked_replied: "Lead was manually marked as replied.",
+  };
+
+  return map[reason] || reason.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function buildRecentLeadActivity(lead: Lead | null): LeadRecentActivityItem[] {
+  if (!lead) return [];
+
+  const items: LeadRecentActivityItem[] = [];
+  const push = (item: LeadRecentActivityItem) => {
+    if (!hasTime(item.time)) return;
+    items.push(item);
+  };
+
+  push({
+    key: "last-click",
+    label: "Last meaningful click",
+    note: lead.lastClickedUrl || "Tracked link clicked",
+    time: lead.lastClickedAt,
+    tone: "green",
+  });
+
+  push({
+    key: "last-open",
+    label: "Last meaningful open",
+    note: "Duplicate opens inside the dedupe window are ignored.",
+    time: lead.lastOpenedAt,
+    tone: "blue",
+  });
+
+  (lead.tracking_history || []).forEach((event, index) => {
+    const eventName = String(event.event || "activity").toLowerCase();
+    push({
+      key: `history-${index}-${eventName}`,
+      label: eventName === "opened" ? "Email opened" : eventName === "clicked" ? "Link clicked" : eventName.replace(/[_-]+/g, " "),
+      note: event.link || event.step_tag || "",
+      time: event.time,
+      tone: eventName.includes("click") ? "green" : eventName.includes("open") ? "blue" : "slate",
+    });
+  });
+
+  (lead.sent_messages || []).forEach((message, index) => {
+    push({
+      key: `sent-message-${index}-${message.step || 0}`,
+      label: message.step ? `Follow-up ${message.step} sent` : "Email sent",
+      note: message.subject || message.trackingTag || "",
+      time: message.sentAt,
+      tone: "slate",
+    });
+  });
+
+  push({
+    key: "sent-at",
+    label: "Initial email sent",
+    note: lead.subject || "",
+    time: lead.sentAt || lead.createdAt,
+    tone: "slate",
+  });
+
+  const seen = new Set<string>();
+  return items
+    .sort((a, b) => toMillis(b.time) - toMillis(a.time))
+    .filter((item) => {
+      const key = `${item.label}|${toMillis(item.time)}|${item.note || ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 5);
+}
+
+function activityToneClass(tone: LeadRecentActivityItem["tone"]) {
+  if (tone === "green") return "bg-emerald-50 text-emerald-600 border-emerald-100";
+  if (tone === "blue") return "bg-blue-50 text-blue-600 border-blue-100";
+  if (tone === "amber") return "bg-amber-50 text-amber-700 border-amber-100";
+  return "bg-slate-50 text-slate-600 border-slate-100";
+}
+
+
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<MainTab>("overview");
   const {
@@ -2691,65 +2800,126 @@ export default function DashboardPage() {
                 <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-600/20 blur-[80px] rounded-full" />
               </section>
 
-              {getNextFollowUpStatus(selectedLead, triggerMode, followupConfig) && (
-                <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
-                  <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-2xl bg-gray-50 ${getNextFollowUpStatus(selectedLead, triggerMode, followupConfig)?.color}`}>
-                      <Timer size={20} />
-                    </div>
-                    <div>
-                      <p className={`text-[11px] font-black uppercase tracking-tight ${getNextFollowUpStatus(selectedLead, triggerMode, followupConfig)?.color}`}>
-                        {getNextFollowUpStatus(selectedLead, triggerMode, followupConfig)?.label}
-                      </p>
-                      {getNextFollowUpStatus(selectedLead, triggerMode, followupConfig)?.time && (
-                        <p className="text-lg font-black text-gray-900 mt-1">{getNextFollowUpStatus(selectedLead, triggerMode, followupConfig)?.time}</p>
-                      )}
-                    </div>
+              <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-5">
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                      <Eye size={13} /> Engagement Summary
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold text-gray-400">
+                      Meaningful opens/clicks only. Duplicate hits inside the dedupe window are ignored.
+                    </p>
                   </div>
-                </section>
-              )}
+                  <span className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-black uppercase text-white">
+                    {selectedLead.status || "new"}
+                  </span>
+                </div>
 
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-blue-50 p-4 border border-blue-100">
+                    <p className="text-[9px] font-black uppercase text-blue-500">Opens</p>
+                    <p className="mt-1 text-3xl font-black text-blue-700">{Number(selectedLead.open_count || 0)}</p>
+                    <p className="mt-2 text-[10px] font-bold text-blue-600">First: {formatLeadTime(selectedLead.firstOpenedAt || selectedLead.lastOpenedAt)}</p>
+                    <p className="text-[10px] font-bold text-blue-600">Last: {formatLeadTime(selectedLead.lastOpenedAt)}</p>
+                  </div>
+
+                  <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
+                    <p className="text-[9px] font-black uppercase text-emerald-500">Clicks</p>
+                    <p className="mt-1 text-3xl font-black text-emerald-700">{Number(selectedLead.click_count || 0)}</p>
+                    <p className="mt-2 text-[10px] font-bold text-emerald-600">First: {formatLeadTime(selectedLead.firstClickedAt || selectedLead.lastClickedAt)}</p>
+                    <p className="text-[10px] font-bold text-emerald-600">Last: {formatLeadTime(selectedLead.lastClickedAt)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-2xl bg-gray-50 p-4 border border-gray-100">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Last activity</p>
+                  <p className="mt-1 text-sm font-black text-gray-900">{formatLeadTime(selectedLead.lastEngagedAt || selectedLead.lastClickedAt || selectedLead.lastOpenedAt || selectedLead.sentAt)}</p>
+                  {selectedLead.lastClickedUrl ? (
+                    <p className="mt-1 truncate text-[10px] font-bold text-emerald-600">Last clicked URL: {selectedLead.lastClickedUrl}</p>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm relative overflow-hidden">
+                <div className="flex items-start gap-4">
+                  <div className={`p-3 rounded-2xl bg-gray-50 ${selectedLeadFollowupInfo?.color || "text-slate-500"}`}>
+                    <Timer size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-[11px] font-black uppercase tracking-tight ${selectedLeadFollowupInfo?.color || "text-slate-500"}`}>
+                      Follow-up Status
+                    </p>
+                    <p className="text-lg font-black text-gray-900 mt-1">
+                      {selectedLead.stopAutomation ? "Automation stopped" : selectedLeadFollowupInfo?.label || "No next follow-up scheduled"}
+                    </p>
+                    {selectedLeadFollowupInfo?.time ? (
+                      <p className="text-[11px] font-bold text-blue-600 mt-1">Next action: {selectedLeadFollowupInfo.time}</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-gray-50 p-4">
+                    <p className="text-[9px] font-black uppercase text-gray-400">Current step</p>
+                    <p className="mt-1 text-sm font-black text-gray-900">
+                      {selectedLead.nextFollowupStep ? `Follow-up ${selectedLead.nextFollowupStep}` : Number(selectedLead.follow_up_count || 0) > 0 ? `Sent ${selectedLead.follow_up_count}` : "Initial outreach"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-gray-50 p-4">
+                    <p className="text-[9px] font-black uppercase text-gray-400">Sent count</p>
+                    <p className="mt-1 text-sm font-black text-gray-900">{Number(selectedLead.follow_up_count || 0)} follow-up(s)</p>
+                  </div>
+                  <div className="rounded-2xl bg-gray-50 p-4">
+                    <p className="text-[9px] font-black uppercase text-gray-400">Last follow-up</p>
+                    <p className="mt-1 text-xs font-black text-gray-900">{formatLeadTime(selectedLead.lastFollowUp)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-gray-50 p-4">
+                    <p className="text-[9px] font-black uppercase text-gray-400">Next follow-up</p>
+                    <p className="mt-1 text-xs font-black text-gray-900">{formatLeadTime(selectedLead.nextFollowupAt)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                  <p className="text-[9px] font-black uppercase text-amber-700">Reason</p>
+                  <p className="mt-1 text-[11px] font-bold leading-relaxed text-amber-800">
+                    {friendlyFollowupReason(selectedLead.nextFollowupReason || selectedLead.nextFollowupStatus || (selectedLead.stopAutomation ? "automation stopped" : ""))}
+                  </p>
+                  {selectedLead.lastFollowupError ? (
+                    <p className="mt-2 text-[10px] font-bold text-red-600">Last error: {String(selectedLead.lastFollowupError)}</p>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
+                <div className="flex justify-between items-center mb-5">
                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <Activity size={12} /> Full Engagement Logs
+                    <Activity size={12} /> Recent Activity
                   </h4>
-
-                  {(selectedLead.tracking_history?.length || 0) > 5 && (
-                    <button onClick={() => setShowAllLogs(!showAllLogs)} className="text-[9px] font-black text-blue-600 uppercase">
-                      {showAllLogs ? "Show Less" : `View All (${selectedLead.tracking_history?.length})`}
-                    </button>
-                  )}
+                  <span className="text-[9px] font-black text-gray-300 uppercase">Last 5 events</span>
                 </div>
 
                 <div className="space-y-2">
-                  {(selectedLead.tracking_history || [])
-                    .slice()
-                    .sort((a, b) => toMillis(b.time) - toMillis(a.time))
-                    .slice(0, showAllLogs ? undefined : 5)
-                    .map((info, idx) => (
-                      <div key={idx} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex justify-between items-center transition-all hover:border-blue-200">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${info.event === "opened" ? "bg-blue-100 text-blue-600" : "bg-green-100 text-green-600"}`}>
-                            <Activity size={14} />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-gray-800 uppercase">
-                              {info.event === "opened" ? "Email Opened" : info.event}
-                              {info.step_tag ? <span className="ml-2 text-blue-500">[{info.step_tag}]</span> : ""}
-                            </p>
-                            <p className="text-[9px] font-bold text-blue-600 italic">{formatDate(info.time)}</p>
-                          </div>
+                  {selectedLeadRecentActivity.map((info) => (
+                    <div key={info.key} className={`border rounded-2xl p-4 flex justify-between items-center transition-all ${activityToneClass(info.tone)}`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-white/70">
+                          {info.tone === "green" ? <MousePointer2 size={14} /> : info.tone === "blue" ? <Eye size={14} /> : <Clock size={14} />}
                         </div>
-                        <CheckCircle2 size={14} className="text-emerald-500" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase truncate">{info.label}</p>
+                          <p className="text-[9px] font-bold italic">{formatLeadTime(info.time)}</p>
+                          {info.note ? <p className="mt-1 truncate text-[9px] font-bold opacity-70">{info.note}</p> : null}
+                        </div>
                       </div>
-                    ))}
+                      <CheckCircle2 size={14} />
+                    </div>
+                  ))}
 
-                  {(!selectedLead.tracking_history || selectedLead.tracking_history.length === 0) && (
+                  {selectedLeadRecentActivity.length === 0 && (
                     <p className="text-[10px] text-gray-400 font-bold text-center py-4 italic">No engagement tracked yet.</p>
                   )}
                 </div>
-              </div>
+              </section>
 
               <section className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-sm">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">

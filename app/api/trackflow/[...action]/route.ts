@@ -155,9 +155,14 @@ type LeadData = {
   click_count?: number;
   sentAt?: any;
   lastFollowUp?: any;
+  firstOpenedAt?: any;
   lastOpenedAt?: any;
+  firstClickedAt?: any;
   lastClickedAt?: any;
+  lastClickedUrl?: string;
   lastEngagedAt?: any;
+  tracking_history?: any[];
+  sent_messages?: any[];
   nextFollowupAt?: any;
   nextFollowupStep?: number;
   nextFollowupStatus?: string;
@@ -3185,6 +3190,7 @@ async function handleBrevoWebhook(req: Request) {
 
       const engagementMinuteUtc = getEngagementMinuteOfDayUtc(eventTime.toMillis());
       updatePayload.open_count = admin.firestore.FieldValue.increment(1);
+      if (!toMillis(leadData.firstOpenedAt)) updatePayload.firstOpenedAt = eventTime;
       updatePayload.lastOpenedAt = eventTime;
       updatePayload.lastEngagedAt = eventTime;
       updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
@@ -3216,6 +3222,7 @@ async function handleBrevoWebhook(req: Request) {
 
       const engagementMinuteUtc = getEngagementMinuteOfDayUtc(eventTime.toMillis());
       updatePayload.click_count = admin.firestore.FieldValue.increment(1);
+      if (!toMillis(leadData.firstClickedAt)) updatePayload.firstClickedAt = eventTime;
       updatePayload.lastClickedAt = eventTime;
       updatePayload.lastEngagedAt = eventTime;
       updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
@@ -3361,6 +3368,7 @@ async function recordSelfHostedEmailEngagement(
 
     const engagementMinuteUtc = getEngagementMinuteOfDayUtc(nowMs);
     updatePayload.open_count = admin.firestore.FieldValue.increment(1);
+    if (!toMillis(leadData.firstOpenedAt)) updatePayload.firstOpenedAt = eventTime;
     updatePayload.lastOpenedAt = eventTime;
     updatePayload.lastEngagedAt = eventTime;
     updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
@@ -3389,6 +3397,7 @@ async function recordSelfHostedEmailEngagement(
 
     const engagementMinuteUtc = getEngagementMinuteOfDayUtc(nowMs);
     updatePayload.click_count = admin.firestore.FieldValue.increment(1);
+    if (!toMillis(leadData.firstClickedAt)) updatePayload.firstClickedAt = eventTime;
     updatePayload.lastClickedAt = eventTime;
     updatePayload.lastEngagedAt = eventTime;
     updatePayload.lastClickedUrl = meta.targetUrl || "";
@@ -6922,6 +6931,36 @@ function serializeScheduledLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSna
 
 type LeadManagementView = "active" | "archived" | "trash" | "all";
 
+function serializeRecentTrackingHistory(value: any, maxItems = 10) {
+  const rows = Array.isArray(value) ? value : [];
+  return rows
+    .map((entry: any) => ({
+      event: String(entry?.event || entry?.type || "activity"),
+      time: serializeApiMillis(entry?.time || entry?.createdAt || entry?.at),
+      link: entry?.link || entry?.url || "",
+      step: entry?.step ?? null,
+      step_tag: entry?.step_tag || entry?.trackingTag || "",
+      source: entry?.source || "",
+    }))
+    .filter((entry: any) => entry.time || entry.event)
+    .sort((a: any, b: any) => Number(b.time || 0) - Number(a.time || 0))
+    .slice(0, maxItems);
+}
+
+function serializeSentMessages(value: any, maxItems = 8) {
+  const rows = Array.isArray(value) ? value : [];
+  return rows
+    .map((entry: any) => ({
+      step: Number(entry?.step || 0) || 0,
+      subject: String(entry?.subject || ""),
+      sentAt: serializeApiMillis(entry?.sentAt || entry?.time || entry?.createdAt),
+      trackingTag: entry?.trackingTag || entry?.step_tag || "",
+    }))
+    .filter((entry: any) => entry.sentAt || entry.subject)
+    .sort((a: any, b: any) => Number(b.sentAt || 0) - Number(a.sentAt || 0))
+    .slice(0, maxItems);
+}
+
 function serializeManagedLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSnap) {
   const data: any = docSnap.data() || {};
   return {
@@ -6945,8 +6984,11 @@ function serializeManagedLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSnap)
     click_count: Number(data.click_count || 0),
     createdAt: serializeApiMillis(data.createdAt),
     sentAt: serializeApiMillis(data.sentAt),
+    firstOpenedAt: serializeApiMillis(data.firstOpenedAt),
     lastOpenedAt: serializeApiMillis(data.lastOpenedAt),
+    firstClickedAt: serializeApiMillis(data.firstClickedAt),
     lastClickedAt: serializeApiMillis(data.lastClickedAt),
+    lastClickedUrl: data.lastClickedUrl || "",
     lastEngagedAt: serializeApiMillis(data.lastEngagedAt),
     lastFollowUp: serializeApiMillis(data.lastFollowUp),
     nextFollowupAt: serializeApiMillis(data.nextFollowupAt),
@@ -6963,6 +7005,8 @@ function serializeManagedLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSnap)
     sheetRowNumber: data.sheetRowNumber || null,
     reportUrl: data.reportUrl || "",
     trackingId: data.trackingId || "",
+    tracking_history: serializeRecentTrackingHistory(data.tracking_history, 10),
+    sent_messages: serializeSentMessages(data.sent_messages, 8),
   };
 }
 

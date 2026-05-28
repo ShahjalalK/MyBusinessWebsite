@@ -45,8 +45,11 @@ export type Lead = {
   click_count?: number;
   status?: string;
   createdAt?: any;
+  firstOpenedAt?: any;
   lastOpenedAt?: any;
+  firstClickedAt?: any;
   lastClickedAt?: any;
+  lastClickedUrl?: string;
   lastEngagedAt?: any;
   lastFollowUp?: any;
   nextFollowupAt?: any;
