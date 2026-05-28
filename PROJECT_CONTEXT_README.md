@@ -1,8 +1,58 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.95.4-self-hosted-email-open-click-tracking
+Version: v18.96-smooth-manual-refresh-stage-15b
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
+
+---
+
+
+## Latest Update — v18.96 Smooth Manual Refresh Stage 15B
+
+Stage 15B fixes dashboard UX so manual data refresh and email send no longer replace the whole page with the global loading screen.
+
+Changed files:
+
+```text
+page.tsx
+LeadsPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Leads tab → Refresh latest 20
+→ keeps the dashboard shell, tabs, and existing rows visible
+→ shows only a small refresh spinner/status inside Leads tab
+→ does not force a full command-center loading screen
+
+Send Email tab → Send Now / Schedule
+→ keeps the Send Email tab open while sending
+→ patches the local lead cache when the API returns a leadId
+→ no immediate full Leads refresh after every send
+→ operator can still manually refresh Leads when needed
+```
+
+Important decisions:
+
+```text
+No realtime database listener was added.
+Firestore reads remain manual/button-driven.
+The global loading screen is now reserved for the very first empty dashboard load only.
+Lead refresh loading is local to LeadsPanel.
+Email send loading stays local to the composer button/status.
+```
+
+Test checklist:
+
+```text
+npm run build
+npm run dev
+Leads tab → Refresh latest 20 → dashboard should not disappear
+Send Email tab → send/schedule a test email → tab should not reload
+Leads tab → manually refresh when you want updated open/click/sent data
+```
 
 ---
 

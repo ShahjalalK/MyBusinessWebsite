@@ -413,6 +413,8 @@ export default function DashboardPage() {
   const [draftReady, setDraftReady] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
   const [selectedOutreachSheetRow, setSelectedOutreachSheetRow] = useState<number | null>(null);
+  const [leadRefreshLoading, setLeadRefreshLoading] = useState(false);
+  const [leadRefreshStatus, setLeadRefreshStatus] = useState("");
 
   const monthOptions = useMemo(() => getRecentMonthOptions(18), []);
 
@@ -426,6 +428,23 @@ export default function DashboardPage() {
     if (!selectedOutreachSheetRow) return null;
     return sheetLeads.find((lead) => Number(lead.rowNumber) === Number(selectedOutreachSheetRow)) || null;
   }, [selectedOutreachSheetRow, sheetLeads]);
+
+  const refreshLeadsSmooth = async (input?: { view: LeadViewFilter; month: string; status: string }) => {
+    setLeadRefreshLoading(true);
+    setLeadRefreshStatus("Refreshing latest leads...");
+
+    try {
+      await refreshLeads(input);
+      setLeadRefreshStatus("Latest leads refreshed without reloading the dashboard.");
+    } catch (error: any) {
+      const message = error?.message || "Lead refresh failed.";
+      console.error("Smooth lead refresh error:", error);
+      setLeadRefreshStatus(`Refresh failed: ${message}`);
+      throw error;
+    } finally {
+      setLeadRefreshLoading(false);
+    }
+  };
 
 
   useEffect(() => {
@@ -1225,9 +1244,39 @@ export default function DashboardPage() {
             setSendStatus("Email sent, but Sheet status update needs review.");
           }
         }
+        const leadIdFromResponse = String(data.leadId || data.id || "").trim();
+        const nowIso = new Date().toISOString();
+        if (leadIdFromResponse) {
+          patchLeadInCache(leadIdFromResponse, {
+            id: leadIdFromResponse,
+            email,
+            emailLower: String(email || "").trim().toLowerCase(),
+            name: clientName,
+            company_name: companyName,
+            website,
+            business_type: businessType,
+            service: selectedService,
+            sender_id: activeSender.id,
+            sender_email: activeSender.email,
+            sender_name: activeSender.name,
+            subject: currentSubject,
+            message: currentMessage,
+            status: scheduledAtISO ? "scheduled" : "sent",
+            sentAt: scheduledAtISO ? undefined : nowIso,
+            scheduledAt: scheduledAtISO || undefined,
+            trackingId: data.trackingId || "",
+            reportUrl: normalizeOptionalUrl(reportUrl),
+            reportButtonText,
+            sheetRowNumber: sheetRowNumberForSend || undefined,
+            sheetWebsiteUrl: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : website,
+            sheetFinalEmail: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Final Email") : email,
+            open_count: 0,
+            click_count: 0,
+          });
+        }
+
         setSendStatus(scheduledAtISO ? "Success! Email Scheduled." : "Success! Outreach Launched.");
-        await refreshLeads();
-        await loadFollowupSummary(true);
+        void loadFollowupSummary(true);
         resetOutreachForm();
       } else if (data.warningOnly && data.code === "cooldown_active") {
         if (sheetRowNumberForSend) {
@@ -2513,7 +2562,8 @@ export default function DashboardPage() {
       leadStatusFilter={leadStatusFilter}
       activeService={activeService}
       searchTerm={searchTerm}
-      loading={loading}
+      loading={leadRefreshLoading}
+      refreshStatus={leadRefreshStatus}
       loadingMoreLeads={loadingMoreLeads}
       hasMoreLeads={hasMoreLeads}
       monthOptions={monthOptions}
@@ -2526,7 +2576,7 @@ export default function DashboardPage() {
       setSearchTerm={setSearchTerm}
       setSelectedLeadIds={setSelectedLeadIds}
       setSelectedLead={setSelectedLead}
-      refreshLeads={refreshLeads}
+      refreshLeads={refreshLeadsSmooth}
       fetchMoreLeads={fetchMoreLeads}
       applyLeadBulkAction={applyLeadBulkAction}
       handleMarkAsReplied={handleMarkAsReplied}
@@ -2757,7 +2807,9 @@ export default function DashboardPage() {
     </AnimatePresence>
   );
 
-  if (loading) {
+  const showInitialDashboardLoading = loading && leads.length === 0 && !leadsLastFetchedAt;
+
+  if (showInitialDashboardLoading) {
     return <div className="min-h-screen bg-[#FAFBFF] px-4 pt-28 text-center text-xs font-black uppercase text-blue-600 animate-pulse">
         Syncing Command Center...
       </div>

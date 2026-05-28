@@ -1,30 +1,17 @@
-TrackFlow Pro v18.95.4 — Self-hosted Email Open/Click Tracking Fix
+TrackFlow v18.96 — Smooth Manual Refresh Stage 15B
 
 Replace these files:
+- page.tsx
+- LeadsPanel.tsx
+- PROJECT_CONTEXT_README.md
 
-app/api/trackflow/[...action]/route.ts
-PROJECT_CONTEXT_README.md
-
-Why:
-- The existing email send flow relied mainly on Brevo webhook open/click events.
-- If Brevo webhook is not configured, delayed, or does not send tags as expected, dashboard open/click counters do not update.
-- This patch adds TrackFlow-owned open and click tracking URLs into every sent email.
-
-After replace:
-
-npm run build
-npm run dev
+Then run:
+- npm run build
+- npm run dev
 
 Test:
-1. Send a test email from Send Email tab to a different mailbox.
-2. Inspect the report/link URL in the received email.
-3. It should start with:
-   https://trackflowpro.com/api/trackflow/track/click?...
-4. Click the link.
-5. Open Leads tab and refresh.
-6. The lead should show clicked / click_count increased.
-7. Open tracking may depend on the recipient mail client loading images.
-
-Note:
-- Brevo webhook tracking remains supported.
-- This is an additional fallback, not a replacement.
+1. Open Leads tab and click Refresh latest 20.
+   The full dashboard should not disappear; only the Leads refresh button/status should show loading.
+2. Open Send Email tab and send/schedule a test email.
+   The tab should stay in place without the full command-center loading screen.
+3. Manually refresh Leads when you want latest open/click/sent data.

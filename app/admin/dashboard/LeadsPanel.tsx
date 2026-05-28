@@ -37,6 +37,7 @@ type LeadsPanelProps = {
   activeService: string;
   searchTerm: string;
   loading: boolean;
+  refreshStatus?: string;
   loadingMoreLeads: boolean;
   hasMoreLeads: boolean;
   monthOptions: MonthOption[];
@@ -98,6 +99,7 @@ export default function LeadsPanel({
   activeService,
   searchTerm,
   loading,
+  refreshStatus,
   loadingMoreLeads,
   hasMoreLeads,
   monthOptions,
@@ -136,7 +138,7 @@ export default function LeadsPanel({
             disabled={loading}
             className="px-4 py-3 rounded-2xl bg-black text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2"
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh latest 20
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> {loading ? "Refreshing..." : "Refresh latest 20"}
           </button>
           <button
             type="button"
@@ -148,6 +150,12 @@ export default function LeadsPanel({
           </button>
         </div>
       </div>
+
+      {refreshStatus ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-blue-700">
+          {refreshStatus}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Loaded" value={leads.length} icon={<Mail size={22} />} />
