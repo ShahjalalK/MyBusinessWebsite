@@ -141,24 +141,46 @@ export function getNextFollowUpStatus(lead: Lead, triggerMode: TriggerMode, conf
   return { label: `F-${followUpCount + 1} Scheduled`, color: "text-blue-500", time: formatDate(scheduledMillis) };
 }
 
-export function isLeadEligibleForStep(lead: Lead, service: ServiceId, step: StepId, triggerMode: TriggerMode): boolean {
-  if (lead.stopAutomation === true) return false;
-  if (!ACTIVE_STATUSES.has(String(lead.status || ""))) return false;
-  if (String(lead.service || "").toLowerCase().trim() !== service.toLowerCase().trim()) return false;
+function normalizeFollowupService(value: any): ServiceId {
+  const text = String(value || "").toLowerCase().trim();
+  if (text.includes("signature")) return "Email Signature";
+  if (text.includes("server") || text.includes("sst")) return "Server Side Tracking";
+  if (text.includes("google") || text.includes("ads")) return "Google Ads";
+  return "Email Signature";
+}
 
-  const followUpCount = Number(lead.follow_up_count || 0);
+export function isLeadEligibleForStep(lead: Lead, service: ServiceId, step: StepId, triggerMode: TriggerMode): boolean {
+  if (lead.stopAutomation === true || lead.archived === true || lead.deleted === true) return false;
+
+  const status = String(lead.status || "").toLowerCase().trim();
+  if (["replied", "bounced", "spam", "unsubscribed", "finished", "cancelled", "not_interested", "blocked_suppressed"].includes(status)) return false;
+  if (!ACTIVE_STATUSES.has(status) && status !== "processing_followup") return false;
+  if (normalizeFollowupService(lead.service) !== service) return false;
+
   const currentStepIndex = STEPS.indexOf(step);
-  if (followUpCount !== currentStepIndex) return false;
+  if (currentStepIndex < 0) return false;
+
+  const currentStepNumber = currentStepIndex + 1;
+  const storedStep = Number(lead.nextFollowupStep || 0);
+  const followUpCount = Number(lead.follow_up_count || 0);
+
+  if (storedStep > 0) {
+    if (storedStep !== currentStepNumber) return false;
+  } else if (followUpCount !== currentStepIndex) {
+    return false;
+  }
 
   const lastSent = getLastSentMs(lead);
   const lastEngaged = getLastEngagedMs(lead);
-  const hasAnyEngagement = Number(lead.open_count || 0) >= 1 || Number(lead.click_count || 0) >= 1 || lastEngaged > 0 || lead.status === "clicked";
+  const hasAnyEngagement = Number(lead.open_count || 0) >= 1 || Number(lead.click_count || 0) >= 1 || lastEngaged > 0 || status === "clicked";
 
   if (!hasAnyEngagement) return false;
 
-  if (step === "step1") {
-    return hasAnyEngagement;
-  }
+  // If the backend already scheduled this exact follow-up step, show it in the Automation tab
+  // even when the local lead cache has older follow_up_count/lastFollowUp values.
+  if (String(lead.nextFollowupStatus || "").toLowerCase() === "scheduled" && storedStep === currentStepNumber) return true;
+
+  if (step === "step1") return true;
 
   return lastSent > 0 && lastEngaged > lastSent;
 }

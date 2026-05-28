@@ -8231,13 +8231,13 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
    * SAFE RESCHEDULE AFTER DAYS GAP CHANGE
    * বাংলা ব্যাখ্যা: Follow-up config save করলে already scheduled/ready lead-এর stored
    * nextFollowupAt নিজে নিজে বদলায় না। এই endpoint selected service + step-এর
-   * active scheduled leads নতুন delay দিয়ে future-এ সরিয়ে দেয়, কিন্তু schedule আগায় না।
+   * active scheduled leads নতুন delay দিয়ে exact nextFollowupAt-এ sync করে।
    */
   await requireAdmin(req);
   const body = await readJson(req).catch(() => ({}));
   const service = getServiceId(body?.service);
   const { stepKey, stepNumber } = normalizeRescheduleStep(body?.step || body?.stepKey);
-  const updateMode = String(body?.updateMode || "extend_only").toLowerCase();
+  const updateMode = String(body?.updateMode || "recalculate_all").toLowerCase();
   const shouldAllowEarlier = updateMode === "recalculate_all" || body?.allowEarlier === true;
   const max = Math.max(1, Math.min(Number(body?.limit || 500), 500));
 

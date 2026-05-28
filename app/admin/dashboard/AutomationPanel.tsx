@@ -284,9 +284,11 @@ export default function AutomationPanel({
           {currentVariants.map((variant, index) => {
             const vIndex = validCurrentVariants.findIndex((v) => v.id === variant.id);
             const targetEmails =
-              vIndex === -1 || validCurrentVariants.length === 0
-                ? []
-                : currentFollowupLeads.filter((_, idx) => idx % validCurrentVariants.length === vIndex);
+              validCurrentVariants.length === 0
+                ? currentFollowupLeads
+                : vIndex === -1
+                  ? []
+                  : currentFollowupLeads.filter((_, idx) => idx % validCurrentVariants.length === vIndex);
 
             return (
               <div key={variant.id} className="bg-white rounded-[40px] shadow-xl border border-gray-50 flex flex-col overflow-hidden">

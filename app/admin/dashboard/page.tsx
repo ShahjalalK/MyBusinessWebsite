@@ -2643,7 +2643,7 @@ export default function DashboardPage() {
           body: JSON.stringify({
             service: activeFollowupService,
             step: activeFollowupStep,
-            updateMode: "extend_only",
+            updateMode: "recalculate_all",
           }),
         });
         const rescheduleData = await rescheduleResponse.json().catch(() => ({}));
@@ -2652,7 +2652,7 @@ export default function DashboardPage() {
         }
         rescheduledCount = Number(rescheduleData.updated || 0);
         rescheduleChecked = Number(rescheduleData.checked || 0);
-        rescheduleMessage = ` Rescheduled ${rescheduledCount} existing ${activeFollowupService} ${activeFollowupStep.toUpperCase()} lead(s). Checked ${rescheduleChecked}.`;
+        rescheduleMessage = ` Synced ${rescheduledCount} existing ${activeFollowupService} ${activeFollowupStep.toUpperCase()} lead schedule(s). Checked ${rescheduleChecked}.`;
       } catch (rescheduleError) {
         console.warn("Follow-up reschedule failed:", rescheduleError);
         rescheduleMessage = " Settings were saved, but existing scheduled leads could not be rescheduled automatically.";
