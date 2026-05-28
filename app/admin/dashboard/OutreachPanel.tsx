@@ -649,7 +649,8 @@ export default function OutreachPanel({
                 required
                 className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 transition-all font-bold text-lg"
                 value={subject}
-                onChange={(e: any) => setSubject(normalizeEmailSubjectForComposer(e.target.value))}
+                onChange={(e: any) => setSubject(e.target.value)}
+                onBlur={(e: any) => setSubject(normalizeEmailSubjectForComposer(e.target.value))}
               />
 
               <div className="rounded-[30px] border border-gray-100 bg-[#fbfcff] p-3">

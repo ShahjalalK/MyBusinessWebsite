@@ -1,6 +1,6 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.95.2-send-email-composer-field-normalization
+Version: v18.95.3-subject-space-input-fix
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
@@ -73,6 +73,27 @@ For Send Email review, Report URL + token is enough; PDF fields no longer hide a
 ```
 
 ---
+
+## Latest Update — v18.95.3 Subject Space Input Fix
+
+Stage 15A follow-up fix: the Send Email composer subject field no longer normalizes the subject on every keypress.
+
+Changed files:
+
+```text
+OutreachPanel.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Important decisions:
+
+```text
+Subject input keeps the operator's exact in-progress typing, including spaces.
+Subject cleanup/HTML stripping runs only when the field loses focus or when the email is sent/scheduled.
+This prevents the spacebar from appearing broken while still keeping the final subject clean.
+No Send Email drawer filtering, Sheet update, Brevo send, schedule, or Firestore behavior was changed.
+```
+
 
 ## Latest Update — v18.95.2 Send Email Composer Field Normalization
 
