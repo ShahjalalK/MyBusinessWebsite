@@ -1,8 +1,44 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.98.1-sender-stats-api-fix
+Version: v18.99-sheet-lead-source-overview
 Last updated: 2026-05-28
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
+
+---
+
+
+## Latest Update — v18.99 Sheet Lead Source Overview
+
+Stage 15D changes the Sheet tab from an old Sheet-based sending queue into a user-friendly Sheet data review and source overview area.
+
+Changed files:
+
+```text
+SheetQueuePanel.tsx
+sheet-readiness.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Sheet tab
+→ shows Email leads, LinkedIn leads, Report Ready, and Needs Review counts
+→ classifies each row as Email / LinkedIn / Needs Review from Sheet source fields and report context
+→ row click opens a large audit detail panel for easier review
+→ Email rows can be opened directly in the Send Email composer for final review/send
+→ LinkedIn rows stay LinkedIn-first and show LinkedIn link copy/report actions
+→ old Queue Selected / Queue Send actions are removed from the visible UI
+```
+
+Important decisions:
+
+```text
+Sheet tab is now for data review, source understanding, and routing.
+Send Email tab remains the place for final email compose/send/schedule.
+Leads tab remains the place for tracking and follow-up state.
+LinkedIn-first rows should not accidentally enter the Send Email composer unless explicitly email-sourced.
+```
 
 ---
 

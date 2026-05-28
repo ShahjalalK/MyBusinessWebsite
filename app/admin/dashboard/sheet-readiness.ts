@@ -1,8 +1,22 @@
 import type { SheetLead } from "./types";
 import { isEmailPatternValid, normalizeOptionalUrl, stripHtml } from "./utils";
 
+export type SheetOutreachChannel = "email" | "linkedin" | "unknown";
+
 export function sheetValue(lead: SheetLead | null | undefined, key: keyof SheetLead | string) {
   return String(lead?.[key as keyof SheetLead] || "").trim();
+}
+
+function lowerSheetText(...values: string[]) {
+  return values.map((value) => String(value || "").toLowerCase()).join(" ");
+}
+
+function normalizedSendStatus(lead: SheetLead) {
+  return sheetValue(lead, "Send Status").toLowerCase();
+}
+
+function isBlockedSendStatus(status: string) {
+  return new Set(["sent", "scheduled", "queued", "sending", "cancelled", "blocked", "do not contact", "unsubscribed", "bounced"]).has(status);
 }
 
 export function isSheetEmailReady(lead: SheetLead) {
@@ -64,25 +78,100 @@ export function isSheetApprovalReady(lead: SheetLead) {
 }
 
 export function isSheetSendStatusReady(lead: SheetLead) {
-  const sendStatus = sheetValue(lead, "Send Status").toLowerCase();
+  const sendStatus = normalizedSendStatus(lead);
   return ["", "not sent", "failed", "needs review"].includes(sendStatus);
+}
+
+export function getSheetOutreachChannel(lead: SheetLead): SheetOutreachChannel {
+  const explicitChannel = lowerSheetText(
+    sheetValue(lead, "outreachChannel"),
+    sheetValue(lead, "Outreach Channel"),
+    sheetValue(lead, "Channel"),
+  );
+
+  if (explicitChannel.includes("linkedin")) return "linkedin";
+  if (explicitChannel.includes("email")) return "email";
+
+  const emailSource = sheetValue(lead, "Email Source").toLowerCase();
+  const searchText = lowerSheetText(
+    emailSource,
+    sheetValue(lead, "Social Platform"),
+    sheetValue(lead, "Social Link"),
+    sheetValue(lead, "Lead Status"),
+    sheetValue(lead, "Lead Label"),
+    sheetValue(lead, "Notes"),
+    sheetValue(lead, "sourceType"),
+    sheetValue(lead, "leadSource"),
+    sheetValue(lead, "auditSource"),
+    sheetValue(lead, "sourceContext"),
+  );
+
+  const looksLinkedIn = searchText.includes("linkedin") || searchText.includes("linked in");
+  const emailSourceHasLinkedIn = emailSource.includes("linkedin") || emailSource.includes("linked in");
+  const explicitlyMovedToEmail =
+    emailSource.includes("email_outreach") ||
+    emailSource.includes("email outreach") ||
+    emailSource.includes("use email") ||
+    emailSource.includes("move to email") ||
+    emailSource.includes("manual email");
+  const explicitlyEmailSourced =
+    explicitlyMovedToEmail ||
+    (!emailSourceHasLinkedIn &&
+      (emailSource.includes("email") ||
+        emailSource.includes("search") ||
+        emailSource.includes("website") ||
+        emailSource.includes("google") ||
+        emailSource.includes("verified") ||
+        emailSource.includes("hunter") ||
+        emailSource.includes("apollo") ||
+        emailSource.includes("python")));
+
+  // LinkedIn/manual prospects stay LinkedIn-first unless the Sheet explicitly moves them to email outreach.
+  if (looksLinkedIn && !explicitlyEmailSourced) return "linkedin";
+  if (isSheetEmailReady(lead)) return "email";
+  if (looksLinkedIn) return "linkedin";
+  return "unknown";
+}
+
+export function isSheetLinkedInOutreachCandidate(lead: SheetLead) {
+  return getSheetOutreachChannel(lead) === "linkedin";
+}
+
+export function isSheetEmailOutreachCandidate(lead: SheetLead) {
+  const sendStatus = normalizedSendStatus(lead);
+  if (isBlockedSendStatus(sendStatus)) return false;
+  if (!isSheetEmailReady(lead)) return false;
+  return getSheetOutreachChannel(lead) === "email";
 }
 
 export function getSheetReadiness(lead: SheetLead) {
   const blockers: string[] = [];
+  const channel = getSheetOutreachChannel(lead);
 
+  if (channel === "linkedin") {
+    if (!isSheetReportReady(lead)) blockers.push("secure report missing");
+    if (!sheetValue(lead, "Social Link")) blockers.push("linkedin link missing");
+
+    return {
+      ready: blockers.length === 0,
+      blockers,
+      note: blockers.length ? blockers.join(" · ") : "Ready for LinkedIn/manual outreach review",
+    };
+  }
+
+  if (channel !== "email") blockers.push("outreach channel unclear");
   if (!isSheetEmailReady(lead)) blockers.push("valid email missing");
   if (!isSheetApprovalReady(lead)) blockers.push("approval not ready");
   if (!isSheetSendStatusReady(lead)) blockers.push(`send status is ${sheetValue(lead, "Send Status") || "not allowed"}`);
   if (!stripHtml(sheetValue(lead, "Email Subject"))) blockers.push("email subject missing");
   if (!stripHtml(sheetValue(lead, "Email Body"))) blockers.push("email body missing");
   if (!sheetValue(lead, "Main Issue")) blockers.push("main issue missing");
-  if (!isSheetReportReady(lead)) blockers.push("secure /r report or PDF fields missing");
+  if (!isSheetReportReady(lead)) blockers.push("secure report missing");
 
   return {
     ready: blockers.length === 0,
     blockers,
-    note: blockers.length ? blockers.join(" · ") : "Ready for verified outreach",
+    note: blockers.length ? blockers.join(" · ") : "Ready for Send Email review",
   };
 }
 
@@ -99,41 +188,36 @@ export function getSheetReportStatus(lead: SheetLead) {
   }
   return {
     label: "Report missing",
-    note: "Upload PDF + register /r link before sending",
+    note: "Create/register a secure report link before outreach",
     tone: "bg-red-50 text-red-700 border-red-100",
   };
 }
 
-export function isSheetEmailOutreachCandidate(lead: SheetLead) {
-  const sendStatus = sheetValue(lead, "Send Status").toLowerCase();
-  const blockedSendStatuses = new Set(["sent", "scheduled", "queued", "sending", "cancelled", "blocked", "do not contact", "unsubscribed", "bounced"]);
-  if (blockedSendStatuses.has(sendStatus)) return false;
+export function getSheetChannelStatus(lead: SheetLead) {
+  const channel = getSheetOutreachChannel(lead);
+  const readiness = getSheetReadiness(lead);
 
-  if (!isSheetEmailReady(lead)) return false;
+  if (channel === "email") {
+    return {
+      label: "Email lead",
+      note: readiness.ready ? "Ready to review in Send Email" : readiness.note,
+      tone: readiness.ready ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-amber-50 text-amber-700 border-amber-100",
+    };
+  }
 
-  const emailSource = sheetValue(lead, "Email Source").toLowerCase();
-  const socialPlatform = sheetValue(lead, "Social Platform").toLowerCase();
-  const socialLink = sheetValue(lead, "Social Link").toLowerCase();
-  const leadStatus = sheetValue(lead, "Lead Status").toLowerCase();
+  if (channel === "linkedin") {
+    return {
+      label: "LinkedIn lead",
+      note: readiness.ready ? "Keep this in LinkedIn/manual workflow" : readiness.note,
+      tone: readiness.ready ? "bg-indigo-50 text-indigo-700 border-indigo-100" : "bg-amber-50 text-amber-700 border-amber-100",
+    };
+  }
 
-  const looksLinkedInOnly =
-    socialPlatform.includes("linkedin") ||
-    socialLink.includes("linkedin.com") ||
-    leadStatus.includes("linkedin");
-
-  const explicitlyEmailSourced =
-    emailSource.includes("email") ||
-    emailSource.includes("search") ||
-    emailSource.includes("website") ||
-    emailSource.includes("google") ||
-    emailSource.includes("verified") ||
-    emailSource.includes("hunter") ||
-    emailSource.includes("apollo");
-
-  // LinkedIn/manual prospects stay out of Send Email unless the operator explicitly marks an email source.
-  if (looksLinkedInOnly && !explicitlyEmailSourced) return false;
-
-  return true;
+  return {
+    label: "Needs review",
+    note: readiness.note || "Choose whether this lead belongs to Email or LinkedIn outreach.",
+    tone: "bg-slate-50 text-slate-600 border-slate-100",
+  };
 }
 
 export function getSheetEmailQueueStatus(lead: SheetLead) {
