@@ -2632,32 +2632,6 @@ export default function DashboardPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) throw new Error(data.error || "Follow-up settings save failed");
 
-      let rescheduledCount = 0;
-      let rescheduleChecked = 0;
-      let rescheduleMessage = "";
-
-      try {
-        const rescheduleResponse = await fetch("/api/trackflow/automation/followups/reschedule", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            service: activeFollowupService,
-            step: activeFollowupStep,
-            updateMode: "extend_only",
-          }),
-        });
-        const rescheduleData = await rescheduleResponse.json().catch(() => ({}));
-        if (!rescheduleResponse.ok || !rescheduleData.success) {
-          throw new Error(rescheduleData.error || "Follow-up reschedule failed");
-        }
-        rescheduledCount = Number(rescheduleData.updated || 0);
-        rescheduleChecked = Number(rescheduleData.checked || 0);
-        rescheduleMessage = ` Rescheduled ${rescheduledCount} existing ${activeFollowupService} ${activeFollowupStep.toUpperCase()} lead(s). Checked ${rescheduleChecked}.`;
-      } catch (rescheduleError) {
-        console.warn("Follow-up reschedule failed:", rescheduleError);
-        rescheduleMessage = " Settings were saved, but existing scheduled leads could not be rescheduled automatically.";
-      }
-
       try {
         const currentUser = auth.currentUser;
         const token = currentUser ? await currentUser.getIdToken() : "";
@@ -2674,8 +2648,7 @@ export default function DashboardPage() {
       setTriggerMode("open_required");
       setHasUnsavedChanges(false);
       await loadFollowupSummary(true);
-      await refreshLeads().catch((refreshError: any) => console.warn("Lead refresh after follow-up save failed:", refreshError));
-      window.alert(`✅ Follow-up settings saved.${rescheduleMessage}`);
+      window.alert("✅ Follow-up settings saved. Template-blocked follow-ups were requeued for the scheduler.");
     } catch (error) {
       console.error(error);
       window.alert("Error saving follow-up settings.");
