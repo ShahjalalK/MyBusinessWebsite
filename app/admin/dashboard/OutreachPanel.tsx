@@ -164,12 +164,7 @@ export default function OutreachPanel({
   handleSendEmail,
   buildPreviewSignature,
 }: OutreachPanelProps) {
-    const getSenderSentCount = (sender?: SenderAccount) => {
-      if (!sender) return 0;
-      return Number(senderCounts[sender.email] || senderCounts[sender.email.toLowerCase()] || senderCounts[sender.id] || 0);
-    };
-
-    const senderCount = activeSender ? getSenderSentCount(activeSender) : 0;
+    const senderCount = activeSender ? senderCounts[activeSender.email] || 0 : 0;
     const remaining = activeSender ? Math.max(activeSender.limit - senderCount, 0) : 0;
     const usagePercent = activeSender ? Math.min(Math.round((senderCount / activeSender.limit) * 100), 100) : 0;
     const senderTone = usagePercent >= 90 ? "text-red-600 bg-red-50" : usagePercent >= 70 ? "text-orange-600 bg-orange-50" : "text-green-600 bg-green-50";
@@ -394,11 +389,11 @@ export default function OutreachPanel({
 
             <div className="xl:col-span-2 grid grid-cols-2 gap-2">
               <div className="rounded-2xl bg-gray-50 p-3">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Sent</p>
-                <p className="text-xl font-black text-gray-900">{senderCount}</p>
+                <p className="text-[9px] font-black text-gray-400 uppercase">Sent today</p>
+                <p className="text-xl font-black text-gray-900">{senderCount}/{activeSender?.limit || 0}</p>
               </div>
               <div className="rounded-2xl bg-gray-50 p-3">
-                <p className="text-[9px] font-black text-gray-400 uppercase">Left</p>
+                <p className="text-[9px] font-black text-gray-400 uppercase">Left today</p>
                 <p className="text-xl font-black text-gray-900">{remaining}</p>
               </div>
             </div>
@@ -540,7 +535,7 @@ export default function OutreachPanel({
 
               <div className="space-y-3">
                 {ACTIVE_SENDERS.map((sender) => {
-                  const count = getSenderSentCount(sender);
+                  const count = senderCounts[sender.email] || 0;
                   const isActive = selectedSender === sender.id;
                   const percent = Math.min((count / sender.limit) * 100, 100);
                   const isLimitReached = count >= sender.limit;
@@ -560,17 +555,14 @@ export default function OutreachPanel({
                             {sender.name || makeNameFromEmail(sender.email)}
                           </p>
                           <p className="font-bold text-[10px] text-gray-400 truncate">{sender.email}</p>
+                          <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-gray-400">Sent today: {count}/{sender.limit} · Left: {Math.max(sender.limit - count, 0)}</p>
                         </div>
                         <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isLimitReached ? "bg-red-100 text-red-600" : "bg-white text-gray-500"}`}>
-                          {count}/{sender.limit}
+                          {isLimitReached ? "Limit" : `${count}/${sender.limit}`}
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                         <div className={`h-full ${percent >= 90 ? "bg-red-500" : percent >= 70 ? "bg-orange-500" : "bg-blue-500"}`} style={{ width: `${percent}%` }} />
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-[9px] font-black uppercase tracking-wide text-gray-400">
-                        <span>Sent today: {count}</span>
-                        <span>Left: {Math.max(sender.limit - count, 0)}</span>
                       </div>
                     </button>
                   );

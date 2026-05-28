@@ -45,6 +45,7 @@ import { createReportCleanupHandlers } from "@/lib/trackflow-cleanup/report-clea
 import {
   BRAND_WEBSITE,
   BRAND_WEBSITE_LABEL,
+  ACTIVE_SENDERS,
   MAIN_INBOX_EMAIL,
   MAIN_INBOX_NAME,
   getDefaultSender,
@@ -2621,6 +2622,55 @@ function getFollowupBatchPerRun(configData: any): number {
 async function getFollowupSentTodayTotal(dateKey = todayKey()): Promise<number> {
   const statsSnap = await adminDb.collection("daily_sending_stats").where("dateKey", "==", dateKey).get();
   return statsSnap.docs.reduce((total: number, docSnap: any) => total + Number((docSnap.data() || {}).followupSent || 0), 0);
+}
+
+
+async function handleSenderStats(req: Request) {
+  await requireAdmin(req);
+
+  const dateKey = todayKey();
+  const statsSnap = await adminDb.collection("daily_sending_stats").where("dateKey", "==", dateKey).get();
+  const byEmail: Record<string, { initialSent: number; followupSent: number; totalSent: number }> = {};
+
+  statsSnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    const senderEmail = normalizeEmail(data.senderEmail || "");
+    if (!senderEmail || senderEmail === "global") return;
+
+    const initialSent = Number(data.initialSent || 0);
+    const followupSent = Number(data.followupSent || 0);
+    const current = byEmail[senderEmail] || { initialSent: 0, followupSent: 0, totalSent: 0 };
+    current.initialSent += initialSent;
+    current.followupSent += followupSent;
+    current.totalSent += initialSent + followupSent;
+    byEmail[senderEmail] = current;
+  });
+
+  const rows = ACTIVE_SENDERS.map((sender: any) => {
+    const email = normalizeEmail(sender.email || "");
+    const count = byEmail[email] || { initialSent: 0, followupSent: 0, totalSent: 0 };
+    const limit = Math.max(1, Math.min(Number(sender.limit || DEFAULT_DAILY_LIMIT), 500));
+    return {
+      id: sender.id,
+      name: sender.name,
+      email,
+      limit,
+      initialSent: count.initialSent,
+      followupSent: count.followupSent,
+      totalSent: count.totalSent,
+      remaining: Math.max(limit - count.initialSent, 0),
+    };
+  });
+
+  return json({
+    success: true,
+    dateKey,
+    rows,
+    counts: rows.reduce((acc: Record<string, number>, row: any) => {
+      acc[row.email] = Number(row.initialSent || 0);
+      return acc;
+    }, {}),
+  });
 }
 
 async function handleFollowupSummary(req: Request) {
@@ -8380,6 +8430,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "cron/recover-locks") return await handleCronRecoverLocks(req);
     if (action === "automation/followups/dry-run") return await handleFollowupDryRun(req);
     if (action === "automation/followups/summary") return await handleFollowupSummary(req);
+    if (action === "sender-stats") return await handleSenderStats(req);
     if (action === "postmaster/health") return await handlePostmasterHealth(req);
     if (action === "admin/health") return await handleAdminHealth(req);
     if (action === "unsubscribe") return await handleUnsubscribeGet(req);

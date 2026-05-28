@@ -94,7 +94,6 @@ import {
   normalizeOptionalUrl,
   normalizeSheetEmailCopy,
   normalizeEmailSubjectForComposer,
-  isLikelyPlaceholderEmailSubject,
   normalizeSheetService,
   sanitizePreviewHtml,
   stripHtml,
@@ -868,53 +867,56 @@ export default function DashboardPage() {
   }, [email]);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchCounts() {
-      const counts: Record<string, number> = {};
-      const senderEmailLookup = new Map<string, string>(ACTIVE_SENDERS.map((sender) => [sender.email.toLowerCase(), sender.email]));
-      const dateKeys = Array.from(new Set([todayKeyDhaka(), new Date().toISOString().slice(0, 10)]));
+      const fallbackCounts: Record<string, number> = ACTIVE_SENDERS.reduce((acc: Record<string, number>, sender) => {
+        acc[sender.email] = 0;
+        return acc;
+      }, {});
 
-      ACTIVE_SENDERS.forEach((sender) => {
-        counts[sender.email] = 0;
-      });
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          if (!cancelled) setSenderCounts((prev) => ({ ...fallbackCounts, ...prev }));
+          return;
+        }
 
-      await Promise.all(
-        dateKeys.map(async (dateKey) => {
-          try {
-            const statsSnap = await getDocs(query(collection(db, "daily_sending_stats"), where("dateKey", "==", dateKey)));
-            statsSnap.docs.forEach((docSnap) => {
-              const stats = docSnap.data() as any;
-              const senderEmail = String(stats.senderEmail || stats.sender_email || "").trim().toLowerCase();
-              const matchedEmail = senderEmailLookup.get(senderEmail);
-              if (!matchedEmail) return;
-              counts[matchedEmail] = Math.max(counts[matchedEmail] || 0, Number(stats.initialSent || 0));
-            });
-          } catch (error) {
-            console.error("Sender count stats query error:", dateKey, error);
-          }
-        })
-      );
+        const token = await currentUser.getIdToken();
+        const response = await fetch("/api/trackflow/sender-stats", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
 
-      await Promise.all(
-        ACTIVE_SENDERS.map(async (sender) => {
-          await Promise.all(
-            dateKeys.map(async (dateKey) => {
-              try {
-                const statsId = `${dateKey}_${emailStatsDocId(sender.email)}`;
-                const statsSnap = await getDoc(doc(db, "daily_sending_stats", statsId));
-                const stats = statsSnap.exists() ? (statsSnap.data() as any) : {};
-                counts[sender.email] = Math.max(counts[sender.email] || 0, Number(stats.initialSent || 0));
-              } catch (error) {
-                console.error("Sender count stats read error:", sender.email, dateKey, error);
-              }
-            })
-          );
-        })
-      );
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Sender stats could not be loaded.");
+        }
 
-      setSenderCounts(counts);
+        const nextCounts: Record<string, number> = { ...fallbackCounts };
+        if (data.counts && typeof data.counts === "object") {
+          Object.entries(data.counts).forEach(([email, value]) => {
+            nextCounts[String(email)] = Number(value || 0);
+          });
+        } else if (Array.isArray(data.rows)) {
+          data.rows.forEach((row: any) => {
+            if (row?.email) nextCounts[String(row.email)] = Number(row.initialSent || 0);
+          });
+        }
+
+        if (!cancelled) setSenderCounts(nextCounts);
+      } catch (error) {
+        console.error("Sender count API error:", error);
+        if (!cancelled) setSenderCounts((prev) => ({ ...fallbackCounts, ...prev }));
+      }
     }
 
     fetchCounts().catch((err) => console.error("Sender count error:", err));
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeTab, sendStatus]);
 
   const loadFollowupConfig = async (force = false) => {
@@ -1305,8 +1307,8 @@ export default function DashboardPage() {
     setLastDraftSavedAt("");
   };
 
-  const validateOutreachForm = (currentMessage = getCurrentEditorHtml(), currentSubjectValue = subject) => {
-    if (!currentSubjectValue.trim()) {
+  const validateOutreachForm = (currentMessage = getCurrentEditorHtml()) => {
+    if (!subject.trim()) {
       window.alert("Subject is required.");
       return false;
     }
@@ -1359,15 +1361,9 @@ export default function DashboardPage() {
     e.preventDefault();
 
     const currentMessage = syncEditorMessage();
-    const sheetLeadForValidation = selectedOutreachSheetLead;
-    let currentSubject = normalizeEmailSubjectForComposer(subject);
-
-    if (sheetLeadForValidation && selectedService) {
-      currentSubject = buildSafeSheetSubject(sheetLeadForValidation, selectedService, currentSubject);
-    }
-
+    const currentSubject = normalizeEmailSubjectForComposer(subject);
     if (currentSubject !== subject) setSubject(currentSubject);
-    if (!validateOutreachForm(currentMessage, currentSubject) || !activeSender) return;
+    if (!validateOutreachForm(currentMessage) || !activeSender) return;
 
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -1490,10 +1486,10 @@ export default function DashboardPage() {
           });
         }
 
-        if (!scheduledAtISO) {
-          setSenderCounts((current) => ({
-            ...current,
-            [activeSender.email]: Math.min(Number(current[activeSender.email] || 0) + 1, activeSender.limit),
+        if (!scheduledAtISO && activeSender?.email) {
+          setSenderCounts((prev) => ({
+            ...prev,
+            [activeSender.email]: Number(prev[activeSender.email] || 0) + 1,
           }));
         }
 
@@ -2300,31 +2296,6 @@ export default function DashboardPage() {
     setSelectedSheetRows(allSelected ? [] : readyRows);
   };
 
-  const buildSafeSheetSubject = (lead: SheetLead, service: ServiceId, normalizedSubject: string) => {
-    const candidate = normalizeEmailSubjectForComposer(normalizedSubject || "");
-    const context = {
-      email: sheetValue(lead, "Final Email"),
-      name: sheetValue(lead, "Decision Maker"),
-      company: sheetValue(lead, "Business Name"),
-      website: sheetValue(lead, "Website URL"),
-      service,
-      mainIssue: sheetValue(lead, "Main Issue"),
-      leadLabel: sheetValue(lead, "Lead Label"),
-    };
-
-    if (!isLikelyPlaceholderEmailSubject(candidate, context)) return candidate;
-
-    const template = getColdEmailTemplateForService(service);
-    return normalizeEmailSubjectForComposer(
-      applyColdEmailMergeTags(template.subject, {
-        name: context.name || makeNameFromEmail(context.email),
-        company: context.company || "your company",
-        website: context.website || "your website",
-        service,
-      })
-    );
-  };
-
   const fillOutreachFromSheet = (lead: SheetLead) => {
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const readiness = getSheetReadiness(lead);
@@ -2341,7 +2312,7 @@ export default function DashboardPage() {
     setCompanyName(sheetValue(lead, "Business Name"));
     setWebsite(sheetValue(lead, "Website URL"));
     setBusinessType(sheetValue(lead, "Lead Label") || sheetValue(lead, "Lead Status"));
-    setSubject(buildSafeSheetSubject(lead, service, emailCopy.subject));
+    setSubject(emailCopy.subject);
     setMessage(emailCopy.bodyHtml);
     setSelectedService(service);
     setReportUrl(sheetValue(lead, "Report URL"));
@@ -2368,7 +2339,7 @@ export default function DashboardPage() {
     const finalEmail = sheetValue(lead, "Final Email");
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const emailCopy = normalizeSheetEmailCopy(sheetValue(lead, "Email Subject"), sheetValue(lead, "Email Body"));
-    const subjectFromSheet = buildSafeSheetSubject(lead, service, emailCopy.subject);
+    const subjectFromSheet = emailCopy.subject;
     const bodyFromSheet = emailCopy.bodyHtml;
     const reportFromSheet = normalizeOptionalUrl(sheetValue(lead, "Report URL"));
 
