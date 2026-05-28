@@ -94,6 +94,7 @@ import {
   normalizeOptionalUrl,
   normalizeSheetEmailCopy,
   normalizeEmailSubjectForComposer,
+  isLikelyPlaceholderEmailSubject,
   normalizeSheetService,
   sanitizePreviewHtml,
   stripHtml,
@@ -869,19 +870,44 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchCounts() {
       const counts: Record<string, number> = {};
-      const dateKey = todayKeyDhaka();
+      const senderEmailLookup = new Map<string, string>(ACTIVE_SENDERS.map((sender) => [sender.email.toLowerCase(), sender.email]));
+      const dateKeys = Array.from(new Set([todayKeyDhaka(), new Date().toISOString().slice(0, 10)]));
+
+      ACTIVE_SENDERS.forEach((sender) => {
+        counts[sender.email] = 0;
+      });
+
+      await Promise.all(
+        dateKeys.map(async (dateKey) => {
+          try {
+            const statsSnap = await getDocs(query(collection(db, "daily_sending_stats"), where("dateKey", "==", dateKey)));
+            statsSnap.docs.forEach((docSnap) => {
+              const stats = docSnap.data() as any;
+              const senderEmail = String(stats.senderEmail || stats.sender_email || "").trim().toLowerCase();
+              const matchedEmail = senderEmailLookup.get(senderEmail);
+              if (!matchedEmail) return;
+              counts[matchedEmail] = Math.max(counts[matchedEmail] || 0, Number(stats.initialSent || 0));
+            });
+          } catch (error) {
+            console.error("Sender count stats query error:", dateKey, error);
+          }
+        })
+      );
 
       await Promise.all(
         ACTIVE_SENDERS.map(async (sender) => {
-          try {
-            const statsId = `${dateKey}_${emailStatsDocId(sender.email)}`;
-            const statsSnap = await getDoc(doc(db, "daily_sending_stats", statsId));
-            const stats = statsSnap.exists() ? statsSnap.data() : {};
-            counts[sender.email] = Number(stats.initialSent || 0);
-          } catch (error) {
-            console.error("Sender count stats read error:", sender.email, error);
-            counts[sender.email] = 0;
-          }
+          await Promise.all(
+            dateKeys.map(async (dateKey) => {
+              try {
+                const statsId = `${dateKey}_${emailStatsDocId(sender.email)}`;
+                const statsSnap = await getDoc(doc(db, "daily_sending_stats", statsId));
+                const stats = statsSnap.exists() ? (statsSnap.data() as any) : {};
+                counts[sender.email] = Math.max(counts[sender.email] || 0, Number(stats.initialSent || 0));
+              } catch (error) {
+                console.error("Sender count stats read error:", sender.email, dateKey, error);
+              }
+            })
+          );
         })
       );
 
@@ -1279,8 +1305,8 @@ export default function DashboardPage() {
     setLastDraftSavedAt("");
   };
 
-  const validateOutreachForm = (currentMessage = getCurrentEditorHtml()) => {
-    if (!subject.trim()) {
+  const validateOutreachForm = (currentMessage = getCurrentEditorHtml(), currentSubjectValue = subject) => {
+    if (!currentSubjectValue.trim()) {
       window.alert("Subject is required.");
       return false;
     }
@@ -1333,9 +1359,15 @@ export default function DashboardPage() {
     e.preventDefault();
 
     const currentMessage = syncEditorMessage();
-    const currentSubject = normalizeEmailSubjectForComposer(subject);
+    const sheetLeadForValidation = selectedOutreachSheetLead;
+    let currentSubject = normalizeEmailSubjectForComposer(subject);
+
+    if (sheetLeadForValidation && selectedService) {
+      currentSubject = buildSafeSheetSubject(sheetLeadForValidation, selectedService, currentSubject);
+    }
+
     if (currentSubject !== subject) setSubject(currentSubject);
-    if (!validateOutreachForm(currentMessage) || !activeSender) return;
+    if (!validateOutreachForm(currentMessage, currentSubject) || !activeSender) return;
 
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -1456,6 +1488,13 @@ export default function DashboardPage() {
             open_count: 0,
             click_count: 0,
           });
+        }
+
+        if (!scheduledAtISO) {
+          setSenderCounts((current) => ({
+            ...current,
+            [activeSender.email]: Math.min(Number(current[activeSender.email] || 0) + 1, activeSender.limit),
+          }));
         }
 
         setSendStatus(scheduledAtISO ? "Success! Email Scheduled." : "Success! Outreach Launched.");
@@ -2261,6 +2300,31 @@ export default function DashboardPage() {
     setSelectedSheetRows(allSelected ? [] : readyRows);
   };
 
+  const buildSafeSheetSubject = (lead: SheetLead, service: ServiceId, normalizedSubject: string) => {
+    const candidate = normalizeEmailSubjectForComposer(normalizedSubject || "");
+    const context = {
+      email: sheetValue(lead, "Final Email"),
+      name: sheetValue(lead, "Decision Maker"),
+      company: sheetValue(lead, "Business Name"),
+      website: sheetValue(lead, "Website URL"),
+      service,
+      mainIssue: sheetValue(lead, "Main Issue"),
+      leadLabel: sheetValue(lead, "Lead Label"),
+    };
+
+    if (!isLikelyPlaceholderEmailSubject(candidate, context)) return candidate;
+
+    const template = getColdEmailTemplateForService(service);
+    return normalizeEmailSubjectForComposer(
+      applyColdEmailMergeTags(template.subject, {
+        name: context.name || makeNameFromEmail(context.email),
+        company: context.company || "your company",
+        website: context.website || "your website",
+        service,
+      })
+    );
+  };
+
   const fillOutreachFromSheet = (lead: SheetLead) => {
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const readiness = getSheetReadiness(lead);
@@ -2277,7 +2341,7 @@ export default function DashboardPage() {
     setCompanyName(sheetValue(lead, "Business Name"));
     setWebsite(sheetValue(lead, "Website URL"));
     setBusinessType(sheetValue(lead, "Lead Label") || sheetValue(lead, "Lead Status"));
-    setSubject(emailCopy.subject);
+    setSubject(buildSafeSheetSubject(lead, service, emailCopy.subject));
     setMessage(emailCopy.bodyHtml);
     setSelectedService(service);
     setReportUrl(sheetValue(lead, "Report URL"));
@@ -2304,7 +2368,7 @@ export default function DashboardPage() {
     const finalEmail = sheetValue(lead, "Final Email");
     const service = normalizeSheetService(sheetValue(lead, "Service Type"));
     const emailCopy = normalizeSheetEmailCopy(sheetValue(lead, "Email Subject"), sheetValue(lead, "Email Body"));
-    const subjectFromSheet = emailCopy.subject;
+    const subjectFromSheet = buildSafeSheetSubject(lead, service, emailCopy.subject);
     const bodyFromSheet = emailCopy.bodyHtml;
     const reportFromSheet = normalizeOptionalUrl(sheetValue(lead, "Report URL"));
 

@@ -260,6 +260,86 @@ export function normalizeEmailSubjectForComposer(value: string) {
   return plain.replace(/\s+/g, " ").slice(0, 180).trim();
 }
 
+
+export function isLikelyPlaceholderEmailSubject(
+  value: string,
+  context: {
+    email?: string;
+    name?: string;
+    company?: string;
+    website?: string;
+    service?: string;
+    mainIssue?: string;
+    leadLabel?: string;
+  } = {},
+) {
+  const subject = normalizeEmailSubjectForComposer(value);
+  const lower = subject.toLowerCase();
+  if (!lower) return true;
+  if (lower.length < 6) return true;
+  if (looksLikeEmailBody(value)) return true;
+  if (/@/.test(lower) || /(?:https?:\/\/|www\.)/i.test(subject)) return true;
+
+  const emailLocal = String(context.email || "").split("@")[0] || "";
+  const websiteHost = String(context.website || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0];
+
+  const exactBadValues = [
+    context.email,
+    emailLocal,
+    context.name,
+    context.company,
+    context.website,
+    websiteHost,
+    context.service,
+    context.mainIssue,
+    context.leadLabel,
+  ]
+    .map((item) => plainTextFromHtmlish(String(item || "")).toLowerCase())
+    .filter(Boolean);
+
+  if (exactBadValues.some((item) => item === lower)) return true;
+
+  const genericRoleSubjects = new Set([
+    "helpdesk",
+    "help desk",
+    "support",
+    "info",
+    "sales",
+    "admin",
+    "office",
+    "contact",
+    "enquiry",
+    "enquiries",
+    "inquiries",
+    "possible contact person",
+    "decision maker",
+    "unknown",
+    "not found",
+    "n/a",
+    "na",
+    "none",
+    "website",
+    "homepage",
+    "google ads",
+    "server side tracking",
+    "email signature",
+  ]);
+
+  if (genericRoleSubjects.has(lower)) return true;
+
+  const wordCount = lower.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 2 && /\b(helpdesk|support|info|sales|admin|office|contact|enquir|inquir|person|website|homepage)\b/i.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function normalizeEmailBodyHtmlForComposer(value: string) {
   const decoded = removeSubjectAndBodyLabels(value);
   if (!plainTextFromHtmlish(decoded)) return "";

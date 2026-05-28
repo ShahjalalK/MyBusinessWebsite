@@ -164,7 +164,12 @@ export default function OutreachPanel({
   handleSendEmail,
   buildPreviewSignature,
 }: OutreachPanelProps) {
-    const senderCount = activeSender ? senderCounts[activeSender.email] || 0 : 0;
+    const getSenderSentCount = (sender?: SenderAccount) => {
+      if (!sender) return 0;
+      return Number(senderCounts[sender.email] || senderCounts[sender.email.toLowerCase()] || senderCounts[sender.id] || 0);
+    };
+
+    const senderCount = activeSender ? getSenderSentCount(activeSender) : 0;
     const remaining = activeSender ? Math.max(activeSender.limit - senderCount, 0) : 0;
     const usagePercent = activeSender ? Math.min(Math.round((senderCount / activeSender.limit) * 100), 100) : 0;
     const senderTone = usagePercent >= 90 ? "text-red-600 bg-red-50" : usagePercent >= 70 ? "text-orange-600 bg-orange-50" : "text-green-600 bg-green-50";
@@ -535,7 +540,7 @@ export default function OutreachPanel({
 
               <div className="space-y-3">
                 {ACTIVE_SENDERS.map((sender) => {
-                  const count = senderCounts[sender.email] || 0;
+                  const count = getSenderSentCount(sender);
                   const isActive = selectedSender === sender.id;
                   const percent = Math.min((count / sender.limit) * 100, 100);
                   const isLimitReached = count >= sender.limit;
@@ -562,6 +567,10 @@ export default function OutreachPanel({
                       </div>
                       <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden">
                         <div className={`h-full ${percent >= 90 ? "bg-red-500" : percent >= 70 ? "bg-orange-500" : "bg-blue-500"}`} style={{ width: `${percent}%` }} />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-[9px] font-black uppercase tracking-wide text-gray-400">
+                        <span>Sent today: {count}</span>
+                        <span>Left: {Math.max(sender.limit - count, 0)}</span>
                       </div>
                     </button>
                   );

@@ -1,8 +1,44 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.97-lead-drawer-engagement-followup-summary
+Version: v18.98-send-email-subject-sender-count-fix
 Last updated: 2026-05-27
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
+
+---
+
+
+## Latest Update — v18.98 Send Email Subject + Sender Count Fix
+
+This patch tightens the Send Email tab after the one-by-one drawer workflow.
+
+Changed files:
+
+```text
+page.tsx
+OutreachPanel.tsx
+utils.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Send Email drawer → selected Sheet row fills composer
+→ subject now uses Email Subject only when it looks like a real email subject
+→ placeholders such as Helpdesk, support, info, contact names, websites, service names, or audit fields are not used as subject
+→ when the Sheet subject looks wrong, the dashboard falls back to the safe code template subject for the selected service
+→ sender cards show sent today and remaining quota more clearly
+→ sender counts are loaded from daily_sending_stats by dateKey + senderEmail and also fallback to the direct stats document id
+→ successful immediate sends increment the local sender count without reloading the page
+```
+
+Important decisions:
+
+```text
+Do not guess a subject from Main Issue, Decision Maker, Final Email, Website URL, or generic role words.
+Do not touch Firestore sender config; senders still live in lib/senders.ts.
+Keep sender counts manual/read-only from daily_sending_stats so no realtime listener is needed.
+```
 
 ---
 
