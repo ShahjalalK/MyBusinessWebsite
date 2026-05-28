@@ -3164,8 +3164,14 @@ export default function DashboardPage() {
               filteredLeadCount={filteredLeads.length}
               loadingMoreLeads={loadingMoreLeads}
               hasMoreLeads={hasMoreLeads}
+              sheetLeads={sheetLeads}
+              sheetLoading={sheetLoading}
+              sheetStatus={sheetStatus}
+              sheetLoadedAt={sheetLoadedAt}
+              senderCounts={senderCounts}
               loadFollowupSummary={loadFollowupSummary}
               loadFirebaseUsage={loadFirebaseUsage}
+              loadSheetLeads={loadSheetLeads}
               runSystemCleanup={runSystemCleanup}
               setActiveTab={setActiveTab}
               setSelectedLead={setSelectedLead}

@@ -1,42 +1,42 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v18.99.1-sheet-composer-subject-safety
+Version: v19.00-overview-command-center
 Last updated: 2026-05-28
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
 
+## Latest Update — v19.00 Overview Command Center
 
-
-## Latest Update — v18.99.1 Sheet-to-Composer Subject Safety Fix
-
-This patch fixes a Send Email composer regression where Sheet tab → Open in Send Email could place role/contact fields such as `Helpdesk`, `Support`, `Info`, or `Possible Contact Person` into the subject field.
+Stage 15E upgrades the Overview tab into a clearer command-center dashboard.
 
 Changed files:
 
 ```text
+OverviewPanel.tsx
 page.tsx
-SheetQueuePanel.tsx
-utils.ts
 PROJECT_CONTEXT_README.md
 ```
 
 Behavior:
 
 ```text
-Sheet tab → Open in Send Email uses the same safe subject builder as the Send Email drawer.
-Invalid subject-like values are blocked before filling the composer.
-If the Sheet subject is missing or looks like a contact/website/service/audit field, the dashboard uses a safe fallback: Quick tracking note for {company}.
-Email Body still goes only into the editor body, not the subject input.
-The Sheet detail panel also shows the safe composer subject instead of a misleading raw Sheet value.
+Overview tab
+→ separates Firestore tracking from Google Sheet pipeline data
+→ shows sent/opened/clicked/replied/bounce/unsubscribe from Firestore lead cache and server summaries
+→ shows Email-ready, LinkedIn-ready, Report-ready, and Needs-review counts from Google Sheet cache
+→ shows follow-up queue status in a smaller, clearer summary
+→ shows Firestore free-tier safety with reads, writes, storage, and sender usage progress bars
+→ keeps manual refresh buttons; no realtime listener is added
 ```
 
 Important decisions:
 
 ```text
-Do not trust a short Sheet value as a subject just because it is in the Email Subject column.
-Contact role words such as helpdesk/support/info/contact/sales must never become the send subject automatically.
-Both Sheet tab and Send Email drawer should share the same normalization path.
+Open/click/reply/follow-up status remains Firestore source-of-truth.
+Google Sheet is used for pipeline review only: email-ready, LinkedIn-ready, report-ready, needs-review.
+Overview should make the data source clear so the operator does not confuse Sheet snapshot values with real tracking state.
+Firestore usage shown here is still an estimate; Firebase Console remains the final quota source.
 ```
 
 ---
