@@ -538,6 +538,80 @@ export default function DashboardPage() {
     return sheetLeads.find((lead) => Number(lead.rowNumber) === Number(selectedOutreachSheetRow)) || null;
   }, [selectedOutreachSheetRow, sheetLeads]);
 
+  const selectedLeadRecentActivity = useMemo(
+    () => buildRecentLeadActivity(selectedLead),
+    [selectedLead],
+  );
+
+  const selectedLeadFollowupInfo = useMemo(() => {
+    if (!selectedLead) {
+      return {
+        label: "No lead selected",
+        time: "",
+        color: "text-slate-500",
+      };
+    }
+
+    const status = String(selectedLead.status || "").toLowerCase();
+    const nextStatus = String(selectedLead.nextFollowupStatus || "").toLowerCase();
+    const stopReason = String(selectedLead.nextFollowupReason || selectedLead.status || "").toLowerCase();
+    const nextAt = selectedLead.nextFollowupAt;
+
+    if (selectedLead.stopAutomation || ["replied", "bounced", "spam", "unsubscribed", "cancelled", "finished", "not_interested"].includes(status)) {
+      return {
+        label: "Automation stopped",
+        time: friendlyFollowupReason(stopReason),
+        color: "text-red-600",
+      };
+    }
+
+    if (nextAt && hasTime(nextAt)) {
+      return {
+        label: selectedLead.nextFollowupStep ? `Follow-up ${selectedLead.nextFollowupStep} scheduled` : "Next follow-up scheduled",
+        time: formatLeadTime(nextAt),
+        color: "text-blue-600",
+      };
+    }
+
+    if (nextStatus.includes("waiting") || nextStatus.includes("open") || nextStatus.includes("engagement")) {
+      return {
+        label: "Waiting for engagement",
+        time: friendlyFollowupReason(selectedLead.nextFollowupReason || nextStatus),
+        color: "text-amber-600",
+      };
+    }
+
+    if (nextStatus.includes("blocked")) {
+      return {
+        label: "Follow-up blocked",
+        time: friendlyFollowupReason(selectedLead.nextFollowupReason || nextStatus),
+        color: "text-red-600",
+      };
+    }
+
+    if (Number(selectedLead.open_count || 0) > 0 || Number(selectedLead.click_count || 0) > 0) {
+      return {
+        label: "Engaged lead",
+        time: selectedLead.lastEngagedAt ? `Last activity: ${formatLeadTime(selectedLead.lastEngagedAt)}` : "",
+        color: "text-emerald-600",
+      };
+    }
+
+    if (status === "sent" || selectedLead.sentAt) {
+      return {
+        label: "Initial email sent",
+        time: "Waiting for open or click before follow-up.",
+        color: "text-slate-600",
+      };
+    }
+
+    return {
+      label: "No next follow-up scheduled",
+      time: friendlyFollowupReason(selectedLead.nextFollowupReason),
+      color: "text-slate-500",
+    };
+  }, [selectedLead]);
+
   const refreshLeadsSmooth = async (input?: { view: LeadViewFilter; month: string; status: string }) => {
     setLeadRefreshLoading(true);
     setLeadRefreshStatus("Refreshing latest leads...");
