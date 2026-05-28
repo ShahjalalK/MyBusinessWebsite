@@ -2245,24 +2245,8 @@ type NextFollowupSchedule = {
 };
 
 function getServiceId(value: any): string {
-  const raw = String(value || "").trim();
-  if (SERVICES.has(raw)) return raw;
-
-  const normalized = raw
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (normalized.includes("signature")) return "Email Signature";
-  if (normalized.includes("server") || normalized.includes("sst") || normalized.includes("side tracking")) {
-    return "Server Side Tracking";
-  }
-  if (normalized.includes("google") || normalized.includes("adwords") || normalized === "ads" || normalized.includes("ppc")) {
-    return "Google Ads";
-  }
-
-  return "Email Signature";
+  const service = String(value || "").trim();
+  return SERVICES.has(service) ? service : "Email Signature";
 }
 
 function getFollowupStepConfig(configData: any, service: string, nextFollowupNumber: number) {
@@ -8183,6 +8167,173 @@ function normalizeFollowupConfigForSave(body: any): Record<string, any> {
   return payload;
 }
 
+function hasUsableFollowupVariants(stepConfig: any): boolean {
+  return Array.isArray(stepConfig?.variants) && stepConfig.variants.some((variant: any) => plainTextFromHtml(String(variant?.content || "")));
+}
+
+function preserveExistingFollowupTemplatesWhenIncomingIsBlank(payload: Record<string, any>, existingData: AnyRecord = {}) {
+  /**
+   * বাংলা ব্যাখ্যা: Dashboard state/cache কোনো কারণে blank variant পাঠালে যেন পুরনো saved
+   * follow-up message হারিয়ে না যায়। Days gap update করা যাবে, কিন্তু non-empty template
+   * blank দিয়ে overwrite হবে না।
+   */
+  for (const service of SERVICES) {
+    const servicePayload = payload?.[service];
+    const serviceExisting = existingData?.[service];
+    if (!servicePayload || typeof servicePayload !== "object" || !serviceExisting || typeof serviceExisting !== "object") continue;
+
+    for (let stepNumber = 1; stepNumber <= 5; stepNumber += 1) {
+      const stepKey = `step${stepNumber}`;
+      const incomingStep = servicePayload?.[stepKey];
+      const existingStep = serviceExisting?.[stepKey];
+      if (!incomingStep || !existingStep) continue;
+
+      if (!hasUsableFollowupVariants(incomingStep) && hasUsableFollowupVariants(existingStep)) {
+        servicePayload[stepKey] = {
+          ...incomingStep,
+          variants: existingStep.variants,
+        };
+      }
+    }
+  }
+
+  return payload;
+}
+
+async function handleGetFollowupConfig(req: Request) {
+  /**
+   * FOLLOW-UP SETTINGS LOAD
+   * বাংলা ব্যাখ্যা: Dashboard client-side Firestore rules/admin email mismatch হলে direct getDoc
+   * fail করতে পারে। তাই config backend admin API দিয়ে load করা হয়।
+   */
+  await requireAdmin(req);
+  const runtimeConfig = await loadFollowupRuntimeConfig();
+
+  return json({
+    success: true,
+    config: runtimeConfig.data,
+    source: runtimeConfig.source,
+    exists: runtimeConfig.exists,
+    dailyFollowupLimit: Number(runtimeConfig.data?.daily_followup_limit || 50),
+    batchPerRun: Number(runtimeConfig.data?.followup_batch_per_run || DEFAULT_FOLLOWUP_BATCH_PER_RUN),
+    triggerMode: "open_required",
+  });
+}
+
+function serializeFollowupCandidateTime(value: any): string | null {
+  const millis = toMillis(value);
+  return millis ? new Date(millis).toISOString() : null;
+}
+
+function hasFollowupEngagementForCandidate(lead: LeadData): boolean {
+  const openCount = Number(lead.open_count || 0);
+  const clickCount = Number(lead.click_count || 0);
+  const lastOpenedMs = toMillis(lead.lastOpenedAt || (lead as any).last_opened);
+  const lastClickedMs = toMillis(lead.lastClickedAt);
+  const lastEngagedMs = toMillis(lead.lastEngagedAt);
+  return openCount > 0 || clickCount > 0 || lastOpenedMs > 0 || lastClickedMs > 0 || lastEngagedMs > 0 || String(lead.status || "").toLowerCase() === "clicked";
+}
+
+function isFollowupCandidateForStep(lead: LeadData, service: string, stepNumber: number): boolean {
+  if (!lead || lead.stopAutomation === true || (lead as any).archived === true || (lead as any).deleted === true) return false;
+  if (!isReschedulableLeadStatus(lead.status)) return false;
+  if (getServiceId(lead.service) !== service) return false;
+
+  const followUpCount = Number(lead.follow_up_count || 0);
+  if (followUpCount !== stepNumber - 1) return false;
+  if (!hasFollowupEngagementForCandidate(lead)) return false;
+
+  const lastSentMs = toMillis(lead.lastFollowUp || (lead as any).lastSentAt || lead.sentAt || lead.createdAt);
+  const lastEngagedMs = Math.max(
+    toMillis(lead.lastEngagedAt),
+    toMillis(lead.lastOpenedAt || (lead as any).last_opened),
+    toMillis(lead.lastClickedAt)
+  );
+
+  if (stepNumber > 1 && (!lastSentMs || !lastEngagedMs || lastEngagedMs <= lastSentMs)) return false;
+
+  return true;
+}
+
+async function handleFollowupCandidates(req: Request) {
+  /**
+   * FIRESTORE FOLLOW-UP CANDIDATES
+   * বাংলা ব্যাখ্যা: Automation tab-এর Active Leads Google Sheet বা Leads tab cache থেকে নয়,
+   * Firestore outreach_leads source-of-truth থেকে load হবে।
+   */
+  await requireAdmin(req);
+
+  const url = new URL(req.url);
+  const service = getServiceId(url.searchParams.get("service"));
+  const { stepKey, stepNumber } = normalizeRescheduleStep(url.searchParams.get("step") || "step1");
+  const limitCount = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 200));
+  const scanLimit = Math.max(limitCount, Math.min(Number(url.searchParams.get("scanLimit") || 500), 1000));
+
+  const runtimeConfig = await loadFollowupRuntimeConfig();
+  const stepConfig = runtimeConfig.data?.[service]?.[stepKey] || null;
+  const delayMinutes = Number(stepConfig?.delay || 1440);
+
+  const snap = await adminDb.collection("outreach_leads").limit(scanLimit).get();
+  const rows: AnyRecord[] = [];
+
+  for (const docSnap of snap.docs) {
+    const lead = { id: docSnap.id, ...docSnap.data() } as LeadData;
+    if (!isFollowupCandidateForStep(lead, service, stepNumber)) continue;
+
+    const lastSentMs = toMillis(lead.lastFollowUp || (lead as any).lastSentAt || lead.sentAt || lead.createdAt);
+    const lastEngagedMs = Math.max(
+      toMillis(lead.lastEngagedAt),
+      toMillis(lead.lastOpenedAt || (lead as any).last_opened),
+      toMillis(lead.lastClickedAt)
+    );
+    const calculatedNextMs = lastEngagedMs ? buildRescheduleTimestampForLead(lead, delayMinutes) : 0;
+
+    rows.push({
+      id: docSnap.id,
+      email: lead.email || lead.emailLower || "",
+      emailLower: lead.emailLower || normalizeEmail(lead.email || ""),
+      name: lead.name || "",
+      company_name: lead.company_name || "",
+      website: lead.website || "",
+      service: getServiceId(lead.service),
+      status: lead.status || "",
+      open_count: Number(lead.open_count || 0),
+      click_count: Number(lead.click_count || 0),
+      follow_up_count: Number(lead.follow_up_count || 0),
+      sentAt: serializeFollowupCandidateTime(lead.sentAt),
+      lastFollowUp: serializeFollowupCandidateTime(lead.lastFollowUp || (lead as any).lastSentAt),
+      lastOpenedAt: serializeFollowupCandidateTime(lead.lastOpenedAt || (lead as any).last_opened),
+      lastClickedAt: serializeFollowupCandidateTime(lead.lastClickedAt),
+      lastEngagedAt: serializeFollowupCandidateTime(lead.lastEngagedAt),
+      nextFollowupAt: serializeFollowupCandidateTime(lead.nextFollowupAt) || (calculatedNextMs ? new Date(calculatedNextMs).toISOString() : null),
+      nextFollowupStep: Number(lead.nextFollowupStep || stepNumber),
+      nextFollowupStatus: lead.nextFollowupStatus || "",
+      nextFollowupReason: lead.nextFollowupReason || "",
+      nextFollowupNumber: stepNumber,
+      lastSentMs,
+      lastEngagedMs,
+      score: Number(lead.open_count || 0) * 10 + Number(lead.click_count || 0) * 25 + Number(lead.follow_up_count || 0) * 3,
+    });
+
+    if (rows.length >= limitCount) break;
+  }
+
+  rows.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+  return json({
+    success: true,
+    source: "firestore",
+    configSource: runtimeConfig.source,
+    service,
+    step: stepKey,
+    stepNumber,
+    checked: snap.size,
+    returned: rows.length,
+    generatedAt: new Date().toISOString(),
+    rows,
+  });
+}
+
 async function handleSaveFollowupConfig(req: Request) {
   /**
    * FOLLOW-UP SETTINGS SAVE
@@ -8191,13 +8342,19 @@ async function handleSaveFollowupConfig(req: Request) {
    */
   await requireAdmin(req);
   const body = await readJson(req);
-  const payload = normalizeFollowupConfigForSave(body);
+  const configRef = adminDb.collection("automation_settings").doc("followup_config");
+  const existingSnap = await configRef.get();
+  const payload = preserveExistingFollowupTemplatesWhenIncomingIsBlank(
+    normalizeFollowupConfigForSave(body),
+    existingSnap.exists ? existingSnap.data() || {} : {},
+  );
 
-  await adminDb.collection("automation_settings").doc("followup_config").set(payload, { merge: true });
+  await configRef.set(payload, { merge: true });
 
   return json({
     success: true,
     message: "Follow-up settings saved through backend API.",
+    config: sanitizeFollowupRuntimeConfig(payload),
     dailyFollowupLimit: payload.daily_followup_limit,
     batchPerRun: payload.followup_batch_per_run,
   });
@@ -8220,8 +8377,7 @@ type FollowupRescheduleResult = {
   skippedInactive: number;
   skippedWrongStep: number;
   skippedMissingSchedule: number;
-  samples: Array<{ leadId: string; email: string; previousAt?: string; nextAt: string; nextAtMs: number }>;
-  updates: Array<{ leadId: string; email: string; previousAt?: string; nextAt: string; nextAtMs: number }>;
+  samples: Array<{ leadId: string; email: string; previousAt?: string; nextAt: string }>;
 };
 
 function isReschedulableLeadStatus(status: any): boolean {
@@ -8277,12 +8433,11 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
     skippedWrongStep: 0,
     skippedMissingSchedule: 0,
     samples: [],
-    updates: [],
   };
 
   const snap = await adminDb
     .collection("outreach_leads")
-    .where("status", "in", Array.from(ACTIVE_STATUSES))
+    .where("nextFollowupStatus", "==", "scheduled")
     .limit(max)
     .get();
 
@@ -8321,6 +8476,11 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
 
     result.matched += 1;
     const existingMs = toMillis(lead.nextFollowupAt);
+    if (!existingMs) {
+      result.skipped += 1;
+      result.skippedMissingSchedule += 1;
+      continue;
+    }
 
     const nextMs = buildRescheduleTimestampForLead(lead, delayMinutes);
     if (!nextMs) {
@@ -8329,7 +8489,7 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
       continue;
     }
 
-    if (existingMs && !shouldAllowEarlier && nextMs <= existingMs + 60_000) {
+    if (!shouldAllowEarlier && nextMs <= existingMs + 60_000) {
       result.skipped += 1;
       result.skippedEarlier += 1;
       continue;
@@ -8339,6 +8499,8 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
       nextFollowupAt: admin.firestore.Timestamp.fromMillis(nextMs),
       nextFollowupStep: stepNumber,
       nextFollowupStatus: "scheduled",
+      nextFollowupDelayMinutes: delayMinutes,
+      nextFollowupConfigStepKey: stepKey,
       nextFollowupReason: nextMs > nowMs ? "rescheduled_after_followup_gap_change" : "ready_after_followup_gap_recalculation",
       lastFollowupEvaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
       automationLock: admin.firestore.FieldValue.delete(),
@@ -8347,19 +8509,13 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
 
     result.updated += 1;
     batchCount += 1;
-    const updateRow = {
-      leadId: docSnap.id,
-      email: lead.emailLower || lead.email || "",
-      previousAt: existingMs ? new Date(existingMs).toISOString() : undefined,
-      nextAt: new Date(nextMs).toISOString(),
-      nextAtMs: nextMs,
-    };
-
     if (result.samples.length < 10) {
-      result.samples.push(updateRow);
-    }
-    if (result.updates.length < 100) {
-      result.updates.push(updateRow);
+      result.samples.push({
+        leadId: docSnap.id,
+        email: lead.emailLower || lead.email || "",
+        previousAt: existingMs ? new Date(existingMs).toISOString() : undefined,
+        nextAt: new Date(nextMs).toISOString(),
+      });
     }
 
     if (batchCount >= 400) await commitBatch();
@@ -8379,101 +8535,6 @@ async function handleRescheduleFollowupsAfterConfigChange(req: Request) {
     ...result,
   });
 }
-
-
-async function handleFollowupAutomationCandidates(req: Request) {
-  /**
-   * Automation tab candidate loader.
-   * This does not depend on the cached Leads tab page, so older engaged leads still
-   * appear under the follow-up editor for the correct service/step.
-   */
-  await requireAdmin(req);
-  const url = new URL(req.url);
-  const service = getServiceId(url.searchParams.get("service"));
-  const { stepKey, stepNumber } = normalizeRescheduleStep(url.searchParams.get("step"));
-  const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 200));
-
-  const runtimeConfig = await loadFollowupRuntimeConfig();
-  const stepConfig = runtimeConfig.data?.[service]?.[stepKey];
-  const delayMinutesRaw = Number(stepConfig?.delay || 1440);
-  const delayMinutes = Number.isFinite(delayMinutesRaw) && delayMinutesRaw > 0 ? delayMinutesRaw : 1440;
-
-  const snap = await adminDb
-    .collection("outreach_leads")
-    .where("status", "in", Array.from(ACTIVE_STATUSES))
-    .limit(Math.min(max * 5, 500))
-    .get();
-
-  const rows: any[] = [];
-  let checked = 0;
-  let skippedWrongService = 0;
-  let skippedWrongStep = 0;
-  let skippedNoEngagement = 0;
-  let skippedInactive = 0;
-
-  for (const docSnap of snap.docs) {
-    checked += 1;
-    const lead = { id: docSnap.id, ...docSnap.data() } as LeadData;
-
-    if (lead.stopAutomation === true || lead.archived === true || lead.deleted === true || !isReschedulableLeadStatus(lead.status)) {
-      skippedInactive += 1;
-      continue;
-    }
-
-    if (getServiceId(lead.service) !== service) {
-      skippedWrongService += 1;
-      continue;
-    }
-
-    const followUpCount = Number(lead.follow_up_count || 0);
-    const expectedFollowupCount = stepNumber - 1;
-    const storedStep = Number(lead.nextFollowupStep || 0);
-    if (followUpCount !== expectedFollowupCount || (storedStep && storedStep !== stepNumber)) {
-      skippedWrongStep += 1;
-      continue;
-    }
-
-    const nextMs = buildRescheduleTimestampForLead(lead, delayMinutes);
-    if (!nextMs) {
-      skippedNoEngagement += 1;
-      continue;
-    }
-
-    rows.push({
-      ...serializeManagedLead(docSnap),
-      service,
-      candidateStep: stepNumber,
-      candidateStepKey: stepKey,
-      candidateNextFollowupAt: nextMs,
-      candidateNextFollowupAtIso: new Date(nextMs).toISOString(),
-      candidateDelayMinutes: delayMinutes,
-    });
-
-    if (rows.length >= max) break;
-  }
-
-  rows.sort((a, b) => {
-    const aMs = Number(a.nextFollowupAt || a.candidateNextFollowupAt || 0);
-    const bMs = Number(b.nextFollowupAt || b.candidateNextFollowupAt || 0);
-    return aMs - bMs;
-  });
-
-  return json({
-    success: true,
-    service,
-    step: stepKey,
-    stepNumber,
-    delayMinutes,
-    count: rows.length,
-    checked,
-    skippedWrongService,
-    skippedWrongStep,
-    skippedNoEngagement,
-    skippedInactive,
-    rows,
-  });
-}
-
 
 async function handleAdminHealth(req: Request) {
   await requireAdmin(req);
@@ -8717,9 +8778,10 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "cron/sheet-queued-sends") return await handleCronSheetQueuedSends(req);
     if (action === "cron/followups") return await handleCronFollowups(req);
     if (action === "cron/recover-locks") return await handleCronRecoverLocks(req);
+    if (action === "automation/followups/config") return await handleGetFollowupConfig(req);
+    if (action === "automation/followups/candidates") return await handleFollowupCandidates(req);
     if (action === "automation/followups/dry-run") return await handleFollowupDryRun(req);
     if (action === "automation/followups/summary") return await handleFollowupSummary(req);
-    if (action === "automation/followups/candidates") return await handleFollowupAutomationCandidates(req);
     if (action === "sender-stats") return await handleSenderStats(req);
     if (action === "postmaster/health") return await handlePostmasterHealth(req);
     if (action === "admin/health") return await handleAdminHealth(req);

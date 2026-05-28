@@ -113,7 +113,6 @@ import {
   isHotLead,
   isLeadEligibleForStep,
   leadScore,
-  makeDefaultConfig,
   makeDefaultStep,
   mergeWithDefaultConfig,
 } from "./followup-utils";
@@ -384,6 +383,9 @@ export default function DashboardPage() {
   } = useLeadStore();
   const leads = cachedLeads as Lead[];
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [followupCandidateLeads, setFollowupCandidateLeads] = useState<Lead[]>([]);
+  const [followupCandidatesLoading, setFollowupCandidatesLoading] = useState(false);
+  const [followupCandidatesStatus, setFollowupCandidatesStatus] = useState("");
   const [reportAssetCleanup, setReportAssetCleanup] = useState<ReportAssetCleanupState>(() => emptyReportAssetCleanupState());
   const [secureReports, setSecureReports] = useState<SecureReportListState>(() => emptySecureReportListState());
 
@@ -525,7 +527,6 @@ export default function DashboardPage() {
   const [selectedOutreachSheetRow, setSelectedOutreachSheetRow] = useState<number | null>(null);
   const [leadRefreshLoading, setLeadRefreshLoading] = useState(false);
   const [leadRefreshStatus, setLeadRefreshStatus] = useState("");
-  const [automationFollowupLeads, setAutomationFollowupLeads] = useState<Lead[]>([]);
 
   const monthOptions = useMemo(() => getRecentMonthOptions(18), []);
 
@@ -926,24 +927,27 @@ export default function DashboardPage() {
 
     try {
       setFollowupLoading(true);
-      const configDoc = await getDoc(doc(db, "automation_settings", "followup_config"));
+      const headers = await getAuthHeaders();
+      const response = await fetch("/api/trackflow/automation/followups/config", {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.error || "Follow-up config load failed");
 
-      if (configDoc.exists()) {
-        const data = configDoc.data();
-        setFollowupConfig(mergeWithDefaultConfig(data));
-        setDailyFollowupLimit(Number(data.daily_followup_limit || 50));
-        setFollowupBatchPerRun(Math.max(1, Math.min(Number(data.followup_batch_per_run || 5), 20)));
-        setTriggerMode("open_required");
-      } else {
-        setFollowupConfig(makeDefaultConfig());
-        setDailyFollowupLimit(50);
-        setFollowupBatchPerRun(5);
-        setTriggerMode("open_required");
-      }
-
+      const configData = data.config && typeof data.config === "object" ? data.config : {};
+      setFollowupConfig(mergeWithDefaultConfig(configData));
+      setDailyFollowupLimit(Number(data.dailyFollowupLimit || configData.daily_followup_limit || 50));
+      setFollowupBatchPerRun(Math.max(1, Math.min(Number(data.batchPerRun || configData.followup_batch_per_run || 5), 20)));
+      setTriggerMode("open_required");
       setFollowupConfigLoadedAt(Date.now());
+      if (force) {
+        setFollowupCandidatesStatus("Config refreshed. Firestore candidates will reload automatically.");
+      }
     } catch (err) {
       console.error("Follow-up config load error:", err);
+      window.alert("Follow-up config could not be loaded. Please check your admin login and server logs.");
     } finally {
       setFollowupLoading(false);
     }
@@ -953,6 +957,45 @@ export default function DashboardPage() {
     loadFollowupConfig(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadFollowupCandidates = async () => {
+    try {
+      setFollowupCandidatesLoading(true);
+      setFollowupCandidatesStatus("Loading Firestore follow-up candidates...");
+
+      const params = new URLSearchParams({
+        service: activeFollowupService,
+        step: activeFollowupStep,
+        limit: "100",
+        scanLimit: "500",
+      });
+
+      const response = await fetch(`/api/trackflow/automation/followups/candidates?${params.toString()}`, {
+        method: "GET",
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) throw new Error(data.error || "Follow-up candidates load failed");
+
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      setFollowupCandidateLeads(rows as Lead[]);
+      setFollowupCandidatesStatus(`Loaded ${rows.length} Firestore follow-up candidate(s).`);
+    } catch (error: any) {
+      console.error("Follow-up candidates load error:", error);
+      setFollowupCandidatesStatus(`Follow-up candidates failed: ${error.message || "Unknown error"}`);
+      setFollowupCandidateLeads([]);
+    } finally {
+      setFollowupCandidatesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "automation") return;
+    loadFollowupCandidates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeFollowupService, activeFollowupStep]);
 
 
   const {
@@ -1160,22 +1203,22 @@ export default function DashboardPage() {
   const days = Math.max(1, Math.floor((currentStepData.delay || 1440) / 1440));
 
   const currentFollowupLeads = useMemo(() => {
-    const merged = new Map<string, Lead>();
+    const byId = new Map<string, Lead>();
 
-    automationFollowupLeads.forEach((lead) => {
-      if (lead?.id && isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode)) {
-        merged.set(lead.id, lead);
-      }
+    followupCandidateLeads.forEach((lead) => {
+      if (!lead?.id) return;
+      byId.set(String(lead.id), lead);
     });
 
-    leads.forEach((lead) => {
-      if (lead?.id && isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode)) {
-        merged.set(lead.id, { ...lead, ...(merged.get(lead.id) || {}) });
-      }
-    });
+    leads
+      .filter((lead) => isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode))
+      .forEach((lead) => {
+        if (!lead?.id || byId.has(String(lead.id))) return;
+        byId.set(String(lead.id), lead);
+      });
 
-    return Array.from(merged.values()).sort((a, b) => toMillis(a.nextFollowupAt) - toMillis(b.nextFollowupAt));
-  }, [automationFollowupLeads, leads, activeFollowupService, activeFollowupStep, triggerMode]);
+    return Array.from(byId.values()).sort((a, b) => leadScore(b) - leadScore(a));
+  }, [followupCandidateLeads, leads, activeFollowupService, activeFollowupStep, triggerMode]);
 
   const updateCurrentStep = (newStepData: StepConfig) => {
     setFollowupConfig((prev: FollowupConfig) => ({
@@ -1601,35 +1644,6 @@ export default function DashboardPage() {
       };
     }
   };
-
-  const loadAutomationFollowupLeads = async () => {
-    const headers = await getAuthHeaders();
-    const params = new URLSearchParams({
-      service: activeFollowupService,
-      step: activeFollowupStep,
-      limit: "100",
-    });
-
-    const response = await fetch(`/api/trackflow/automation/followups/candidates?${params.toString()}`, {
-      headers,
-      cache: "no-store",
-    });
-    const data = await readTrackflowJson(response);
-    if (!response.ok || !data.success) throw new Error(data.error || "Follow-up candidates failed");
-
-    setAutomationFollowupLeads(Array.isArray(data.rows) ? data.rows : []);
-    return data;
-  };
-
-  useEffect(() => {
-    if (activeTab !== "automation") return;
-
-    loadAutomationFollowupLeads().catch((error) => {
-      console.error("Automation follow-up candidates load error:", error);
-      setAutomationFollowupLeads([]);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, activeFollowupService, activeFollowupStep, followupConfigLoadedAt]);
 
 
 
@@ -2675,6 +2689,9 @@ export default function DashboardPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) throw new Error(data.error || "Follow-up settings save failed");
+      if (data.config && typeof data.config === "object") {
+        setFollowupConfig(mergeWithDefaultConfig(data.config));
+      }
 
       let rescheduledCount = 0;
       let rescheduleChecked = 0;
@@ -2696,19 +2713,6 @@ export default function DashboardPage() {
         }
         rescheduledCount = Number(rescheduleData.updated || 0);
         rescheduleChecked = Number(rescheduleData.checked || 0);
-
-        if (Array.isArray(rescheduleData.updates)) {
-          rescheduleData.updates.forEach((row: any) => {
-            if (!row?.leadId) return;
-            patchLeadInCache(String(row.leadId), {
-              nextFollowupAt: row.nextAtMs || row.nextAt || null,
-              nextFollowupStep: Number(rescheduleData.stepNumber || 0) || undefined,
-              nextFollowupStatus: "scheduled",
-              nextFollowupReason: "rescheduled_after_followup_gap_change",
-            });
-          });
-        }
-
         rescheduleMessage = ` Synced ${rescheduledCount} existing ${activeFollowupService} ${activeFollowupStep.toUpperCase()} lead schedule(s). Checked ${rescheduleChecked}.`;
       } catch (rescheduleError) {
         console.warn("Follow-up reschedule failed:", rescheduleError);
@@ -2731,7 +2735,7 @@ export default function DashboardPage() {
       setTriggerMode("open_required");
       setHasUnsavedChanges(false);
       await loadFollowupSummary(true);
-      await loadAutomationFollowupLeads().catch((candidateRefreshError: any) => console.warn("Follow-up candidate refresh failed:", candidateRefreshError));
+      await loadFollowupCandidates().catch((candidateError: any) => console.warn("Follow-up candidate refresh failed:", candidateError));
       await refreshLeads().catch((refreshError: any) => console.warn("Lead refresh after follow-up save failed:", refreshError));
       window.alert(`✅ Follow-up settings saved.${rescheduleMessage}`);
     } catch (error) {
@@ -2912,6 +2916,12 @@ export default function DashboardPage() {
     />
   );
 
+  const followupPanelStatus = followupCandidatesLoading
+    ? "Loading Firestore follow-up candidates..."
+    : followupCandidatesStatus
+      ? `${dryRunStatus || "Automation ready."} · ${followupCandidatesStatus}`
+      : dryRunStatus;
+
   const renderFollowups = () => (
     <AutomationPanel
       activeFollowupService={activeFollowupService}
@@ -2925,7 +2935,7 @@ export default function DashboardPage() {
       dailyFollowupLimit={dailyFollowupLimit}
       followupBatchPerRun={followupBatchPerRun}
       triggerMode={triggerMode}
-      dryRunStatus={dryRunStatus}
+      dryRunStatus={followupPanelStatus}
       dryRunLoading={dryRunLoading}
       dryRunRows={dryRunRows}
       showVariantLeads={showVariantLeads}

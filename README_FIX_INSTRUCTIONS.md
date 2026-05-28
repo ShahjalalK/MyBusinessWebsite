@@ -1,22 +1,24 @@
-# TrackFlow Pro — Follow-up Days Gap + Active Leads Sync Fix
+# TrackFlowPro Follow-up Combined Fix
+
+This package merges both follow-up fixes together:
+
+1. Follow-up templates load/save through backend admin API, so message boxes stay after refresh.
+2. Active Leads under each follow-up message load from Firestore outreach_leads, not Google Sheet or only the Leads tab cache.
+3. Days Gap save recalculates nextFollowupAt and stores nextFollowupDelayMinutes / nextFollowupConfigStepKey.
 
 ## Replace these files
 
-1. `app/api/trackflow/[...action]/route.ts`
-2. `app/admin/dashboard/page.tsx`
-3. `app/admin/dashboard/AutomationPanel.tsx`
-4. `app/admin/dashboard/followup-utils.ts`
+- app/api/trackflow/[...action]/route.ts
+- app/admin/dashboard/page.tsx
+- app/admin/dashboard/followup-utils.ts
+- app/admin/dashboard/AutomationPanel.tsx
+- app/admin/dashboard/types.ts
 
-If your dashboard folder is not exactly `app/admin/dashboard/`, replace the files in the same folder where your current `page.tsx`, `AutomationPanel.tsx`, and `followup-utils.ts` live.
+The last three are included to keep your dashboard folder consistent with the uploaded latest files.
 
-## What this fixes
+## Test locally
 
-- Automation tab Active Leads now shows matching leads even when the variant editor is still empty.
-- Google Ads opened leads can show under the correct follow-up step when `nextFollowupStep` is already stored in Firestore.
-- Saving Days Gap now calls the reschedule endpoint with `recalculate_all`, so existing scheduled leads sync to the new gap both when the gap increases and when it decreases.
-- Backend still skips replied, bounced, spam, unsubscribed, stopped, archived, and deleted leads.
-
-## Test
+Make sure your Windows time/timezone is correct first, because Firebase Admin can fail with ACCESS_TOKEN_EXPIRED if system time is wrong.
 
 ```bash
 npm run build
@@ -25,17 +27,35 @@ npm run dev
 
 Then test:
 
-1. Open `/admin/dashboard`.
-2. Go to Automation tab.
-3. Select `Google Ads` and `F-1`.
-4. Confirm the opened Google Ads lead appears under `Active Leads` below the variation box.
-5. Add a short follow-up message if the editor is empty.
-6. Change Days Gap.
-7. Click `Save Follow-up Settings`.
-8. Open Leads tab, refresh latest leads, then open the lead drawer.
-9. Confirm Next action / Next follow-up date matches the new Days Gap.
+1. Login as admin.
+2. Open Admin Dashboard -> Automation.
+3. Select Google Ads -> F-1.
+4. Confirm saved follow-up message appears.
+5. Confirm Active Leads appears below the message.
+6. Change Days Gap and Save Follow-up Settings.
+7. Refresh browser and click Refresh Config.
+8. Confirm message still appears and Active Leads still appears.
+9. Check Firestore lead fields:
+   - nextFollowupAt
+   - nextFollowupDelayMinutes
+   - nextFollowupConfigStepKey
+   - nextFollowupStatus
+   - nextFollowupReason
 
-## Notes
+## Debug endpoint
 
-- If Active Leads is still 0, click `Refresh latest 20` in Leads tab first, because Automation tab uses the dashboard lead cache.
-- If the lead is not in the latest cache, load more or search/refresh until that lead is present.
+While logged in through the dashboard, check Network tab for:
+
+```text
+/api/trackflow/automation/followups/candidates?service=Google+Ads&step=step1&limit=100&scanLimit=500
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "source": "firestore",
+  "rows": [...]
+}
+```

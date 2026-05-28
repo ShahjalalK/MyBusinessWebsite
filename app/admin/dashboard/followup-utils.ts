@@ -53,28 +53,6 @@ export function getLastEngagedMs(lead: Lead) {
   );
 }
 
-export function normalizeLeadService(value: any): ServiceId {
-  const raw = String(value || "").trim();
-  const direct = SERVICE_NAMES.find((service) => service.toLowerCase() === raw.toLowerCase());
-  if (direct) return direct as ServiceId;
-
-  const normalized = raw
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (normalized.includes("signature")) return "Email Signature";
-  if (normalized.includes("server") || normalized.includes("sst") || normalized.includes("side tracking")) {
-    return "Server Side Tracking";
-  }
-  if (normalized.includes("google") || normalized.includes("adwords") || normalized === "ads" || normalized.includes("ppc")) {
-    return "Google Ads";
-  }
-
-  return "Email Signature";
-}
-
 export function isHotLead(lead: Lead) {
   return Number(lead.click_count || 0) > 0 || Number(lead.open_count || 0) >= 1 || lead.status === "clicked";
 }
@@ -134,7 +112,7 @@ export function getNextFollowUpStatus(lead: Lead, triggerMode: TriggerMode, conf
   const followUpCount = Number(lead.follow_up_count || 0);
   if (followUpCount >= 5) return null;
 
-  const service = normalizeLeadService(lead.service);
+  const service = (lead.service || "Email Signature") as ServiceId;
   const nextStep = (STEPS[followUpCount] || "step1") as StepId;
   const stepConfig = config?.[service]?.[nextStep];
   const delayMinutes = Number(stepConfig?.delay || 1440);
@@ -166,7 +144,7 @@ export function getNextFollowUpStatus(lead: Lead, triggerMode: TriggerMode, conf
 export function isLeadEligibleForStep(lead: Lead, service: ServiceId, step: StepId, triggerMode: TriggerMode): boolean {
   if (lead.stopAutomation === true) return false;
   if (!ACTIVE_STATUSES.has(String(lead.status || ""))) return false;
-  if (normalizeLeadService(lead.service) !== service) return false;
+  if (String(lead.service || "").toLowerCase().trim() !== service.toLowerCase().trim()) return false;
 
   const followUpCount = Number(lead.follow_up_count || 0);
   const currentStepIndex = STEPS.indexOf(step);
