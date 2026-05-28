@@ -1,18 +1,30 @@
-Replace these files in your project:
+TrackFlow Pro v18.95.4 — Self-hosted Email Open/Click Tracking Fix
 
-app/api/export/blob-reports/route.ts
-lib/trackflow-api/report-normalizers.ts
-lib/trackflow-api/reports.ts
-app/components/LeadList.tsx
-app/components/LeadList/types.ts
+Replace these files:
+
+app/api/trackflow/[...action]/route.ts
 PROJECT_CONTEXT_README.md
 
-Then run:
+Why:
+- The existing email send flow relied mainly on Brevo webhook open/click events.
+- If Brevo webhook is not configured, delayed, or does not send tags as expected, dashboard open/click counters do not update.
+- This patch adds TrackFlow-owned open and click tracking URLs into every sent email.
+
+After replace:
 
 npm run build
 npm run dev
 
 Test:
-1. Create one search lead secure report. Confirm Firestore audit_reports/{token} has outreachChannel=email and leadSource=python_search.
-2. Create one LinkedIn/manual secure report. Confirm Firestore audit_reports/{token} has outreachChannel=linkedin and leadSource=linkedin_audit.
-3. Confirm no emailCopy/linkedinMessageCopy is saved in audit_reports.
+1. Send a test email from Send Email tab to a different mailbox.
+2. Inspect the report/link URL in the received email.
+3. It should start with:
+   https://trackflowpro.com/api/trackflow/track/click?...
+4. Click the link.
+5. Open Leads tab and refresh.
+6. The lead should show clicked / click_count increased.
+7. Open tracking may depend on the recipient mail client loading images.
+
+Note:
+- Brevo webhook tracking remains supported.
+- This is an additional fallback, not a replacement.

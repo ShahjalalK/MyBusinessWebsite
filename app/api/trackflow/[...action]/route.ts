@@ -409,10 +409,87 @@ const SendInitialBodySchema = z
 
 // Shared route helpers, security helpers, sender selection, suppression,
 // contact-memory and lightweight email-event logging now live under lib/trackflow-*.
-function buildReportLinkBlock(reportUrl?: string, buttonText = "View private audit note") {
+type EmailTrackingContext = {
+  leadId?: string;
+  tag?: string;
+  emailLower?: string;
+};
+
+function buildTrackedClickUrl(targetUrl: string, context: EmailTrackingContext = {}): string {
+  const safeTarget = sanitizeOptionalUrl(targetUrl || "");
+  const leadId = String(context.leadId || "").trim();
+
+  if (!safeTarget || !leadId) return safeTarget || targetUrl || "";
+
+  try {
+    const trackingUrl = new URL(`${appBaseUrl()}/api/trackflow/track/click`);
+    trackingUrl.searchParams.set("lid", leadId);
+    if (context.tag) trackingUrl.searchParams.set("t", context.tag);
+    if (context.emailLower) trackingUrl.searchParams.set("email", context.emailLower);
+    trackingUrl.searchParams.set("url", safeTarget);
+    return trackingUrl.toString();
+  } catch {
+    return safeTarget;
+  }
+}
+
+function buildOpenTrackingPixel(context: EmailTrackingContext = {}): string {
+  const leadId = String(context.leadId || "").trim();
+  if (!leadId) return "";
+
+  try {
+    const trackingUrl = new URL(`${appBaseUrl()}/api/trackflow/track/open`);
+    trackingUrl.searchParams.set("lid", leadId);
+    if (context.tag) trackingUrl.searchParams.set("t", context.tag);
+    if (context.emailLower) trackingUrl.searchParams.set("email", context.emailLower);
+
+    return `<img src="${escapeHtml(trackingUrl.toString())}" width="1" height="1" alt="" border="0" style="display:none;width:1px;height:1px;max-width:1px;max-height:1px;overflow:hidden;opacity:0;mso-hide:all;" />`;
+  } catch {
+    return "";
+  }
+}
+
+function shouldTrackHref(value: string): boolean {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+
+  try {
+    const url = new URL(raw);
+    if (!["http:", "https:"].includes(url.protocol)) return false;
+    if (url.pathname.includes("/api/trackflow/track/click")) return false;
+    if (url.pathname.includes("/api/trackflow/unsubscribe") || url.pathname.includes("/unsubscribe")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rewriteHtmlLinksForTracking(html: string, context: EmailTrackingContext = {}): string {
+  if (!context.leadId || !html) return html;
+
+  return String(html).replace(
+    /<a\b([^>]*?)\bhref=(["'])(.*?)\2([^>]*)>/gi,
+    (match, before, quote, href, after) => {
+      const cleanHref = String(href || "").trim();
+      if (!shouldTrackHref(cleanHref)) return match;
+
+      const trackedUrl = buildTrackedClickUrl(cleanHref, context);
+      if (!trackedUrl || trackedUrl === cleanHref) return match;
+
+      return `<a${before}href=${quote}${escapeHtml(trackedUrl)}${quote}${after}>`;
+    },
+  );
+}
+
+function buildReportLinkBlock(
+  reportUrl?: string,
+  buttonText = "View private audit note",
+  trackingContext: EmailTrackingContext = {},
+) {
   const safeUrl = sanitizePublicReportUrl(reportUrl || "");
   if (!safeUrl) return "";
 
+  const clickUrl = trackingContext.leadId ? buildTrackedClickUrl(safeUrl, trackingContext) : safeUrl;
   const safeText = escapeHtml(buttonText || "View private audit note").slice(0, 80);
 
   // Agency-style, Outlook-safe CTA. Keep it as a table so Brevo/Outlook render consistently.
@@ -423,7 +500,7 @@ function buildReportLinkBlock(reportUrl?: string, buttonText = "View private aud
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
               <td bgcolor="#0f172a" style="border-radius:6px;background:#0f172a;mso-padding-alt:10px 14px;">
-                <a href="${safeUrl}" target="_blank" style="display:inline-block;padding:10px 14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#ffffff;text-decoration:none;font-weight:bold;">
+                <a href="${escapeHtml(clickUrl)}" target="_blank" style="display:inline-block;padding:10px 14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#ffffff;text-decoration:none;font-weight:bold;">
                   ${safeText}
                 </a>
               </td>
@@ -1410,13 +1487,21 @@ function buildEmailHtml(
     sender?: SenderConfig;
     signatureMode?: SignatureMode;
     includeReportLink?: boolean;
+    leadId?: string;
   } = {}
 ) {
+  const trackingContext: EmailTrackingContext = {
+    leadId: options.leadId,
+    tag,
+    emailLower,
+  };
   const cleanMessage = normalizeEmailBodyHtml(message);
+  const trackedMessage = rewriteHtmlLinksForTracking(cleanMessage, trackingContext);
   const includeSignature = options.includeSignature !== false;
   const signatureMode = includeSignature ? normalizeSignatureMode(options.signatureMode, "full") : "none";
-  const reportBlock = options.includeReportLink === false ? "" : buildReportLinkBlock(options.reportUrl, options.reportButtonText || "View short audit note");
+  const reportBlock = options.includeReportLink === false ? "" : buildReportLinkBlock(options.reportUrl, options.reportButtonText || "View short audit note", trackingContext);
   const signatureBlock = includeSignature ? buildSignature(emailLower, tag, options.sender, signatureMode) : "";
+  const openPixel = buildOpenTrackingPixel(trackingContext);
 
   return `<!doctype html>
 <html>
@@ -1431,9 +1516,10 @@ function buildEmailHtml(
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;max-width:620px;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
               <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;mso-line-height-rule:exactly;color:#1f2937;padding:0;margin:0;">
-                ${cleanMessage}
+                ${trackedMessage}
                 ${reportBlock}
                 ${signatureBlock}
+                ${openPixel}
               </td>
             </tr>
           </table>
@@ -1851,6 +1937,7 @@ async function sendInitialFromBody(rawBody: any) {
         sender,
         signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
         includeReportLink: true,
+        leadId: leadRef.id,
       }),
       tag,
       customMessageId,
@@ -2064,6 +2151,7 @@ async function handleCronScheduledInitials(req: Request) {
             sender,
             signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "full", "full"),
             includeReportLink: true,
+            leadId: String((lead as AnyRecord).id || leadRef.id),
           }),
           tag,
           customMessageId,
@@ -2804,6 +2892,7 @@ async function handleCronFollowups(req: Request) {
         sender,
         signatureMode: "compact",
         includeReportLink: false,
+        leadId: String(lockedLead.id || ""),
       });
 
       const data = await sendViaBrevo({
@@ -2976,10 +3065,20 @@ async function handleBrevoWebhook(req: Request) {
 
   const event = String(body.event || "");
   const emailLower = normalizeEmail(body.email || "");
-  const rawMessageId = String(body["message-id"] || body.messageId || "").replace(/[<>]/g, "");
-  const tags = Array.isArray(body.tags) ? body.tags : [];
-  const receivedTag = tags.length > 0 ? String(tags[0]) : "";
-  const timestamp = Number(body.ts_event || Math.floor(Date.now() / 1000));
+  const rawMessageId = String(body["message-id"] || body.messageId || body.message_id || "").replace(/[<>]/g, "");
+  const tags = Array.isArray(body.tags)
+    ? body.tags
+    : typeof body.tags === "string"
+      ? [body.tags]
+      : [];
+  const receivedTag = firstCleanString(
+    body.tag,
+    body["X-Mailin-Tag"],
+    body["x-mailin-tag"],
+    body["mailin-tag"],
+    tags[0],
+  );
+  const timestamp = Number(body.ts_event || body.ts || Math.floor(Date.now() / 1000));
   const eventTime = admin.firestore.Timestamp.fromMillis(timestamp * 1000);
 
   const outreachRef = adminDb.collection("outreach_leads");
@@ -3175,6 +3274,196 @@ async function handleBrevoWebhook(req: Request) {
   });
 
   return json({ message: "Webhook processed" });
+}
+
+
+const TRACKING_PIXEL_GIF = Buffer.from(
+  "R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==",
+  "base64",
+);
+
+function trackingPixelResponse() {
+  return new Response(TRACKING_PIXEL_GIF, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/gif",
+      "Content-Length": String(TRACKING_PIXEL_GIF.length),
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
+
+function cleanTrackingIdentifier(value: any, maxLength = 128): string {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, maxLength);
+}
+
+async function resolveLeadForSelfHostedTracking(req: Request): Promise<{
+  url: URL;
+  leadDoc: FirestoreDocSnap | null;
+  leadData: LeadData | null;
+  tag: string;
+  emailLower: string;
+}> {
+  const url = new URL(req.url);
+  const leadId = cleanTrackingIdentifier(url.searchParams.get("lid") || url.searchParams.get("leadId") || "");
+  const tag = cleanTrackingIdentifier(url.searchParams.get("t") || url.searchParams.get("tag") || "", 140);
+  const emailLower = normalizeEmail(url.searchParams.get("email") || "");
+  const trackingId = cleanTrackingIdentifier(url.searchParams.get("trackingId") || (tag ? tag.split("_step")[0] : ""), 100);
+  const outreachRef = adminDb.collection("outreach_leads");
+
+  let leadDoc: FirestoreDocSnap | null = null;
+
+  if (leadId) {
+    const directSnap = await outreachRef.doc(leadId).get();
+    if (directSnap.exists) leadDoc = directSnap;
+  }
+
+  if (!leadDoc && trackingId) {
+    const trackingSnap = await outreachRef.where("trackingId", "==", trackingId).limit(1).get();
+    if (!trackingSnap.empty) leadDoc = trackingSnap.docs[0];
+  }
+
+  const leadData = leadDoc?.exists ? (leadDoc.data() as LeadData) : null;
+  return { url, leadDoc, leadData, tag, emailLower };
+}
+
+async function recordSelfHostedEmailEngagement(
+  leadDoc: FirestoreDocSnap,
+  leadData: LeadData,
+  event: "opened" | "clicked",
+  tag: string,
+  meta: { targetUrl?: string; req?: Request } = {},
+) {
+  const docRef = leadDoc.ref || adminDb.collection("outreach_leads").doc(leadDoc.id);
+  const eventTime = admin.firestore.Timestamp.now();
+  const updatePayload: AnyRecord = {};
+  const nowMs = eventTime.toMillis();
+  const trackingEntryBase = {
+    time: eventTime,
+    step_tag: tag || "self_hosted",
+    source: "trackflow_self_hosted_tracking",
+  };
+
+  if (event === "opened") {
+    const lastOpened = toMillis(leadData.lastOpenedAt);
+    if (isDuplicateEngagement(lastOpened, nowMs, webhookOpenDedupeMs())) {
+      return { recorded: false, reason: "duplicate_open" };
+    }
+
+    if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
+      updatePayload.status = "opened";
+    }
+
+    const engagementMinuteUtc = getEngagementMinuteOfDayUtc(nowMs);
+    updatePayload.open_count = admin.firestore.FieldValue.increment(1);
+    updatePayload.lastOpenedAt = eventTime;
+    updatePayload.lastEngagedAt = eventTime;
+    updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
+    updatePayload.preferred_engagement_minute_utc = engagementMinuteUtc;
+    updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
+    updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
+    await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "opened");
+
+    if (envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false)) {
+      updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
+        event: "opened",
+        ...trackingEntryBase,
+      });
+    }
+  }
+
+  if (event === "clicked") {
+    const lastClicked = toMillis(leadData.lastClickedAt);
+    if (isDuplicateEngagement(lastClicked, nowMs, webhookClickDedupeMs())) {
+      return { recorded: false, reason: "duplicate_click" };
+    }
+
+    if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
+      updatePayload.status = "clicked";
+    }
+
+    const engagementMinuteUtc = getEngagementMinuteOfDayUtc(nowMs);
+    updatePayload.click_count = admin.firestore.FieldValue.increment(1);
+    updatePayload.lastClickedAt = eventTime;
+    updatePayload.lastEngagedAt = eventTime;
+    updatePayload.lastClickedUrl = meta.targetUrl || "";
+    updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
+    updatePayload.preferred_engagement_minute_utc = engagementMinuteUtc;
+    updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
+    updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
+    await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "clicked");
+
+    if (envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false)) {
+      updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
+        event: "clicked",
+        ...trackingEntryBase,
+        link: meta.targetUrl || "unknown link",
+      });
+    }
+  }
+
+  if (Object.keys(updatePayload).length) {
+    await docRef.update(updatePayload);
+  }
+
+  const sheetRowNumber = Number(leadData.sheetRowNumber || 0);
+  if (sheetRowNumber > 1) {
+    const sheetUpdates: AnyRecord = {};
+    if (event === "opened") sheetUpdates.openCount = String(Number(leadData.open_count || 0) + 1);
+    if (event === "clicked") sheetUpdates.clickCount = String(Number(leadData.click_count || 0) + 1);
+    if (Object.keys(sheetUpdates).length) await patchSheetRowSafely(sheetRowNumber, sheetUpdates);
+  }
+
+  await addEmailEvent(leadDoc.id, event, {
+    emailLower: leadData.emailLower || normalizeEmail(leadData.email || ""),
+    trackingTag: tag || "",
+    url: meta.targetUrl || "",
+    source: "trackflow_self_hosted_tracking",
+    eventTime,
+  });
+
+  return { recorded: true, reason: event };
+}
+
+async function handleSelfHostedEmailOpen(req: Request) {
+  try {
+    const { leadDoc, leadData, tag, emailLower } = await resolveLeadForSelfHostedTracking(req);
+
+    if (leadDoc && leadData) {
+      const dbEmailLower = leadData.emailLower || normalizeEmail(leadData.email || "");
+      if (!emailLower || !dbEmailLower || emailLower === dbEmailLower) {
+        await recordSelfHostedEmailEngagement(leadDoc, leadData, "opened", tag, { req });
+      }
+    }
+  } catch (error) {
+    console.warn("Self-hosted email open tracking failed:", error);
+  }
+
+  return trackingPixelResponse();
+}
+
+async function handleSelfHostedEmailClick(req: Request) {
+  const { url, leadDoc, leadData, tag, emailLower } = await resolveLeadForSelfHostedTracking(req);
+  const rawTarget = String(url.searchParams.get("url") || "").trim();
+  const targetUrl = sanitizeOptionalUrl(rawTarget) || appBaseUrl();
+
+  try {
+    if (leadDoc && leadData) {
+      const dbEmailLower = leadData.emailLower || normalizeEmail(leadData.email || "");
+      if (!emailLower || !dbEmailLower || emailLower === dbEmailLower) {
+        await recordSelfHostedEmailEngagement(leadDoc, leadData, "clicked", tag, { targetUrl, req });
+      }
+    }
+  } catch (error) {
+    console.warn("Self-hosted email click tracking failed:", error);
+  }
+
+  return NextResponse.redirect(targetUrl, { status: 302 });
 }
 
 /** POST /api/trackflow/webhooks/reply */
@@ -8039,6 +8328,8 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "reports/preview") return await handleReportPreview(req);
     if (action === "reports/download") return await handleReportDownload(req);
     if (action === "reports/cta") return await handleReportCta(req);
+    if (action === "track/open" || action === "email/open") return await handleSelfHostedEmailOpen(req);
+    if (action === "track/click" || action === "email/click") return await handleSelfHostedEmailClick(req);
     if (action === "cron/scheduled-initials") return await handleCronScheduledInitials(req);
     if (action === "cron/sheet-queued-sends") return await handleCronSheetQueuedSends(req);
     if (action === "cron/followups") return await handleCronFollowups(req);
