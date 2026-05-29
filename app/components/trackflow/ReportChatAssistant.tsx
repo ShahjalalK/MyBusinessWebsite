@@ -5,7 +5,16 @@
 // Purpose: Premium floating Messenger-style secure-page chatbot UI.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactElement,
+} from "react";
 import {
   Bot,
   CheckCircle2,
@@ -386,7 +395,6 @@ export default function ReportChatAssistant({
   );
 
   const starterQuestionChips = questionSuggestions.starterQuestions;
-  const closedQuestionChips = questionSuggestions.closedQuestions;
   const followUpQuestionChips = questionSuggestions.followUpQuestions;
 
   useEffect(() => {
@@ -718,10 +726,10 @@ export default function ReportChatAssistant({
         Ask about this review
       </span>
 
-      <div className="fixed inset-x-3 bottom-3 z-[90] flex flex-col items-end sm:inset-x-auto sm:bottom-6 sm:right-6">
+      <div className="fixed inset-x-3 bottom-4 z-[90] flex flex-col items-end sm:inset-x-auto sm:right-6 lg:bottom-6">
         {isOpen ? (
           <div
-            className="flex h-[min(820px,calc(100vh-24px))] w-full max-w-[540px] flex-col overflow-hidden rounded-[1.75rem] border border-blue-100 bg-white shadow-2xl shadow-slate-950/25 sm:w-[470px] lg:w-[520px]"
+            className="flex h-[min(720px,calc(100vh-32px))] w-full max-w-[540px] flex-col overflow-hidden rounded-[1.75rem] border border-blue-100 bg-white shadow-2xl shadow-slate-950/25 sm:w-[470px] lg:w-[520px]"
             role="dialog"
             aria-modal="false"
             aria-label="TrackFlow Pro report chat"
@@ -736,8 +744,8 @@ export default function ReportChatAssistant({
                   </div>
 
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-black">TrackFlow Pro Assistant</p>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-blue-100">{helperBadge}</p>
+                    <p className="truncate text-sm font-black">Ask about this review</p>
+                    <p className="mt-0.5 truncate text-xs font-semibold text-blue-100">{helperBadge} · answers from this report</p>
                   </div>
                 </div>
 
@@ -843,7 +851,7 @@ export default function ReportChatAssistant({
                   <div className="mb-2 flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-blue-600" />
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
-                      Helpful questions
+                      Start with one question
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -884,8 +892,8 @@ export default function ReportChatAssistant({
                     ref={inputRef}
                     id="trackflow-report-chat-input"
                     value={question}
-                    onChange={(event) => setQuestion(event.target.value)}
-                    onKeyDown={(event) => {
+                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setQuestion(event.target.value)}
+                    onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();
                         void submitQuestion();
@@ -914,26 +922,10 @@ export default function ReportChatAssistant({
           </div>
         ) : (
           <>
-            {!isDisabled && closedQuestionChips.length > 0 ? (
-              <div className="mb-3 flex w-full max-w-[360px] flex-col items-end gap-2 sm:max-w-[380px]">
-                {closedQuestionChips.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => void submitQuestion(item)}
-                    disabled={isSending}
-                    className="max-w-full rounded-full border border-white/70 bg-white/90 px-3.5 py-2 text-right text-[11px] font-bold leading-4 text-slate-700 shadow-lg shadow-slate-950/10 backdrop-blur transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              className="group flex items-center gap-3 rounded-full bg-blue-600 px-5 py-4 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
+              className="group flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full bg-blue-600 px-4 py-3.5 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:px-5 sm:py-4"
               aria-label="Open tracking review chat"
               aria-expanded={isOpen}
             >
@@ -945,7 +937,7 @@ export default function ReportChatAssistant({
 
               <span className="hidden text-left sm:block">
                 <span className="block text-sm font-black leading-none">Ask about this review</span>
-                <span className="mt-1 block text-[11px] font-bold text-blue-100">Online • report-aware assistant</span>
+                <span className="mt-1 block text-[11px] font-bold text-blue-100">Online • report-aware answers</span>
               </span>
 
               <Sparkles className="hidden h-4 w-4 opacity-80 transition group-hover:rotate-12 sm:block" />

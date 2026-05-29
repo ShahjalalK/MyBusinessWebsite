@@ -1,56 +1,47 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v19.03-footprint-memory-manager
+Version: v19.04-secure-page-chat-focused-ux
 Last updated: 2026-05-29
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
 
+## Latest Update — v19.04 Secure Page Chat-Focused UX Polish
 
-## Latest Update — v19.03 Footprint Memory Manager
-
-This patch simplifies the lower Cleanup tab section so it manages lightweight email safety memories instead of showing a second old-lead delete workflow.
+This patch improves the client-facing secure tracking review page without changing report storage, Python-generated content, Gemini server prompts, or PDF/report backend behavior.
 
 Changed files:
 
 ```text
-CleanupPanel.tsx
-page.tsx
-types.ts
-app/api/trackflow/[...action]/route.ts
-lib/trackflow-cleanup/report-cleanup.ts
-lib/trackflow-cleanup/sheet-cleanup.ts
+app/tracking-review/[domainSlug]/[token]/page.tsx
+app/components/trackflow/ReportChatAssistant.tsx
+app/components/trackflow/reportChatQuestions.ts
 PROJECT_CONTEXT_README.md
 ```
 
 Behavior:
 
 ```text
-Cleanup tab top section
-→ Delete Everywhere still handles report, PDF, Blob preview, Supabase chat, Sheet row, and linked contact cleanup
-→ operator only chooses Keep Footprint or No Footprint
-
-Cleanup tab lower section
-→ renamed to Footprint Memory
-→ lists contact_memory and suppression_list safety records
-→ supports search by email/domain/company
-→ supports simple filters: Blocked, Allowed, All
-→ row actions: Allow again and Forget memory
-→ date-based cleanup can forget memories older than 30/60/90/180 days
-→ confirmations are short: ALLOW and FORGET
+Secure report page
+→ keeps dynamic report content but makes the first screen easier for clients to understand
+→ adds a compact review-focus summary in the hero area
+→ makes Ask about this review a primary hero action
+→ changes the right hero card into a question/assistant bridge
+→ keeps the PDF available but makes it less dominant than findings and assistant questions
+→ shows recommended next steps as a clearer numbered verification plan
+→ removes large closed-state quick-question chips from the floating chat button so it does not cover hero content
+→ keeps the floating chat assistant report-aware, evidence-safe, and focused on saved report context
 ```
 
 Important decisions:
 
 ```text
-Footprint Memory does not delete reports, PDFs, leads, Sheet rows, or tracking history.
-Allow again removes suppression and expires contact_memory cooldown so the email can be used again after manual permission/test confirmation.
-Forget memory deletes contact_memory and suppression_list records for that email.
-Date-based forget only deletes footprint records older than the selected age.
-Keep blocked is the default state; there is no separate button for it.
+Do not change Python-generated report wording in this patch.
+Do not change Firestore report shape, report register, PDF preview/download routes, tracking beacons, or Gemini answer-generation route.
+The secure page should guide the client through: understand the review → ask the assistant → read findings → request verification.
+The chatbot remains a central feature, but it must not visually overlap or hide important page content.
 ```
 
----
 ## Latest Update — v19.00 Overview Command Center
 
 Stage 15E upgrades the Overview tab into a clearer command-center dashboard.

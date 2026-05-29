@@ -46,19 +46,19 @@ type BuildQuestionInput = {
 
 const DEFAULT_CLOSED_QUESTIONS = [
   "What should we verify first?",
-  "Can this affect Google Ads reporting?",
+  "Can this affect lead reporting?",
 ];
 
 const DEFAULT_STARTER_QUESTIONS = [
   "What should we verify first?",
-  "What does this finding mean?",
-  "Can this affect Google Ads reporting?",
+  "Can you explain the main finding?",
   "What evidence was visible in the review?",
+  "What needs account access to confirm?",
 ];
 
 const DEFAULT_FOLLOW_UP_QUESTIONS = [
   "What is the safest next step?",
-  "Why does this need account access?",
+  "What access is needed to confirm this?",
   "Can TrackFlow Pro verify this for us?",
 ];
 
@@ -280,6 +280,7 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
 
   rules.push(
     { question: "What should we verify first?", priority: 100 },
+    { question: "Can you explain the main finding?", priority: 92 },
     { question: "What evidence was visible in the review?", priority: 84 },
     { question: "What is the safest next step?", priority: 82 },
     { question: "Can TrackFlow Pro verify this for us?", priority: 70 },

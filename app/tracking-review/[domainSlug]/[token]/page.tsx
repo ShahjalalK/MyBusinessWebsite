@@ -784,6 +784,24 @@ function BulletList({
   );
 }
 
+function NumberedStepList({ items }: { items: string[] }) {
+  return (
+    <ol className="space-y-3">
+      {items.map((item, index) => (
+        <li
+          key={`${item}-${index}`}
+          className="grid grid-cols-[2.25rem_1fr] gap-3 rounded-2xl border border-amber-100 bg-white/70 p-4 shadow-sm shadow-amber-950/5"
+        >
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-xs font-black text-white shadow-lg shadow-emerald-500/20">
+            {index + 1}
+          </span>
+          <span className="text-sm font-bold leading-6 text-slate-700">{item}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function ReportFooter() {
   return (
     <footer className="border-t border-slate-200 bg-white">
@@ -1051,6 +1069,24 @@ export default async function ReportPage({ params }: ReportPageProps) {
     formatDate(report.createdAt || report.registeredAt || report.uploadedAt) ||
     formatDate(new Date().toISOString());
 
+  const primaryConversionFocus = getPrimaryConversionFocus(report, privateReportCopy);
+  const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
+  const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
+  const heroSummaryCards = [
+    {
+      label: "Review focus",
+      value: reviewFocusLabel,
+    },
+    {
+      label: "Evidence type",
+      value: "Browser-visible signals",
+    },
+    {
+      label: "Best next action",
+      value: "Ask the assistant or verify inside accounts",
+    },
+  ];
+
   const chatQuestionContext: ReportChatQuestionContext = {
     companyName,
     domain,
@@ -1059,8 +1095,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
     scoreLabel: getReportScoreLabel(report),
     mainFinding,
     businessImpact,
-    primaryConversionFocus: getPrimaryConversionFocus(report, privateReportCopy),
-    businessType: getBusinessTypeLabel(report, privateReportCopy),
+    primaryConversionFocus,
+    businessType: businessTypeLabel,
     whatChecked,
     proofPoints: enhancedProofPoints,
     recommendations,
@@ -1085,7 +1121,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               Private tracking review
             </div>
 
-            <h1 className="mt-6 max-w-4xl break-words text-3xl font-black leading-[0.98] tracking-[-0.045em] text-slate-950 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-6 max-w-4xl break-words text-4xl font-black leading-[0.98] tracking-[-0.05em] text-slate-950 sm:text-5xl lg:text-6xl">
               {headline}
             </h1>
 
@@ -1094,18 +1130,41 @@ export default async function ReportPage({ params }: ReportPageProps) {
               {domain ? <span> · {domain}</span> : null}. {pageSubheadline}
             </p>
 
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              {heroSummaryCards.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-[1.25rem] border border-slate-200 bg-white/85 p-4 shadow-sm shadow-slate-950/5 backdrop-blur"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-sm font-black leading-5 text-slate-900">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
             <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap">
               <LinkButton href="#findings" variant="dark">
                 View findings
               </LinkButton>
 
-              <LinkButton href="#pdf-report" variant="secondary">
-                View PDF report
-              </LinkButton>
-
-              <LinkButton href="#ask-this-review" variant="secondary">
+              <LinkButton href="#ask-this-review" variant="primary">
                 Ask about this review
               </LinkButton>
+
+              <LinkButton href={ctaHref} variant="secondary">
+                {ctaText}
+              </LinkButton>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
+              <a href="#pdf-report" className="rounded-full border border-slate-200 bg-white px-4 py-2 transition hover:border-blue-200 hover:text-blue-700">
+                Full PDF report available
+              </a>
+              <span className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-emerald-700">
+                Report-aware assistant included
+              </span>
             </div>
 
             <div className="mt-8 flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
@@ -1134,7 +1193,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/10 lg:p-6">
             <div className="rounded-[1.5rem] border border-slate-200 bg-slate-950 p-6 text-white">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
-                Audit snapshot
+                Questions this review can answer
               </p>
 
               <p className="mt-4 text-2xl font-black tracking-[-0.04em]">
@@ -1143,23 +1202,33 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
               <div className="mt-6 grid gap-3">
                 {auditSnapshotQuestions.map((item) => (
-                  <div
+                  <a
                     key={item}
-                    className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm font-bold leading-6 text-slate-200"
+                    href="#ask-this-review"
+                    className="group rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm font-bold leading-6 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white"
                   >
-                    {item}
-                  </div>
+                    <span>{item}</span>
+                    <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
+                      Ask the assistant
+                    </span>
+                  </a>
                 ))}
               </div>
+
+              <a
+                href="#ask-this-review"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-400/30"
+              >
+                Ask about this review
+              </a>
             </div>
 
-            <div className="mt-4 rounded-[1.5rem] border border-amber-100 bg-amber-50 p-5">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-700">
-                Important note
+            <div className="mt-4 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-5">
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
+                Evidence-safe assistant
               </p>
-              <p className="mt-3 text-sm font-bold leading-7 text-amber-950">
-                This is a public browser-visible review. Final confirmation requires access to GA4,
-                Google Ads, GTM, CRM, or server-side tools.
+              <p className="mt-3 text-sm font-bold leading-7 text-blue-950">
+                The assistant explains this review using the saved report context. Final confirmation still requires approved access to GA4, Google Ads, GTM, CRM, or server-side tools.
               </p>
             </div>
           </div>
@@ -1167,10 +1236,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
       </section>
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-4 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-3 lg:p-6">
-          {trustSignals.map((item) => (
-            <div key={item} className="rounded-[1.35rem] border border-slate-100 bg-slate-50 p-4">
-              <div className="mb-3 h-2 w-10 rounded-full bg-blue-600" />
+        <div className="grid gap-3 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3 lg:p-5">
+          {trustSignals.map((item, index) => (
+            <div key={item} className="flex items-start gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50 p-4">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-black text-white">
+                {index + 1}
+              </span>
               <p className="text-sm font-black leading-6 text-slate-900">{item}</p>
             </div>
           ))}
@@ -1182,8 +1253,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
         className="mx-auto grid max-w-7xl scroll-mt-24 gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-16"
       >
         <div className="space-y-6">
-          <SectionCard label="Main finding" tone="blue">
+          <SectionCard label="Primary finding" tone="blue">
             <p className="text-lg font-black leading-8 text-slate-950">{mainFinding}</p>
+            <p className="mt-3 text-sm font-semibold leading-7 text-blue-950/70">
+              This section summarizes the main browser-visible point to review before relying on the data for reporting or optimisation decisions.
+            </p>
           </SectionCard>
 
           <SectionCard label="Business impact" tone="green">
@@ -1212,8 +1286,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <SectionCard label="Recommended next step" tone="amber">
-            <BulletList items={recommendations} marker="green" />
+          <SectionCard label="Recommended verification plan" tone="amber">
+            <NumberedStepList items={recommendations} />
           </SectionCard>
 
           <SectionCard label={howToReadTitle}>
@@ -1235,7 +1309,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </h2>
 
               <p className="mt-3 text-sm font-semibold leading-7 text-slate-500">
-                The PDF preview is streamed through TrackFlow Pro, so the client should not see a Google Drive login screen. Previewing does not count as a download; only the download button records a PDF download signal.
+                Open or download the full audit document below. The PDF is streamed securely through TrackFlow Pro so the review can stay private and easy to access.
               </p>
 
               {expiresLabel ? (
