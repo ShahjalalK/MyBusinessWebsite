@@ -8045,8 +8045,12 @@ function footprintMatchesSearch(row: any, queryText: string): boolean {
 }
 
 function normalizeFootprintEmails(input: any): string[] {
-  const raw = Array.isArray(input?.emails) ? input.emails : [input?.email];
-  return Array.from(new Set(raw.map((value: any) => normalizeEmail(String(value || ""))).filter(isValidEmail))).slice(0, 100);
+  const raw: unknown[] = Array.isArray(input?.emails) ? input.emails : [input?.email];
+  const emails = raw
+    .map((value) => normalizeEmail(String(value || "")))
+    .filter((email): email is string => isValidEmail(email));
+
+  return Array.from(new Set<string>(emails)).slice(0, 100);
 }
 
 async function handleFootprintMemoryList(req: Request) {
