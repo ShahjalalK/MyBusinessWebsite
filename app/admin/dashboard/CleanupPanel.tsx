@@ -1,6 +1,6 @@
 "use client";
 
-import React, { type ReactNode } from "react";
+import React, { type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
   CheckCircle2,
   Database,
@@ -26,6 +26,27 @@ import type {
   SecureReportRow,
 } from "./types";
 import { formatDate, normalizeOptionalUrl } from "./utils";
+
+
+type CleanupPanelProps = {
+  reportAssetCleanup: ReportAssetCleanupState;
+  setReportAssetCleanup: (value: ReportAssetCleanupState | ((prev: ReportAssetCleanupState) => ReportAssetCleanupState)) => void;
+  previewReportAssetCleanup: () => Promise<void>;
+  runReportAssetCleanup: () => Promise<void>;
+  secureReports: SecureReportListState;
+  setSecureReports: (value: SecureReportListState | ((prev: SecureReportListState) => SecureReportListState)) => void;
+  loadSecureReports: (force?: boolean) => Promise<void>;
+  selectSecureReportForCleanup: (report: SecureReportRow) => void;
+  viewSecureReportLead: (report: SecureReportRow) => void;
+  toggleSecureReportSelection: (token: string) => void;
+  runBulkReportCleanup: (dryRun?: boolean) => Promise<void>;
+  footprintMemory: FootprintMemoryState;
+  setFootprintMemory: (value: FootprintMemoryState | ((prev: FootprintMemoryState) => FootprintMemoryState)) => void;
+  loadFootprintMemories: (force?: boolean) => Promise<void>;
+  allowFootprintMemory: (email: string) => Promise<void>;
+  forgetFootprintMemory: (email: string) => Promise<void>;
+  forgetOldFootprintMemories: () => Promise<void>;
+};
 
 const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
   {
@@ -397,14 +418,14 @@ export default function CleanupPanel({
               <input
                 type="text"
                 value={secureReports.search}
-                onChange={(event) => setSecureReports((prev) => ({ ...prev, search: event.target.value }))}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setSecureReports((prev) => ({ ...prev, search: event.target.value }))}
                 placeholder="Search by domain, company, email, or token"
                 className="w-full pl-10 pr-4 py-3 rounded-2xl bg-white border border-gray-100 text-sm font-bold text-gray-800 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200"
               />
             </div>
             <select
               value={secureReports.filter}
-              onChange={(event) => setSecureReports((prev) => ({ ...prev, filter: event.target.value as SecureReportFilter }))}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => setSecureReports((prev) => ({ ...prev, filter: event.target.value as SecureReportFilter }))}
               className="w-full px-4 py-3 rounded-2xl bg-white border border-gray-100 text-xs font-black text-gray-700 outline-none"
             >
               {SECURE_REPORT_FILTERS.map((filter) => (
@@ -597,7 +618,7 @@ export default function CleanupPanel({
             <input
               type="text"
               value={reportAssetCleanup.input}
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 setReportAssetCleanup((prev) => ({ ...prev, input: event.target.value, error: "", status: "" }))
               }
               placeholder="Paste secure report URL or token"
@@ -609,7 +630,7 @@ export default function CleanupPanel({
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">What do you want to do?</label>
             <select
               value={reportAssetCleanup.mode}
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                 setReportAssetCleanup((prev) => ({
                   ...prev,
                   mode: event.target.value as ReportAssetCleanupMode,
@@ -637,7 +658,7 @@ export default function CleanupPanel({
             ) : (
               <select
                 value={reportAssetCleanup.leadMode}
-                onChange={(event) =>
+                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
                   setReportAssetCleanup((prev) => ({ ...prev, leadMode: event.target.value as ReportAssetCleanupLeadMode, error: "", status: "" }))
                 }
                 className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
@@ -669,7 +690,7 @@ export default function CleanupPanel({
             <input
               type="text"
               value={reportAssetCleanup.confirmText}
-              onChange={(event) => setReportAssetCleanup((prev) => ({ ...prev, confirmText: event.target.value }))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setReportAssetCleanup((prev) => ({ ...prev, confirmText: event.target.value }))}
               placeholder="Type DELETE"
               className="w-full px-4 py-3 rounded-2xl bg-white border border-red-100 text-sm font-black text-red-700 outline-none"
             />
@@ -814,8 +835,8 @@ export default function CleanupPanel({
               <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 value={footprintMemory.search}
-                onChange={(event) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, search: event.target.value }))}
-                onKeyDown={(event) => {
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, search: event.target.value }))}
+                onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
                   if (event.key === "Enter") loadFootprintMemories(true);
                 }}
                 placeholder="Search by email, company, or website"
@@ -856,7 +877,7 @@ export default function CleanupPanel({
           <div className="flex flex-wrap gap-2 items-center">
             <select
               value={footprintMemory.olderThanDays}
-              onChange={(event) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, olderThanDays: Number(event.target.value) }))}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, olderThanDays: Number(event.target.value) }))}
               className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-[10px] font-black uppercase text-gray-600 outline-none"
             >
               <option value={30}>Older than 30 days</option>
