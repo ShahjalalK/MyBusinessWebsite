@@ -131,6 +131,7 @@ type BrevoSendInput = {
   htmlContent: string;
   tag: string;
   customMessageId: string;
+  headers?: Record<string, string>;
 };
 
 type LeadData = {
@@ -1580,6 +1581,7 @@ async function sendViaBrevo(input: BrevoSendInput) {
         "X-Entity-Ref-ID": input.tag.split("_step")[0],
         "List-Unsubscribe": `<${unsub}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        ...(input.headers || {}),
       },
     }),
   });
@@ -1590,6 +1592,67 @@ async function sendViaBrevo(input: BrevoSendInput) {
   }
 
   return data;
+}
+
+function normalizeMessageIdHeader(value: any): string {
+  const raw = String(value || "")
+    .trim()
+    .replace(/[\r\n]/g, "")
+    .slice(0, 300);
+
+  if (!raw) return "";
+
+  const match = raw.match(/<[^<>\s]+@[^<>\s]+>/);
+  if (match) return match[0];
+
+  const cleaned = raw.replace(/[<>]/g, "").trim();
+  if (!cleaned || !cleaned.includes("@") || /\s/.test(cleaned)) return "";
+  return `<${cleaned}>`;
+}
+
+function getLeadMessageIdChain(lead: LeadData): string[] {
+  const candidates: any[] = [];
+
+  candidates.push(lead.customMessageId, lead.originalMessageId, lead.brevoMessageId);
+
+  if (Array.isArray(lead.sent_messages)) {
+    for (const message of lead.sent_messages) {
+      if (!message || typeof message !== "object") continue;
+      candidates.push(
+        message.customMessageId,
+        message.messageId,
+        message.brevoMessageId,
+        message.threadMessageId,
+        message.inReplyTo,
+      );
+    }
+  }
+
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of candidates) {
+    const messageId = normalizeMessageIdHeader(value);
+    if (!messageId || seen.has(messageId)) continue;
+    seen.add(messageId);
+    output.push(messageId);
+  }
+
+  return output;
+}
+
+function buildThreadHeadersForFollowup(lead: LeadData): Record<string, string> {
+  const chain = getLeadMessageIdChain(lead);
+  if (!chain.length) return {};
+
+  const threadRootMessageId = chain[0];
+  const previousMessageId = chain[chain.length - 1] || threadRootMessageId;
+
+  return {
+    "In-Reply-To": previousMessageId,
+    References: chain.join(" "),
+    "X-TFP-Thread-Root": threadRootMessageId,
+  };
 }
 
 function deterministicVariantIndex(key: string, length: number): number {
@@ -2938,8 +3001,10 @@ async function handleCronFollowups(req: Request) {
       if (!selectedVariant?.content) throw new ApiError("No safe follow-up variant available", 400);
 
       const tag = `${lockedLead.trackingId || lockedLead.id}_step${lockedDecision.trackingStepNumber}`;
-      const subject = `Re: ${lockedLead.subject || "Our Discussion"}`;
+      const baseSubject = String(lockedLead.subject || "Our Discussion").replace(/^\s*re:\s*/i, "").trim() || "Our Discussion";
+      const subject = `Re: ${baseSubject}`;
       const customMessageId = `<${Date.now()}.${lockedLead.trackingId || lockedLead.id}.${lockedDecision.configStepKey}@mail.trackflowpro.com>`;
+      const threadHeaders = buildThreadHeadersForFollowup(lockedLead);
       const htmlContent = buildEmailHtml(personalizeTemplate(selectedVariant.content, lockedLead), emailLower, tag, {
         includeSignature: lockedLead.include_signature !== false,
         reportUrl: "",
@@ -2958,6 +3023,7 @@ async function handleCronFollowups(req: Request) {
         htmlContent,
         tag,
         customMessageId,
+        headers: threadHeaders,
       });
       emailActuallySent = true;
 
@@ -2983,6 +3049,10 @@ async function handleCronFollowups(req: Request) {
           nextFollowupNumber,
           configStepKey: lockedDecision.configStepKey,
         },
+        lastFollowupMessageId: data.messageId || customMessageId,
+        lastFollowupCustomMessageId: customMessageId,
+        lastFollowupInReplyTo: threadHeaders["In-Reply-To"] || "",
+        lastFollowupReferences: threadHeaders.References || "",
         sent_messages: admin.firestore.FieldValue.arrayUnion({
           step: lockedDecision.trackingStepNumber,
           followupNumber: nextFollowupNumber,
@@ -2991,6 +3061,10 @@ async function handleCronFollowups(req: Request) {
           trackingTag: tag,
           variantId: selectedVariant.id || "",
           messageId: data.messageId || "",
+          customMessageId,
+          inReplyTo: threadHeaders["In-Reply-To"] || "",
+          references: threadHeaders.References || "",
+          threadRootMessageId: threadHeaders["X-TFP-Thread-Root"] || "",
           eligibilityReasons: lockedDecision.reasons,
           sentAt,
         }),
@@ -3002,6 +3076,9 @@ async function handleCronFollowups(req: Request) {
         step: lockedDecision.trackingStepNumber,
         trackingTag: tag,
         messageId: data.messageId || "",
+        customMessageId,
+        inReplyTo: threadHeaders["In-Reply-To"] || "",
+        references: threadHeaders.References || "",
         eligibilityReasons: lockedDecision.reasons,
       });
 

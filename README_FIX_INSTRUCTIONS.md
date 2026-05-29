@@ -1,61 +1,47 @@
-# TrackFlowPro Follow-up Combined Fix
+# TrackFlowPro Follow-up Threading Fix
 
-This package merges both follow-up fixes together:
+## Files to replace
 
-1. Follow-up templates load/save through backend admin API, so message boxes stay after refresh.
-2. Active Leads under each follow-up message load from Firestore outreach_leads, not Google Sheet or only the Leads tab cache.
-3. Days Gap save recalculates nextFollowupAt and stores nextFollowupDelayMinutes / nextFollowupConfigStepKey.
+Replace these files in your project:
 
-## Replace these files
+```text
+app/api/trackflow/[...action]/route.ts
+app/admin/dashboard/types.ts
+```
 
-- app/api/trackflow/[...action]/route.ts
-- app/admin/dashboard/page.tsx
-- app/admin/dashboard/followup-utils.ts
-- app/admin/dashboard/AutomationPanel.tsx
-- app/admin/dashboard/types.ts
+## What changed
 
-The last three are included to keep your dashboard folder consistent with the uploaded latest files.
+- Follow-up emails now include email-threading headers:
+  - `In-Reply-To`
+  - `References`
+  - `X-TFP-Thread-Root`
+- Follow-up subject is normalized as `Re: original subject` without double `Re: Re:`.
+- Follow-up send records extra thread metadata in Firestore:
+  - `customMessageId`
+  - `inReplyTo`
+  - `references`
+  - `threadRootMessageId`
+  - `lastFollowupCustomMessageId`
+  - `lastFollowupInReplyTo`
+  - `lastFollowupReferences`
+- Initial email behavior is unchanged.
+- Signature/footer behavior is unchanged.
 
-## Test locally
+## Test checklist
 
-Make sure your Windows time/timezone is correct first, because Firebase Admin can fail with ACCESS_TOKEN_EXPIRED if system time is wrong.
+1. Run:
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Then test:
+2. Send an initial test email to your own address.
+3. Open it once so it becomes eligible.
+4. Make the lead due for F-1 and run follow-up.
+5. In Gmail, the follow-up should appear in the same conversation/thread as the initial email.
+6. Firestore `sent_messages` should contain the follow-up with `inReplyTo` and `references` populated.
 
-1. Login as admin.
-2. Open Admin Dashboard -> Automation.
-3. Select Google Ads -> F-1.
-4. Confirm saved follow-up message appears.
-5. Confirm Active Leads appears below the message.
-6. Change Days Gap and Save Follow-up Settings.
-7. Refresh browser and click Refresh Config.
-8. Confirm message still appears and Active Leads still appears.
-9. Check Firestore lead fields:
-   - nextFollowupAt
-   - nextFollowupDelayMinutes
-   - nextFollowupConfigStepKey
-   - nextFollowupStatus
-   - nextFollowupReason
+## Note
 
-## Debug endpoint
-
-While logged in through the dashboard, check Network tab for:
-
-```text
-/api/trackflow/automation/followups/candidates?service=Google+Ads&step=step1&limit=100&scanLimit=500
-```
-
-Expected response:
-
-```json
-{
-  "success": true,
-  "source": "firestore",
-  "rows": [...]
-}
-```
+Email clients ultimately decide threading behavior. Gmail usually threads reliably when `Subject`, `In-Reply-To`, and `References` are present.

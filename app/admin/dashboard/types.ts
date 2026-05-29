@@ -30,6 +30,17 @@ export type SentMessage = {
   message?: string;
   sentAt: any;
   trackingTag?: string;
+  kind?: "initial" | "followup" | string;
+  followupNumber?: number;
+  configStepKey?: string;
+  variantId?: string;
+  messageId?: string;
+  brevoMessageId?: string;
+  customMessageId?: string;
+  inReplyTo?: string;
+  references?: string;
+  threadRootMessageId?: string;
+  eligibilityReasons?: string[];
 };
 
 export type Lead = {
