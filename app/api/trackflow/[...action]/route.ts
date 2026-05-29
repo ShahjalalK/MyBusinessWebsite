@@ -7986,6 +7986,213 @@ async function handleCleanupDeleteFullKeepMemory(req: Request) {
   return json({ success: true, count: results.length, deletedCount, results });
 }
 
+function serializeTimestampIso(value: any): string {
+  const ms = toMillis(value);
+  return ms ? new Date(ms).toISOString() : "";
+}
+
+function getFootprintDocActivityMs(data: Record<string, any> = {}): number {
+  return Math.max(
+    toMillis(data.updatedAt),
+    toMillis(data.createdAt),
+    toMillis(data.lastContactedAt),
+    toMillis(data.allowAgainAt),
+    toMillis(data.memoryExpiresAt),
+    toMillis(data.cooldownUntil)
+  );
+}
+
+function serializeFootprintMemoryRow(emailKey: string, memory: Record<string, any> | null, suppression: Record<string, any> | null) {
+  const emailLower = normalizeEmail(String(memory?.emailLower || suppression?.emailLower || decodeURIComponent(emailKey || "").replace(/%2E/gi, ".")));
+  const cooldownMs = toMillis(memory?.cooldownUntil);
+  const memoryExpiresMs = toMillis(memory?.memoryExpiresAt);
+  const nowMs = Date.now();
+  const suppressionActive = Boolean(suppression && !suppression.allowedAgainAt);
+  const contactMemoryActive = Boolean(memory && cooldownMs > nowMs && (!memoryExpiresMs || memoryExpiresMs > nowMs) && !memory.allowedAgainAt);
+  const allowedAgain = Boolean(memory?.allowedAgainAt || suppression?.allowedAgainAt) || (!suppressionActive && !contactMemoryActive);
+  const status = allowedAgain ? "allowed_again" : suppressionActive ? "requires_permission" : "blocked";
+  const lastActivityMs = Math.max(getFootprintDocActivityMs(memory || {}), getFootprintDocActivityMs(suppression || {}));
+
+  return {
+    email: emailLower,
+    emailLower,
+    companyName: String(memory?.companyName || suppression?.companyName || ""),
+    website: String(memory?.website || suppression?.website || ""),
+    service: String(memory?.service || ""),
+    reason: String(memory?.cleanupReason || suppression?.reason || memory?.lastOutcome || "safety_memory"),
+    lastOutcome: String(memory?.lastOutcome || suppression?.reason || "safety_memory"),
+    status,
+    statusLabel: status === "allowed_again" ? "Allowed again" : status === "requires_permission" ? "Requires permission" : "Blocked",
+    source: memory && suppression ? "combined" : suppression ? "suppression_list" : "contact_memory",
+    lastActivityAt: lastActivityMs ? new Date(lastActivityMs).toISOString() : "",
+    lastContactedAt: serializeTimestampIso(memory?.lastContactedAt),
+    cooldownUntil: serializeTimestampIso(memory?.cooldownUntil),
+    memoryExpiresAt: serializeTimestampIso(memory?.memoryExpiresAt),
+    updatedAt: serializeTimestampIso(memory?.updatedAt || suppression?.updatedAt),
+    openCount: Number(memory?.openCount || 0),
+    clickCount: Number(memory?.clickCount || 0),
+    sourceLeadId: String(memory?.sourceLeadId || suppression?.sourceLeadId || ""),
+    suppressionReason: String(suppression?.reason || ""),
+  };
+}
+
+function footprintMatchesSearch(row: any, queryText: string): boolean {
+  const q = queryText.trim().toLowerCase();
+  if (!q) return true;
+  return [row.emailLower, row.companyName, row.website, row.reason, row.lastOutcome, row.suppressionReason]
+    .map((value) => String(value || "").toLowerCase())
+    .some((value) => value.includes(q));
+}
+
+function normalizeFootprintEmails(input: any): string[] {
+  const raw = Array.isArray(input?.emails) ? input.emails : [input?.email];
+  return Array.from(new Set(raw.map((value: any) => normalizeEmail(String(value || ""))).filter(isValidEmail))).slice(0, 100);
+}
+
+async function handleFootprintMemoryList(req: Request) {
+  await requireAdmin(req);
+  const url = new URL(req.url);
+  const queryText = String(url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+  const filter = String(url.searchParams.get("filter") || "blocked").toLowerCase();
+  const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 200));
+
+  const [memorySnap, suppressionSnap] = await Promise.all([
+    adminDb.collection("contact_memory").limit(Math.min(max * 3, 500)).get(),
+    adminDb.collection("suppression_list").limit(Math.min(max * 3, 500)).get(),
+  ]);
+
+  const byEmail = new Map<string, { memory: Record<string, any> | null; suppression: Record<string, any> | null }>();
+
+  memorySnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    const emailLower = normalizeEmail(data.emailLower || decodeURIComponent(docSnap.id).replace(/%2E/gi, "."));
+    if (!emailLower) return;
+    byEmail.set(emailLower, { ...(byEmail.get(emailLower) || { memory: null, suppression: null }), memory: data });
+  });
+
+  suppressionSnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    const emailLower = normalizeEmail(data.emailLower || decodeURIComponent(docSnap.id).replace(/%2E/gi, "."));
+    if (!emailLower) return;
+    byEmail.set(emailLower, { ...(byEmail.get(emailLower) || { memory: null, suppression: null }), suppression: data });
+  });
+
+  let rows = Array.from(byEmail.entries()).map(([email, value]) => serializeFootprintMemoryRow(email, value.memory, value.suppression));
+
+  if (filter === "blocked") rows = rows.filter((row: any) => row.status !== "allowed_again");
+  if (filter === "allowed") rows = rows.filter((row: any) => row.status === "allowed_again");
+  rows = rows.filter((row: any) => footprintMatchesSearch(row, queryText));
+  rows.sort((a: any, b: any) => toMillis(b.lastActivityAt) - toMillis(a.lastActivityAt));
+  rows = rows.slice(0, max);
+
+  return json({
+    success: true,
+    count: rows.length,
+    checked: byEmail.size,
+    filter,
+    query: queryText,
+    rows,
+  });
+}
+
+async function deleteFootprintDocsForEmails(emails: string[]) {
+  const batch = adminDb.batch();
+  let count = 0;
+  emails.forEach((emailLower) => {
+    const docId = emailDocId(emailLower);
+    batch.delete(adminDb.collection("contact_memory").doc(docId));
+    batch.delete(adminDb.collection("suppression_list").doc(docId));
+    count += 1;
+  });
+  if (count > 0) await batch.commit();
+  return count;
+}
+
+async function allowFootprintDocsForEmails(emails: string[], actor: string) {
+  const batch = adminDb.batch();
+  const now = admin.firestore.Timestamp.now();
+  emails.forEach((emailLower) => {
+    const docId = emailDocId(emailLower);
+    batch.set(
+      adminDb.collection("contact_memory").doc(docId),
+      {
+        emailLower,
+        allowedAgain: true,
+        allowAgainAt: admin.firestore.FieldValue.serverTimestamp(),
+        allowAgainBy: actor,
+        cooldownUntil: now,
+        memoryExpiresAt: now,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    batch.delete(adminDb.collection("suppression_list").doc(docId));
+  });
+  await batch.commit();
+  return emails.length;
+}
+
+async function forgetFootprintDocsOlderThan(days: number) {
+  const cutoffMs = Date.now() - days * 86_400_000;
+  const [memorySnap, suppressionSnap] = await Promise.all([
+    adminDb.collection("contact_memory").limit(500).get(),
+    adminDb.collection("suppression_list").limit(500).get(),
+  ]);
+
+  const refs: any[] = [];
+  memorySnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    const activityMs = getFootprintDocActivityMs(data);
+    if (activityMs && activityMs <= cutoffMs) refs.push(docSnap.ref);
+  });
+  suppressionSnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    const activityMs = getFootprintDocActivityMs(data);
+    if (activityMs && activityMs <= cutoffMs) refs.push(docSnap.ref);
+  });
+
+  let deleted = 0;
+  for (let index = 0; index < refs.length; index += 450) {
+    const batch = adminDb.batch();
+    refs.slice(index, index + 450).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+    deleted += refs.slice(index, index + 450).length;
+  }
+  return deleted;
+}
+
+async function handleFootprintMemoryAction(req: Request) {
+  const adminUser: any = await requireAdmin(req);
+  const body = await readJson(req);
+  const action = String(body.action || "").trim().toLowerCase();
+  const actor = normalizeEmail(adminUser.email || "admin");
+
+  if (action === "allow") {
+    if (String(body.confirm || "").trim().toUpperCase() !== "ALLOW") throw new ApiError("Type ALLOW to allow this email again", 400);
+    const emails = normalizeFootprintEmails(body);
+    if (!emails.length) throw new ApiError("At least one valid email is required", 400);
+    const count = await allowFootprintDocsForEmails(emails, actor);
+    return json({ success: true, action, count, message: `Allowed ${count} email(s) again.` });
+  }
+
+  if (action === "forget") {
+    if (String(body.confirm || "").trim().toUpperCase() !== "FORGET") throw new ApiError("Type FORGET to delete footprint memory", 400);
+    const emails = normalizeFootprintEmails(body);
+    if (!emails.length) throw new ApiError("At least one valid email is required", 400);
+    const count = await deleteFootprintDocsForEmails(emails);
+    return json({ success: true, action, count, message: `Forgot ${count} footprint memor${count === 1 ? "y" : "ies"}.` });
+  }
+
+  if (action === "forget_older") {
+    if (String(body.confirm || "").trim().toUpperCase() !== "FORGET") throw new ApiError("Type FORGET to delete old footprint memories", 400);
+    const days = Math.max(1, Math.min(Number(body.olderThanDays || 90), 3650));
+    const count = await forgetFootprintDocsOlderThan(days);
+    return json({ success: true, action, count, olderThanDays: days, message: `Forgot ${count} footprint memor${count === 1 ? "y" : "ies"} older than ${days} days.` });
+  }
+
+  throw new ApiError("Unknown footprint memory action", 400);
+}
+
 async function handleCleanupSkip(req: Request) {
   await requireAdmin(req);
   const body = await readJson(req);
@@ -8826,6 +9033,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     if (action === "leads/bulk-action") return await handleLeadsBulkAction(req);
     if (action === "system/cleanup") return await handleSystemCleanup(req);
     if (action === "cleanup/delete-full-keep-memory") return await handleCleanupDeleteFullKeepMemory(req);
+    if (action === "cleanup/footprint-memory") return await handleFootprintMemoryAction(req);
     if (action === "cleanup/skip") return await handleCleanupSkip(req);
     if (action === "cleanup/protect") return await handleCleanupProtect(req);
     if (action === "cleanup/manual-run") return await handleCleanupManualRun(req);
@@ -8868,6 +9076,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "leads") return await handleLeadsGet(req);
     if (action === "system/usage-summary") return await handleUsageSummary(req);
     if (action === "cleanup/candidates") return await handleCleanupCandidates(req);
+    if (action === "cleanup/footprint-memory") return await handleFootprintMemoryList(req);
     if (action === "cleanup/reports") return await handleSecureReportsList(req);
     if (action === "cleanup/report") return await handleReportCleanupPreview(req);
     if (action === "cron/cleanup-expired-reports") return await handleExpiredReportCleanupCron(req);

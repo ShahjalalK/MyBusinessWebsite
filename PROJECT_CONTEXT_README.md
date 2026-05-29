@@ -1,11 +1,56 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v19.00-overview-command-center
-Last updated: 2026-05-28
+Version: v19.03-footprint-memory-manager
+Last updated: 2026-05-29
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
 
+
+## Latest Update — v19.03 Footprint Memory Manager
+
+This patch simplifies the lower Cleanup tab section so it manages lightweight email safety memories instead of showing a second old-lead delete workflow.
+
+Changed files:
+
+```text
+CleanupPanel.tsx
+page.tsx
+types.ts
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+lib/trackflow-cleanup/sheet-cleanup.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Cleanup tab top section
+→ Delete Everywhere still handles report, PDF, Blob preview, Supabase chat, Sheet row, and linked contact cleanup
+→ operator only chooses Keep Footprint or No Footprint
+
+Cleanup tab lower section
+→ renamed to Footprint Memory
+→ lists contact_memory and suppression_list safety records
+→ supports search by email/domain/company
+→ supports simple filters: Blocked, Allowed, All
+→ row actions: Allow again and Forget memory
+→ date-based cleanup can forget memories older than 30/60/90/180 days
+→ confirmations are short: ALLOW and FORGET
+```
+
+Important decisions:
+
+```text
+Footprint Memory does not delete reports, PDFs, leads, Sheet rows, or tracking history.
+Allow again removes suppression and expires contact_memory cooldown so the email can be used again after manual permission/test confirmation.
+Forget memory deletes contact_memory and suppression_list records for that email.
+Date-based forget only deletes footprint records older than the selected age.
+Keep blocked is the default state; there is no separate button for it.
+```
+
+---
 ## Latest Update — v19.00 Overview Command Center
 
 Stage 15E upgrades the Overview tab into a clearer command-center dashboard.

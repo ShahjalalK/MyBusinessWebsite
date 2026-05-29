@@ -66,6 +66,7 @@ import type {
   CleanupCandidate,
   CleanupState,
   ContactMemoryWarning,
+  FootprintMemoryState,
   FirebaseUsageState,
   FollowupConfig,
   FollowupSummaryState,
@@ -185,6 +186,20 @@ function emptyReportAssetCleanupState(): ReportAssetCleanupState {
     lastPreviewAt: null,
     manifest: null,
     steps: [],
+  };
+}
+
+function emptyFootprintMemoryState(): FootprintMemoryState {
+  return {
+    loading: false,
+    actionLoading: false,
+    error: "",
+    status: "",
+    loadedAt: null,
+    search: "",
+    filter: "blocked",
+    olderThanDays: 90,
+    rows: [],
   };
 }
 
@@ -388,6 +403,7 @@ export default function DashboardPage() {
   const [followupCandidatesStatus, setFollowupCandidatesStatus] = useState("");
   const [reportAssetCleanup, setReportAssetCleanup] = useState<ReportAssetCleanupState>(() => emptyReportAssetCleanupState());
   const [secureReports, setSecureReports] = useState<SecureReportListState>(() => emptySecureReportListState());
+  const [footprintMemory, setFootprintMemory] = useState<FootprintMemoryState>(() => emptyFootprintMemoryState());
 
   const {
     // Lead screen UI state kept in Zustand so filter/selection state survives tab switches.
@@ -2135,6 +2151,111 @@ export default function DashboardPage() {
     }
   };
 
+  const loadFootprintMemories = async (force = false) => {
+    if (!force && footprintMemory.loadedAt && Date.now() - footprintMemory.loadedAt < 60_000) return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, loading: true, error: "", status: "Loading footprint memories..." }));
+
+    try {
+      const params = new URLSearchParams({
+        limit: "100",
+        filter: footprintMemory.filter,
+      });
+      const searchText = footprintMemory.search.trim();
+      if (searchText) params.set("q", searchText);
+
+      const response = await fetch(`/api/trackflow/cleanup/footprint-memory?${params.toString()}`, {
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Footprint memory load failed");
+
+      setFootprintMemory((prev: FootprintMemoryState) => ({
+        ...prev,
+        loading: false,
+        error: "",
+        status: `Loaded ${data.count || 0} footprint memor${Number(data.count || 0) === 1 ? "y" : "ies"}.`,
+        loadedAt: Date.now(),
+        rows: Array.isArray(data.rows) ? data.rows : [],
+      }));
+    } catch (error: any) {
+      console.error("Footprint memory load error:", error);
+      setFootprintMemory((prev: FootprintMemoryState) => ({
+        ...prev,
+        loading: false,
+        error: error?.message || "Footprint memory load failed",
+        status: "",
+        rows: [],
+      }));
+    }
+  };
+
+  const allowFootprintMemory = async (email: string) => {
+    const emailText = String(email || "").trim();
+    if (!emailText) return;
+    const typed = window.prompt(`Type ALLOW to allow ${emailText} again.`);
+    if (String(typed || "").trim().toUpperCase() !== "ALLOW") return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Allowing email again...", error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: "allow", emails: [emailText], confirm: "ALLOW" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Allow again failed");
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || "Email allowed again." }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Allow again failed", status: "" }));
+    }
+  };
+
+  const forgetFootprintMemory = async (email: string) => {
+    const emailText = String(email || "").trim();
+    if (!emailText) return;
+    const typed = window.prompt(`Type FORGET to delete the footprint memory for ${emailText}.`);
+    if (String(typed || "").trim().toUpperCase() !== "FORGET") return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Forgetting footprint memory...", error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: "forget", emails: [emailText], confirm: "FORGET" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Forget memory failed");
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || "Footprint memory removed." }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Forget memory failed", status: "" }));
+    }
+  };
+
+  const forgetOldFootprintMemories = async () => {
+    const days = Math.max(1, Number(footprintMemory.olderThanDays || 90));
+    const typed = window.prompt(`Type FORGET to delete footprint memories older than ${days} days.`);
+    if (String(typed || "").trim().toUpperCase() !== "FORGET") return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: `Forgetting memories older than ${days} days...`, error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: "forget_older", olderThanDays: days, confirm: "FORGET" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Bulk forget failed");
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || `Forgot ${data.count || 0} old footprint memories.` }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Bulk forget failed", status: "" }));
+    }
+  };
+
   const loadSheetLeads = async (force = false) => {
     const cacheKey = `${sheetLeadFilter}|${sheetApprovalFilter}|${sheetSendFilter}`;
     if (!force && sheetLoadedAt && sheetCacheKey === cacheKey) {
@@ -2263,11 +2384,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === "cleanup") {
-      loadCleanupCandidates(leadCleanup.bucket, false);
       loadSecureReports(false);
+      loadFootprintMemories(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, leadCleanup.bucket]);
+  }, [activeTab, footprintMemory.filter]);
 
   const patchSheetLead = async (rowNumber: number, updates: Record<string, any>) => {
     const headers = await getAuthHeaders();
@@ -3270,16 +3391,6 @@ export default function DashboardPage() {
           {activeTab === "leads" && renderLeads()}
           {activeTab === "cleanup" && (
             <CleanupPanel
-              leadCleanup={leadCleanup}
-              selectedCleanupIds={selectedCleanupIds}
-              setSelectedCleanupIds={setSelectedCleanupIds}
-              setLeadCleanup={setLeadCleanup}
-              loadCleanupCandidates={loadCleanupCandidates}
-              runManualCleanupRefresh={runManualCleanupRefresh}
-              deleteSelectedCleanupWithMemory={deleteSelectedCleanupWithMemory}
-              skipSelectedCleanup={skipSelectedCleanup}
-              protectSelectedCleanup={protectSelectedCleanup}
-              toggleCleanupCandidate={toggleCleanupCandidate}
               reportAssetCleanup={reportAssetCleanup}
               setReportAssetCleanup={setReportAssetCleanup}
               previewReportAssetCleanup={previewReportAssetCleanup}
@@ -3291,6 +3402,12 @@ export default function DashboardPage() {
               viewSecureReportLead={viewSecureReportLead}
               toggleSecureReportSelection={toggleSecureReportSelection}
               runBulkReportCleanup={runBulkReportCleanup}
+              footprintMemory={footprintMemory}
+              setFootprintMemory={setFootprintMemory}
+              loadFootprintMemories={loadFootprintMemories}
+              allowFootprintMemory={allowFootprintMemory}
+              forgetFootprintMemory={forgetFootprintMemory}
+              forgetOldFootprintMemories={forgetOldFootprintMemories}
             />
           )}
           {activeTab === "automation" && renderFollowups()}

@@ -263,6 +263,43 @@ export type CleanupState = {
 };
 
 
+
+export type FootprintMemoryFilter = "blocked" | "allowed" | "all";
+
+export type FootprintMemoryRow = {
+  email: string;
+  emailLower: string;
+  companyName?: string;
+  website?: string;
+  service?: string;
+  reason?: string;
+  lastOutcome?: string;
+  status?: "blocked" | "requires_permission" | "allowed_again" | "expired";
+  statusLabel?: string;
+  source?: "contact_memory" | "suppression_list" | "combined";
+  lastActivityAt?: string;
+  lastContactedAt?: string;
+  cooldownUntil?: string;
+  memoryExpiresAt?: string;
+  updatedAt?: string;
+  openCount?: number;
+  clickCount?: number;
+  sourceLeadId?: string;
+  suppressionReason?: string;
+};
+
+export type FootprintMemoryState = {
+  loading: boolean;
+  actionLoading: boolean;
+  error: string;
+  status: string;
+  loadedAt: number | null;
+  search: string;
+  filter: FootprintMemoryFilter;
+  olderThanDays: number;
+  rows: FootprintMemoryRow[];
+};
+
 export type ContactMemoryWarning = {
   emailLower?: string;
   lastOutcome?: string;

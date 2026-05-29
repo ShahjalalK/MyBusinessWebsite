@@ -15,9 +15,8 @@ import {
 } from "lucide-react";
 
 import type {
-  CleanupBucket,
-  CleanupCandidate,
-  CleanupState,
+  FootprintMemoryRow,
+  FootprintMemoryState,
   ReportAssetCleanupLeadMode,
   ReportAssetCleanupMode,
   ReportAssetCleanupState,
@@ -27,45 +26,6 @@ import type {
   SecureReportRow,
 } from "./types";
 import { formatDate, normalizeOptionalUrl } from "./utils";
-
-type CleanupBucketOption = {
-  id: CleanupBucket;
-  label: string;
-  note: string;
-};
-
-type CleanupPanelProps = {
-  leadCleanup: CleanupState;
-  selectedCleanupIds: string[];
-  setSelectedCleanupIds: (value: string[]) => void;
-  setLeadCleanup: (value: CleanupState | ((prev: CleanupState) => CleanupState)) => void;
-  loadCleanupCandidates: (bucket?: CleanupBucket, force?: boolean) => Promise<void>;
-  runManualCleanupRefresh: () => Promise<void>;
-  deleteSelectedCleanupWithMemory: () => Promise<void>;
-  skipSelectedCleanup: (days?: number) => Promise<void>;
-  protectSelectedCleanup: () => Promise<void>;
-  toggleCleanupCandidate: (leadId: string) => void;
-  reportAssetCleanup: ReportAssetCleanupState;
-  setReportAssetCleanup: (value: ReportAssetCleanupState | ((prev: ReportAssetCleanupState) => ReportAssetCleanupState)) => void;
-  previewReportAssetCleanup: () => Promise<void>;
-  runReportAssetCleanup: () => Promise<void>;
-  secureReports: SecureReportListState;
-  setSecureReports: (value: SecureReportListState | ((prev: SecureReportListState) => SecureReportListState)) => void;
-  loadSecureReports: (force?: boolean) => Promise<void>;
-  selectSecureReportForCleanup: (report: SecureReportRow) => void;
-  viewSecureReportLead: (report: SecureReportRow) => void;
-  toggleSecureReportSelection: (token: string) => void;
-  runBulkReportCleanup: (dryRun?: boolean) => Promise<void>;
-};
-
-const CLEANUP_BUCKETS: CleanupBucketOption[] = [
-  { id: "due", label: "Due Now", note: "Safe no-reply candidates ready for cleanup" },
-  { id: "cold", label: "No Reply", note: "No open/click after the cleanup waiting period" },
-  { id: "warm", label: "Viewed, No Reply", note: "Opened/clicked but no reply after the review period" },
-  { id: "replied", label: "Needs Review", note: "Replied/interested leads for manual review" },
-  { id: "protected", label: "Protected", note: "Suppression/do-not-contact candidates" },
-  { id: "upcoming", label: "Upcoming", note: "Not due yet, but scheduled by policy" },
-];
 
 const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
   {
@@ -303,17 +263,20 @@ function StatCard({
   );
 }
 
+
+function formatFootprintReason(row: FootprintMemoryRow) {
+  const reason = String(row.suppressionReason || row.reason || row.lastOutcome || "Safety memory").replace(/_/g, " ");
+  return reason || "Safety memory";
+}
+
+function footprintStatusClass(status?: string) {
+  if (status === "allowed_again") return "bg-emerald-50 text-emerald-700";
+  if (status === "expired") return "bg-gray-100 text-gray-500";
+  if (status === "requires_permission") return "bg-amber-50 text-amber-700";
+  return "bg-red-50 text-red-600";
+}
+
 export default function CleanupPanel({
-  leadCleanup,
-  selectedCleanupIds,
-  setSelectedCleanupIds,
-  setLeadCleanup,
-  loadCleanupCandidates,
-  runManualCleanupRefresh,
-  deleteSelectedCleanupWithMemory,
-  skipSelectedCleanup,
-  protectSelectedCleanup,
-  toggleCleanupCandidate,
   reportAssetCleanup,
   setReportAssetCleanup,
   previewReportAssetCleanup,
@@ -325,14 +288,13 @@ export default function CleanupPanel({
   viewSecureReportLead,
   toggleSecureReportSelection,
   runBulkReportCleanup,
+  footprintMemory,
+  setFootprintMemory,
+  loadFootprintMemories,
+  allowFootprintMemory,
+  forgetFootprintMemory,
+  forgetOldFootprintMemories,
 }: CleanupPanelProps) {
-  const selectedCount = selectedCleanupIds.length;
-  const eligibleCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.eligible && !row.protectedLead).length;
-  const sheetLinkedCount = leadCleanup.rows.filter((row: CleanupCandidate) => row.sheetLinked).length;
-
-  const activeBucket = leadCleanup.bucket as CleanupBucket;
-  const allVisibleRowsSelected = leadCleanup.rows.length > 0 && leadCleanup.rows.every((row: CleanupCandidate) => selectedCleanupIds.includes(row.leadId));
-  const isActionDisabled = Boolean(leadCleanup.actionLoading || selectedCount === 0);
   const reportCleanupInput = reportAssetCleanup.input.trim();
   const reportCleanupDisabled = reportAssetCleanup.loading || !reportCleanupInput;
   const deleteConfirmReady = reportAssetCleanup.mode === "assets_only" || reportAssetCleanup.confirmText.trim().toUpperCase() === "DELETE";
@@ -354,11 +316,8 @@ export default function CleanupPanel({
   const bulkReportActionDisabled = Boolean(secureReports.bulkLoading || selectedReportCount === 0);
   const selectedReportActionLabel =
     reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Reports";
-
-  const handleBucketSelect = (bucket: CleanupBucket) => {
-    setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket }));
-    loadCleanupCandidates(bucket, true);
-  };
+  const footprintRows = footprintMemory.rows.slice(0, 100);
+  const blockedFootprintCount = footprintMemory.rows.filter((row) => row.status !== "allowed_again").length;
 
   return (
     <div className="space-y-6">
@@ -367,37 +326,37 @@ export default function CleanupPanel({
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
             <ShieldCheck size={14} /> Cleanup Center
           </p>
-          <h1 className="text-3xl font-black tracking-tighter text-gray-900">Clean old reports and outreach leads</h1>
+          <h1 className="text-3xl font-black tracking-tighter text-gray-900">Clean reports and manage footprint memory</h1>
           <p className="text-gray-500 text-sm font-semibold mt-2 max-w-3xl">
-            Manage secure report files, expired audit links, and old no-reply leads from one place. Start with preview, then choose the safe action.
+            Delete secure report data from every connected place, then manage the lightweight email memories that prevent accidental repeat outreach.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={runManualCleanupRefresh}
-            disabled={leadCleanup.loading || leadCleanup.actionLoading}
+            onClick={() => loadSecureReports(true)}
+            disabled={secureReports.loading}
             className="px-4 py-3 rounded-2xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:bg-gray-300 flex items-center gap-2"
           >
-            <RefreshCw size={14} className={leadCleanup.loading || leadCleanup.actionLoading ? "animate-spin" : ""} /> Check Leads
+            <RefreshCw size={14} className={secureReports.loading ? "animate-spin" : ""} /> Refresh Reports
           </button>
           <button
             type="button"
-            onClick={() => loadCleanupCandidates(activeBucket, true)}
-            disabled={leadCleanup.loading || leadCleanup.actionLoading}
+            onClick={() => loadFootprintMemories(true)}
+            disabled={footprintMemory.loading || footprintMemory.actionLoading}
             className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-50 flex items-center gap-2"
           >
-            <Database size={14} /> Refresh
+            <Database size={14} /> Refresh Memory
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Lead rows" value={leadCleanup.rows.length} icon={<Database size={22} />} />
-        <StatCard label="Ready" value={eligibleCount} icon={<CheckCircle2 size={22} />} tone="green" />
-        <StatCard label="Selected" value={selectedCount} icon={<MousePointer2 size={22} />} tone="orange" />
-        <StatCard label="Sheet linked" value={sheetLinkedCount} icon={<FileText size={22} />} tone="blue" />
+        <StatCard label="Secure reports" value={secureReports.rows.length} icon={<FileText size={22} />} />
+        <StatCard label="Selected reports" value={selectedReportCount} icon={<MousePointer2 size={22} />} tone="orange" />
+        <StatCard label="Footprints" value={footprintMemory.rows.length} icon={<Database size={22} />} tone="blue" />
+        <StatCard label="Blocked" value={blockedFootprintCount} icon={<CheckCircle2 size={22} />} tone="green" />
       </div>
 
       <div className="bg-white border border-gray-100 rounded-[35px] p-5 shadow-sm space-y-5">
@@ -824,67 +783,101 @@ export default function CleanupPanel({
         )}
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-[30px] p-5 shadow-sm space-y-4">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="bg-white border border-gray-100 rounded-[30px] p-5 shadow-sm space-y-5">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <Database size={14} /> Old Lead Cleanup
+              <Database size={14} /> Footprint Memory
             </p>
-            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Review old no-reply leads</h2>
-            <p className="text-sm text-gray-500 font-semibold mt-2">
-              Select old leads that are safe to delete with footprint memory, skip, or protect. This is separate from secure report cleanup above.
+            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Manage email safety memories</h2>
+            <p className="text-sm text-gray-500 font-semibold mt-2 max-w-3xl">
+              These lightweight records stay after cleanup, unsubscribe, bounce, or manual block so TrackFlow does not email the same contact again by mistake.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={isActionDisabled}
-                onClick={deleteSelectedCleanupWithMemory}
-                className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
-              >
-                <Trash2 size={14} /> Delete, Keep Footprint
-              </button>
             <button
               type="button"
-              disabled={isActionDisabled}
-              onClick={() => skipSelectedCleanup(30)}
-              className="px-4 py-3 rounded-2xl bg-amber-50 text-amber-700 text-[10px] font-black uppercase disabled:opacity-40"
+              disabled={footprintMemory.loading || footprintMemory.actionLoading}
+              onClick={() => loadFootprintMemories(true)}
+              className="px-4 py-3 rounded-2xl bg-gray-900 text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
             >
-              Skip 30 Days
-            </button>
-            <button
-              type="button"
-              disabled={isActionDisabled}
-              onClick={protectSelectedCleanup}
-              className="px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 text-[10px] font-black uppercase disabled:opacity-40"
-            >
-              Protect
+              <RefreshCw size={14} className={footprintMemory.loading || footprintMemory.actionLoading ? "animate-spin" : ""} /> Refresh
             </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {CLEANUP_BUCKETS.map((bucket) => (
-            <button
-              key={bucket.id}
-              type="button"
-              onClick={() => handleBucketSelect(bucket.id)}
-              className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${activeBucket === bucket.id ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"}`}
-              title={bucket.note}
-            >
-              {bucket.label}
-            </button>
-          ))}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-3 items-end">
+          <div>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Search email or domain</label>
+            <div className="mt-2 relative">
+              <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={footprintMemory.search}
+                onChange={(event) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, search: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") loadFootprintMemories(true);
+                }}
+                placeholder="Search by email, company, or website"
+                className="w-full rounded-2xl border border-gray-100 bg-gray-50 pl-11 pr-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["blocked", "Blocked"],
+              ["allowed", "Allowed"],
+              ["all", "All"],
+            ] as const).map(([filter, label]) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => {
+                  setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, filter }));
+                }}
+                className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase ${footprintMemory.filter === filter ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-          Recommended: delete old no-reply leads with footprint memory after the waiting period. Use protect for important contacts or anyone who should not be cleaned automatically.
+          Keep blocked is the default. Use Allow again when a client asks to be contacted again or when you are testing. Use Forget memory only for old, fake, or test records you no longer need.
         </div>
 
-        {(leadCleanup.status || leadCleanup.error) && (
-          <p className={`text-[10px] font-black uppercase tracking-widest ${leadCleanup.error ? "text-red-600" : "text-gray-400"}`}>
-            {leadCleanup.error || leadCleanup.status}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-2xl bg-gray-50 border border-gray-100 p-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Date-based memory cleanup</p>
+            <p className="text-xs font-bold text-gray-500 mt-1">Deletes only footprint records. It does not touch reports, PDFs, leads, Sheet rows, or tracking history.</p>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              value={footprintMemory.olderThanDays}
+              onChange={(event) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, olderThanDays: Number(event.target.value) }))}
+              className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-[10px] font-black uppercase text-gray-600 outline-none"
+            >
+              <option value={30}>Older than 30 days</option>
+              <option value={60}>Older than 60 days</option>
+              <option value={90}>Older than 90 days</option>
+              <option value={180}>Older than 180 days</option>
+            </select>
+            <button
+              type="button"
+              disabled={footprintMemory.actionLoading}
+              onClick={forgetOldFootprintMemories}
+              className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
+            >
+              Forget Old Memories
+            </button>
+          </div>
+        </div>
+
+        {(footprintMemory.status || footprintMemory.error) && (
+          <p className={`text-[10px] font-black uppercase tracking-widest ${footprintMemory.error ? "text-red-600" : "text-gray-400"}`}>
+            {footprintMemory.error || footprintMemory.status}
           </p>
         )}
       </div>
@@ -894,101 +887,73 @@ export default function CleanupPanel({
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="p-4">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleRowsSelected}
-                    onChange={(event) => {
-                      setSelectedCleanupIds(event.target.checked ? leadCleanup.rows.map((row: CleanupCandidate) => row.leadId) : []);
-                    }}
-                  />
-                </th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Source</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Outcome</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Timeline</th>
-                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Safety</th>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason</th>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Last activity</th>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Action</th>
               </tr>
             </thead>
-
             <tbody className="divide-y divide-gray-50">
-              {leadCleanup.loading && (
+              {footprintMemory.loading && (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-blue-600 font-black uppercase">
-                    Loading cleanup candidates...
+                  <td colSpan={5} className="p-10 text-center text-blue-600 font-black uppercase">
+                    Loading footprint memories...
                   </td>
                 </tr>
               )}
 
-              {!leadCleanup.loading &&
-                leadCleanup.rows.map((row: CleanupCandidate) => {
-                  const checked = selectedCleanupIds.includes(row.leadId);
-                  return (
-                    <tr key={row.leadId} className={checked ? "bg-blue-50/50" : "hover:bg-gray-50/50"}>
-                      <td className="p-4 align-top">
-                        <input type="checkbox" checked={checked} onChange={() => toggleCleanupCandidate(row.leadId)} />
-                      </td>
-                      <td className="p-4 align-top min-w-[280px]">
-                        <p className="font-black text-gray-900">{row.company || row.name || "Unnamed lead"}</p>
-                        <p className="text-xs text-gray-500 font-semibold mt-1">{row.email}</p>
-                        {row.website && (
-                          <a
-                            href={normalizeOptionalUrl(row.website) || "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs text-blue-600 font-bold inline-flex items-center gap-1 mt-1"
-                          >
-                            Open website <ExternalLink size={12} />
-                          </a>
-                        )}
-                      </td>
-                      <td className="p-4 align-top">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                            row.sheetLinked ? "bg-blue-50 text-blue-600" : row.sourceKind === "test" ? "bg-purple-50 text-purple-600" : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {formatSourceLabel(row.sourceKind, row.source)}
-                        </span>
-                        {row.sheetRowNumber ? (
-                          <p className="text-[10px] font-bold text-gray-400 mt-2">Sheet Row #{row.sheetRowNumber}</p>
-                        ) : (
-                          <p className="text-[10px] font-bold text-gray-400 mt-2">Sheet not linked</p>
-                        )}
-                      </td>
-                      <td className="p-4 align-top min-w-[220px]">
-                        <p className="text-xs font-black text-gray-900 uppercase">{row.outcome || "unknown"}</p>
-                        <p className="text-[10px] font-bold text-gray-400 mt-1">{row.reason}</p>
-                        <p className="text-[10px] font-black text-blue-600 mt-2">
-                          Open {row.openCount || 0} · Click {row.clickCount || 0} · F{row.followUpCount || 0}
+              {!footprintMemory.loading &&
+                footprintRows.map((row: FootprintMemoryRow) => (
+                  <tr key={`${row.emailLower || row.email}-${row.source || "memory"}`} className="hover:bg-gray-50/50">
+                    <td className="p-4 align-top min-w-[260px]">
+                      <p className="font-black text-gray-900">{row.email || row.emailLower}</p>
+                      {(row.companyName || row.website) && (
+                        <p className="text-[10px] font-bold text-gray-400 mt-1">
+                          {[row.companyName, row.website].filter(Boolean).join(" · ")}
                         </p>
-                      </td>
-                      <td className="p-4 align-top min-w-[220px]">
-                        <p className="text-xs font-black text-gray-900">{row.daysOld || 0} days old</p>
-                        <p className="text-[10px] font-bold text-gray-400 mt-1">Last: {row.lastContactedAt ? formatDate(row.lastContactedAt) : "N/A"}</p>
-                        <p className="text-[10px] font-bold text-gray-400 mt-1">Due: {row.dueAt ? formatDate(row.dueAt) : "N/A"}</p>
-                      </td>
-                      <td className="p-4 align-top min-w-[220px]">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                            row.eligible && !row.protectedLead ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-700"
-                          }`}
+                      )}
+                    </td>
+                    <td className="p-4 align-top min-w-[220px]">
+                      <p className="text-xs font-black text-gray-900 uppercase">{formatFootprintReason(row)}</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-1">{row.source === "suppression_list" ? "Suppression" : row.source === "combined" ? "Memory + suppression" : "Contact memory"}</p>
+                    </td>
+                    <td className="p-4 align-top min-w-[200px]">
+                      <p className="text-xs font-black text-gray-900">{row.lastActivityAt ? formatDate(row.lastActivityAt) : "N/A"}</p>
+                      {row.cooldownUntil && <p className="text-[10px] font-bold text-gray-400 mt-1">Blocked until: {formatDate(row.cooldownUntil)}</p>}
+                    </td>
+                    <td className="p-4 align-top min-w-[170px]">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${footprintStatusClass(row.status)}`}>
+                        {row.statusLabel || row.status || "Blocked"}
+                      </span>
+                    </td>
+                    <td className="p-4 align-top min-w-[220px]">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={footprintMemory.actionLoading || row.status === "allowed_again"}
+                          onClick={() => allowFootprintMemory(row.emailLower || row.email)}
+                          className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase disabled:opacity-40"
                         >
-                          {row.eligible && !row.protectedLead ? "Safe cleanup due" : row.protectedLead ? "Protected/review" : "Not due"}
-                        </span>
-                        <p className="text-[10px] font-bold text-gray-400 mt-2">Memory: {row.memoryMonths || row.cooldownMonths || 0} months</p>
-                        {(row.blockedReasons || []).length > 0 && (
-                          <p className="text-[10px] font-bold text-red-500 mt-2">{(row.blockedReasons || []).join(", ")}</p>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                          Allow again
+                        </button>
+                        <button
+                          type="button"
+                          disabled={footprintMemory.actionLoading}
+                          onClick={() => forgetFootprintMemory(row.emailLower || row.email)}
+                          className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
+                        >
+                          Forget memory
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
 
-              {!leadCleanup.loading && leadCleanup.rows.length === 0 && (
+              {!footprintMemory.loading && footprintRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-gray-400 font-bold">
-                    No cleanup candidates found for this bucket.
+                  <td colSpan={5} className="p-10 text-center text-gray-400 font-bold">
+                    No footprint memories found for this view.
                   </td>
                 </tr>
               )}
