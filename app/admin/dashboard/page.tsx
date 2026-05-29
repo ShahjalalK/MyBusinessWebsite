@@ -172,9 +172,9 @@ function emptyFirebaseUsageState(): FirebaseUsageState {
 function emptyReportAssetCleanupState(): ReportAssetCleanupState {
   return {
     input: "",
-    mode: "soft",
-    leadMode: "archive",
-    sheetMode: "mark",
+    mode: "hard",
+    leadMode: "delete",
+    sheetMode: "delete" as any,
     loading: false,
     error: "",
     status: "",
@@ -1765,23 +1765,19 @@ export default function DashboardPage() {
     }
 
     if (!dryRun && reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
-      window.alert("Type DELETE_REPORT_ASSETS before deleting selected test data.");
+      window.alert("Type DELETE_REPORT_ASSETS before deleting selected reports everywhere.");
       return;
     }
 
     if (!dryRun) {
       const actionName =
-        reportAssetCleanup.mode === "hard"
-          ? "Delete Selected Test Data"
-          : reportAssetCleanup.mode === "assets_only"
-            ? "Remove Files From Selected"
-            : "Archive Selected Reports";
+        reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Everywhere";
 
       const contactModeNote =
         reportAssetCleanup.leadMode === "delete_no_memory"
-          ? " No-memory contact delete will only run for contacts with no outreach history."
+          ? " No-footprint delete will only run for contacts with no outreach history."
           : reportAssetCleanup.leadMode === "delete"
-            ? " A tiny safety memory will be kept when needed."
+            ? " A tiny footprint memory will be kept to prevent duplicate outreach."
             : "";
 
       if (!window.confirm(`${actionName} will process ${tokens.length} selected report(s).${contactModeNote} Continue?`)) return;
@@ -1917,7 +1913,7 @@ export default function DashboardPage() {
     }
 
     if (reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
-      window.alert("Type DELETE_REPORT_ASSETS before deleting test data.");
+      window.alert("Type DELETE_REPORT_ASSETS before deleting everywhere.");
       return;
     }
 
@@ -1925,15 +1921,13 @@ export default function DashboardPage() {
       reportAssetCleanup.leadMode === "delete_no_memory"
         ? " The selected contact will be deleted only if no outreach history is found."
         : reportAssetCleanup.leadMode === "delete"
-          ? " A small safety memory will be kept for the selected contact."
+          ? " A small footprint memory will be kept for the selected contact."
           : "";
 
     const confirmMessage =
-      reportAssetCleanup.mode === "hard"
-        ? `Delete Test Data will remove report records and selected linked data. Use this only for fake/test records.${contactModeNote} Continue?`
-        : reportAssetCleanup.mode === "assets_only"
-          ? `Remove Files Only will remove the PDF, preview image, and chat history but keep saved records.${contactModeNote} Continue?`
-          : `Archive Report will remove report files, make the secure page inactive, and keep a small safety history.${contactModeNote} Continue?`;
+      reportAssetCleanup.mode === "assets_only"
+        ? `Remove Files Only will remove the PDF, preview image, and chat history but keep saved records.${contactModeNote} Continue?`
+        : `Delete Everywhere will remove the report record, files, Sheet row, and selected linked contact data.${contactModeNote} Continue?`;
 
     if (!window.confirm(confirmMessage)) return;
 

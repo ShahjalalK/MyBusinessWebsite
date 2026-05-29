@@ -2,7 +2,7 @@ import { google } from "googleapis";
 
 type AnyRecord = Record<string, any>;
 
-export type SheetCleanupMode = "skip" | "mark" | "clear";
+export type SheetCleanupMode = "skip" | "mark" | "clear" | "delete";
 
 export type SheetCleanupResult = {
   configured: boolean;
@@ -181,6 +181,39 @@ async function updateSingleSheetRow(sheets: any, spreadsheetId: string, rowNumbe
   });
 }
 
+async function getSheetId(sheets: any, spreadsheetId: string): Promise<number> {
+  const response = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets(properties(sheetId,title))",
+  });
+
+  const sheet = (response.data.sheets || []).find((item: any) => item?.properties?.title === SHEET_NAME);
+  const sheetId = Number(sheet?.properties?.sheetId);
+  if (!Number.isFinite(sheetId)) throw new Error(`Google Sheet tab not found: ${SHEET_NAME}`);
+  return sheetId;
+}
+
+async function deleteSingleSheetRow(sheets: any, spreadsheetId: string, rowNumber: number): Promise<void> {
+  const sheetId = await getSheetId(sheets, spreadsheetId);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowNumber - 1,
+              endIndex: rowNumber,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
 function makeCleanupUpdates(input: {
   mode: SheetCleanupMode;
   cleanupMode: string;
@@ -256,6 +289,19 @@ export async function cleanupGoogleSheetReportRow(input: {
 
   try {
     const { sheets, spreadsheetId } = await getSheetsClient();
+
+    if (input.mode === "delete") {
+      await deleteSingleSheetRow(sheets, spreadsheetId, rowNumber);
+      return {
+        configured: true,
+        skipped: false,
+        rowNumber,
+        mode: input.mode,
+        ok: true,
+        message: `Sheet row ${rowNumber} deleted.`,
+      };
+    }
+
     await ensureHeaderRow(sheets, spreadsheetId);
     const existing = await readSingleSheetRow(sheets, spreadsheetId, rowNumber);
     const updates = makeCleanupUpdates({

@@ -1,10 +1,48 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v19.00-overview-command-center
-Last updated: 2026-05-28
+Version: v19.01-simple-delete-cleanup-flow
+Last updated: 2026-05-29
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
+
+## Latest Update — v19.01 Simple Delete Cleanup Flow
+
+The Cleanup tab has been changed from an archive-first report cleanup area into a simpler delete-first cleanup workflow that matches the operator's lead lifecycle decision.
+
+Changed files:
+
+```text
+CleanupPanel.tsx
+page.tsx
+lib/trackflow-cleanup/report-cleanup.ts
+lib/trackflow-cleanup/sheet-cleanup.ts
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Cleanup tab
+→ Archive Report is removed from the main secure report cleanup UI
+→ default action is Delete Everywhere
+→ Delete Everywhere deletes report files, secure report Firestore records, domain index records, Supabase chat history when configured, Google Sheet row when available, and the linked contact action selected in the UI
+→ Delete contact, keep footprint remains the safest default for contacted/no-reply leads
+→ Delete contact, no footprint is allowed only when no outreach history is detected
+→ Remove Files Only remains available for cases where the lead/contact should stay but report files should be removed
+→ Google Sheet cleanup now supports deleting the matched Sheet row, not only marking or clearing fields
+```
+
+Important decisions:
+
+```text
+Cleanup tab is now a lead lifecycle cleanup tool, not an archive manager.
+If a lead was contacted, keep a tiny contact_memory footprint before deleting full lead/report data so future automation does not contact the same person again by mistake.
+If a lead was never contacted or is only test data, no-footprint delete is allowed.
+The backend still blocks no-footprint delete when outreach history is found.
+Preview remains the first step before any destructive cleanup action.
+Hard delete still requires DELETE_REPORT_ASSETS confirmation.
+```
 
 ## Latest Update — v19.00 Overview Command Center
 

@@ -536,7 +536,7 @@ function parseLeadMode(value: any): LeadCleanupMode {
 
 function parseSheetMode(value: any): SheetCleanupMode {
   const raw = clean(value || "mark").toLowerCase();
-  if (["skip", "mark", "clear"].includes(raw)) return raw as SheetCleanupMode;
+  if (["skip", "mark", "clear", "delete"].includes(raw)) return raw as SheetCleanupMode;
   return "mark";
 }
 function isVercelBlobCleanupConfigured(): boolean {
@@ -667,6 +667,12 @@ async function deleteSupabaseChatStep(manifest: CleanupManifest): Promise<Cleanu
   }
 }
 
+function sheetCleanupAction(sheetMode: SheetCleanupMode): string {
+  if (sheetMode === "delete") return "delete_sheet_row";
+  if (sheetMode === "clear") return "clear_report_fields";
+  return "mark_cleanup";
+}
+
 async function writeSheetCleanupStep(
   manifest: CleanupManifest,
   sheetMode: SheetCleanupMode,
@@ -685,7 +691,7 @@ async function writeSheetCleanupStep(
     if (result.skipped) {
       return {
         service: "google_sheet",
-        action: sheetMode === "clear" ? "clear_report_fields" : "mark_cleanup",
+        action: sheetCleanupAction(sheetMode),
         status: "skipped",
         target: result.rowNumber ? String(result.rowNumber) : undefined,
         message: result.message,
@@ -695,7 +701,7 @@ async function writeSheetCleanupStep(
 
     return {
       service: "google_sheet",
-      action: sheetMode === "clear" ? "clear_report_fields" : "mark_cleanup",
+      action: sheetCleanupAction(sheetMode),
       status: result.ok ? "ok" : "error",
       target: result.rowNumber ? String(result.rowNumber) : undefined,
       message: result.message,
@@ -705,7 +711,7 @@ async function writeSheetCleanupStep(
   } catch (error: any) {
     return {
       service: "google_sheet",
-      action: sheetMode === "clear" ? "clear_report_fields" : "mark_cleanup",
+      action: sheetCleanupAction(sheetMode),
       status: "error",
       target: manifest.sheetRowNumber ? String(manifest.sheetRowNumber) : undefined,
       error: safeError(error),
@@ -747,13 +753,24 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
     return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup was skipped by request." };
   }
 
+  const reason = `report_cleanup_${leadMode}`;
+
   if (!manifest.leadId || !manifest.leadFound) {
+    if (leadMode === "delete" && manifest.emailLower) {
+      await writeContactMemoryForLead(lead, manifest, actor, reason);
+      return {
+        service: "firestore",
+        action: "delete_lead_keep_memory",
+        status: "ok",
+        message: "No linked contact record was found, but a tiny footprint memory was saved from the report email.",
+      };
+    }
+
     return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "No linked contact record found." };
   }
 
   const ref = adminDb.collection("outreach_leads").doc(manifest.leadId);
   const now = admin.firestore.FieldValue.serverTimestamp();
-  const reason = `report_cleanup_${leadMode}`;
 
   try {
     if (leadMode === "delete_no_memory") {
@@ -1034,7 +1051,12 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
       : { service: "firestore", action: "cleanup_domain_indexes", status: "skipped", message: "No domain index IDs found." },
     sheetMode === "skip"
       ? { service: "google_sheet", action: "mark_cleanup", status: "skipped", message: "Sheet cleanup would be skipped." }
-      : plannedStep("google_sheet", sheetMode === "clear" ? "clear_report_fields" : "mark_cleanup", String(manifest.sheetRowNumber || ""), "Sheet row would be updated if row number is available."),
+      : plannedStep(
+          "google_sheet",
+          sheetCleanupAction(sheetMode),
+          String(manifest.sheetRowNumber || ""),
+          sheetMode === "delete" ? "Sheet row would be deleted if row number is available." : "Sheet row would be updated if row number is available.",
+        ),
     leadMode === "none"
       ? { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup would be skipped." }
       : leadMode === "delete_no_memory" && manifest.leadContacted
