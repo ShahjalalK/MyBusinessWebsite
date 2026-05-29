@@ -281,7 +281,7 @@ export type BulkLeadAction = "archive" | "restore" | "trash" | "delete_permanent
 
 export type ReportAssetCleanupMode = "soft" | "hard" | "assets_only";
 export type ReportAssetCleanupLeadMode = "none" | "archive" | "trash" | "delete" | "delete_no_memory";
-export type ReportAssetCleanupSheetMode = "skip" | "mark" | "clear";
+export type ReportAssetCleanupSheetMode = "skip" | "mark" | "clear" | "delete";
 export type ReportCleanupStepStatus = "planned" | "skipped" | "ok" | "warning" | "error";
 
 export type ReportCleanupStep = {

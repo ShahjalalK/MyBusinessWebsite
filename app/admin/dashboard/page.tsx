@@ -174,7 +174,7 @@ function emptyReportAssetCleanupState(): ReportAssetCleanupState {
     input: "",
     mode: "hard",
     leadMode: "delete",
-    sheetMode: "delete" as any,
+    sheetMode: "delete",
     loading: false,
     error: "",
     status: "",
@@ -1764,20 +1764,22 @@ export default function DashboardPage() {
       return;
     }
 
-    if (!dryRun && reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
-      window.alert("Type DELETE_REPORT_ASSETS before deleting selected reports everywhere.");
+    if (!dryRun && reportAssetCleanup.mode !== "assets_only" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE") {
+      window.alert("Type DELETE before deleting selected report data.");
       return;
     }
 
     if (!dryRun) {
       const actionName =
-        reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Everywhere";
+        reportAssetCleanup.mode === "assets_only"
+          ? "Remove Files From Selected"
+          : "Delete Selected Reports";
 
       const contactModeNote =
         reportAssetCleanup.leadMode === "delete_no_memory"
-          ? " No-footprint delete will only run for contacts with no outreach history."
+          ? " No-memory contact delete will only run for contacts with no outreach history."
           : reportAssetCleanup.leadMode === "delete"
-            ? " A tiny footprint memory will be kept to prevent duplicate outreach."
+            ? " A tiny safety memory will be kept when needed."
             : "";
 
       if (!window.confirm(`${actionName} will process ${tokens.length} selected report(s).${contactModeNote} Continue?`)) return;
@@ -1799,11 +1801,11 @@ export default function DashboardPage() {
         headers: await getAuthHeaders(),
         body: JSON.stringify({
           tokens,
-          mode: reportAssetCleanup.mode,
-          leadMode: reportAssetCleanup.leadMode,
-          sheetMode: reportAssetCleanup.sheetMode,
+          mode: reportAssetCleanup.mode === "assets_only" ? "assets_only" : "hard",
+          leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : reportAssetCleanup.leadMode,
+          sheetMode: reportAssetCleanup.mode === "assets_only" ? "skip" : "delete",
           dryRun,
-          confirm: dryRun ? undefined : reportAssetCleanup.mode === "hard" ? "DELETE_REPORT_ASSETS" : "CLEANUP_REPORT_ASSETS",
+          confirm: dryRun ? undefined : "DELETE",
         }),
       });
 
@@ -1844,9 +1846,9 @@ export default function DashboardPage() {
   const buildReportCleanupQuery = () => {
     const input = reportAssetCleanup.input.trim();
     const params = new URLSearchParams({
-      mode: reportAssetCleanup.mode,
-      leadMode: reportAssetCleanup.leadMode,
-      sheetMode: reportAssetCleanup.sheetMode,
+      mode: reportAssetCleanup.mode === "assets_only" ? "assets_only" : "hard",
+      leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : reportAssetCleanup.leadMode,
+      sheetMode: reportAssetCleanup.mode === "assets_only" ? "skip" : "delete",
     });
 
     if (looksLikeReportUrl(input)) params.set("reportUrl", input);
@@ -1912,22 +1914,20 @@ export default function DashboardPage() {
       return;
     }
 
-    if (reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS") {
-      window.alert("Type DELETE_REPORT_ASSETS before deleting everywhere.");
+    if (reportAssetCleanup.mode !== "assets_only" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE") {
+      window.alert("Type DELETE before deleting report data.");
       return;
     }
 
     const contactModeNote =
       reportAssetCleanup.leadMode === "delete_no_memory"
-        ? " The selected contact will be deleted only if no outreach history is found."
-        : reportAssetCleanup.leadMode === "delete"
-          ? " A small footprint memory will be kept for the selected contact."
-          : "";
+        ? " The linked contact will be deleted only if no outreach history is found."
+        : " A tiny footprint memory will be kept for the linked contact when possible.";
 
     const confirmMessage =
       reportAssetCleanup.mode === "assets_only"
-        ? `Remove Files Only will remove the PDF, preview image, and chat history but keep saved records.${contactModeNote} Continue?`
-        : `Delete Everywhere will remove the report record, files, Sheet row, and selected linked contact data.${contactModeNote} Continue?`;
+        ? "Remove Files Only will remove the PDF, preview image, and chat history but keep saved records. Continue?"
+        : `Delete Everywhere will remove the secure report, files, Sheet row, and linked contact data.${contactModeNote} Continue?`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -1948,11 +1948,11 @@ export default function DashboardPage() {
         headers: await getAuthHeaders(),
         body: JSON.stringify({
           ...(inputIsUrl ? { reportUrl: input } : { token: input }),
-          mode: reportAssetCleanup.mode,
-          leadMode: reportAssetCleanup.leadMode,
-          sheetMode: reportAssetCleanup.sheetMode,
+          mode: reportAssetCleanup.mode === "assets_only" ? "assets_only" : "hard",
+          leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : reportAssetCleanup.leadMode,
+          sheetMode: reportAssetCleanup.mode === "assets_only" ? "skip" : "delete",
           dryRun: false,
-          confirm: reportAssetCleanup.mode === "hard" ? "DELETE_REPORT_ASSETS" : "CLEANUP_REPORT_ASSETS",
+          confirm: "DELETE",
         }),
       });
       const data = await readTrackflowJson(response);
@@ -2048,16 +2048,13 @@ export default function DashboardPage() {
     }
   };
 
-  const deleteSelectedCleanupWithMemory = async (sheetMode: "delete" | "mark" | "skip" = "delete") => {
+  const deleteSelectedCleanupWithMemory = async () => {
     if (selectedCleanupIds.length === 0) {
       window.alert("Select at least one cleanup candidate.");
       return;
     }
 
-    const message =
-      sheetMode === "delete"
-        ? `This will save footprint memory, delete matching Sheet rows, and permanently delete ${selectedCleanupIds.length} Firebase lead(s). Continue?`
-        : `This will save footprint memory and delete ${selectedCleanupIds.length} Firebase lead(s). Sheet rows will be ${sheetMode === "mark" ? "marked Deleted" : "skipped"}. Continue?`;
+    const message = `This will save footprint memory, delete matching Sheet rows, and permanently delete ${selectedCleanupIds.length} Firebase lead(s). Continue?`;
 
     if (!window.confirm(message)) return;
 
@@ -2067,7 +2064,7 @@ export default function DashboardPage() {
       const response = await fetch("/api/trackflow/cleanup/delete-full-keep-memory", {
         method: "POST",
         headers: await getAuthHeaders(),
-        body: JSON.stringify({ ids: selectedCleanupIds, sheetMode }),
+        body: JSON.stringify({ ids: selectedCleanupIds, sheetMode: "delete" }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Cleanup delete failed");

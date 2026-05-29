@@ -20,7 +20,6 @@ import type {
   CleanupState,
   ReportAssetCleanupLeadMode,
   ReportAssetCleanupMode,
-  ReportAssetCleanupSheetMode,
   ReportAssetCleanupState,
   ReportCleanupStep,
   SecureReportFilter,
@@ -42,7 +41,7 @@ type CleanupPanelProps = {
   setLeadCleanup: (value: CleanupState | ((prev: CleanupState) => CleanupState)) => void;
   loadCleanupCandidates: (bucket?: CleanupBucket, force?: boolean) => Promise<void>;
   runManualCleanupRefresh: () => Promise<void>;
-  deleteSelectedCleanupWithMemory: (sheetMode?: "delete" | "mark" | "skip") => Promise<void>;
+  deleteSelectedCleanupWithMemory: () => Promise<void>;
   skipSelectedCleanup: (days?: number) => Promise<void>;
   protectSelectedCleanup: () => Promise<void>;
   toggleCleanupCandidate: (leadId: string) => void;
@@ -72,25 +71,18 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
   {
     id: "hard",
     label: "Delete Everywhere",
-    note: "Deletes the secure report record, PDF, preview image, chat history, Sheet row, and the linked contact action selected below.",
+    note: "Deletes the secure report, PDF, preview image, chat history, Google Sheet row, and linked contact data. Your only decision is whether to keep a tiny footprint memory.",
   },
   {
     id: "assets_only",
     label: "Remove Files Only",
-    note: "Removes only the PDF, preview image, and chat history. Use this when the lead/contact should stay in the system.",
+    note: "Removes only the PDF, preview image, and chat history. Saved report, Sheet row, and contact data stay unchanged.",
   },
 ];
 
-const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string }> = [
-  { id: "delete", label: "Delete contact, keep footprint" },
-  { id: "delete_no_memory", label: "Delete contact, no footprint" },
-  { id: "none", label: "Keep contact unchanged" },
-];
-
-const REPORT_SHEET_MODES: Array<{ id: ReportAssetCleanupSheetMode; label: string }> = [
-  { id: "delete" as ReportAssetCleanupSheetMode, label: "Delete Sheet row" },
-  { id: "skip", label: "Leave Sheet unchanged" },
-  { id: "clear", label: "Clear report fields only" },
+const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string; note: string }> = [
+  { id: "delete", label: "Keep Footprint", note: "Best for contacted/no-reply leads. Deletes full data but keeps tiny safety memory to avoid future duplicate outreach." },
+  { id: "delete_no_memory", label: "No Footprint", note: "Only for test or never-contacted leads. Backend blocks this when outreach history exists." },
 ];
 
 const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = [
@@ -151,13 +143,15 @@ function reportStepActionLabel(step: ReportCleanupStep): string {
   if (action.includes("delete_preview")) return "Remove image";
   if (action.includes("delete_report_chat")) return "Remove chat";
   if (action.includes("delete_report_document")) return "Delete record";
-  if (action.includes("mark_report_cleaned")) return "Mark report cleaned";
+  if (action.includes("mark_report_cleaned")) return "Archive report";
   if (action.includes("cleanup_domain") || action.includes("delete_domain")) return "Update lookup";
   if (action.includes("delete_sheet_row")) return "Delete Sheet row";
   if (action.includes("clear_report_fields")) return "Clear Sheet fields";
   if (action.includes("mark_cleanup")) return "Mark cleaned";
-  if (action.includes("delete_lead_no_memory")) return "Delete contact, no footprint";
-  if (action.includes("delete_lead")) return "Delete contact, keep footprint";
+  if (action.includes("archive_lead")) return "Archive lead";
+  if (action.includes("trash_lead")) return "Move to trash";
+  if (action.includes("delete_lead_no_memory")) return "Delete test contact";
+  if (action.includes("delete_lead")) return "Delete contact";
 
   return step.action ? step.action.replace(/_/g, " ") : "Cleanup";
 }
@@ -184,7 +178,6 @@ function reportStepMessage(step: ReportCleanupStep): string {
 
 function reportModeActionLabel(mode: ReportAssetCleanupMode): string {
   if (mode === "assets_only") return "Remove Files Only";
-  if (mode === "hard") return "Delete Everywhere";
   return "Delete Everywhere";
 }
 
@@ -342,8 +335,8 @@ export default function CleanupPanel({
   const isActionDisabled = Boolean(leadCleanup.actionLoading || selectedCount === 0);
   const reportCleanupInput = reportAssetCleanup.input.trim();
   const reportCleanupDisabled = reportAssetCleanup.loading || !reportCleanupInput;
-  const hardConfirmReady = reportAssetCleanup.mode !== "hard" || reportAssetCleanup.confirmText.trim().toUpperCase() === "DELETE_REPORT_ASSETS";
-  const reportCleanupCanRun = !reportCleanupDisabled && hardConfirmReady;
+  const deleteConfirmReady = reportAssetCleanup.mode === "assets_only" || reportAssetCleanup.confirmText.trim().toUpperCase() === "DELETE";
+  const reportCleanupCanRun = !reportCleanupDisabled && deleteConfirmReady;
   const manifest = reportAssetCleanup.manifest;
   const activeReportMode = REPORT_CLEANUP_MODES.find((mode) => mode.id === reportAssetCleanup.mode) || REPORT_CLEANUP_MODES[0];
   const actionLabel = reportModeActionLabel(reportAssetCleanup.mode);
@@ -360,7 +353,7 @@ export default function CleanupPanel({
     filteredSecureReports.length > 0 && filteredSecureReports.every((report) => selectedReportTokens.includes(report.token));
   const bulkReportActionDisabled = Boolean(secureReports.bulkLoading || selectedReportCount === 0);
   const selectedReportActionLabel =
-    reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Everywhere";
+    reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Reports";
 
   const handleBucketSelect = (bucket: CleanupBucket) => {
     setLeadCleanup((prev: CleanupState) => ({ ...prev, bucket }));
@@ -413,9 +406,9 @@ export default function CleanupPanel({
             <p className="text-[10px] font-black text-violet-600 uppercase tracking-widest flex items-center gap-2">
               <ShieldCheck size={14} /> Secure Report Cleanup
             </p>
-            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Delete unwanted report and lead data</h2>
+            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Clean a report link or PDF</h2>
             <p className="text-sm text-gray-500 font-semibold mt-2 max-w-3xl">
-              Select a secure report or paste a token. Preview first, then delete everything or keep only a tiny footprint to prevent duplicate outreach.
+              Paste a secure report URL or token. Preview shows exactly what will happen before any file or record changes.
             </p>
           </div>
           <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
@@ -518,7 +511,7 @@ export default function CleanupPanel({
               <button
                 type="button"
                 onClick={() => runBulkReportCleanup(false)}
-                disabled={bulkReportActionDisabled || (reportAssetCleanup.mode === "hard" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE_REPORT_ASSETS")}
+                disabled={bulkReportActionDisabled || (reportAssetCleanup.mode !== "assets_only" && reportAssetCleanup.confirmText.trim().toUpperCase() !== "DELETE")}
                 className="px-3 py-2 rounded-xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:bg-gray-300 inline-flex items-center gap-1"
               >
                 <Trash2 size={12} /> {selectedReportActionLabel}
@@ -639,7 +632,7 @@ export default function CleanupPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr] gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_0.8fr_0.8fr] gap-3">
           <div>
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Secure report URL or token</label>
             <input
@@ -654,21 +647,18 @@ export default function CleanupPanel({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Cleanup action</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">What do you want to do?</label>
             <select
               value={reportAssetCleanup.mode}
-              onChange={(event) => {
-                const nextMode = event.target.value as ReportAssetCleanupMode;
+              onChange={(event) =>
                 setReportAssetCleanup((prev) => ({
                   ...prev,
-                  mode: nextMode,
-                  leadMode: nextMode === "assets_only" ? "none" : "delete",
-                  sheetMode: nextMode === "assets_only" ? "skip" : ("delete" as ReportAssetCleanupSheetMode),
+                  mode: event.target.value as ReportAssetCleanupMode,
                   confirmText: "",
                   error: "",
                   status: "",
-                }));
-              }}
+                }))
+              }
               className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
             >
               {REPORT_CLEANUP_MODES.map((mode) => (
@@ -681,62 +671,51 @@ export default function CleanupPanel({
 
           <div>
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Footprint memory</label>
-            <select
-              value={reportAssetCleanup.leadMode}
-              onChange={(event) =>
-                setReportAssetCleanup((prev) => ({ ...prev, leadMode: event.target.value as ReportAssetCleanupLeadMode, error: "", status: "" }))
-              }
-              className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
-            >
-              {REPORT_LEAD_MODES.map((mode) => (
-                <option key={mode.id} value={mode.id}>
-                  {mode.label}
-                </option>
-              ))}
-            </select>
+            {reportAssetCleanup.mode === "assets_only" ? (
+              <div className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-500">
+                Contact unchanged
+              </div>
+            ) : (
+              <select
+                value={reportAssetCleanup.leadMode}
+                onChange={(event) =>
+                  setReportAssetCleanup((prev) => ({ ...prev, leadMode: event.target.value as ReportAssetCleanupLeadMode, error: "", status: "" }))
+                }
+                className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
+              >
+                {REPORT_LEAD_MODES.map((mode) => (
+                  <option key={mode.id} value={mode.id}>
+                    {mode.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Google Sheet</label>
-            <select
-              value={reportAssetCleanup.sheetMode}
-              onChange={(event) =>
-                setReportAssetCleanup((prev) => ({ ...prev, sheetMode: event.target.value as ReportAssetCleanupSheetMode, error: "", status: "" }))
-              }
-              className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
-            >
-              {REPORT_SHEET_MODES.map((mode) => (
-                <option key={mode.id} value={mode.id}>
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
-        <div className={`rounded-2xl border p-4 text-[12px] font-bold leading-relaxed ${reportAssetCleanup.mode === "hard" ? "bg-red-50 border-red-100 text-red-700" : "bg-blue-50 border-blue-100 text-blue-700"}`}>
+        <div className={`rounded-2xl border p-4 text-[12px] font-bold leading-relaxed ${reportAssetCleanup.mode === "assets_only" ? "bg-blue-50 border-blue-100 text-blue-700" : "bg-red-50 border-red-100 text-red-700"}`}>
           <span className="font-black">{activeReportMode.label}:</span> {activeReportMode.note}
-          {reportAssetCleanup.mode === "hard" && " This is the normal action when a lead/report is no longer useful."}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-[12px] text-gray-600 font-semibold leading-relaxed">
           <span className="font-black text-gray-900">Footprint rule:</span>{" "}
-          Use <span className="font-black">keep footprint</span> for any contacted lead so future automation does not email them again.
-          Use <span className="font-black">no footprint</span> only for test or never-contacted leads; the backend blocks no-footprint delete when outreach history is found.
+          Choose <span className="font-black">Keep Footprint</span> for contacted leads so they are not emailed again later.
+          Choose <span className="font-black">No Footprint</span> only for test or never-contacted leads; the backend blocks it if outreach history exists.
         </div>
 
-        {reportAssetCleanup.mode === "hard" && (
+        {reportAssetCleanup.mode !== "assets_only" && (
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4 space-y-2">
             <label className="block text-[10px] font-black text-red-600 uppercase tracking-widest">Delete confirmation</label>
             <input
               type="text"
               value={reportAssetCleanup.confirmText}
               onChange={(event) => setReportAssetCleanup((prev) => ({ ...prev, confirmText: event.target.value }))}
-              placeholder="Type DELETE_REPORT_ASSETS"
+              placeholder="Type DELETE"
               className="w-full px-4 py-3 rounded-2xl bg-white border border-red-100 text-sm font-black text-red-700 outline-none"
             />
             <p className="text-[11px] font-bold text-red-500">
-              Use this only after preview. This deletes report records and the selected linked data instead of archiving them.
+              Type DELETE after preview. This removes the report, files, Sheet row, and selected contact data.
             </p>
           </div>
         )}
@@ -754,7 +733,7 @@ export default function CleanupPanel({
             type="button"
             disabled={!reportCleanupCanRun}
             onClick={runReportAssetCleanup}
-            className={`px-4 py-3 rounded-2xl text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2 ${reportAssetCleanup.mode === "hard" ? "bg-red-600" : "bg-slate-950"}`}
+            className={`px-4 py-3 rounded-2xl text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2 ${reportAssetCleanup.mode === "assets_only" ? "bg-slate-950" : "bg-red-600"}`}
           >
             <Trash2 size={14} /> {actionLabel}
           </button>
@@ -853,27 +832,19 @@ export default function CleanupPanel({
             </p>
             <h2 className="text-2xl font-black tracking-tighter text-gray-900">Review old no-reply leads</h2>
             <p className="text-sm text-gray-500 font-semibold mt-2">
-              Select old no-reply leads that are safe to delete with footprint memory, skip, or protect. This is separate from secure report cleanup above.
+              Select old leads that are safe to delete with footprint memory, skip, or protect. This is separate from secure report cleanup above.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={isActionDisabled}
-              onClick={() => deleteSelectedCleanupWithMemory("mark")}
-              className="px-4 py-3 rounded-2xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
-            >
-              <Trash2 size={14} /> Delete, Keep Footprint
-            </button>
-            <button
-              type="button"
-              disabled={isActionDisabled}
-              onClick={() => deleteSelectedCleanupWithMemory("delete")}
-              className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
-            >
-              Delete From Sheet Too
-            </button>
+              <button
+                type="button"
+                disabled={isActionDisabled}
+                onClick={deleteSelectedCleanupWithMemory}
+                className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
+              >
+                <Trash2 size={14} /> Delete, Keep Footprint
+              </button>
             <button
               type="button"
               disabled={isActionDisabled}
@@ -908,7 +879,7 @@ export default function CleanupPanel({
         </div>
 
         <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-          Recommended: delete old no-reply leads with footprint memory. Use protect for important contacts or anyone who should not be cleaned automatically.
+          Recommended: delete old no-reply leads with footprint memory after the waiting period. Use protect for important contacts or anyone who should not be cleaned automatically.
         </div>
 
         {(leadCleanup.status || leadCleanup.error) && (

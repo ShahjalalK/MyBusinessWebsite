@@ -518,6 +518,7 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
 
 function isConfirmed(body: AnyRecord, mode: CleanupMode): boolean {
   const confirm = clean(body.confirm || body.confirmation).toUpperCase();
+  if (confirm === "DELETE") return true;
   if (mode === "hard") return confirm === "DELETE_REPORT_ASSETS";
   return confirm === "CLEANUP_REPORT_ASSETS" || confirm === "DELETE_REPORT_ASSETS";
 }
@@ -535,10 +536,16 @@ function parseLeadMode(value: any): LeadCleanupMode {
 }
 
 function parseSheetMode(value: any): SheetCleanupMode {
-  const raw = clean(value || "mark").toLowerCase();
+  const raw = clean(value || "delete").toLowerCase();
   if (["skip", "mark", "clear", "delete"].includes(raw)) return raw as SheetCleanupMode;
-  return "mark";
+  return "delete";
 }
+function sheetCleanupAction(sheetMode: SheetCleanupMode): string {
+  if (sheetMode === "delete") return "delete_sheet_row";
+  if (sheetMode === "clear") return "clear_report_fields";
+  return "mark_cleanup";
+}
+
 function isVercelBlobCleanupConfigured(): boolean {
   return Boolean(clean(process.env.BLOB_READ_WRITE_TOKEN));
 }
@@ -667,12 +674,6 @@ async function deleteSupabaseChatStep(manifest: CleanupManifest): Promise<Cleanu
   }
 }
 
-function sheetCleanupAction(sheetMode: SheetCleanupMode): string {
-  if (sheetMode === "delete") return "delete_sheet_row";
-  if (sheetMode === "clear") return "clear_report_fields";
-  return "mark_cleanup";
-}
-
 async function writeSheetCleanupStep(
   manifest: CleanupManifest,
   sheetMode: SheetCleanupMode,
@@ -753,24 +754,13 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
     return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup was skipped by request." };
   }
 
-  const reason = `report_cleanup_${leadMode}`;
-
   if (!manifest.leadId || !manifest.leadFound) {
-    if (leadMode === "delete" && manifest.emailLower) {
-      await writeContactMemoryForLead(lead, manifest, actor, reason);
-      return {
-        service: "firestore",
-        action: "delete_lead_keep_memory",
-        status: "ok",
-        message: "No linked contact record was found, but a tiny footprint memory was saved from the report email.",
-      };
-    }
-
     return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "No linked contact record found." };
   }
 
   const ref = adminDb.collection("outreach_leads").doc(manifest.leadId);
   const now = admin.firestore.FieldValue.serverTimestamp();
+  const reason = `report_cleanup_${leadMode}`;
 
   try {
     if (leadMode === "delete_no_memory") {
@@ -1390,7 +1380,7 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
 
     const mode = parseMode(url.searchParams.get("mode") || "soft");
     const leadMode = parseLeadMode(url.searchParams.get("leadMode") || "none");
-    const sheetMode = parseSheetMode(url.searchParams.get("sheetMode") || "mark");
+    const sheetMode = parseSheetMode(url.searchParams.get("sheetMode") || "delete");
     const { manifest } = await buildCleanupManifest(token);
 
     return {
@@ -1476,7 +1466,7 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
 
     const mode = parseMode(body.mode || "soft");
     const leadMode = parseLeadMode(body.leadMode || body.lead_mode || "none");
-    const sheetMode = parseSheetMode(body.sheetMode || body.sheet_mode || "mark");
+    const sheetMode = parseSheetMode(body.sheetMode || body.sheet_mode || "delete");
     const dryRun = body.dryRun !== false;
     const actor = cleanEmail(adminUser.email || "admin") || "admin";
     const { manifest, report, lead } = await buildCleanupManifest(token);
@@ -1493,15 +1483,13 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
         sheetMode,
         manifest,
         steps,
-        confirmRequired: mode === "hard" ? "DELETE_REPORT_ASSETS" : "CLEANUP_REPORT_ASSETS",
+        confirmRequired: "DELETE",
       });
     }
 
     if (!isConfirmed(body, mode)) {
       throw new ApiError(
-        mode === "hard"
-          ? "Confirmation required. Send confirm: DELETE_REPORT_ASSETS."
-          : "Confirmation required. Send confirm: CLEANUP_REPORT_ASSETS.",
+        "Confirmation required. Send confirm: DELETE.",
         400,
       );
     }
@@ -1546,15 +1534,13 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
 
     const mode = parseMode(body.mode || "soft");
     const leadMode = parseLeadMode(body.leadMode || body.lead_mode || "none");
-    const sheetMode = parseSheetMode(body.sheetMode || body.sheet_mode || "mark");
+    const sheetMode = parseSheetMode(body.sheetMode || body.sheet_mode || "delete");
     const dryRun = body.dryRun !== false;
     const actor = cleanEmail(adminUser.email || "admin") || "admin";
 
     if (!dryRun && !isConfirmed(body, mode)) {
       throw new ApiError(
-        mode === "hard"
-          ? "Confirmation required. Send confirm: DELETE_REPORT_ASSETS."
-          : "Confirmation required. Send confirm: CLEANUP_REPORT_ASSETS.",
+        "Confirmation required. Send confirm: DELETE.",
         400,
       );
     }
