@@ -1684,7 +1684,9 @@ export default function DashboardPage() {
 
 
   const loadChatInsights = async (force = false) => {
-    if (!force && chatInsights.loadedAt && Date.now() - chatInsights.loadedAt < 60_000) return;
+    // Chat activity can arrive after the tab is already open, so only skip cached loads
+    // when we already have rows. Empty states should be allowed to refresh.
+    if (!force && chatInsights.loadedAt && chatInsights.rows.length > 0 && Date.now() - chatInsights.loadedAt < 60_000) return;
 
     setChatInsights((prev) => ({
       ...prev,
@@ -1703,25 +1705,40 @@ export default function DashboardPage() {
         params.set("search", chatInsights.search.trim());
       }
 
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) {
+        throw new Error("Admin login required. Please login again.");
+      }
+
       const response = await fetch(`/api/trackflow/report-chat?${params.toString()}`, {
         method: "GET",
-        headers: await getAuthHeaders(),
+        headers,
         cache: "no-store",
       });
 
       const data = await readTrackflowJson(response);
-      if (!response.ok || !data.success) {
+      const apiOk = response.ok && (data.success === true || data.ok === true);
+      if (!apiOk) {
         throw new Error(data.message || data.error || "Client chats could not be loaded.");
       }
 
-      const rows = Array.isArray(data.sessions) ? (data.sessions as ReportChatSessionRow[]) : [];
+      const rows = Array.isArray(data.sessions)
+        ? (data.sessions as ReportChatSessionRow[])
+        : Array.isArray(data.rows)
+          ? (data.rows as ReportChatSessionRow[])
+          : [];
 
       setChatInsights((prev) => ({
         ...prev,
         rows,
         loading: false,
         loadedAt: Date.now(),
-        status: rows.length ? `${rows.length} client chat conversation${rows.length === 1 ? "" : "s"} loaded.` : "No client chats found yet.",
+        status:
+          data.loggingConfigured === false
+            ? "Supabase chat logging is not configured for this environment. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+            : rows.length
+              ? `${rows.length} client chat conversation${rows.length === 1 ? "" : "s"} loaded.`
+              : "No client chats found yet. Send a test message from a secure report, then click Refresh.",
         error: "",
       }));
     } catch (error: any) {
@@ -1751,19 +1768,53 @@ export default function DashboardPage() {
         sessionId: session.id,
       });
 
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) {
+        throw new Error("Admin login required. Please login again.");
+      }
+
       const response = await fetch(`/api/trackflow/report-chat?${params.toString()}`, {
         method: "GET",
-        headers: await getAuthHeaders(),
+        headers,
         cache: "no-store",
       });
 
       const data = await readTrackflowJson(response);
-      if (!response.ok || !data.success) {
+      const apiOk = response.ok && (data.success === true || data.ok === true);
+      if (!apiOk) {
         throw new Error(data.message || data.error || "Conversation transcript could not be loaded.");
       }
 
-      const messages = Array.isArray(data.messages) ? (data.messages as ReportChatMessageRow[]) : [];
-      const latestSession = (data.session || session) as ReportChatSessionRow;
+      const apiMessages = Array.isArray(data.messages) ? (data.messages as ReportChatMessageRow[]) : [];
+      const latestSession = {
+        ...session,
+        ...(data.session && typeof data.session === "object" ? (data.session as ReportChatSessionRow) : {}),
+        lastUserQuestion:
+          String((data.session as ReportChatSessionRow | undefined)?.lastUserQuestion || "").trim() ||
+          String(session.lastUserQuestion || "").trim(),
+      } as ReportChatSessionRow;
+
+      const fallbackQuestion = String(latestSession.lastUserQuestion || "").trim();
+      const fallbackCreatedAt =
+        latestSession.lastSeenAt ||
+        latestSession.updatedAt ||
+        latestSession.firstSeenAt ||
+        session.lastSeenAt ||
+        session.updatedAt ||
+        session.firstSeenAt ||
+        "";
+
+      const messages: ReportChatMessageRow[] = apiMessages.length || !fallbackQuestion
+        ? apiMessages
+        : [
+            {
+              sessionId: latestSession.id || session.id,
+              reportToken: latestSession.reportToken || session.reportToken,
+              role: "user",
+              content: fallbackQuestion,
+              createdAt: fallbackCreatedAt,
+            },
+          ];
 
       setChatInsights((prev) => ({
         ...prev,
@@ -1789,9 +1840,14 @@ export default function DashboardPage() {
     }));
 
     try {
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) {
+        throw new Error("Admin login required. Please login again.");
+      }
+
       const response = await fetch("/api/trackflow/report-chat", {
         method: "POST",
-        headers: await getAuthHeaders(),
+        headers,
         cache: "no-store",
         body: JSON.stringify({
           adminAction: "mark_reviewed",
@@ -1801,7 +1857,8 @@ export default function DashboardPage() {
       });
 
       const data = await readTrackflowJson(response);
-      if (!response.ok || !data.success) {
+      const apiOk = response.ok && (data.success === true || data.ok === true);
+      if (!apiOk) {
         throw new Error(data.message || data.error || "Conversation could not be marked as reviewed.");
       }
 
@@ -1830,12 +1887,26 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab !== "chat-insights") return;
-    if (chatInsights.loadedAt || chatInsights.loading) return;
 
-    loadChatInsights(false).catch((error: any) => {
-      console.error("Client chat insight load error:", error);
-    });
-  }, [activeTab, chatInsights.loadedAt, chatInsights.loading]);
+    let cancelled = false;
+
+    const load = () => {
+      if (cancelled) return;
+      loadChatInsights(true).catch((error: any) => {
+        console.error("Client chat insight load error:", error);
+      });
+    };
+
+    load();
+    const timer = window.setInterval(load, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+    // Keep this effect tied only to tab changes. The refresh button and timer handle new messages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
 
 

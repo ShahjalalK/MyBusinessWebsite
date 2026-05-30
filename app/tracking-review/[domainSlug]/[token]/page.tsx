@@ -679,6 +679,164 @@ function ReportViewBeacon({ token }: { token: string }) {
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
+
+function PdfDownloadExperienceScript() {
+  const script = `
+(function () {
+  try {
+    if (window.__trackflowPdfDownloadExperienceReady) return;
+    window.__trackflowPdfDownloadExperienceReady = true;
+
+    function setStatus(message, state) {
+      var status = document.querySelector('[data-trackflow-pdf-status]');
+      if (!status) return;
+
+      var icon = status.querySelector('[data-trackflow-pdf-status-icon]');
+      var text = status.querySelector('[data-trackflow-pdf-status-message]');
+      var currentState = state || 'idle';
+
+      status.hidden = false;
+
+      if (text) text.textContent = message;
+
+      if (currentState === 'loading') {
+        status.className = 'mb-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800';
+        if (icon) icon.textContent = 'Preparing';
+        return;
+      }
+
+      if (currentState === 'success') {
+        status.className = 'mb-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800';
+        if (icon) icon.textContent = 'Download started';
+        return;
+      }
+
+      if (currentState === 'error') {
+        status.className = 'mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700';
+        if (icon) icon.textContent = 'Action needed';
+        return;
+      }
+
+      status.className = 'mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600';
+      if (icon) icon.textContent = 'Ready';
+    }
+
+    function parseFileName(response) {
+      var header = response.headers.get('content-disposition') || '';
+      var utfMatch = header.match(/filename\\*=UTF-8''([^;]+)/i);
+      if (utfMatch && utfMatch[1]) {
+        try {
+          return decodeURIComponent(utfMatch[1].replace(/["']/g, '').trim()) || 'trackflow-audit-report.pdf';
+        } catch (error) {}
+      }
+
+      var normalMatch = header.match(/filename="?([^"]+)"?/i);
+      if (normalMatch && normalMatch[1]) {
+        return normalMatch[1].replace(/["']/g, '').trim() || 'trackflow-audit-report.pdf';
+      }
+
+      return 'trackflow-audit-report.pdf';
+    }
+
+    function setButtonState(button, state, labelText) {
+      var label = button.querySelector('[data-trackflow-pdf-download-label]');
+      var spinner = button.querySelector('[data-trackflow-pdf-download-spinner]');
+      var dot = button.querySelector('[data-trackflow-pdf-download-dot]');
+
+      if (label) label.textContent = labelText || button.getAttribute('data-default-label') || 'Download PDF';
+
+      if (state === 'loading') {
+        button.setAttribute('aria-busy', 'true');
+        button.setAttribute('data-download-state', 'loading');
+        button.classList.add('pointer-events-none', 'opacity-80');
+        if (spinner) spinner.hidden = false;
+        if (dot) dot.hidden = true;
+        return;
+      }
+
+      button.removeAttribute('aria-busy');
+      button.setAttribute('data-download-state', state || 'idle');
+      button.classList.remove('pointer-events-none', 'opacity-80');
+      if (spinner) spinner.hidden = true;
+      if (dot) dot.hidden = false;
+    }
+
+    async function downloadPdf(button, href) {
+      var separator = href.indexOf('?') >= 0 ? '&' : '?';
+      var url = href + separator + 'downloadRequest=' + Date.now();
+
+      setButtonState(button, 'loading', 'Preparing secure PDF...');
+      setStatus('Preparing your secure PDF. Please wait — the download will start automatically on this page.', 'loading');
+
+      try {
+        var response = await fetch(url, {
+          method: 'GET',
+          cache: 'no-store',
+          credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+          throw new Error('PDF download failed with HTTP ' + response.status);
+        }
+
+        var blob = await response.blob();
+
+        if (!blob || !blob.size) {
+          throw new Error('The downloaded PDF file was empty.');
+        }
+
+        var fileName = parseFileName(response);
+        var objectUrl = window.URL.createObjectURL(blob);
+        var link = document.createElement('a');
+
+        link.href = objectUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+
+        window.setTimeout(function () {
+          try {
+            window.URL.revokeObjectURL(objectUrl);
+            link.remove();
+          } catch (error) {}
+        }, 2000);
+
+        setStatus('Download started. Please check your browser downloads bar or download folder.', 'success');
+        setButtonState(button, 'success', 'Download started');
+
+        window.setTimeout(function () {
+          setButtonState(button, 'idle', button.getAttribute('data-default-label') || 'Download PDF');
+          setStatus('Ready to download again. You will stay on this secure review page.', 'idle');
+        }, 4500);
+      } catch (error) {
+        setStatus('The PDF could not start downloading automatically. Please use Open PDF, or try Download PDF again.', 'error');
+        setButtonState(button, 'error', 'Try download again');
+      }
+    }
+
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) return;
+
+      var button = target.closest('[data-trackflow-pdf-download]');
+      if (!button) return;
+
+      var href = button.getAttribute('href');
+      if (!href) return;
+
+      event.preventDefault();
+
+      if (button.getAttribute('data-download-state') === 'loading') return;
+
+      downloadPdf(button, href);
+    }, true);
+  } catch (error) {}
+})();`;
+
+  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+}
+
 function LinkButton({
   href,
   children,
@@ -1141,6 +1299,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <ReportViewBeacon token={token} />
+      <PdfDownloadExperienceScript />
       <ReportNavbar />
 
       <section className="relative overflow-hidden border-b border-slate-200 bg-white pt-24">
@@ -1332,51 +1491,124 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </SectionCard>
 
-          <section id="pdf-report" className="scroll-mt-24 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 p-6">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
-                Full PDF report
-              </p>
+          <section id="pdf-report" className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
+            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
+                    Full PDF report
+                  </p>
 
-              <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">
-                Review the full audit document
-              </h2>
+                  <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">
+                    Review the full audit document
+                  </h2>
 
-              <p className="mt-3 text-sm font-semibold leading-7 text-slate-500">
-                Open or download the full audit document below. The PDF is streamed securely through TrackFlow Pro so the review can stay private and easy to access.
-              </p>
+                  <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
+                    Preview the audit document directly on this page, or download it securely without leaving the review.
+                  </p>
+                </div>
 
-              {expiresLabel ? (
-                <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                  Available until {expiresLabel}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="bg-slate-100 p-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:hidden">
-                <p className="text-sm font-black text-slate-950">PDF preview is available</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  For the best mobile experience, open the audit document in a new tab or download it directly.
-                </p>
+                {expiresLabel ? (
+                  <p className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm">
+                    Available until {expiresLabel}
+                  </p>
+                ) : null}
               </div>
 
-              <iframe
-                title="TrackFlow Pro audit PDF preview"
-                src={previewHref}
-                loading="lazy"
-                className="hidden h-[520px] w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[560px]"
-              />
+              <div className="mt-5 grid gap-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-3">
+                <span className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-blue-700 shadow-sm">
+                  Secure PDF stream
+                </span>
+                <span className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-emerald-700 shadow-sm">
+                  Download stays on page
+                </span>
+                <span className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  Account access not used
+                </span>
+              </div>
             </div>
 
-            <div className="grid gap-3 border-t border-slate-200 p-5 sm:grid-cols-2">
-              <LinkButton href={previewHref} variant="dark" target="_blank" rel="noopener noreferrer">
-                Open PDF
-              </LinkButton>
+            <div className="bg-slate-100 p-3 sm:p-4">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                      Embedded PDF preview
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-slate-900">
+                      Scroll inside the preview to read the full audit.
+                    </p>
+                  </div>
 
-              <LinkButton href={downloadHref} variant="secondary" target="_blank" rel="noopener noreferrer">
-                Download PDF
-              </LinkButton>
+                  <a
+                    href={previewHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-blue-600"
+                  >
+                    Open full screen
+                  </a>
+                </div>
+
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 md:hidden">
+                  <p className="text-sm font-black text-slate-950">PDF preview is ready</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                    Mobile browsers display PDFs differently. Use Open full screen or Download PDF for the best reading experience.
+                  </p>
+                </div>
+
+                <iframe
+                  title="TrackFlow Pro audit PDF preview"
+                  src={previewHref}
+                  loading="lazy"
+                  className="hidden h-[640px] w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[720px]"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 bg-white p-5">
+              <div
+                data-trackflow-pdf-status
+                role="status"
+                aria-live="polite"
+                className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600"
+              >
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span data-trackflow-pdf-status-icon className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    Ready
+                  </span>
+                  <span data-trackflow-pdf-status-message className="text-sm font-bold leading-6">
+                    Click Download PDF — the file will prepare here without leaving this secure page.
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <LinkButton href={previewHref} variant="dark" target="_blank" rel="noopener noreferrer">
+                  Open PDF
+                </LinkButton>
+
+                <a
+                  href={downloadHref}
+                  download
+                  data-trackflow-pdf-download="true"
+                  data-download-state="idle"
+                  data-default-label="Download PDF"
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/15 sm:w-auto"
+                >
+                  <span
+                    data-trackflow-pdf-download-spinner
+                    hidden
+                    className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-blue-100 border-t-blue-700"
+                  />
+                  <span data-trackflow-pdf-download-dot className="mr-2 h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span data-trackflow-pdf-download-label>Download PDF</span>
+                </a>
+              </div>
+
+              <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
+                Download starts in the background, so the visitor stays on this secure review page.
+              </p>
             </div>
           </section>
         </aside>

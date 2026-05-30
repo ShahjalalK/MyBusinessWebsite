@@ -84,19 +84,162 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function getOrCreateSessionId(token: string): string {
-  const key = `trackflow_report_chat_session_${token || "unknown"}`;
+function normalizeSessionToken(value: string): string {
+  return (
+    String(value || "unknown")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 96) || "unknown"
+  );
+}
 
-  try {
-    const existing = window.localStorage.getItem(key);
-    if (existing && isUuid(existing)) return existing;
+function getSessionStorageKey(token: string): string {
+  return `trackflow_report_chat_session_${normalizeSessionToken(token)}`;
+}
 
-    const next = createUuid();
-    window.localStorage.setItem(key, next);
-    return next;
-  } catch {
-    return createUuid();
+function getSessionCookieName(token: string): string {
+  return `tfp_chat_session_${normalizeSessionToken(token).slice(0, 64)}`;
+}
+
+function isBrowserAvailable(): boolean {
+  return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
+function hashToUuid(input: string): string {
+  // Small deterministic browser-safe hash fallback.
+  // Used only when storage/cookie is unavailable or not persisted.
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  const text = String(input || "trackflow-session");
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text.charCodeAt(index);
+    h1 ^= char;
+    h1 = Math.imul(h1, 16777619);
+    h2 ^= char + index;
+    h2 = Math.imul(h2, 2246822519);
   }
+
+  const hex = [h1, h2, h1 ^ h2, Math.imul(h1 + h2, 3266489917)]
+    .map((value) => (value >>> 0).toString(16).padStart(8, "0"))
+    .join("")
+    .slice(0, 32);
+
+  const variantNibble = ((parseInt(hex[16] || "8", 16) & 0x3) | 0x8).toString(16);
+
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    `4${hex.slice(13, 16)}`,
+    `${variantNibble}${hex.slice(17, 20)}`,
+    hex.slice(20, 32),
+  ].join("-");
+}
+
+function getDeterministicBrowserSessionId(token: string): string {
+  if (!isBrowserAvailable()) return createUuid();
+
+  const fingerprint = [
+    normalizeSessionToken(token),
+    window.location.origin,
+    navigator.userAgent || "",
+    navigator.language || "",
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+    String(window.screen?.width || ""),
+    String(window.screen?.height || ""),
+    String(window.screen?.colorDepth || ""),
+    String(window.devicePixelRatio || ""),
+  ].join("|");
+
+  return hashToUuid(fingerprint);
+}
+
+function readCookieValue(name: string): string {
+  if (!isBrowserAvailable()) return "";
+
+  const encodedName = `${encodeURIComponent(name)}=`;
+  const parts = String(document.cookie || "").split(";");
+
+  for (const part of parts) {
+    const item = part.trim();
+    if (item.startsWith(encodedName)) {
+      return decodeURIComponent(item.slice(encodedName.length));
+    }
+  }
+
+  return "";
+}
+
+function writeCookieValue(name: string, value: string) {
+  if (!isBrowserAvailable()) return;
+
+  const maxAgeSeconds = 60 * 60 * 24 * 180;
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax`;
+}
+
+function readStorageValue(storage: Storage | undefined, key: string): string {
+  try {
+    const value = storage?.getItem(key) || "";
+    return value && isUuid(value) ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStorageValue(storage: Storage | undefined, key: string, value: string) {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // Storage can be blocked in some browser modes.
+  }
+}
+
+function readStoredSessionId(token: string): string {
+  if (!isBrowserAvailable()) return "";
+
+  const key = getSessionStorageKey(token);
+  const localValue = readStorageValue(window.localStorage, key);
+  if (localValue) return localValue;
+
+  const sessionValue = readStorageValue(window.sessionStorage, key);
+  if (sessionValue) return sessionValue;
+
+  const cookieValue = readCookieValue(getSessionCookieName(token));
+  return cookieValue && isUuid(cookieValue) ? cookieValue : "";
+}
+
+function writeStoredSessionId(token: string, sessionId: string) {
+  if (!isBrowserAvailable() || !isUuid(sessionId)) return;
+
+  const key = getSessionStorageKey(token);
+
+  writeStorageValue(window.localStorage, key, sessionId);
+  writeStorageValue(window.sessionStorage, key, sessionId);
+  writeCookieValue(getSessionCookieName(token), sessionId);
+}
+
+function getOrCreateSessionId(token: string, preferredSessionId = ""): string {
+  if (preferredSessionId && isUuid(preferredSessionId)) {
+    writeStoredSessionId(token, preferredSessionId);
+    return preferredSessionId;
+  }
+
+  const existing = readStoredSessionId(token);
+  if (existing) {
+    writeStoredSessionId(token, existing);
+    return existing;
+  }
+
+  const randomSessionId = createUuid();
+  writeStoredSessionId(token, randomSessionId);
+
+  const confirmedSessionId = readStoredSessionId(token);
+  if (confirmedSessionId) return confirmedSessionId;
+
+  const fallbackSessionId = getDeterministicBrowserSessionId(token);
+  writeStoredSessionId(token, fallbackSessionId);
+
+  return fallbackSessionId;
 }
 
 function buildGreeting(): ChatMessage {
@@ -343,6 +486,8 @@ export default function ReportChatAssistant({
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const sessionIdRef = useRef("");
+  const sessionTokenRef = useRef("");
 
   const storageKey = useMemo(
     () => (token && sessionId ? getMessagesStorageKey(token, sessionId) : ""),
@@ -399,7 +544,14 @@ export default function ReportChatAssistant({
 
   useEffect(() => {
     if (!token) return;
-    setSessionId(getOrCreateSessionId(token));
+
+    const tokenKey = normalizeSessionToken(token);
+    const preferredSessionId = sessionTokenRef.current === tokenKey ? sessionIdRef.current : "";
+    const stableSessionId = getOrCreateSessionId(token, preferredSessionId);
+
+    sessionTokenRef.current = tokenKey;
+    sessionIdRef.current = stableSessionId;
+    setSessionId((current) => (current === stableSessionId ? current : stableSessionId));
   }, [token]);
 
   useEffect(() => {
@@ -581,8 +733,16 @@ export default function ReportChatAssistant({
     const cleanQuestion = String(nextQuestion ?? question).trim();
     if (!cleanQuestion || isSending || isDisabled) return;
 
-    const activeSessionId = sessionId || getOrCreateSessionId(token);
-    if (!sessionId) setSessionId(activeSessionId);
+    const tokenKey = normalizeSessionToken(token);
+    const activeSessionId = getOrCreateSessionId(
+      token,
+      sessionTokenRef.current === tokenKey ? sessionIdRef.current || sessionId : "",
+    );
+
+    sessionTokenRef.current = tokenKey;
+    sessionIdRef.current = activeSessionId;
+
+    if (sessionId !== activeSessionId) setSessionId(activeSessionId);
 
     const userMessage: ChatMessage = {
       id: createId("user"),

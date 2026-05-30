@@ -42,6 +42,9 @@ export type StoredReportChatSession = {
   lastAssistantAnswerSnippet?: string;
   reviewedAt?: string;
   reportUrl?: string;
+  pdfDownloadedAt?: string;
+  lastPdfDownloadedAt?: string;
+  pdfDownloadCount?: number;
 };
 
 export type ReportChatVisitInfo = {
@@ -58,6 +61,18 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABAS
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const CHAT_SESSIONS_TABLE = process.env.TRACKFLOW_CHAT_SESSIONS_TABLE || "trackflow_report_chat_sessions";
 const CHAT_MESSAGES_TABLE = process.env.TRACKFLOW_CHAT_MESSAGES_TABLE || "trackflow_report_chat_messages";
+
+const CHAT_DEBUG = process.env.TRACKFLOW_CHAT_DEBUG === "1";
+
+function debugLog(message: string, extra: Record<string, unknown> = {}) {
+  if (!CHAT_DEBUG) return;
+  console.log(`[trackflow-chat] ${message}`, extra);
+}
+
+function debugWarn(message: string, extra: Record<string, unknown> = {}) {
+  if (!CHAT_DEBUG) return;
+  console.warn(`[trackflow-chat] ${message}`, extra);
+}
 
 function isConfigured(): boolean {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
@@ -87,7 +102,9 @@ function cleanNumber(value: unknown, fallback = 0): number {
 }
 
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim(),
+  );
 }
 
 function safeTableName(value: string): string {
@@ -110,10 +127,23 @@ async function postRows({
   rows: AnyRecord | AnyRecord[];
   upsert?: boolean;
 }): Promise<boolean> {
-  if (!isConfigured()) return false;
+  const rowCount = Array.isArray(rows) ? rows.length : 1;
+
+  if (!isConfigured()) {
+    debugWarn("Supabase POST skipped because env is not configured.", {
+      table,
+      rowCount,
+      hasSupabaseUrl: Boolean(SUPABASE_URL),
+      hasServiceRoleKey: Boolean(SUPABASE_SERVICE_ROLE_KEY),
+    });
+    return false;
+  }
 
   const cleanTable = safeTableName(table);
-  if (!cleanTable) return false;
+  if (!cleanTable) {
+    debugWarn("Supabase POST skipped because table name is invalid.", { table });
+    return false;
+  }
 
   const url = `${getBaseUrl()}/rest/v1/${cleanTable}${upsert ? "?on_conflict=id" : ""}`;
 
@@ -129,18 +159,53 @@ async function postRows({
       body: JSON.stringify(rows),
     });
 
-    return response.ok;
-  } catch {
-    // Logging is optional. Never break the client-facing secure report chatbot.
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      debugWarn("Supabase POST failed.", {
+        table: cleanTable,
+        status: response.status,
+        statusText: response.statusText,
+        upsert,
+        rowCount,
+        error: text.slice(0, 800),
+      });
+      return false;
+    }
+
+    debugLog("Supabase POST ok.", {
+      table: cleanTable,
+      upsert,
+      rowCount,
+      status: response.status,
+    });
+
+    return true;
+  } catch (error: any) {
+    debugWarn("Supabase POST crashed.", {
+      table: cleanTable,
+      upsert,
+      rowCount,
+      error: String(error?.message || error || "Unknown error"),
+    });
     return false;
   }
 }
 
 async function getRows<T>({ table, query }: { table: string; query: string }): Promise<T[]> {
-  if (!isConfigured()) return [];
+  if (!isConfigured()) {
+    debugWarn("Supabase GET skipped because env is not configured.", {
+      table,
+      hasSupabaseUrl: Boolean(SUPABASE_URL),
+      hasServiceRoleKey: Boolean(SUPABASE_SERVICE_ROLE_KEY),
+    });
+    return [];
+  }
 
   const cleanTable = safeTableName(table);
-  if (!cleanTable) return [];
+  if (!cleanTable) {
+    debugWarn("Supabase GET skipped because table name is invalid.", { table });
+    return [];
+  }
 
   const url = `${getBaseUrl()}/rest/v1/${cleanTable}${query.startsWith("?") ? query : `?${query}`}`;
 
@@ -155,11 +220,34 @@ async function getRows<T>({ table, query }: { table: string; query: string }): P
       },
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      debugWarn("Supabase GET failed.", {
+        table: cleanTable,
+        status: response.status,
+        statusText: response.statusText,
+        query,
+        error: text.slice(0, 800),
+      });
+      return [];
+    }
 
     const json = await response.json().catch(() => []);
-    return Array.isArray(json) ? (json as T[]) : [];
-  } catch {
+    const rows = Array.isArray(json) ? (json as T[]) : [];
+
+    debugLog("Supabase GET ok.", {
+      table: cleanTable,
+      query,
+      rows: rows.length,
+    });
+
+    return rows;
+  } catch (error: any) {
+    debugWarn("Supabase GET crashed.", {
+      table: cleanTable,
+      query,
+      error: String(error?.message || error || "Unknown error"),
+    });
     return [];
   }
 }
@@ -364,7 +452,6 @@ export async function logReportChatSession(input: {
 
   if (savedRich) return;
 
-  // Backward-compatible fallback for older setup SQL with only id/report_token/domain/updated_at.
   await postRows({
     table: CHAT_SESSIONS_TABLE,
     upsert: true,
@@ -396,7 +483,6 @@ export async function logReportChatMessages(input: {
 
   if (!reportToken) return;
 
-  // Match the base messages table: session_id, report_token, role, content, source, quota_status, created_at.
   await postRows({
     table: CHAT_MESSAGES_TABLE,
     rows: [
@@ -488,7 +574,65 @@ export async function loadReportChatMessages(input: {
   return messages;
 }
 
-function normalizeSessionRow(row: {
+
+export async function loadReportChatQuestions(input: {
+  reportToken: string;
+  sessionId?: string;
+  limit?: number;
+}): Promise<StoredReportChatMessage[]> {
+  const reportToken = cleanId(input.reportToken);
+  const sessionId = cleanId(input.sessionId);
+  const limit = Math.max(1, Math.min(100, Number(input.limit || 60)));
+
+  if (!reportToken) return [];
+
+  const queryParts = [
+    "select=session_id,report_token,role,content,source,quota_status,created_at",
+    `report_token=eq.${encodeURIComponent(reportToken)}`,
+    "role=eq.user",
+    "order=created_at.asc",
+    `limit=${limit}`,
+  ];
+
+  if (sessionId) {
+    queryParts.splice(2, 0, `session_id=eq.${encodeURIComponent(sessionId)}`);
+  }
+
+  const rows = await getRows<{
+    session_id?: string;
+    report_token?: string;
+    role?: string;
+    content?: string;
+    source?: string;
+    quota_status?: string;
+    created_at?: string;
+  }>({
+    table: CHAT_MESSAGES_TABLE,
+    query: queryParts.join("&"),
+  });
+
+  const messages: StoredReportChatMessage[] = [];
+
+  for (const row of rows) {
+    const content = cleanText(row.content, 5000);
+    if (!content) continue;
+
+    messages.push({
+      sessionId: cleanId(row.session_id || sessionId),
+      reportToken: cleanId(row.report_token || reportToken),
+      role: "user",
+      content,
+      source: cleanText(row.source, 80),
+      quotaStatus: cleanText(row.quota_status, 80),
+      createdAt: cleanText(row.created_at, 80),
+    });
+  }
+
+  return messages;
+}
+
+
+type SupabaseSessionRow = {
   id?: string;
   report_token?: string;
   domain?: string;
@@ -509,7 +653,12 @@ function normalizeSessionRow(row: {
   last_assistant_answer_snippet?: string;
   reviewed_at?: string;
   report_url?: string;
-}): StoredReportChatSession | null {
+  pdf_downloaded_at?: string;
+  last_pdf_downloaded_at?: string;
+  pdf_download_count?: number | string;
+};
+
+function normalizeSessionRow(row: SupabaseSessionRow): StoredReportChatSession | null {
   const id = cleanId(row.id);
   const token = cleanId(row.report_token);
 
@@ -536,10 +685,13 @@ function normalizeSessionRow(row: {
     lastAssistantAnswerSnippet: cleanText(row.last_assistant_answer_snippet, 900),
     reviewedAt: cleanText(row.reviewed_at, 80),
     reportUrl: cleanText(row.report_url, 500),
+    pdfDownloadedAt: cleanText(row.pdf_downloaded_at, 80),
+    lastPdfDownloadedAt: cleanText(row.last_pdf_downloaded_at, 80),
+    pdfDownloadCount: cleanNumber(row.pdf_download_count, 0),
   };
 }
 
-export async function listReportChatSessions(input: {
+async function listReportChatSessionsFromMessages(input: {
   reportToken?: string;
   limit?: number;
   search?: string;
@@ -548,60 +700,103 @@ export async function listReportChatSessions(input: {
   const limit = Math.max(1, Math.min(250, Number(input.limit || 100)));
 
   const queryParts = [
-    "select=id,report_token,domain,domain_slug,company_name,country_code,country_name,region,city,device_type,browser,os,first_seen_at,last_seen_at,updated_at,message_count,last_user_question,last_assistant_answer_snippet,reviewed_at,report_url",
-    "order=updated_at.desc",
-    `limit=${limit}`,
+    "select=session_id,report_token,role,content,created_at",
+    "order=created_at.desc",
+    `limit=${Math.min(limit * 8, 1000)}`,
   ];
 
   if (reportToken) {
     queryParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
   }
 
-  let rows = await getRows<{
-    id?: string;
+  const rows = await getRows<{
+    session_id?: string;
     report_token?: string;
-    domain?: string;
-    domain_slug?: string;
-    company_name?: string;
-    country_code?: string;
-    country_name?: string;
-    region?: string;
-    city?: string;
-    device_type?: string;
-    browser?: string;
-    os?: string;
-    first_seen_at?: string;
-    last_seen_at?: string;
-    updated_at?: string;
-    message_count?: number | string;
-    last_user_question?: string;
-    last_assistant_answer_snippet?: string;
-    reviewed_at?: string;
-    report_url?: string;
+    role?: string;
+    content?: string;
+    created_at?: string;
   }>({
-    table: CHAT_SESSIONS_TABLE,
+    table: CHAT_MESSAGES_TABLE,
     query: queryParts.join("&"),
   });
 
-  if (!rows.length) {
-    const fallbackParts = [
-      "select=id,report_token,domain,updated_at",
-      "order=updated_at.desc",
-      `limit=${limit}`,
-    ];
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+      reportToken: string;
+      firstSeenAt: string;
+      lastSeenAt: string;
+      updatedAt: string;
+      messageCount: number;
+      lastUserQuestion: string;
+      lastAssistantAnswerSnippet: string;
+    }
+  >();
 
-    if (reportToken) {
-      fallbackParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
+  for (const row of rows) {
+    const id = cleanId(row.session_id);
+    const token = cleanId(row.report_token);
+    if (!id || !token) continue;
+
+    const key = `${token}:${id}`;
+    const createdAt = cleanText(row.created_at, 80) || new Date().toISOString();
+    const role = String(row.role || "");
+    const content = cleanText(row.content, role === "assistant" ? 900 : 700);
+
+    const current =
+      grouped.get(key) ||
+      {
+        id,
+        reportToken: token,
+        firstSeenAt: createdAt,
+        lastSeenAt: createdAt,
+        updatedAt: createdAt,
+        messageCount: 0,
+        lastUserQuestion: "",
+        lastAssistantAnswerSnippet: "",
+      };
+
+    current.messageCount += 1;
+
+    if (!current.firstSeenAt || createdAt < current.firstSeenAt) {
+      current.firstSeenAt = createdAt;
     }
 
-    rows = await getRows({
-      table: CHAT_SESSIONS_TABLE,
-      query: fallbackParts.join("&"),
-    });
+    if (!current.lastSeenAt || createdAt > current.lastSeenAt) {
+      current.lastSeenAt = createdAt;
+      current.updatedAt = createdAt;
+    }
+
+    if (role === "user" && content && !current.lastUserQuestion) {
+      current.lastUserQuestion = content;
+    }
+
+    if (role === "assistant" && content && !current.lastAssistantAnswerSnippet) {
+      current.lastAssistantAnswerSnippet = content;
+    }
+
+    grouped.set(key, current);
   }
 
   const search = cleanText(input.search, 120).toLowerCase();
-  const sessions = rows.map(normalizeSessionRow).filter((item): item is StoredReportChatSession => Boolean(item));
+
+  const sessions = Array.from(grouped.values())
+    .map((item): StoredReportChatSession => ({
+      id: item.id,
+      reportToken: item.reportToken,
+      firstSeenAt: item.firstSeenAt,
+      lastSeenAt: item.lastSeenAt,
+      updatedAt: item.updatedAt,
+      messageCount: item.messageCount,
+      lastUserQuestion: item.lastUserQuestion,
+      lastAssistantAnswerSnippet: item.lastAssistantAnswerSnippet,
+      deviceType: "Unknown",
+      browser: "Unknown",
+      os: "Unknown",
+    }))
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))
+    .slice(0, limit);
 
   if (!search) return sessions;
 
@@ -617,12 +812,162 @@ export async function listReportChatSessions(input: {
       session.browser,
       session.os,
       session.lastUserQuestion,
+      session.lastAssistantAnswerSnippet,
     ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
 
     return haystack.includes(search);
+  });
+}
+
+export async function listReportChatSessions(input: {
+  reportToken?: string;
+  limit?: number;
+  search?: string;
+} = {}): Promise<StoredReportChatSession[]> {
+  const reportToken = cleanId(input.reportToken);
+  const limit = Math.max(1, Math.min(250, Number(input.limit || 100)));
+
+  const queryParts = [
+    "select=id,report_token,domain,domain_slug,company_name,country_code,country_name,region,city,device_type,browser,os,first_seen_at,last_seen_at,updated_at,message_count,last_user_question,last_assistant_answer_snippet,reviewed_at,report_url,pdf_downloaded_at,last_pdf_downloaded_at,pdf_download_count",
+    "order=updated_at.desc",
+    `limit=${limit}`,
+  ];
+
+  if (reportToken) {
+    queryParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
+  }
+
+  let rows = await getRows<SupabaseSessionRow>({
+    table: CHAT_SESSIONS_TABLE,
+    query: queryParts.join("&"),
+  });
+
+  if (!rows.length) {
+    const fallbackParts = [
+      "select=id,report_token,domain,updated_at",
+      "order=updated_at.desc",
+      `limit=${limit}`,
+    ];
+
+    if (reportToken) {
+      fallbackParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
+    }
+
+    rows = await getRows<SupabaseSessionRow>({
+      table: CHAT_SESSIONS_TABLE,
+      query: fallbackParts.join("&"),
+    });
+  }
+
+  const search = cleanText(input.search, 120).toLowerCase();
+  const sessions = rows.map(normalizeSessionRow).filter((item): item is StoredReportChatSession => Boolean(item));
+
+  const filteredSessions = !search
+    ? sessions
+    : sessions.filter((session) => {
+        const haystack = [
+          session.reportToken,
+          session.domain,
+          session.domainSlug,
+          session.companyName,
+          session.countryCode,
+          session.countryName,
+          session.deviceType,
+          session.browser,
+          session.os,
+          session.lastUserQuestion,
+          session.lastAssistantAnswerSnippet,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return haystack.includes(search);
+      });
+
+  if (filteredSessions.length) return filteredSessions;
+
+  return listReportChatSessionsFromMessages({
+    reportToken: reportToken || undefined,
+    search,
+    limit,
+  });
+}
+
+export async function markReportPdfDownloaded(input: {
+  reportToken: string;
+  domainSlug?: string;
+  domain?: string;
+  companyName?: string;
+  reportUrl?: string;
+}): Promise<void> {
+  const reportToken = cleanId(input.reportToken);
+  const now = new Date().toISOString();
+
+  if (!reportToken) return;
+
+  const existingRows = await getRows<{
+    id?: string;
+    report_token?: string;
+    pdf_downloaded_at?: string;
+    pdf_download_count?: number | string;
+  }>({
+    table: CHAT_SESSIONS_TABLE,
+    query: [
+      "select=id,report_token,pdf_downloaded_at,pdf_download_count",
+      `report_token=eq.${encodeURIComponent(reportToken)}`,
+      "limit=50",
+    ].join("&"),
+  });
+
+  const rows: AnyRecord[] = existingRows.length
+    ? existingRows.reduce<AnyRecord[]>((output, row) => {
+        const id = cleanId(row.id);
+        if (!id) return output;
+
+        output.push({
+          id,
+          report_token: reportToken,
+          domain_slug: cleanText(input.domainSlug, 180),
+          domain: cleanText(input.domain, 180),
+          company_name: cleanText(input.companyName, 180),
+          report_url: cleanText(input.reportUrl, 500),
+          pdf_downloaded_at: cleanText(row.pdf_downloaded_at, 80) || now,
+          last_pdf_downloaded_at: now,
+          pdf_download_count: cleanNumber(row.pdf_download_count, 0) + 1,
+          updated_at: now,
+        });
+
+        return output;
+      }, [])
+    : [
+        {
+          id: `pdf_${reportToken}`.slice(0, 96),
+          report_token: reportToken,
+          domain_slug: cleanText(input.domainSlug, 180),
+          domain: cleanText(input.domain, 180),
+          company_name: cleanText(input.companyName, 180),
+          report_url: cleanText(input.reportUrl, 500),
+          pdf_downloaded_at: now,
+          last_pdf_downloaded_at: now,
+          pdf_download_count: 1,
+          first_seen_at: now,
+          last_seen_at: now,
+          updated_at: now,
+          message_count: 0,
+          device_type: "Unknown",
+          browser: "Unknown",
+          os: "Unknown",
+        },
+      ];
+
+  await postRows({
+    table: CHAT_SESSIONS_TABLE,
+    upsert: true,
+    rows,
   });
 }
 

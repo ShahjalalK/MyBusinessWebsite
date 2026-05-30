@@ -2,12 +2,17 @@
 
 // ============================================================
 // FILE: ChatInsightsPanel.tsx
-// Purpose: Operator-friendly client chat insight tab for admin dashboard.
+// Purpose: Smart operator-friendly client chat insight tab.
+// Notes:
+// - Groups visitors by report/website so busy dashboards stay readable.
+// - Shows client/user questions only; assistant answers stay hidden.
 // ============================================================
 
 import React, { useMemo } from "react";
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   ExternalLink,
   Globe2,
@@ -18,7 +23,7 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
-import type { ChatInsightsState, ReportChatSessionRow } from "./types";
+import type { ChatInsightsState, ReportChatMessageRow, ReportChatSessionRow } from "./types";
 import { formatDate } from "./utils";
 
 type ChatInsightsPanelProps = {
@@ -27,6 +32,23 @@ type ChatInsightsPanelProps = {
   loadChatInsights: (force?: boolean) => Promise<void>;
   openChatInsightSession: (session: ReportChatSessionRow) => Promise<void>;
   markChatSessionReviewed: (session: ReportChatSessionRow) => Promise<void>;
+};
+
+type ChatInsightFilter = "attention" | "all" | "pdf" | "reviewed";
+type IntentLevel = "High" | "Medium" | "Low";
+
+type ChatInsightGroup = {
+  key: string;
+  label: string;
+  subtitle: string;
+  sessions: ReportChatSessionRow[];
+  visitorCount: number;
+  totalQuestions: number;
+  pdfDownloads: number;
+  needsReview: number;
+  latestActive: string;
+  latestQuestion: string;
+  intent: IntentLevel;
 };
 
 function safeText(value: unknown, fallback = "Unknown") {
@@ -46,19 +68,129 @@ function getClientLabel(session: ReportChatSessionRow) {
   return session.companyName || session.domain || session.domainSlug || "Private report visitor";
 }
 
+function getReportKey(session: ReportChatSessionRow) {
+  return session.reportToken || session.domainSlug || session.domain || session.id;
+}
+
+function getReportSubtitle(session: ReportChatSessionRow) {
+  return session.domain || session.domainSlug || session.reportToken || "Secure report";
+}
+
+function getTimeValue(value?: string) {
+  const time = Date.parse(String(value || ""));
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getPdfDownloadCount(session: ReportChatSessionRow) {
+  return Math.max(0, Number(session.pdfDownloadCount || 0));
+}
+
+function hasPdfDownload(session: ReportChatSessionRow) {
+  return Boolean(session.lastPdfDownloadedAt || session.pdfDownloadedAt || getPdfDownloadCount(session) > 0);
+}
+
+function getQuestionCount(session: ReportChatSessionRow) {
+  const rawCount = Math.max(0, Number(session.messageCount || 0));
+  const estimatedQuestions = rawCount > 1 ? Math.ceil(rawCount / 2) : rawCount;
+  const hasQuestion = Boolean(String(session.lastUserQuestion || "").trim());
+  return Math.max(estimatedQuestions, hasQuestion ? 1 : 0);
+}
+
 function getQuestionTopic(question?: string) {
   const text = String(question || "").toLowerCase();
 
   if (/\b(google ads|ads reporting|conversion action|diagnostic)\b/.test(text)) return "Google Ads";
   if (/\bga4|google analytics|debugview\b/.test(text)) return "GA4";
   if (/\bgtm|tag manager|preview\b/.test(text)) return "GTM";
-  if (/\bphone|call|call tracking|click[-\s]?to[-\s]?call\b/.test(text)) return "Phone calls";
-  if (/\bform|lead|enquiry|inquiry|submit\b/.test(text)) return "Lead form";
-  if (/\bbooking|appointment|schedule|reservation\b/.test(text)) return "Booking";
-  if (/\bserver|crm|offline|capi\b/.test(text)) return "Server-side";
-  if (/\bmeta|facebook|pixel\b/.test(text)) return "Meta Pixel";
+  if (/\b(phone|call|call tracking|click[-\s]?to[-\s]?call)\b/.test(text)) return "Phone calls";
+  if (/\b(form|lead|enquiry|inquiry|submit)\b/.test(text)) return "Lead form";
+  if (/\b(booking|appointment|schedule|reservation)\b/.test(text)) return "Booking";
+  if (/\b(server|crm|offline|capi)\b/.test(text)) return "Server-side";
+  if (/\b(meta|facebook|pixel)\b/.test(text)) return "Meta Pixel";
 
   return "General review";
+}
+
+function getSessionIntent(session: ReportChatSessionRow): IntentLevel {
+  const question = String(session.lastUserQuestion || "").toLowerCase();
+  let score = 0;
+
+  if (String(session.lastUserQuestion || "").trim()) score += 1;
+  if (getQuestionCount(session) >= 2) score += 2;
+  if (hasPdfDownload(session)) score += 2;
+  if (!session.reviewedAt) score += 1;
+
+  if (/\b(cost|price|pricing|quote|proposal|fix|setup|install|access|call|meeting|book|hire|next step|how soon)\b/.test(question)) {
+    score += 3;
+  }
+
+  if (score >= 5) return "High";
+  if (score >= 2) return "Medium";
+  return "Low";
+}
+
+function getIntentWeight(intent: IntentLevel) {
+  if (intent === "High") return 3;
+  if (intent === "Medium") return 2;
+  return 1;
+}
+
+function getIntentClass(intent: IntentLevel) {
+  if (intent === "High") return "border-red-100 bg-red-50 text-red-700";
+  if (intent === "Medium") return "border-amber-100 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-white text-slate-500";
+}
+
+function sessionNeedsAttention(session: ReportChatSessionRow) {
+  return !session.reviewedAt && (Boolean(String(session.lastUserQuestion || "").trim()) || hasPdfDownload(session));
+}
+
+function buildGroups(rows: ReportChatSessionRow[]): ChatInsightGroup[] {
+  const grouped = new Map<string, ReportChatSessionRow[]>();
+
+  rows.forEach((session) => {
+    const key = getReportKey(session);
+    const current = grouped.get(key) || [];
+    current.push(session);
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([key, sessions]) => {
+      const sortedSessions = [...sessions].sort((a, b) => getTimeValue(getLastActive(b)) - getTimeValue(getLastActive(a)));
+      const primary = sortedSessions[0];
+      const totalQuestions = sortedSessions.reduce((total, session) => total + getQuestionCount(session), 0);
+      const pdfDownloads = sortedSessions.reduce((total, session) => total + getPdfDownloadCount(session), 0);
+      const needsReview = sortedSessions.filter((session) => !session.reviewedAt).length;
+      const latestQuestion =
+        sortedSessions.find((session) => String(session.lastUserQuestion || "").trim())?.lastUserQuestion || "";
+      const intent = sortedSessions
+        .map(getSessionIntent)
+        .sort((a, b) => getIntentWeight(b) - getIntentWeight(a))[0] || "Low";
+
+      return {
+        key,
+        label: getClientLabel(primary),
+        subtitle: getReportSubtitle(primary),
+        sessions: sortedSessions,
+        visitorCount: sortedSessions.length,
+        totalQuestions,
+        pdfDownloads,
+        needsReview,
+        latestActive: getLastActive(primary),
+        latestQuestion,
+        intent,
+      };
+    })
+    .sort((a, b) => {
+      const intentDiff = getIntentWeight(b.intent) - getIntentWeight(a.intent);
+      if (intentDiff) return intentDiff;
+
+      const reviewDiff = b.needsReview - a.needsReview;
+      if (reviewDiff) return reviewDiff;
+
+      return getTimeValue(b.latestActive) - getTimeValue(a.latestActive);
+    });
 }
 
 export default function ChatInsightsPanel({
@@ -68,7 +200,10 @@ export default function ChatInsightsPanel({
   openChatInsightSession,
   markChatSessionReviewed,
 }: ChatInsightsPanelProps) {
-  const visibleRows = useMemo(() => {
+  const [activeFilter, setActiveFilter] = React.useState<ChatInsightFilter>("attention");
+  const [toggledGroupKeys, setToggledGroupKeys] = React.useState<Set<string>>(() => new Set());
+
+  const searchedRows = useMemo(() => {
     const search = chatInsights.search.trim().toLowerCase();
     if (!search) return chatInsights.rows;
 
@@ -93,11 +228,82 @@ export default function ChatInsightsPanel({
     });
   }, [chatInsights.rows, chatInsights.search]);
 
+  const attentionRows = useMemo(
+    () => searchedRows.filter(sessionNeedsAttention),
+    [searchedRows],
+  );
+
+  const visibleRows = useMemo(() => {
+    if (activeFilter === "pdf") return searchedRows.filter(hasPdfDownload);
+    if (activeFilter === "reviewed") return searchedRows.filter((session) => Boolean(session.reviewedAt));
+    if (activeFilter === "attention") return attentionRows.length ? attentionRows : searchedRows;
+    return searchedRows;
+  }, [activeFilter, attentionRows, searchedRows]);
+
+  const groupedRows = useMemo(() => buildGroups(visibleRows), [visibleRows]);
+
+  const defaultExpandedGroupKeys = useMemo(() => {
+    const priorityGroups = groupedRows.filter((group) => group.intent === "High" || group.needsReview > 0);
+    const groupsToOpen = priorityGroups.length ? priorityGroups : groupedRows.slice(0, 1);
+
+    return new Set(groupsToOpen.slice(0, 6).map((group) => group.key));
+  }, [groupedRows]);
+
+  const toggleGroup = React.useCallback((groupKey: string) => {
+    setToggledGroupKeys((current) => {
+      const next = new Set(current);
+
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const isGroupExpanded = React.useCallback(
+    (group: ChatInsightGroup) => defaultExpandedGroupKeys.has(group.key) !== toggledGroupKeys.has(group.key),
+    [defaultExpandedGroupKeys, toggledGroupKeys],
+  );
+
   const totalConversations = chatInsights.rows.length;
   const needsReview = chatInsights.rows.filter((session) => !session.reviewedAt).length;
-  const mobileCount = chatInsights.rows.filter((session) => String(session.deviceType || "").toLowerCase() === "mobile").length;
+  const pdfDownloads = chatInsights.rows.reduce((total, session) => total + getPdfDownloadCount(session), 0);
+  const totalQuestions = chatInsights.rows.reduce((total, session) => total + getQuestionCount(session), 0);
   const countries = new Set(chatInsights.rows.map((session) => session.countryCode || session.countryName).filter(Boolean));
   const selectedSession = chatInsights.selectedSession;
+
+  const clientQuestions = useMemo<ReportChatMessageRow[]>(() => {
+    const transcriptQuestions = chatInsights.messages.filter(
+      (message) => message.role === "user" && String(message.content || "").trim(),
+    );
+
+    if (transcriptQuestions.length) return transcriptQuestions;
+
+    if (!selectedSession) return [];
+
+    const fallbackQuestion = String(selectedSession.lastUserQuestion || "").trim();
+    if (!fallbackQuestion) return [];
+
+    return [
+      {
+        sessionId: selectedSession.id,
+        reportToken: selectedSession.reportToken,
+        role: "user",
+        content: fallbackQuestion,
+        createdAt: getLastActive(selectedSession),
+      },
+    ];
+  }, [chatInsights.messages, selectedSession]);
+
+  const filterItems: Array<{ id: ChatInsightFilter; label: string; count: number }> = [
+    { id: "attention", label: "Needs attention", count: attentionRows.length },
+    { id: "all", label: "All visitors", count: searchedRows.length },
+    { id: "pdf", label: "PDF downloaded", count: searchedRows.filter(hasPdfDownload).length },
+    { id: "reviewed", label: "Reviewed", count: searchedRows.filter((session) => Boolean(session.reviewedAt)).length },
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -109,9 +315,9 @@ export default function ChatInsightsPanel({
                 <MessageCircle size={14} />
                 Chat Insights
               </div>
-              <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Client chat activity</h2>
+              <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Client intent dashboard</h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
-                See what report visitors ask, where they are from, and which device they used. This view stays simple for follow-up decisions.
+                Grouped by website/report, then separated by visitor session. Use this to spot questions, PDF downloads, and follow-up priority without clutter.
               </p>
             </div>
 
@@ -128,7 +334,7 @@ export default function ChatInsightsPanel({
 
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conversations</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Visitors</p>
               <p className="mt-2 text-3xl font-black text-slate-950">{totalConversations}</p>
             </div>
             <div className="rounded-3xl border border-amber-100 bg-amber-50 p-4">
@@ -136,12 +342,12 @@ export default function ChatInsightsPanel({
               <p className="mt-2 text-3xl font-black text-amber-700">{needsReview}</p>
             </div>
             <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">Countries</p>
-              <p className="mt-2 text-3xl font-black text-blue-700">{countries.size}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">Questions</p>
+              <p className="mt-2 text-3xl font-black text-blue-700">{totalQuestions}</p>
             </div>
             <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Mobile visitors</p>
-              <p className="mt-2 text-3xl font-black text-emerald-700">{mobileCount}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">PDF downloads</p>
+              <p className="mt-2 text-3xl font-black text-emerald-700">{pdfDownloads}</p>
             </div>
           </div>
 
@@ -151,7 +357,7 @@ export default function ChatInsightsPanel({
               <input
                 value={chatInsights.search}
                 onChange={(event) => setChatInsightsSearch(event.target.value)}
-                placeholder="Search client, country, device, or question..."
+                placeholder="Search website, country, device, or question..."
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </label>
@@ -159,6 +365,27 @@ export default function ChatInsightsPanel({
             <p className="text-xs font-bold text-slate-400">
               {chatInsights.loadedAt ? `Last loaded: ${formatDate(chatInsights.loadedAt)}` : "Load conversations to begin."}
             </p>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {filterItems.map((item) => {
+              const active = item.id === activeFilter;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveFilter(item.id)}
+                  className={`rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-[0.12em] transition ${
+                    active
+                      ? "bg-slate-950 text-white shadow-lg shadow-slate-950/10"
+                      : "border border-slate-100 bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-700"
+                  }`}
+                >
+                  {item.label} · {item.count}
+                </button>
+              );
+            })}
           </div>
 
           {chatInsights.error ? (
@@ -177,7 +404,7 @@ export default function ChatInsightsPanel({
         <div className="overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-              Client conversations
+              Website / report groups
             </p>
           </div>
 
@@ -186,70 +413,157 @@ export default function ChatInsightsPanel({
               <Loader2 size={18} className="animate-spin" />
               Loading client chats...
             </div>
-          ) : visibleRows.length ? (
+          ) : groupedRows.length ? (
             <div className="divide-y divide-slate-100">
-              {visibleRows.map((session) => {
-                const isSelected = selectedSession?.id === session.id;
-                const reviewed = Boolean(session.reviewedAt);
-                const topic = getQuestionTopic(session.lastUserQuestion);
+              {groupedRows.map((group) => {
+                const expanded = isGroupExpanded(group);
 
                 return (
-                  <button
-                    key={`${session.reportToken}-${session.id}`}
-                    type="button"
-                    onClick={() => void openChatInsightSession(session)}
-                    className={`block w-full px-5 py-4 text-left transition hover:bg-blue-50/50 ${
-                      isSelected ? "bg-blue-50" : "bg-white"
-                    }`}
-                  >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-base font-black text-slate-950">{getClientLabel(session)}</p>
-                          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                            {topic}
-                          </span>
-                          {reviewed ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                              <CheckCircle2 size={12} />
-                              Reviewed
+                  <section key={group.key} className="bg-white">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.key)}
+                      aria-expanded={expanded}
+                      className="block w-full border-b border-slate-100 bg-slate-50/70 px-5 py-4 text-left transition hover:bg-blue-50/70"
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-2xl border border-slate-100 bg-white text-slate-500 shadow-sm">
+                              {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </span>
-                          ) : (
-                            <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
-                              New
+                            <p className="truncate text-base font-black text-slate-950">{group.label}</p>
+                            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${getIntentClass(group.intent)}`}>
+                              {group.intent} intent
                             </span>
-                          )}
+                            {group.needsReview ? (
+                              <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                                {group.needsReview} needs review
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                Reviewed
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-1 text-xs font-bold text-slate-400">{group.subtitle}</p>
+                          {group.latestQuestion ? (
+                            <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-slate-600">
+                              Latest question: {group.latestQuestion}
+                            </p>
+                          ) : null}
                         </div>
 
-                        <p className="mt-1 text-xs font-bold text-slate-400">
-                          {session.domain || session.domainSlug || session.reportToken}
-                        </p>
-
-                        <p className="mt-3 line-clamp-2 text-sm font-semibold leading-6 text-slate-600">
-                          {session.lastUserQuestion || "No client question saved yet."}
-                        </p>
+                        <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[280px]">
+                          <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                            {group.visitorCount} visitor{group.visitorCount === 1 ? "" : "s"}
+                          </span>
+                          <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                            {group.totalQuestions} question{group.totalQuestions === 1 ? "" : "s"}
+                          </span>
+                          <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                            {group.pdfDownloads} PDF download{group.pdfDownloads === 1 ? "" : "s"}
+                          </span>
+                          <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                            Last: {formatChatTime(group.latestActive)}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[260px]">
-                        <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                          <Globe2 size={14} />
-                          {session.countryName || session.countryCode || "Unknown"}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                          <MonitorSmartphone size={14} />
-                          {safeText(session.deviceType)}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                          <MessageCircle size={14} />
-                          {Number(session.messageCount || 0)} messages
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                          <Clock size={14} />
-                          {formatChatTime(getLastActive(session))}
-                        </span>
+                      <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        {expanded ? "Click to collapse visitors" : "Click to show visitors"}
+                      </p>
+                    </button>
+
+                    {expanded ? (
+                      <div className="divide-y divide-slate-100">
+                        {group.sessions.map((session, index) => {
+                      const isSelected = selectedSession?.id === session.id && selectedSession.reportToken === session.reportToken;
+                      const reviewed = Boolean(session.reviewedAt);
+                      const pdfDownloaded = hasPdfDownload(session);
+                      const topic = getQuestionTopic(session.lastUserQuestion);
+                      const intent = getSessionIntent(session);
+                      const questionCount = getQuestionCount(session);
+                      const visitorName = group.visitorCount > 1 ? `Visitor ${index + 1}` : getClientLabel(session);
+
+                      return (
+                        <button
+                          key={`${session.reportToken}-${session.id}`}
+                          type="button"
+                          onClick={() => void openChatInsightSession(session)}
+                          className={`block w-full px-5 py-4 text-left transition hover:bg-blue-50/50 ${
+                            isSelected ? "bg-blue-50" : "bg-white"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate text-sm font-black text-slate-950">{visitorName}</p>
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                                  {topic}
+                                </span>
+                                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${getIntentClass(intent)}`}>
+                                  {intent}
+                                </span>
+                                {pdfDownloaded ? (
+                                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                    PDF downloaded
+                                  </span>
+                                ) : null}
+                                {reviewed ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                    <CheckCircle2 size={12} />
+                                    Reviewed
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                                    New
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="mt-1 text-xs font-bold text-slate-400">
+                                {safeText(session.deviceType)} · {safeText(session.browser)} · {safeText(session.os)}
+                              </p>
+
+                              <p className="mt-3 line-clamp-2 text-sm font-semibold leading-6 text-slate-600">
+                                {session.lastUserQuestion || "No client question saved for this visitor yet."}
+                              </p>
+
+                              {pdfDownloaded ? (
+                                <p className="mt-2 text-xs font-bold text-emerald-700">
+                                  PDF downloaded {getPdfDownloadCount(session) > 1 ? `${getPdfDownloadCount(session)} times` : "once"}
+                                  {session.lastPdfDownloadedAt || session.pdfDownloadedAt ? ` · Last: ${formatChatTime(session.lastPdfDownloadedAt || session.pdfDownloadedAt)}` : ""}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[260px]">
+                              <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                                <Globe2 size={14} />
+                                {session.countryName || session.countryCode || "Unknown"}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                                <MonitorSmartphone size={14} />
+                                {safeText(session.deviceType)}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                                <MessageCircle size={14} />
+                                {questionCount} question{questionCount === 1 ? "" : "s"}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                                <Clock size={14} />
+                                {formatChatTime(getLastActive(session))}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                        })}
                       </div>
-                    </div>
-                  </button>
+                    ) : null}
+                  </section>
                 );
               })}
             </div>
@@ -258,21 +572,25 @@ export default function ChatInsightsPanel({
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-400">
                 <MessageCircle size={22} />
               </div>
-              <p className="mt-4 text-sm font-black text-slate-900">No client chats found yet.</p>
+              <p className="mt-4 text-sm font-black text-slate-900">No matching client activity found.</p>
               <p className="mt-1 text-xs font-semibold text-slate-400">
-                New secure-page conversations will appear here after Supabase chat logging is configured.
+                Try another filter, or send a test question from a secure report and click Refresh.
               </p>
             </div>
           )}
         </div>
       </div>
 
-      <aside className="rounded-[32px] border border-slate-100 bg-white p-5 shadow-sm xl:sticky xl:top-28 xl:max-h-[calc(100vh-8rem)] xl:overflow-hidden">
+      <aside className="rounded-[32px] border border-slate-100 bg-white p-5 shadow-sm xl:sticky xl:top-24 xl:flex xl:h-[calc(100vh-7rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden">
         {selectedSession ? (
-          <div className="flex h-full min-h-[520px] flex-col">
-            <div className="border-b border-slate-100 pb-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conversation</p>
+          <div className="flex h-full min-h-[520px] flex-col xl:min-h-0">
+            <div className="shrink-0 border-b border-slate-100 pb-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Selected visitor</p>
               <h3 className="mt-2 text-xl font-black text-slate-950">{getClientLabel(selectedSession)}</h3>
+              <p className="mt-1 text-xs font-bold text-slate-400">
+                Session: {selectedSession.id.slice(0, 8)} · {getQuestionCount(selectedSession)} question{getQuestionCount(selectedSession) === 1 ? "" : "s"}
+              </p>
+
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500">
                 <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                   {selectedSession.countryName || selectedSession.countryCode || "Country unknown"}
@@ -286,6 +604,15 @@ export default function ChatInsightsPanel({
                 <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                   {selectedSession.os || "OS unknown"}
                 </span>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">PDF activity</p>
+                <p className="mt-1">
+                  {selectedSession.lastPdfDownloadedAt || selectedSession.pdfDownloadedAt
+                    ? `Downloaded ${getPdfDownloadCount(selectedSession) > 1 ? `${getPdfDownloadCount(selectedSession)} times` : "once"} · Last: ${formatChatTime(selectedSession.lastPdfDownloadedAt || selectedSession.pdfDownloadedAt)}`
+                    : "PDF not downloaded by this visitor yet."}
+                </p>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -313,50 +640,57 @@ export default function ChatInsightsPanel({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 pr-1 pb-8">
               {chatInsights.transcriptLoading ? (
                 <div className="flex items-center justify-center gap-3 p-8 text-sm font-bold text-blue-600">
                   <Loader2 size={18} className="animate-spin" />
-                  Loading transcript...
+                  Loading client questions...
                 </div>
-              ) : chatInsights.messages.length ? (
+              ) : clientQuestions.length ? (
                 <div className="space-y-3">
-                  {chatInsights.messages.map((message, index) => {
-                    const isUser = message.role === "user";
+                  <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                      Questions asked by this visitor
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-blue-700/80">
+                      Assistant answers are hidden here. Open the secure report if you need to review the full chat.
+                    </p>
+                  </div>
 
-                    return (
-                      <div key={`${message.createdAt || index}-${message.role}`} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-[92%] rounded-3xl px-4 py-3 text-sm font-semibold leading-6 shadow-sm ${
-                            isUser
-                              ? "rounded-br-md bg-blue-600 text-white shadow-blue-900/10"
-                              : "rounded-bl-md border border-slate-100 bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          <p className="whitespace-pre-wrap">{message.content}</p>
-                          <p className={`mt-2 text-[10px] font-bold ${isUser ? "text-blue-100" : "text-slate-400"}`}>
-                            {formatChatTime(message.createdAt)}
-                          </p>
-                        </div>
+                  {clientQuestions.map((message, index) => (
+                    <div
+                      key={`${message.createdAt || index}-${message.content}`}
+                      className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                          Question {index + 1}
+                        </p>
+                        <p className="shrink-0 text-[10px] font-bold text-slate-400">
+                          {formatChatTime(message.createdAt)}
+                        </p>
                       </div>
-                    );
-                  })}
+                      <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-6 text-slate-800">
+                        {message.content}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6 text-center text-sm font-bold text-slate-500">
-                  No transcript messages were found for this session.
+                  No client questions were found for this visitor yet.
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="flex min-h-[520px] flex-col items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+          <div className="flex h-full min-h-[520px] flex-col items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-slate-50 p-8 text-center xl:min-h-0">
             <div className="grid h-16 w-16 place-items-center rounded-full bg-white text-blue-600 shadow-sm">
               <MessageCircle size={26} />
             </div>
-            <h3 className="mt-5 text-lg font-black text-slate-950">Select a conversation</h3>
+            <h3 className="mt-5 text-lg font-black text-slate-950">Select a visitor</h3>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-              Click a client chat from the list to see the full conversation and follow-up details.
+              Click a visitor session under a website group to see only that visitor's questions and follow-up details.
             </p>
           </div>
         )}

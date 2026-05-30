@@ -484,6 +484,9 @@ export type ReportChatSessionRow = {
   lastAssistantAnswerSnippet?: string;
   reviewedAt?: string;
   reportUrl?: string;
+  pdfDownloadedAt?: string;
+  lastPdfDownloadedAt?: string;
+  pdfDownloadCount?: number;
 };
 
 export type ChatInsightsState = {

@@ -1,4 +1,6 @@
 import { Buffer } from "node:buffer";
+import * as http from "node:http";
+import * as https from "node:https";
 import { createHash, createHmac } from "node:crypto";
 
 type B2Config = {
@@ -277,6 +279,142 @@ export async function uploadPdfToB2(input: {
   };
 }
 
+
+type B2NodeReadResponse = {
+  status: number;
+  statusText: string;
+  headers: http.IncomingHttpHeaders;
+  buffer: Buffer;
+};
+
+function numberEnv(name: string, fallback: number, min: number, max: number): number {
+  const parsed = Number(process.env[name]);
+  const value = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.max(min, Math.min(value, max));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getHeaderValue(headers: http.IncomingHttpHeaders, name: string): string {
+  const value = headers[name.toLowerCase()];
+  if (Array.isArray(value)) return value[0] || "";
+  return String(value || "");
+}
+
+function isRetryableB2Status(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function shouldRetryB2Error(error: unknown): boolean {
+  const message = String((error as any)?.message || error || "").toLowerCase();
+  const code = String((error as any)?.code || (error as any)?.cause?.code || "").toLowerCase();
+
+  return (
+    code.includes("timeout") ||
+    code.includes("econnreset") ||
+    code.includes("etimedout") ||
+    code.includes("eai_again") ||
+    code.includes("enotfound") ||
+    code.includes("und_err_connect_timeout") ||
+    message.includes("timeout") ||
+    message.includes("fetch failed") ||
+    message.includes("socket") ||
+    message.includes("network")
+  );
+}
+
+function readSignedB2ObjectWithNodeHttp(input: {
+  url: string;
+  headers: Record<string, string>;
+  timeoutMs: number;
+}): Promise<B2NodeReadResponse> {
+  return new Promise((resolve, reject) => {
+    let parsed: URL;
+
+    try {
+      parsed = new URL(input.url);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const transport = parsed.protocol === "http:" ? http : https;
+    const request = transport.request(
+      parsed,
+      {
+        method: "GET",
+        headers: input.headers,
+        timeout: input.timeoutMs,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+
+        response.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode || 0,
+            statusText: response.statusMessage || "",
+            headers: response.headers,
+            buffer: Buffer.concat(chunks),
+          });
+        });
+      },
+    );
+
+    request.on("timeout", () => {
+      request.destroy(new Error(`Backblaze B2 read timed out after ${input.timeoutMs}ms.`));
+    });
+
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+async function readSignedB2ObjectWithRetry(input: {
+  signedUrl: string;
+  headers: Record<string, string>;
+  key: string;
+}): Promise<B2NodeReadResponse> {
+  const attempts = numberEnv("B2_READ_RETRIES", 3, 1, 5);
+  const timeoutMs = numberEnv("B2_READ_TIMEOUT_MS", 45000, 10000, 120000);
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await readSignedB2ObjectWithNodeHttp({
+        url: input.signedUrl,
+        headers: input.headers,
+        timeoutMs,
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        return response;
+      }
+
+      const shouldRetry = isRetryableB2Status(response.status) && attempt < attempts;
+      if (!shouldRetry) return response;
+
+      lastError = new Error(`Backblaze B2 object read failed (${response.status}): ${response.buffer.toString("utf8", 0, 500)}`);
+    } catch (error) {
+      lastError = error;
+
+      if (!shouldRetryB2Error(error) || attempt >= attempts) {
+        break;
+      }
+    }
+
+    await sleep(Math.min(750 * attempt, 2500));
+  }
+
+  const message = String((lastError as any)?.message || lastError || "Backblaze B2 read failed");
+  throw new Error(`Backblaze B2 object read failed for ${input.key}: ${message}`);
+}
+
 export async function readB2Object(key: string): Promise<B2ReadResult> {
   const objectKey = normalizeObjectKey(key);
   const signed = buildSignedRequest({
@@ -284,25 +422,25 @@ export async function readB2Object(key: string): Promise<B2ReadResult> {
     key: objectKey,
   });
 
-  const response = await fetch(signed.url, {
-    method: "GET",
-    cache: "no-store",
+  const response = await readSignedB2ObjectWithRetry({
+    signedUrl: signed.url,
     headers: signed.headers,
+    key: objectKey,
   });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Backblaze B2 object read failed (${response.status}): ${text.slice(0, 500)}`);
+  if (response.status < 200 || response.status >= 300) {
+    const text = response.buffer.toString("utf8", 0, 500);
+    throw new Error(`Backblaze B2 object read failed (${response.status}): ${text}`);
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const buffer = response.buffer;
 
   return {
     key: objectKey,
     bucket: signed.bucket,
-    contentType: response.headers.get("content-type") || "application/octet-stream",
-    contentLength: Number(response.headers.get("content-length") || buffer.byteLength || 0),
-    etag: response.headers.get("etag")?.replace(/"/g, "") || "",
+    contentType: getHeaderValue(response.headers, "content-type") || "application/octet-stream",
+    contentLength: Number(getHeaderValue(response.headers, "content-length") || buffer.byteLength || 0),
+    etag: getHeaderValue(response.headers, "etag").replace(/"/g, ""),
     buffer,
   };
 }

@@ -1,10 +1,546 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v19.05-secure-page-booking-cta
-Last updated: 2026-05-29
+Version: v22.00-chat-insights-secure-pdf-handoff
+Last updated: 2026-05-30
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
+
+## Current Critical Context — Read This First
+
+This README is the main handoff document for TrackFlow Pro. When a new assistant/developer is asked to fix a bug, they should first identify the feature area, then request only the connected files listed here. Do not ask for the whole project unless the issue crosses many modules.
+
+Current system priorities:
+
+```text
+1. Keep client-facing secure pages professional, English-only, evidence-safe, and non-accusatory.
+2. Keep Firestore slim; do not store chat transcripts or full outreach copy in audit_reports.
+3. Store secure-page chat activity in Supabase only when configured.
+4. Dashboard Chat Insights should be simple for sales/follow-up decisions, not highly technical.
+5. Secure report PDF preview/download should feel premium and should not navigate the client away during download.
+6. Same secure-page visitor should stay as one visitor/session across multiple questions in the same browser.
+7. Different browser/device without login/contact identity may be a different visitor.
+8. Avoid touching the huge catch-all route unless the bug actually belongs there.
+```
+
+---
+
+## Latest Update — v22.00 Secure Report PDF Download Feedback + Chat Insights Stability
+
+This update documents the recent secure-page chatbot, Chat Insights dashboard, Supabase, visitor/session, and PDF UX fixes.
+
+Changed or recently connected files:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+app/admin/dashboard/ChatInsightsPanel.tsx
+app/admin/dashboard/page.tsx
+app/admin/dashboard/types.ts
+lib/trackflow-storage/b2.ts
+app/api/trackflow/[...action]/route.ts
+```
+
+### Secure report PDF experience
+
+Current intended behavior:
+
+```text
+PDF preview:
+→ embedded inside the secure report page
+→ premium card-style section
+→ mobile shows a lighter note instead of forcing heavy iframe preview
+
+Open PDF:
+→ opens PDF in a new tab for users who want full browser PDF controls
+
+Download PDF:
+→ should NOT navigate the visitor away from the secure page
+→ uses client-side fetch/blob download from the internal download route
+→ button immediately shows a spinner and “Preparing secure PDF...”
+→ status box tells the user the file is being prepared
+→ after download starts, status says “Download started”
+→ if automatic download fails, user sees a clear fallback message to use Open PDF
+```
+
+Important implementation note:
+
+```text
+The secure page should still use internal routes:
+previewHref  = /api/trackflow/reports/preview?token=...
+downloadHref = /api/trackflow/reports/download?token=...
+
+Do not expose private B2 object URLs to the browser.
+Do not replace the internal preview/download routes with /api/trackflow/report-chat.
+```
+
+When PDF download opens a new page/tab or shows JSON:
+
+```text
+First file to inspect:
+app/tracking-review/[domainSlug]/[token]/page.tsx
+
+Check:
+- previewHref must be /api/trackflow/reports/preview?token=...
+- downloadHref must be /api/trackflow/reports/download?token=...
+- Download PDF should be handled on-page if using the premium download UX script
+```
+
+When PDF preview/download returns 502 or timeout:
+
+```text
+Ask for:
+lib/trackflow-storage/b2.ts
+app/api/trackflow/[...action]/route.ts
+
+Reason:
+The issue is usually B2 read/download timeout, retry behavior, or report PDF buffer resolution.
+```
+
+### Chat Insights dashboard
+
+Current intended behavior:
+
+```text
+Admin Dashboard → Chat Insights
+→ groups activity by website/report
+→ each report group is collapsible/toggleable
+→ each group contains visitor sessions
+→ each visitor row shows country/device/browser/questions/PDF/review status
+→ right panel shows only that selected visitor’s questions
+→ assistant answers are hidden from the dashboard
+→ Open report is available if the operator needs to review the full secure-page chat
+→ filters: Needs attention, All visitors, PDF downloaded, Reviewed
+→ intent badges: High / Medium / Low based on questions, PDF downloads, and follow-up intent
+```
+
+Professional dashboard structure:
+
+```text
+Website / report group
+→ Visitor 1
+   → Question 1
+   → Question 2
+→ Visitor 2
+   → Question 1
+```
+
+Important rule:
+
+```text
+Do not mix questions from another visitor/session as a fallback.
+If selected visitor has no messages, show selectedSession.lastUserQuestion only.
+Do not load all reportToken questions into the selected visitor panel unless explicitly requested for debugging.
+```
+
+When Chat Insights questions do not show:
+
+```text
+Ask for:
+app/admin/dashboard/ChatInsightsPanel.tsx
+app/admin/dashboard/page.tsx
+app/admin/dashboard/types.ts
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+
+Then check:
+- API response from /api/trackflow/report-chat?admin=1...
+- Supabase trackflow_report_chat_messages has role='user' rows
+- route admin transcript endpoint returns only user questions for the selected session
+- right panel clientQuestions filter only displays role='user'
+```
+
+When dashboard becomes visually messy:
+
+```text
+Usually update only:
+app/admin/dashboard/ChatInsightsPanel.tsx
+
+Do not touch:
+route.ts
+supabase-admin.ts
+page.tsx
+
+unless the data loading itself is broken.
+```
+
+### Visitor/session stability
+
+Current intended behavior:
+
+```text
+Same reportToken + same browser = same visitor/session
+Refreshing the page keeps the same visitor
+Returning the next day from the same browser keeps the same visitor
+Multiple questions in the same browser should appear under one visitor
+Different browser/device generally becomes a different visitor unless a future contact identity system is added
+```
+
+Current visitor storage strategy:
+
+```text
+ReportChatAssistant.tsx
+→ stores chat session id using localStorage/sessionStorage/cookie where available
+→ sends sessionId in POST /api/trackflow/report-chat
+
+report-chat/route.ts
+→ should respect the incoming stable sessionId
+→ may use cookie/request fallback only if the body sessionId is missing or invalid
+
+lib/supabase-admin.ts
+→ createChatSessionId() must preserve valid UUIDs
+→ if isUuid() is wrong, Supabase will create a new random session every message
+```
+
+Critical historical bug:
+
+```text
+If the dashboard creates a new visitor after every message even though browser storage has the same session id, check lib/supabase-admin.ts.
+
+Bad UUID regex example:
+^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$
+
+Correct UUID regex:
+^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+
+The bad regex misses the final hyphen group and makes valid UUIDs fail validation.
+Then createChatSessionId() falls back to randomUUID(), creating one visitor per message.
+```
+
+When “new visitor every message” happens:
+
+```text
+Ask for:
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+
+Check:
+1. Browser storage contains trackflow_report_chat_session_{token}
+2. POST body includes the same sessionId every message
+3. route.ts does not replace a valid body sessionId
+4. supabase-admin.ts isUuid() validates normal UUIDs correctly
+5. logReportChatSession() and logReportChatMessages() use the same sessionId
+```
+
+### Supabase chat logging and dashboard activity
+
+Current Supabase intent:
+
+```text
+trackflow_report_chat_sessions
+→ one row per visitor/session per report
+→ stores report token, website, country/device/browser, latest question, message count, PDF activity, reviewed status
+
+trackflow_report_chat_messages
+→ stores chat messages
+→ dashboard displays only role='user' rows by default
+```
+
+Important fields for sessions:
+
+```text
+id
+report_token
+domain
+domain_slug
+company_name
+country_code
+country_name
+region
+city
+device_type
+browser
+os
+first_seen_at
+last_seen_at
+updated_at
+message_count
+last_user_question
+last_assistant_answer_snippet
+reviewed_at
+report_url
+pdf_downloaded_at
+last_pdf_downloaded_at
+pdf_download_count
+```
+
+Important fields for messages:
+
+```text
+session_id
+report_token
+role
+content
+source
+quota_status
+created_at
+```
+
+If Supabase returns missing column errors:
+
+```text
+Run a schema/column query in Supabase SQL Editor and compare against the fields above.
+Typical missing columns:
+domain_slug
+company_name
+country_code
+last_user_question
+last_assistant_answer_snippet
+reviewed_at
+report_url
+pdf_downloaded_at
+last_pdf_downloaded_at
+pdf_download_count
+```
+
+If Supabase returns permission denied:
+
+```text
+Grant service_role privileges for both tables.
+The server uses SUPABASE_SERVICE_ROLE_KEY, never client public anon access.
+```
+
+Recommended debug env:
+
+```env
+TRACKFLOW_CHAT_DEBUG=1
+```
+
+### Localhost behavior
+
+Expected localhost limitations:
+
+```text
+Country/location may show Unknown on localhost.
+Vercel production usually provides x-vercel-ip-country.
+Localhost will not automatically include real geo headers.
+Device/browser/OS can still be detected from user-agent.
+```
+
+Localhost testing tips:
+
+```text
+Use exactly one origin:
+http://localhost:3000
+
+Do not mix:
+http://localhost:3000
+http://127.0.0.1:3000
+
+Those are different browser storage/cookie origins.
+Incognito/private window also creates a separate visitor.
+```
+
+To test location locally with API clients, send headers:
+
+```text
+x-vercel-ip-country: US
+x-vercel-ip-country-region: FL
+x-vercel-ip-city: Miami
+user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124
+```
+
+---
+
+## File Request Protocol for Future Assistants
+
+When the user reports a problem, do not ask for random files. Ask for the minimum connected set below.
+
+### Secure page UI / PDF UX
+
+Ask first:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+```
+
+Ask additionally only if backend fails:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-storage/b2.ts
+```
+
+Use this for:
+
+```text
+PDF preview looks bad
+Download PDF navigates away
+Download button has no feedback
+Secure page layout is not professional
+Open PDF/download route shows wrong content
+```
+
+### Secure page chatbot UI/session
+
+Ask first:
+
+```text
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+```
+
+Use this for:
+
+```text
+new visitor every message
+chat history not restoring
+same visitor questions not grouped
+chat does not send sessionId
+chat UI issue
+quota fallback behavior
+```
+
+### Chat Insights dashboard
+
+Ask first:
+
+```text
+app/admin/dashboard/ChatInsightsPanel.tsx
+app/admin/dashboard/page.tsx
+app/admin/dashboard/types.ts
+```
+
+Ask additionally if data/API is wrong:
+
+```text
+app/api/trackflow/report-chat/route.ts
+lib/supabase-admin.ts
+Supabase schema/query output
+```
+
+Use this for:
+
+```text
+questions not showing
+right panel cuts messages
+visitor rows messy
+group toggle/collapse issue
+PDF activity not showing
+reviewed status issue
+dashboard TypeScript error
+```
+
+### Supabase chat data issue
+
+Ask first:
+
+```text
+lib/supabase-admin.ts
+app/api/trackflow/report-chat/route.ts
+```
+
+Also ask for Supabase SQL output:
+
+```sql
+select column_name, data_type
+from information_schema.columns
+where table_name in (
+  'trackflow_report_chat_sessions',
+  'trackflow_report_chat_messages'
+)
+order by table_name, ordinal_position;
+```
+
+Useful test queries:
+
+```sql
+select
+  session_id,
+  report_token,
+  role,
+  content,
+  created_at
+from public.trackflow_report_chat_messages
+where report_token = 'REPORT_TOKEN'
+order by created_at desc
+limit 20;
+```
+
+```sql
+select
+  id,
+  report_token,
+  last_user_question,
+  message_count,
+  pdf_download_count,
+  last_pdf_downloaded_at,
+  updated_at
+from public.trackflow_report_chat_sessions
+where report_token = 'REPORT_TOKEN'
+order by updated_at desc;
+```
+
+### B2 PDF download issue
+
+Ask first:
+
+```text
+lib/trackflow-storage/b2.ts
+app/api/trackflow/[...action]/route.ts
+```
+
+Use this for:
+
+```text
+B2 timeout
+PDF preview/download 502
+readB2Object fetch failed
+Backblaze endpoint timeout
+download works sometimes but not always
+```
+
+### Catch-all TrackFlow route safety
+
+Do not touch this file unless necessary:
+
+```text
+app/api/trackflow/[...action]/route.ts
+```
+
+Only touch it when:
+
+```text
+report preview/download/CTA route fails
+B2 streaming fails
+main TrackFlow API dispatcher fails
+email/follow-up/cleanup backend behavior fails
+```
+
+Do not use it for pure Chat Insights UI issues.
+
+---
+
+## Known Stable Test Checklist After Recent Fixes
+
+After replacing files, always run:
+
+```powershell
+Remove-Item -Recurse -Force .next
+npm run dev
+```
+
+Then test:
+
+```text
+1. Open secure report page.
+2. Ask 3 chatbot questions in the same browser.
+3. Confirm browser storage has trackflow_report_chat_session_{token}.
+4. Refresh admin dashboard Chat Insights.
+5. Confirm one visitor/session contains all 3 questions.
+6. Confirm right panel shows only client/user questions, not assistant answers.
+7. Click Download PDF.
+8. Confirm page does not navigate away.
+9. Confirm download button shows preparing/download started status.
+10. Confirm PDF download count updates after refresh.
+```
+
+---
+
 
 ## Latest Update — v19.05 Secure Page Booking CTA
 
@@ -2380,6 +2916,24 @@ Before sending to a client:
 7. Confirm no white/invisible text.
 8. Confirm PDF URL and secure page URL work.
 9. Confirm LinkedIn preview image works if sharing link.
+
+---
+
+
+## 9.5 Recent Chat Insights / PDF Troubleshooting Addendum
+
+| Problem | Ask For These Files First | Notes |
+|---|---|---|
+| Every chatbot message creates a new visitor | `ReportChatAssistant.tsx`, `app/api/trackflow/report-chat/route.ts`, `lib/supabase-admin.ts` | First check `isUuid()` in `supabase-admin.ts`; a bad regex can force `randomUUID()` every message. |
+| Browser storage has session id but dashboard still creates many visitors | `lib/supabase-admin.ts`, `report-chat/route.ts` | Backend is likely replacing the valid body `sessionId`. |
+| Chat Insights right panel shows no questions | `ChatInsightsPanel.tsx`, dashboard `page.tsx`, `report-chat/route.ts`, `supabase-admin.ts` | Check whether `trackflow_report_chat_messages` has role=`user` rows. |
+| Chat Insights right panel cuts off question cards | `ChatInsightsPanel.tsx` | Usually UI-only sticky/flex/overflow fix; no backend needed. |
+| Chat Insights is visually messy with many websites | `ChatInsightsPanel.tsx` | Use collapsible website/report groups and filters. |
+| PDF download leaves the secure page | `app/tracking-review/[domainSlug]/[token]/page.tsx` | Use on-page fetch/blob download; keep Open PDF as new-tab action. |
+| Download button gives no feedback | `app/tracking-review/[domainSlug]/[token]/page.tsx` | Add visible status box, spinner, preparing/download-started states. |
+| PDF preview shows JSON from report-chat | `app/tracking-review/[domainSlug]/[token]/page.tsx` | `previewHref` is wrong; it must use `/api/trackflow/reports/preview?token=...`. |
+| PDF route 502 / Backblaze timeout | `lib/trackflow-storage/b2.ts`, `app/api/trackflow/[...action]/route.ts` | Add/increase retry and timeout around B2 reads. |
+| Location/country unknown on localhost | Usually no file needed | Localhost lacks Vercel/Cloudflare geo headers; test in production or send custom headers. |
 
 ---
 
