@@ -1,8 +1,43 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v19.04-secure-page-chat-focused-ux
+Version: v19.05-secure-page-booking-cta
 Last updated: 2026-05-29
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
+
+---
+
+## Latest Update — v19.05 Secure Page Booking CTA
+
+This patch adds a professional booking/contact conversion path to the client-facing secure tracking review page while keeping the chatbot as the main first interaction.
+
+Changed files:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+PROJECT_CONTEXT_README.md
+```
+
+Behavior:
+
+```text
+Secure report page
+→ hero primary actions remain View findings and Ask about this review
+→ hero adds a Book a verification call action that scrolls to the booking section
+→ bottom CTA becomes a dedicated Verification call section
+→ booking button uses report/private copy bookingUrl or calendlyUrl when present
+→ fallback booking URL can come from NEXT_PUBLIC_TRACKFLOW_CALENDLY_URL or NEXT_PUBLIC_CALENDLY_URL
+→ if no booking URL is configured, the button falls back to the existing tracked report CTA
+→ email reply remains available as a secondary contact path
+```
+
+Important decisions:
+
+```text
+Do not embed a large Calendly iframe by default.
+Do not make the page feel like a sales page before the client reads the review.
+Keep the chatbot focused: the booking section explicitly suggests asking the assistant first when the client wants a plain-English explanation.
+Do not change Python-generated secure page content, report storage, PDF preview/download, Gemini server route, Firestore fields, or chatbot answer logic.
+```
 
 ---
 

@@ -57,6 +57,10 @@ const DEFAULT_RECOMMENDATIONS = [
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_TRACKFLOW_CONTACT_EMAIL || "shahjalal@trackflowpro.com";
 const LINKEDIN_URL = process.env.NEXT_PUBLIC_TRACKFLOW_LINKEDIN_URL || "https://www.linkedin.com/in/shahjalal-khan/";
+const CALENDLY_URL =
+  process.env.NEXT_PUBLIC_TRACKFLOW_CALENDLY_URL ||
+  process.env.NEXT_PUBLIC_CALENDLY_URL ||
+  "";
 const MAILING_ADDRESS =
   process.env.NEXT_PUBLIC_TRACKFLOW_MAILING_ADDRESS ||
   process.env.TRACKFLOW_MAILING_ADDRESS ||
@@ -608,6 +612,32 @@ function cleanCtaTarget(value: unknown): string {
   return "/contact";
 }
 
+function cleanExternalBookingUrl(value: unknown): string {
+  const raw = cleanText(value, "");
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw);
+    if (["http:", "https:"].includes(url.protocol)) return url.toString().slice(0, 700);
+  } catch {}
+
+  return "";
+}
+
+function getBookingUrl(report: Record<string, any>, privateReportCopy: Record<string, any>): string {
+  return cleanExternalBookingUrl(
+    privateReportCopy.bookingUrl ||
+      privateReportCopy.booking_url ||
+      privateReportCopy.calendlyUrl ||
+      privateReportCopy.calendly_url ||
+      report.bookingUrl ||
+      report.booking_url ||
+      report.calendlyUrl ||
+      report.calendly_url ||
+      CALENDLY_URL,
+  );
+}
+
 function ReportViewBeacon({ token }: { token: string }) {
   const script = `
 (function () {
@@ -1052,18 +1082,22 @@ export default async function ReportPage({ params }: ReportPageProps) {
     ],
     3,
   );
-  const ctaHeadline = cleanText(privateReportCopy.ctaHeadline || report.ctaHeadline || report.cta_headline, "Want this verified inside your actual accounts?");
-  const ctaDescription = cleanText(
-    privateReportCopy.ctaDescription || report.ctaDescription || report.cta_description,
-    "I can check the conversion path inside GA4, Google Ads, GTM, CRM, or server tools and confirm whether your lead tracking is recording correctly.",
-  );
-
   const expiresLabel = formatDate(report.pdfExpiresAt || report.expiresAt);
   const previewHref = `/api/trackflow/reports/preview?token=${encodeURIComponent(token)}`;
   const downloadHref = `/api/trackflow/reports/download?token=${encodeURIComponent(token)}`;
 
   const ctaTarget = cleanCtaTarget(report.ctaUrl);
   const ctaHref = `/api/trackflow/reports/cta?token=${encodeURIComponent(token)}&target=${encodeURIComponent(ctaTarget)}`;
+  const bookingUrl = getBookingUrl(report, privateReportCopy);
+  const bookingHref = bookingUrl || ctaHref;
+  const bookingHeadline = cleanText(
+    privateReportCopy.bookingHeadline || report.bookingHeadline || report.booking_headline,
+    "Ready to verify this tracking setup live?",
+  );
+  const bookingDescription = cleanText(
+    privateReportCopy.bookingDescription || report.bookingDescription || report.booking_description,
+    "Book a short verification call to review GA4, Google Ads, GTM, CRM, or server-side recording with approved account access.",
+  );
 
   const reportDate =
     formatDate(report.createdAt || report.registeredAt || report.uploadedAt) ||
@@ -1083,7 +1117,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     },
     {
       label: "Best next action",
-      value: "Ask the assistant or verify inside accounts",
+      value: "Ask the assistant, then book verification",
     },
   ];
 
@@ -1153,8 +1187,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 Ask about this review
               </LinkButton>
 
-              <LinkButton href={ctaHref} variant="secondary">
-                {ctaText}
+              <LinkButton href="#book-verification" variant="secondary">
+                Book a verification call
               </LinkButton>
             </div>
 
@@ -1359,37 +1393,76 @@ export default async function ReportPage({ params }: ReportPageProps) {
         chatContext={chatQuestionContext}
       />
 
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 lg:p-10">
-          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-            <div>
+      <section id="book-verification" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16 sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl shadow-slate-950/15">
+          <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="p-8 lg:p-10">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
-                Next step
+                Verification call
               </p>
 
               <h2 className="mt-4 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
-                {ctaHeadline}
+                {bookingHeadline}
               </h2>
 
               <p className="mt-4 max-w-2xl text-base font-semibold leading-8 text-slate-300">
-                {ctaDescription}
+                {bookingDescription}
               </p>
+
+              <div className="mt-7 grid gap-3 sm:grid-cols-3">
+                {[
+                  "Review the finding",
+                  "Check account-side evidence",
+                  "Confirm the next action",
+                ].map((item, index) => (
+                  <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-xs font-black text-white">
+                      {index + 1}
+                    </span>
+                    <p className="mt-3 text-sm font-black leading-6 text-white">{item}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-              <a
-                href={ctaHref}
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 sm:w-auto lg:w-full"
-              >
-                {ctaText}
-              </a>
+            <div className="border-t border-white/10 bg-white/[0.04] p-6 lg:border-l lg:border-t-0 lg:p-8">
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-200">
+                  Best after reading the review
+                </p>
+                <p className="mt-3 text-sm font-semibold leading-7 text-slate-300">
+                  Use the assistant first if you want a plain-English explanation. Then book a call when you are ready to verify the conversion path inside the actual tools.
+                </p>
+              </div>
 
-              <a
-                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`}
-                className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20 sm:w-auto lg:w-full"
-              >
-                Reply by Email
-              </a>
+              <div className="mt-5 flex flex-col gap-3">
+                <a
+                  href={bookingHref}
+                  target={bookingUrl ? "_blank" : undefined}
+                  rel={bookingUrl ? "noopener noreferrer" : undefined}
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
+                >
+                  Book a verification call
+                </a>
+
+                <a
+                  href="#ask-this-review"
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+                >
+                  Ask the assistant first
+                </a>
+
+                <a
+                  href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`}
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+                >
+                  Reply by Email
+                </a>
+              </div>
+
+              <p className="mt-4 text-xs font-semibold leading-6 text-slate-400">
+                {bookingUrl ? "Booking opens securely in a new tab." : "Booking link is not configured yet, so this button uses the current review CTA."}
+              </p>
             </div>
           </div>
         </div>
