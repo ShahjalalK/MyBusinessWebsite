@@ -25,7 +25,33 @@ export type StoredReportChatSession = {
   id: string;
   reportToken: string;
   domain?: string;
+  domainSlug?: string;
+  companyName?: string;
+  countryCode?: string;
+  countryName?: string;
+  region?: string;
+  city?: string;
+  deviceType?: string;
+  browser?: string;
+  os?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
   updatedAt?: string;
+  messageCount?: number;
+  lastUserQuestion?: string;
+  lastAssistantAnswerSnippet?: string;
+  reviewedAt?: string;
+  reportUrl?: string;
+};
+
+export type ReportChatVisitInfo = {
+  countryCode?: string;
+  countryName?: string;
+  region?: string;
+  city?: string;
+  deviceType?: string;
+  browser?: string;
+  os?: string;
 };
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -55,8 +81,13 @@ function cleanText(value: unknown, maxLength = 3000): string {
     .slice(0, maxLength);
 }
 
+function cleanNumber(value: unknown, fallback = 0): number {
+  const next = Number(value);
+  return Number.isFinite(next) && next >= 0 ? Math.floor(next) : fallback;
+}
+
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
 }
 
 function safeTableName(value: string): string {
@@ -78,16 +109,16 @@ async function postRows({
   table: string;
   rows: AnyRecord | AnyRecord[];
   upsert?: boolean;
-}): Promise<void> {
-  if (!isConfigured()) return;
+}): Promise<boolean> {
+  if (!isConfigured()) return false;
 
   const cleanTable = safeTableName(table);
-  if (!cleanTable) return;
+  if (!cleanTable) return false;
 
   const url = `${getBaseUrl()}/rest/v1/${cleanTable}${upsert ? "?on_conflict=id" : ""}`;
 
   try {
-    await fetch(url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -97,8 +128,11 @@ async function postRows({
       },
       body: JSON.stringify(rows),
     });
+
+    return response.ok;
   } catch {
     // Logging is optional. Never break the client-facing secure report chatbot.
+    return false;
   }
 }
 
@@ -129,7 +163,6 @@ async function getRows<T>({ table, query }: { table: string; query: string }): P
     return [];
   }
 }
-
 
 async function deleteRows({
   table,
@@ -249,27 +282,97 @@ export function createChatSessionId(value?: unknown): string {
   return isUuid(raw) ? raw : randomUUID();
 }
 
+async function readSessionCounter({
+  sessionId,
+  reportToken,
+}: {
+  sessionId: string;
+  reportToken: string;
+}): Promise<{ firstSeenAt: string; messageCount: number }> {
+  const rows = await getRows<{
+    first_seen_at?: string;
+    message_count?: number | string;
+  }>({
+    table: CHAT_SESSIONS_TABLE,
+    query: [
+      "select=first_seen_at,message_count",
+      `id=eq.${encodeURIComponent(sessionId)}`,
+      `report_token=eq.${encodeURIComponent(reportToken)}`,
+      "limit=1",
+    ].join("&"),
+  });
+
+  const first = rows[0];
+
+  return {
+    firstSeenAt: cleanText(first?.first_seen_at, 80),
+    messageCount: cleanNumber(first?.message_count, 0),
+  };
+}
+
 export async function logReportChatSession(input: {
   sessionId: string;
   reportToken: string;
   domainSlug?: string;
   domain?: string;
   companyName?: string;
+  reportUrl?: string;
   source?: string;
+  visit?: ReportChatVisitInfo;
+  lastUserQuestion?: string;
+  lastAssistantAnswerSnippet?: string;
+  messageIncrement?: number;
 }): Promise<void> {
   const sessionId = createChatSessionId(input.sessionId);
+  const reportToken = cleanId(input.reportToken);
+  const now = new Date().toISOString();
 
-  // Keep this payload compatible with the simple SQL table shared in setup instructions.
-  // Extra values like companyName/domainSlug are intentionally omitted so logging does not fail
-  // on projects that have only the base columns.
+  if (!reportToken) return;
+
+  const existing = await readSessionCounter({ sessionId, reportToken });
+  const firstSeenAt = existing.firstSeenAt || now;
+  const messageCount = existing.messageCount + cleanNumber(input.messageIncrement, 0);
+  const visit = input.visit || {};
+
+  const richRow = {
+    id: sessionId,
+    report_token: reportToken,
+    domain_slug: cleanText(input.domainSlug, 180),
+    domain: cleanText(input.domain, 180),
+    company_name: cleanText(input.companyName, 180),
+    country_code: cleanText(visit.countryCode, 12),
+    country_name: cleanText(visit.countryName, 80),
+    region: cleanText(visit.region, 120),
+    city: cleanText(visit.city, 120),
+    device_type: cleanText(visit.deviceType || "Unknown", 40),
+    browser: cleanText(visit.browser || "Unknown", 80),
+    os: cleanText(visit.os || "Unknown", 80),
+    first_seen_at: firstSeenAt,
+    last_seen_at: now,
+    updated_at: now,
+    message_count: messageCount,
+    last_user_question: cleanText(input.lastUserQuestion, 700),
+    last_assistant_answer_snippet: cleanText(input.lastAssistantAnswerSnippet, 900),
+    report_url: cleanText(input.reportUrl, 500),
+  };
+
+  const savedRich = await postRows({
+    table: CHAT_SESSIONS_TABLE,
+    upsert: true,
+    rows: richRow,
+  });
+
+  if (savedRich) return;
+
+  // Backward-compatible fallback for older setup SQL with only id/report_token/domain/updated_at.
   await postRows({
     table: CHAT_SESSIONS_TABLE,
     upsert: true,
     rows: {
       id: sessionId,
-      report_token: cleanId(input.reportToken),
+      report_token: reportToken,
       domain: cleanText(input.domain, 180),
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     },
   });
 }
@@ -281,9 +384,17 @@ export async function logReportChatMessages(input: {
   answer: string;
   mode: "gemini_stream" | "smart_fallback" | "quota_disabled" | "error";
   status?: string;
+  domainSlug?: string;
+  domain?: string;
+  companyName?: string;
+  reportUrl?: string;
+  visit?: ReportChatVisitInfo;
 }): Promise<void> {
   const sessionId = createChatSessionId(input.sessionId);
   const now = new Date().toISOString();
+  const reportToken = cleanId(input.reportToken);
+
+  if (!reportToken) return;
 
   // Match the base messages table: session_id, report_token, role, content, source, quota_status, created_at.
   await postRows({
@@ -291,7 +402,7 @@ export async function logReportChatMessages(input: {
     rows: [
       {
         session_id: sessionId,
-        report_token: cleanId(input.reportToken),
+        report_token: reportToken,
         role: "user",
         content: cleanText(input.question, 1400),
         source: cleanText(input.mode, 80),
@@ -300,7 +411,7 @@ export async function logReportChatMessages(input: {
       },
       {
         session_id: sessionId,
-        report_token: cleanId(input.reportToken),
+        report_token: reportToken,
         role: "assistant",
         content: cleanText(input.answer, 5000),
         source: cleanText(input.mode, 80),
@@ -308,6 +419,19 @@ export async function logReportChatMessages(input: {
         created_at: now,
       },
     ],
+  });
+
+  await logReportChatSession({
+    sessionId,
+    reportToken,
+    domainSlug: input.domainSlug,
+    domain: input.domain,
+    companyName: input.companyName,
+    reportUrl: input.reportUrl,
+    visit: input.visit,
+    lastUserQuestion: input.question,
+    lastAssistantAnswerSnippet: input.answer,
+    messageIncrement: 2,
   });
 }
 
@@ -364,15 +488,67 @@ export async function loadReportChatMessages(input: {
   return messages;
 }
 
+function normalizeSessionRow(row: {
+  id?: string;
+  report_token?: string;
+  domain?: string;
+  domain_slug?: string;
+  company_name?: string;
+  country_code?: string;
+  country_name?: string;
+  region?: string;
+  city?: string;
+  device_type?: string;
+  browser?: string;
+  os?: string;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  updated_at?: string;
+  message_count?: number | string;
+  last_user_question?: string;
+  last_assistant_answer_snippet?: string;
+  reviewed_at?: string;
+  report_url?: string;
+}): StoredReportChatSession | null {
+  const id = cleanId(row.id);
+  const token = cleanId(row.report_token);
+
+  if (!id || !token) return null;
+
+  return {
+    id,
+    reportToken: token,
+    domain: cleanText(row.domain, 180),
+    domainSlug: cleanText(row.domain_slug, 180),
+    companyName: cleanText(row.company_name, 180),
+    countryCode: cleanText(row.country_code, 12),
+    countryName: cleanText(row.country_name, 80),
+    region: cleanText(row.region, 120),
+    city: cleanText(row.city, 120),
+    deviceType: cleanText(row.device_type, 40),
+    browser: cleanText(row.browser, 80),
+    os: cleanText(row.os, 80),
+    firstSeenAt: cleanText(row.first_seen_at, 80),
+    lastSeenAt: cleanText(row.last_seen_at, 80),
+    updatedAt: cleanText(row.updated_at, 80),
+    messageCount: cleanNumber(row.message_count, 0),
+    lastUserQuestion: cleanText(row.last_user_question, 700),
+    lastAssistantAnswerSnippet: cleanText(row.last_assistant_answer_snippet, 900),
+    reviewedAt: cleanText(row.reviewed_at, 80),
+    reportUrl: cleanText(row.report_url, 500),
+  };
+}
+
 export async function listReportChatSessions(input: {
   reportToken?: string;
   limit?: number;
+  search?: string;
 } = {}): Promise<StoredReportChatSession[]> {
   const reportToken = cleanId(input.reportToken);
-  const limit = Math.max(1, Math.min(200, Number(input.limit || 80)));
+  const limit = Math.max(1, Math.min(250, Number(input.limit || 100)));
 
   const queryParts = [
-    "select=id,report_token,domain,updated_at",
+    "select=id,report_token,domain,domain_slug,company_name,country_code,country_name,region,city,device_type,browser,os,first_seen_at,last_seen_at,updated_at,message_count,last_user_question,last_assistant_answer_snippet,reviewed_at,report_url",
     "order=updated_at.desc",
     `limit=${limit}`,
   ];
@@ -381,31 +557,105 @@ export async function listReportChatSessions(input: {
     queryParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
   }
 
-  const rows = await getRows<{
+  let rows = await getRows<{
     id?: string;
     report_token?: string;
     domain?: string;
+    domain_slug?: string;
+    company_name?: string;
+    country_code?: string;
+    country_name?: string;
+    region?: string;
+    city?: string;
+    device_type?: string;
+    browser?: string;
+    os?: string;
+    first_seen_at?: string;
+    last_seen_at?: string;
     updated_at?: string;
+    message_count?: number | string;
+    last_user_question?: string;
+    last_assistant_answer_snippet?: string;
+    reviewed_at?: string;
+    report_url?: string;
   }>({
     table: CHAT_SESSIONS_TABLE,
     query: queryParts.join("&"),
   });
 
-  const sessions: StoredReportChatSession[] = [];
+  if (!rows.length) {
+    const fallbackParts = [
+      "select=id,report_token,domain,updated_at",
+      "order=updated_at.desc",
+      `limit=${limit}`,
+    ];
 
-  for (const row of rows) {
-    const id = cleanId(row.id);
-    const token = cleanId(row.report_token);
+    if (reportToken) {
+      fallbackParts.splice(1, 0, `report_token=eq.${encodeURIComponent(reportToken)}`);
+    }
 
-    if (!id || !token) continue;
-
-    sessions.push({
-      id,
-      reportToken: token,
-      domain: cleanText(row.domain, 180),
-      updatedAt: cleanText(row.updated_at, 80),
+    rows = await getRows({
+      table: CHAT_SESSIONS_TABLE,
+      query: fallbackParts.join("&"),
     });
   }
 
-  return sessions;
+  const search = cleanText(input.search, 120).toLowerCase();
+  const sessions = rows.map(normalizeSessionRow).filter((item): item is StoredReportChatSession => Boolean(item));
+
+  if (!search) return sessions;
+
+  return sessions.filter((session) => {
+    const haystack = [
+      session.reportToken,
+      session.domain,
+      session.domainSlug,
+      session.companyName,
+      session.countryCode,
+      session.countryName,
+      session.deviceType,
+      session.browser,
+      session.os,
+      session.lastUserQuestion,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(search);
+  });
+}
+
+export async function markReportChatSessionReviewed(input: {
+  sessionId: string;
+  reportToken: string;
+}): Promise<void> {
+  const sessionId = createChatSessionId(input.sessionId);
+  const reportToken = cleanId(input.reportToken);
+  const now = new Date().toISOString();
+
+  if (!reportToken) return;
+
+  const savedRich = await postRows({
+    table: CHAT_SESSIONS_TABLE,
+    upsert: true,
+    rows: {
+      id: sessionId,
+      report_token: reportToken,
+      reviewed_at: now,
+      updated_at: now,
+    },
+  });
+
+  if (savedRich) return;
+
+  await postRows({
+    table: CHAT_SESSIONS_TABLE,
+    upsert: true,
+    rows: {
+      id: sessionId,
+      report_token: reportToken,
+      updated_at: now,
+    },
+  });
 }

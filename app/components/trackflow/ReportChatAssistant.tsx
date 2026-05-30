@@ -916,7 +916,7 @@ export default function ReportChatAssistant({
               )}
 
               <p className="mt-2 text-center text-[10px] font-semibold leading-4 text-slate-400">
-                Conversation may be saved for follow-up. Final confirmation requires approved access.
+                Conversation and basic visit details may be saved for follow-up. Final confirmation requires approved access.
               </p>
             </div>
           </div>

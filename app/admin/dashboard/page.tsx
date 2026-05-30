@@ -62,6 +62,7 @@ import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardSt
 
 import type {
   BulkLeadAction,
+  ChatInsightsState,
   CleanupBucket,
   CleanupCandidate,
   CleanupState,
@@ -73,6 +74,8 @@ import type {
   Lead,
   MainTab,
   ReportAssetCleanupState,
+  ReportChatMessageRow,
+  ReportChatSessionRow,
   SecureReportListState,
   SecureReportRow,
   ScheduledEditState,
@@ -128,6 +131,7 @@ import AutomationPanel from "./AutomationPanel";
 import SheetQueuePanel from "./SheetQueuePanel";
 import OutreachPanel from "./OutreachPanel";
 import LeadsPanel from "./LeadsPanel";
+import ChatInsightsPanel from "./ChatInsightsPanel";
 
 const MAILING_ADDRESS =
   process.env.NEXT_PUBLIC_TRACKFLOW_MAILING_ADDRESS ||
@@ -225,6 +229,22 @@ function emptySecureReportListState(): SecureReportListState {
     bulkRows: [],
     bulkFailedCount: 0,
     bulkCompletedCount: 0,
+  };
+}
+
+
+function emptyChatInsightsState(): ChatInsightsState {
+  return {
+    loading: false,
+    transcriptLoading: false,
+    actionLoading: false,
+    error: "",
+    status: "",
+    loadedAt: null,
+    search: "",
+    rows: [],
+    selectedSession: null,
+    messages: [],
   };
 }
 
@@ -403,6 +423,7 @@ export default function DashboardPage() {
   const [followupCandidatesStatus, setFollowupCandidatesStatus] = useState("");
   const [reportAssetCleanup, setReportAssetCleanup] = useState<ReportAssetCleanupState>(() => emptyReportAssetCleanupState());
   const [secureReports, setSecureReports] = useState<SecureReportListState>(() => emptySecureReportListState());
+  const [chatInsights, setChatInsights] = useState<ChatInsightsState>(() => emptyChatInsightsState());
   const [footprintMemory, setFootprintMemory] = useState<FootprintMemoryState>(() => emptyFootprintMemoryState());
 
   const {
@@ -1662,6 +1683,161 @@ export default function DashboardPage() {
   };
 
 
+  const loadChatInsights = async (force = false) => {
+    if (!force && chatInsights.loadedAt && Date.now() - chatInsights.loadedAt < 60_000) return;
+
+    setChatInsights((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+      status: "Loading client chat conversations...",
+    }));
+
+    try {
+      const params = new URLSearchParams({
+        admin: "1",
+        limit: "150",
+      });
+
+      if (chatInsights.search.trim()) {
+        params.set("search", chatInsights.search.trim());
+      }
+
+      const response = await fetch(`/api/trackflow/report-chat?${params.toString()}`, {
+        method: "GET",
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || "Client chats could not be loaded.");
+      }
+
+      const rows = Array.isArray(data.sessions) ? (data.sessions as ReportChatSessionRow[]) : [];
+
+      setChatInsights((prev) => ({
+        ...prev,
+        rows,
+        loading: false,
+        loadedAt: Date.now(),
+        status: rows.length ? `${rows.length} client chat conversation${rows.length === 1 ? "" : "s"} loaded.` : "No client chats found yet.",
+        error: "",
+      }));
+    } catch (error: any) {
+      setChatInsights((prev) => ({
+        ...prev,
+        loading: false,
+        error: String(error?.message || error || "Client chats could not be loaded."),
+        status: "",
+      }));
+    }
+  };
+
+  const openChatInsightSession = async (session: ReportChatSessionRow) => {
+    setChatInsights((prev) => ({
+      ...prev,
+      selectedSession: session,
+      transcriptLoading: true,
+      messages: [],
+      error: "",
+      status: "",
+    }));
+
+    try {
+      const params = new URLSearchParams({
+        admin: "1",
+        token: session.reportToken,
+        sessionId: session.id,
+      });
+
+      const response = await fetch(`/api/trackflow/report-chat?${params.toString()}`, {
+        method: "GET",
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || "Conversation transcript could not be loaded.");
+      }
+
+      const messages = Array.isArray(data.messages) ? (data.messages as ReportChatMessageRow[]) : [];
+      const latestSession = (data.session || session) as ReportChatSessionRow;
+
+      setChatInsights((prev) => ({
+        ...prev,
+        selectedSession: latestSession,
+        transcriptLoading: false,
+        messages,
+      }));
+    } catch (error: any) {
+      setChatInsights((prev) => ({
+        ...prev,
+        transcriptLoading: false,
+        error: String(error?.message || error || "Conversation transcript could not be loaded."),
+      }));
+    }
+  };
+
+  const markChatSessionReviewed = async (session: ReportChatSessionRow) => {
+    setChatInsights((prev) => ({
+      ...prev,
+      actionLoading: true,
+      error: "",
+      status: "",
+    }));
+
+    try {
+      const response = await fetch("/api/trackflow/report-chat", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+        body: JSON.stringify({
+          adminAction: "mark_reviewed",
+          token: session.reportToken,
+          sessionId: session.id,
+        }),
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || "Conversation could not be marked as reviewed.");
+      }
+
+      const reviewedAt = String(data.reviewedAt || new Date().toISOString());
+
+      setChatInsights((prev) => ({
+        ...prev,
+        actionLoading: false,
+        status: "Conversation marked as reviewed.",
+        rows: prev.rows.map((row) =>
+          row.id === session.id && row.reportToken === session.reportToken ? { ...row, reviewedAt } : row,
+        ),
+        selectedSession:
+          prev.selectedSession?.id === session.id && prev.selectedSession.reportToken === session.reportToken
+            ? { ...prev.selectedSession, reviewedAt }
+            : prev.selectedSession,
+      }));
+    } catch (error: any) {
+      setChatInsights((prev) => ({
+        ...prev,
+        actionLoading: false,
+        error: String(error?.message || error || "Conversation could not be marked as reviewed."),
+      }));
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "chat-insights") return;
+    if (chatInsights.loadedAt || chatInsights.loading) return;
+
+    loadChatInsights(false).catch((error: any) => {
+      console.error("Client chat insight load error:", error);
+    });
+  }, [activeTab, chatInsights.loadedAt, chatInsights.loading]);
+
+
 
   const loadSecureReports = async (force = false) => {
     if (!force && secureReports.loadedAt && Date.now() - secureReports.loadedAt < 60_000) return;
@@ -2868,6 +3044,7 @@ export default function DashboardPage() {
       { id: "cleanup", label: "Cleanup", icon: <Trash2 size={16} /> },
       { id: "automation", label: "Automation", icon: <Settings2 size={16} /> },
       { id: "analytics", label: "Analytics", icon: <BarChart3 size={16} /> },
+      { id: "chat-insights", label: "Chat Insights", icon: <MessageSquare size={16} /> },
     ];
 
     return (
@@ -3419,6 +3596,20 @@ export default function DashboardPage() {
               postmasterLoading={postmasterLoading}
               postmasterHealth={postmasterHealth}
               loadPostmasterHealth={loadPostmasterHealth}
+            />
+          )}
+          {activeTab === "chat-insights" && (
+            <ChatInsightsPanel
+              chatInsights={chatInsights}
+              setChatInsightsSearch={(value) =>
+                setChatInsights((prev) => ({
+                  ...prev,
+                  search: value,
+                }))
+              }
+              loadChatInsights={loadChatInsights}
+              openChatInsightSession={openChatInsightSession}
+              markChatSessionReviewed={markChatSessionReviewed}
             />
           )}
 

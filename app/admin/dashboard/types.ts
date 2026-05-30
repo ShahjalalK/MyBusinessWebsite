@@ -1,4 +1,4 @@
-export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics";
+export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
 
 export type ServiceId = "Email Signature" | "Google Ads" | "Server Side Tracking";
@@ -450,4 +450,51 @@ export type SecureReportListState = {
   bulkRows: BulkSecureReportCleanupRow[];
   bulkFailedCount: number;
   bulkCompletedCount: number;
+};
+
+
+export type ReportChatMessageRow = {
+  sessionId: string;
+  reportToken: string;
+  role: "user" | "assistant";
+  content: string;
+  source?: string;
+  quotaStatus?: string;
+  createdAt?: string;
+};
+
+export type ReportChatSessionRow = {
+  id: string;
+  reportToken: string;
+  domain?: string;
+  domainSlug?: string;
+  companyName?: string;
+  countryCode?: string;
+  countryName?: string;
+  region?: string;
+  city?: string;
+  deviceType?: "Mobile" | "Tablet" | "Desktop" | "Unknown" | string;
+  browser?: string;
+  os?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  updatedAt?: string;
+  messageCount?: number;
+  lastUserQuestion?: string;
+  lastAssistantAnswerSnippet?: string;
+  reviewedAt?: string;
+  reportUrl?: string;
+};
+
+export type ChatInsightsState = {
+  loading: boolean;
+  transcriptLoading: boolean;
+  actionLoading: boolean;
+  error: string;
+  status: string;
+  loadedAt: number | null;
+  search: string;
+  rows: ReportChatSessionRow[];
+  selectedSession: ReportChatSessionRow | null;
+  messages: ReportChatMessageRow[];
 };
