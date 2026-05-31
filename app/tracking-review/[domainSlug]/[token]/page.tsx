@@ -319,7 +319,8 @@ function isMessyBusinessName(value: string, domain = ""): boolean {
 
   if (!text) return true;
   if (isGenericBusinessNameSegment(text)) return true;
-  if (/https?:\/\//i.test(text) || /www\./i.test(text)) return true;
+  if (/https?:\/\//i.test(text) || /www\./i.test(text) || /\bhttps?\b/i.test(text)) return true;
+  if (/\b(event catering https|event catering|restaurant food service|food service|local service|lead generation|professional service)\b/i.test(text) && !/\balsies\b/i.test(text)) return true;
   if (/[›»]/.test(text)) return true;
   if (domainLower && lower.includes(domainLower)) return true;
   if (/\.com|\.net|\.org|\.co|\.io|\.us|\.uk/i.test(text)) return true;
@@ -350,16 +351,16 @@ function cleanBusinessNameCandidate(value: unknown, domain = ""): string {
 
 function getDisplayCompanyName(report: Record<string, any>, domain: string): string {
   const candidates = [
-    report.preparedFor,
-    report.prepared_for,
+    report.companyName,
+    report.company_name,
+    report.businessName,
+    report.business_name,
     report.displayCompanyName,
     report.display_company_name,
     report.clientName,
     report.client_name,
-    report.businessName,
-    report.business_name,
-    report.companyName,
-    report.company_name,
+    report.preparedFor,
+    report.prepared_for,
   ];
 
   for (const candidate of candidates) {
@@ -377,7 +378,8 @@ function isMessyHeadline(value: string, domain = ""): boolean {
   const domainLower = domain.toLowerCase();
 
   if (isGenericHeadline(text)) return true;
-  if (/https?:\/\//i.test(text) || /www\./i.test(text)) return true;
+  if (/https?:\/\//i.test(text) || /www\./i.test(text) || /\bhttps?\b/i.test(text)) return true;
+  if (/\b(event catering https|event catering|restaurant food service|food service|local service|lead generation|professional service)\b/i.test(text) && !/\balsies\b/i.test(text)) return true;
   if (/[›»]/.test(text)) return true;
   if (domainLower && lower.includes(domainLower)) return true;
   if (/\.com|\.net|\.org|\.co|\.io|\.us|\.uk/i.test(text)) return true;
@@ -452,7 +454,11 @@ function getReportScoreLabel(report: Record<string, any>): string {
 
 function getPrimaryConversionFocus(report: Record<string, any>, privateReportCopy: Record<string, any>): string {
   return cleanText(
-    privateReportCopy.primaryConversionFocus ||
+    privateReportCopy.primaryConversionLabel ||
+      privateReportCopy.primary_conversion_label ||
+      report.primaryConversionLabel ||
+      report.primary_conversion_label ||
+      privateReportCopy.primaryConversionFocus ||
       privateReportCopy.primary_conversion_focus ||
       report.primaryConversionFocus ||
       report.primary_conversion_focus ||
@@ -479,6 +485,77 @@ function getBusinessTypeLabel(report: Record<string, any>, privateReportCopy: Re
     "",
   );
 }
+
+function isAlertSignupReview(report: Record<string, any>, privateReportCopy: Record<string, any>): boolean {
+  const blob = [
+    report.headline,
+    report.mainFinding,
+    report.mainIssue,
+    report.primaryConversionFocus,
+    report.primary_conversion_focus,
+    report.primaryConversion,
+    report.primary_conversion,
+    report.primaryConversionAction,
+    report.primary_conversion_action,
+    privateReportCopy.headline,
+    privateReportCopy.mainFinding,
+    privateReportCopy.primaryConversionFocus,
+    privateReportCopy.primaryConversionLabel,
+    privateReportCopy.primaryConversion,
+    privateReportCopy.actionLabel,
+    privateReportCopy.pathLabel,
+    privateReportCopy.auditSnapshotTitle,
+    ...(Array.isArray(privateReportCopy.auditSnapshotQuestions) ? privateReportCopy.auditSnapshotQuestions : []),
+    ...(Array.isArray(privateReportCopy.recommendations) ? privateReportCopy.recommendations.map((item) => cleanListItemText(item)) : []),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  return /newsletter[_\s-]*subscription|alert signup|notification form|sign up for alerts|register to be notified|sms\/email|sms|customer opt-in|customer opt in|subscribe/.test(blob);
+}
+
+function normalizeAlertSignupText(value: string): string {
+  return normalizeDisplayText(value)
+    .replace(/\blead form, contact, and enquiry actions\b/gi, "alert signup and notification form actions")
+    .replace(/\blead form and contact journey\b/gi, "alert signup / notification form journey")
+    .replace(/\blead form tracking snapshot\b/gi, "Alert Signup Form tracking snapshot")
+    .replace(/\blead form tracking\b/gi, "alert signup form tracking")
+    .replace(/\blead form and enquiry-path tracking\b/gi, "alert signup and notification form tracking")
+    .replace(/\blead form submissions\b/gi, "alert signup and notification form submissions")
+    .replace(/\blead path\b/gi, "alert signup path")
+    .replace(/\blead journey\b/gi, "alert signup journey")
+    .replace(/\benquiry actions\b/gi, "notification form actions")
+    .replace(/\bcontact journey\b/gi, "notification form journey")
+    .trim();
+}
+
+function alertSignupVerificationPlan(): string[] {
+  return [
+    "Run one controlled alert signup / notification form test from the website.",
+    "Confirm sign_up, subscribe, generate_lead, or form_submit signals in GTM Preview, GA4 DebugView, and Google Ads diagnostics.",
+    "Match the same test with the CRM, form platform, SMS/email platform, or server records where relevant.",
+    "Separate browser-visible evidence from final account-side confirmation.",
+  ];
+}
+
+function alertSignupCheckedItems(existing: string[]): string[] {
+  return cleanList(
+    [
+      "Alert signup and notification form journey signals.",
+      "GA4, Google Tag Manager, Google Ads, and first-party/server-side tracking signals.",
+      ...existing.map(normalizeAlertSignupText),
+    ],
+    DEFAULT_CHECKS,
+    6,
+  );
+}
+
+function alertSignupSnapshotQuestions(): string[] {
+  return [
+    "Are alert signup and notification form actions recorded clearly inside the relevant accounts?",
+    "Which browser-visible tracking signals were observed?",
+    "What needs confirmation inside GA4, GTM, Google Ads, CRM, SMS/email platform, or server logs?",
+  ];
+}
+
 
 function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): string[] {
   const items = Array.isArray(value)
@@ -1201,24 +1278,24 @@ export default async function ReportPage({ params }: ReportPageProps) {
   ));
   const ctaText = getDisplayCtaText(privateReportCopy.ctaText || report.ctaText || report.cta_text);
 
-  const mainFinding = sentenceCaseFirst(cleanText(
+  let mainFinding = sentenceCaseFirst(cleanText(
     privateReportCopy.mainFinding || report.mainFinding || report.mainIssue,
     "A conversion tracking review may be useful based on public browser-visible evidence.",
   ));
 
-  const businessImpact = sentenceCaseFirst(cleanText(
+  let businessImpact = sentenceCaseFirst(cleanText(
     privateReportCopy.businessImpact || report.businessImpact,
     "If important lead actions are not measured clearly, it can be harder to know which marketing channels are creating enquiries.",
   ));
 
-  const whatChecked = cleanList(privateReportCopy.whatChecked || report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
-  const proofPoints = cleanList(privateReportCopy.proofPoints || report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
-  const recommendations = cleanList(privateReportCopy.recommendations || report.recommendations || report.nextSteps, DEFAULT_RECOMMENDATIONS, 6);
-  const auditSnapshotTitle = cleanText(
+  let whatChecked = cleanList(privateReportCopy.whatChecked || report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
+  let proofPoints = cleanList(privateReportCopy.proofPoints || report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
+  let recommendations = cleanList(privateReportCopy.recommendations || report.recommendations || report.nextSteps, DEFAULT_RECOMMENDATIONS, 6);
+  let auditSnapshotTitle = cleanText(
     privateReportCopy.auditSnapshotTitle || report.auditSnapshotTitle || report.audit_snapshot_title,
     "What this review is designed to clarify",
   );
-  const auditSnapshotQuestions = cleanList(
+  let auditSnapshotQuestions = cleanList(
     privateReportCopy.auditSnapshotQuestions || report.auditSnapshotQuestions || report.audit_snapshot_questions,
     [
       "Are key tracking tags visible from the browser?",
@@ -1227,6 +1304,20 @@ export default async function ReportPage({ params }: ReportPageProps) {
     ],
     3,
   );
+  const isAlertSignup = isAlertSignupReview(report, privateReportCopy);
+  if (isAlertSignup) {
+    mainFinding = normalizeAlertSignupText(mainFinding || "Alert signup and notification form tracking should be verified inside GA4 and Google Ads.");
+    businessImpact = normalizeAlertSignupText(
+      businessImpact ||
+        "If alert signup or notification form actions are not recorded clearly, campaign reports may not show which ads create real customer opt-ins or local notification requests.",
+    );
+    whatChecked = alertSignupCheckedItems(whatChecked);
+    recommendations = alertSignupVerificationPlan();
+    auditSnapshotTitle = "Alert Signup Form tracking snapshot";
+    auditSnapshotQuestions = alertSignupSnapshotQuestions();
+    proofPoints = cleanList(proofPoints.map(normalizeAlertSignupText), DEFAULT_PROOF_POINTS, 6);
+  }
+
   const manualAds = getManualAdsTransparency(report);
   const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);

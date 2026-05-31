@@ -687,6 +687,73 @@ export function normalizeCtaInteractionReport(...values: any[]): AnyRecord | nul
   };
 }
 
+function displayNameFromDomainValue(value: any): string {
+  const raw = firstCleanString(value).replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0].split("?")[0];
+  const base = raw.split(".")[0] || raw;
+  return base
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .trim();
+}
+
+function isBadReportCompanyName(value: string, domain = ""): boolean {
+  const text = firstCleanString(value).toLowerCase();
+  if (!text) return true;
+  if (/https?:\/\//i.test(text) || /www\./i.test(text) || /\bhttps?\b/i.test(text)) return true;
+  if (/\.(com|net|org|co|io|us|uk|ca|au)(\/|$|\s)/i.test(text)) return true;
+  if (/\b(event catering https|event catering|restaurant food service|food service|local service|lead generation|professional service)\b/i.test(text) && !/\balsies\b/i.test(text)) return true;
+  if (text.length > 72) return true;
+  const root = firstCleanString(domain).replace(/^https?:\/\//i, "").replace(/^www\./i, "").split(".")[0].toLowerCase();
+  if (root && text.includes(root)) return false;
+  return false;
+}
+
+function cleanReportCompanyName(value: any, domain = ""): string {
+  const fallback = displayNameFromDomainValue(domain) || "Website";
+  let text = firstCleanString(value);
+  text = text
+    .replace(/https?:\/\/\S+|www\.\S+/gi, " ")
+    .replace(/\bhttps?\b/gi, " ")
+    .replace(/\b(event catering service|event catering|restaurant food service|restaurant|food service|local service|lead generation|professional service|ecommerce|online store|prepared for)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–—|•.,]+|[\s\-–—|•.,]+$/g, "");
+  if (!text || isBadReportCompanyName(text, domain)) return fallback;
+  const root = firstCleanString(domain).replace(/^https?:\/\//i, "").replace(/^www\./i, "").split(".")[0];
+  if (root && new RegExp(`\\b${root.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\b`, "i").test(text)) return displayNameFromDomainValue(domain);
+  return text || fallback;
+}
+
+function isAlertSignupReportPayload(body: AnyRecord = {}, privatePage: AnyRecord = {}): boolean {
+  const blob = [
+    body.primaryConversion,
+    body.primary_conversion,
+    body.primaryConversionAction,
+    body.primary_conversion_action,
+    body.primaryConversionLabel,
+    body.primary_conversion_label,
+    body.headline,
+    body.mainFinding,
+    body.main_finding,
+    privatePage.primaryConversion,
+    privatePage.primaryConversionLabel,
+    privatePage.headline,
+    privatePage.mainFinding,
+    privatePage.auditSnapshotTitle,
+    ...(Array.isArray(privatePage.auditSnapshotQuestions) ? privatePage.auditSnapshotQuestions : []),
+    ...(Array.isArray(privatePage.recommendations) ? privatePage.recommendations.map((item: any) => typeof item === "string" ? item : JSON.stringify(item)) : []),
+  ].filter(Boolean).join(" ").toLowerCase();
+  return /newsletter[_\s-]*subscription|alert signup|notification form|sign up for alerts|register to be notified|sms\/email|customer opt-in|customer opt in|subscribe/.test(blob);
+}
+
+function alertSignupVerificationPlanObjects(): AnyRecord[] {
+  return [
+    { title: "Run one controlled alert signup / notification form test from the website." },
+    { title: "Confirm sign_up, subscribe, generate_lead, or form_submit signals in GTM Preview, GA4 DebugView, and Google Ads diagnostics." },
+    { title: "Match the same test with the CRM, form platform, SMS/email platform, or server records where relevant." },
+    { title: "Separate browser-visible evidence from final account-side confirmation." },
+  ];
+}
+
 export function getReportTimestamp(value: any, fallbackDays = 30) {
   const parsed = timestampFromAny(value);
   if (parsed) return parsed;
@@ -696,7 +763,7 @@ export function getReportTimestamp(value: any, fallbackDays = 30) {
 export function normalizeReportPayload(body: AnyRecord = {}) {
   const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
-  const companyName = firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, domain);
+  const companyName = cleanReportCompanyName(firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, body.preparedFor, body.prepared_for, domain), domain);
   const domainSlug = normalizeReportSlug(body.domainSlug || body.domain_slug || body.reportSlug || body.report_slug || domain || companyName || "website");
   const pdfViewUrl = sanitizeOptionalUrl(
     body.pdfViewUrl ||
@@ -761,6 +828,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   );
   const privateReportCopy = sanitizePublicReportCopyObject(rawPrivateReportCopy, 40);
   const privatePage = sanitizePublicReportCopyObject(getObjectCandidate(rawSecurePageCopy, privateReportCopy), 40);
+  const alertSignupContext = isAlertSignupReportPayload(body, privatePage);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
 
   const headline = firstCleanString(
@@ -807,17 +875,17 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     10,
   );
 
-  const recommendations = normalizeRecommendationArray(
+  let recommendations = normalizeRecommendationArray(
     privatePage.recommendations || privatePage.recommendedFixPlan || privatePage.recommended_fix_plan || body.recommendations || body.fixRecommendations || body.fix_recommendations,
     8,
   );
 
-  const whatChecked = normalizeStringArray(
+  let whatChecked = normalizeStringArray(
     privatePage.whatChecked || privatePage.what_checked || privatePage.checks || body.whatChecked || body.what_checked || body.auditScope || body.audit_scope,
     8,
   );
 
-  const auditSnapshotQuestions = normalizeStringArray(
+  let auditSnapshotQuestions = normalizeStringArray(
     privatePage.auditSnapshotQuestions || privatePage.audit_snapshot_questions || privatePage.snapshotQuestions || body.auditSnapshotQuestions || body.audit_snapshot_questions,
     4,
   );
@@ -838,7 +906,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     4,
   );
 
-  const verificationPlan = normalizeVerificationPlan(
+  let verificationPlan = normalizeVerificationPlan(
     privatePage.verificationPlan ||
       privatePage.verification_plan ||
       privatePage.recommendedFixPlan ||
@@ -884,6 +952,26 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     "Book a tracking review",
   );
 
+  if (alertSignupContext) {
+    recommendations = [
+      "Verify alert signup and notification form actions inside GA4 DebugView, GTM Preview, Google Ads diagnostics, CRM, SMS/email platform, or server logs where relevant.",
+      "Confirm expected events such as sign_up, subscribe, generate_lead, or form_submit fire once per real customer action.",
+      "Test the alert signup / notification form journey and confirm the final action inside the relevant account or server systems.",
+      "Keep browser-visible evidence separate from final account-level confirmation in client communication.",
+    ];
+    verificationPlan = alertSignupVerificationPlanObjects();
+    whatChecked = normalizeStringArray([
+      "Alert signup and notification form journey signals.",
+      "GA4, Google Tag Manager, Google Ads, and first-party/server-side tracking signals.",
+      ...whatChecked,
+    ], 8);
+    auditSnapshotQuestions = [
+      "Are alert signup and notification form actions recorded clearly inside the relevant accounts?",
+      "Which browser-visible tracking signals were observed?",
+      "What needs confirmation inside GA4, GTM, Google Ads, CRM, SMS/email platform, or server logs?",
+    ];
+  }
+
   const normalizedPrivateReportCopy = {
     headline,
     subheadline,
@@ -900,7 +988,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaInteractionTest,
     cta_interaction_test: ctaInteractionTest,
     whatChecked,
-    auditSnapshotTitle: firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title, "What this review is designed to clarify"),
+    auditSnapshotTitle: alertSignupContext ? "Alert Signup Form tracking snapshot" : firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title, "What this review is designed to clarify"),
     auditSnapshotQuestions,
     trustNotes,
     howToReadTitle: firstCleanString(privatePage.howToReadTitle, privatePage.how_to_read_title, body.howToReadTitle, body.how_to_read_title, "How to read this review"),
