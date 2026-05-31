@@ -946,14 +946,28 @@ async function handleAdminGet(req: NextRequest) {
 
   if (rawSessionId && reportToken) {
     const transcriptLimit = Math.min(limit, 100);
+    const sessionId = createChatSessionId(rawSessionId);
 
-    let messages = await loadReportChatQuestions({
-      sessionId: rawSessionId,
+    let transcriptMode = "full_qa";
+    let messages = await loadReportChatMessages({
+      sessionId,
       reportToken,
       limit: transcriptLimit,
     });
 
+    // Backward-compatible fallback for old/partial rows where only user questions
+    // were saved or where an old endpoint only queried questions.
     if (!messages.length) {
+      transcriptMode = "questions_only";
+      messages = await loadReportChatQuestions({
+        sessionId,
+        reportToken,
+        limit: transcriptLimit,
+      });
+    }
+
+    if (!messages.length) {
+      transcriptMode = "questions_only_report_fallback";
       messages = await loadReportChatQuestions({
         reportToken,
         limit: transcriptLimit,
@@ -962,9 +976,11 @@ async function handleAdminGet(req: NextRequest) {
 
     return jsonOk({
       messages,
-      sessionId: rawSessionId,
+      sessionId,
       reportToken,
-      transcriptMode: "questions_only",
+      transcriptMode,
+      assistantMessages: messages.filter((message) => message.role === "assistant").length,
+      userMessages: messages.filter((message) => message.role === "user").length,
       loggingConfigured: isReportChatLoggingConfigured(),
     });
   }

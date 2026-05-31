@@ -96,6 +96,17 @@ function cleanText(value: unknown, maxLength = 3000): string {
     .slice(0, maxLength);
 }
 
+function cleanMessageContent(value: unknown, maxLength = 5000): string {
+  return String(value || "")
+    .replace(/\r/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+    .replace(/[\t\f\v ]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function cleanCountryCode(value: unknown): string {
   const code = cleanText(value, 12).toUpperCase();
   if (!/^[A-Z]{2}$/.test(code)) return "";
@@ -506,7 +517,7 @@ export async function logReportChatMessages(input: {
         session_id: sessionId,
         report_token: reportToken,
         role: "user",
-        content: cleanText(input.question, 1400),
+        content: cleanMessageContent(input.question, 1400),
         source: cleanText(input.mode, 80),
         quota_status: cleanText(input.status || "ok", 80),
         created_at: now,
@@ -515,7 +526,7 @@ export async function logReportChatMessages(input: {
         session_id: sessionId,
         report_token: reportToken,
         role: "assistant",
-        content: cleanText(input.answer, 5000),
+        content: cleanMessageContent(input.answer, 5000),
         source: cleanText(input.mode, 80),
         quota_status: cleanText(input.status || "ok", 80),
         created_at: now,
@@ -572,7 +583,7 @@ export async function loadReportChatMessages(input: {
   for (const row of rows) {
     const role: StoredReportChatMessage["role"] | null =
       row.role === "assistant" ? "assistant" : row.role === "user" ? "user" : null;
-    const content = cleanText(row.content, 5000);
+    const content = cleanMessageContent(row.content, 5000);
 
     if (!role || !content) continue;
 
@@ -630,7 +641,7 @@ export async function loadReportChatQuestions(input: {
   const messages: StoredReportChatMessage[] = [];
 
   for (const row of rows) {
-    const content = cleanText(row.content, 5000);
+    const content = cleanMessageContent(row.content, 5000);
     if (!content) continue;
 
     messages.push({

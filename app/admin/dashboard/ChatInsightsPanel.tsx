@@ -57,6 +57,141 @@ function safeText(value: unknown, fallback = "Unknown") {
   return text || fallback;
 }
 
+const ADMIN_TRANSCRIPT_HEADINGS = [
+  "Short answer",
+  "What this means",
+  "What to verify next",
+  "Important note",
+  "Evidence to review",
+  "Next step",
+  "Best next step",
+  "Recommended first step",
+  "Recommended order",
+  "Why it matters",
+  "How we reduce risk",
+  "What we do not need",
+  "Minimum access for diagnosis",
+  "Only if you approve implementation",
+  "When higher access may be needed",
+  "Not needed",
+  "Best practice",
+  "Access safety",
+  "For this review",
+  "If campaign work is approved",
+  "If campaign management is approved",
+  "How we normally approach it",
+  "For campaign review",
+  "For campaign setup or management",
+  "What we can review safely",
+  "What we will not do in read-only mode",
+  "Best way to contact",
+  "Book a call",
+  "Direct contact",
+  "Marketplace option",
+  "Before sharing access",
+  "What to prepare",
+  "How we would proceed",
+  "Contact email",
+  "Safety note",
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isAdminTranscriptHeading(value: string) {
+  const text = String(value || "")
+    .replace(/[:：]+$/g, "")
+    .trim()
+    .toLowerCase();
+
+  return ADMIN_TRANSCRIPT_HEADINGS.some((heading) => heading.toLowerCase() === text);
+}
+
+function normalizeAdminTranscriptContent(value: unknown) {
+  let text = String(value || "").replace(/\r/g, "").trim();
+
+  if (!text) return "";
+
+  text = text
+    .replace(/Best\s*next\s*step/gi, "Recommended first step")
+    .replace(/Recommended\s*first\s*step/gi, "Recommended first step")
+    .replace(/Recommended\s*order/gi, "Recommended order")
+    .replace(/Important\s*note/gi, "Important note")
+    .replace(/Direct\s*contact/gi, "Direct contact")
+    .replace(/Marketplace\s*option/gi, "Marketplace option")
+    .replace(/Access\s*safety/gi, "Access safety")
+    .replace(/\s*[•]\s+/g, "\n- ");
+
+  for (const heading of ADMIN_TRANSCRIPT_HEADINGS) {
+    const escaped = escapeRegExp(heading);
+    const pattern = new RegExp(`\\s*(${escaped})\\s*[:：]\\s*`, "gi");
+    text = text.replace(pattern, (_match, title: string) => `\n\n${title}:\n`);
+  }
+
+  return text
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function FormattedAdminTranscriptMessage({
+  content,
+  isAssistant,
+}: {
+  content: string;
+  isAssistant: boolean;
+}) {
+  const lines = normalizeAdminTranscriptContent(content)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return null;
+
+  return (
+    <div className="space-y-2.5">
+      {lines.map((line, index) => {
+        const bullet = line.match(/^[-*]\s+(.+)$/);
+        const heading = isAdminTranscriptHeading(line);
+
+        if (heading) {
+          return (
+            <p
+              key={`${index}-${line}`}
+              className={`pt-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                isAssistant ? "text-emerald-700" : "text-blue-700"
+              }`}
+            >
+              {line.replace(/[:：]+$/g, "")}
+            </p>
+          );
+        }
+
+        if (bullet) {
+          return (
+            <div key={`${index}-${line}`} className="flex gap-2 text-sm font-semibold leading-6">
+              <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${isAssistant ? "bg-emerald-500" : "bg-blue-500"}`} />
+              <span className={isAssistant ? "text-emerald-950" : "text-slate-800"}>{bullet[1]}</span>
+            </div>
+          );
+        }
+
+        return (
+          <p
+            key={`${index}-${line}`}
+            className={`text-sm font-semibold leading-6 ${isAssistant ? "text-emerald-950" : "text-slate-900"}`}
+          >
+            {line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+
 function isUnknownLocationValue(value?: string) {
   const text = String(value || "").trim().toLowerCase();
   return !text || text === "unknown" || text === "xx" || text === "zz";
@@ -254,6 +389,7 @@ export default function ChatInsightsPanel({
 }: ChatInsightsPanelProps) {
   const [activeFilter, setActiveFilter] = React.useState<ChatInsightFilter>("attention");
   const [toggledGroupKeys, setToggledGroupKeys] = React.useState<Set<string>>(() => new Set());
+  const [showAssistantAnswers, setShowAssistantAnswers] = React.useState(false);
 
   const searchedRows = useMemo(() => {
     const search = chatInsights.search.trim().toLowerCase();
@@ -357,6 +493,20 @@ export default function ChatInsightsPanel({
     ];
   }, [chatInsights.messages, selectedSession]);
 
+  const fullTranscriptMessages = useMemo<ReportChatMessageRow[]>(() => {
+    const remoteMessages = chatInsights.messages.filter(
+      (message) =>
+        (message.role === "user" || message.role === "assistant") &&
+        String(message.content || "").trim(),
+    );
+
+    if (showAssistantAnswers && remoteMessages.length) return remoteMessages;
+
+    return clientQuestions;
+  }, [chatInsights.messages, clientQuestions, showAssistantAnswers]);
+
+  const transcriptModeLabel = showAssistantAnswers ? "Full Q&A" : "Questions only";
+
   const filterItems: Array<{ id: ChatInsightFilter; label: string; count: number }> = [
     { id: "attention", label: "Needs attention", count: attentionRows.length },
     { id: "all", label: "All visitors", count: searchedRows.length },
@@ -365,7 +515,7 @@ export default function ChatInsightsPanel({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_500px] 2xl:grid-cols-[minmax(0,1fr)_560px]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(620px,1fr)_520px] 2xl:grid-cols-[minmax(760px,1fr)_560px]">
       <div className="space-y-6">
         <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -485,13 +635,13 @@ export default function ChatInsightsPanel({
                       aria-expanded={expanded}
                       className="block w-full border-b border-slate-100 bg-slate-50/70 px-5 py-4 text-left transition hover:bg-blue-50/70"
                     >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0">
+                      <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+                        <div className="min-w-0 2xl:max-w-[52%]">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-2xl border border-slate-100 bg-white text-slate-500 shadow-sm">
                               {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </span>
-                            <p className="truncate text-base font-black text-slate-950">{group.label}</p>
+                            <p className="min-w-0 text-base font-black leading-6 text-slate-950">{group.label}</p>
                             <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${getIntentClass(group.intent)}`}>
                               {group.intent} intent
                             </span>
@@ -506,9 +656,9 @@ export default function ChatInsightsPanel({
                             )}
                           </div>
 
-                          <p className="mt-1 text-xs font-bold text-slate-400">{group.subtitle}</p>
+                          <p className="mt-1 break-words text-xs font-bold leading-5 text-slate-400">{group.subtitle}</p>
                           {group.latestQuestion ? (
-                            <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-slate-600">
+                            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
                               Latest question: {group.latestQuestion}
                             </p>
                           ) : null}
@@ -519,7 +669,7 @@ export default function ChatInsightsPanel({
                           ) : null}
                         </div>
 
-                        <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[280px]">
+                        <div className="grid w-full grid-cols-2 gap-2 text-xs font-bold text-slate-500 sm:grid-cols-4 2xl:w-auto 2xl:min-w-[300px] 2xl:grid-cols-2">
                           <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
                             {group.visitorCount} visitor{group.visitorCount === 1 ? "" : "s"}
                           </span>
@@ -633,48 +783,48 @@ export default function ChatInsightsPanel({
         </div>
       </div>
 
-      <aside className="rounded-[32px] border border-slate-100 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:flex xl:h-[calc(100vh-5.5rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden">
+      <aside className="rounded-[32px] border border-slate-100 bg-white p-3 shadow-sm xl:sticky xl:top-3 xl:flex xl:h-[calc(100vh-1.5rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden">
         {selectedSession ? (
           <div className="flex h-full min-h-[520px] flex-col xl:min-h-0">
-            <div className="shrink-0 border-b border-slate-100 pb-3">
+            <div className="shrink-0 border-b border-slate-100 pb-1.5">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Selected visitor</p>
-              <h3 className="mt-2 text-xl font-black text-slate-950">{getClientLabel(selectedSession)}</h3>
+              <h3 className="mt-1 truncate text-base font-black text-slate-950">{getClientLabel(selectedSession)}</h3>
               <p className="mt-1 text-xs font-bold text-slate-400">
                 Session: {selectedSession.id.slice(0, 8)} · {getQuestionCount(selectedSession)} question{getQuestionCount(selectedSession) === 1 ? "" : "s"}
               </p>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-[10px] font-bold text-slate-500">
+                <span className="truncate rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-1">
                   {getNetworkLocationDisplay(selectedSession)}
                 </span>
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
+                <span className="truncate rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-1">
                   {selectedSession.deviceType || "Device unknown"}
                 </span>
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
+                <span className="truncate rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-1">
                   {selectedSession.browser || "Browser unknown"}
                 </span>
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
+                <span className="truncate rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-1">
                   {selectedSession.os || "OS unknown"}
                 </span>
               </div>
 
-              <p className="mt-2 text-[10px] font-semibold leading-4 text-slate-400">
-                Network location is approximate, not GPS. VPN/proxy/ISP routing can change it.
+              <p className="mt-1 text-[10px] font-semibold leading-4 text-slate-400">
+                Approx. network location, not GPS.
               </p>
 
-              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-800">
+              <div className="mt-1.5 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Report PDF activity</p>
-                <p className="mt-1">
+                <p className="mt-0.5">
                   {selectedReportGroup?.pdfDownloads
                     ? `This report was downloaded ${selectedReportGroup.pdfDownloads > 1 ? `${selectedReportGroup.pdfDownloads} times` : "once"}${selectedReportGroup.latestPdfDownloadedAt ? ` · Last: ${formatChatTime(selectedReportGroup.latestPdfDownloadedAt)}` : ""}`
                     : "PDF not downloaded for this report yet."}
                 </p>
-                <p className="mt-1.5 text-[10px] font-semibold leading-4 text-emerald-700/80">
-                  Report-level activity, not assigned to every visitor.
+                <p className="mt-0.5 text-[10px] font-semibold leading-4 text-emerald-700/80">
+                  Report-level activity.
                 </p>
               </div>
 
-              <div className="mt-2.5 flex flex-wrap gap-2">
+              <div className="mt-1.5 flex flex-wrap gap-2">
                 {selectedSession.reportUrl ? (
                   <a
                     href={selectedSession.reportUrl}
@@ -699,50 +849,79 @@ export default function ChatInsightsPanel({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-3 pr-1.5 pb-10">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2 pr-1.5 pb-12">
               {chatInsights.transcriptLoading ? (
                 <div className="flex items-center justify-center gap-3 p-8 text-sm font-bold text-blue-600">
                   <Loader2 size={18} className="animate-spin" />
                   Loading client questions...
                 </div>
-              ) : clientQuestions.length ? (
+              ) : fullTranscriptMessages.length ? (
                 <div className="space-y-3">
-                  <div className="sticky top-0 z-10 rounded-2xl border border-blue-100 bg-blue-50/95 px-3.5 py-2.5 backdrop-blur">
+                  <div className="sticky top-0 z-10 rounded-2xl border border-slate-100 bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
-                        Visitor questions
-                      </p>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
-                        {clientQuestions.length}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
+                          {transcriptModeLabel}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">
+                          {fullTranscriptMessages.length} items
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowAssistantAnswers((current) => !current)}
+                        className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-blue-700 transition hover:bg-blue-700 hover:text-white"
+                      >
+                        {showAssistantAnswers ? "Hide answers" : "Show answers"}
+                      </button>
                     </div>
-                    <p className="mt-1 text-[11px] font-bold leading-4 text-blue-700/80">
-                      Assistant answers stay hidden here. Open report only when full chat review is needed.
-                    </p>
                   </div>
 
-                  {clientQuestions.map((message, index) => (
-                    <div
-                      key={`${message.createdAt || index}-${message.content}`}
-                      className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm transition hover:border-blue-100 hover:shadow-md"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                          Question {index + 1}
-                        </p>
-                        <p className="shrink-0 text-[10px] font-bold text-slate-400">
-                          {formatChatTime(message.createdAt)}
-                        </p>
-                      </div>
-                      <p className="mt-2 whitespace-pre-wrap break-words text-[15px] font-bold leading-7 text-slate-900">
-                        {message.content}
-                      </p>
+                  {showAssistantAnswers && !chatInsights.messages.some((message) => message.role === "assistant") ? (
+                    <div className="rounded-3xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800">
+                      Assistant answers were not returned for this selected session. Refresh once, then select the visitor again. If this remains, this session may only have saved user-question rows in Supabase.
                     </div>
-                  ))}
+                  ) : null}
+
+                  {fullTranscriptMessages.map((message, index) => {
+                    const isAssistant = message.role === "assistant";
+
+                    return (
+                      <div
+                        key={`${message.createdAt || index}-${message.role}-${message.content}`}
+                        className={`rounded-3xl border p-3.5 shadow-sm transition hover:shadow-md ${
+                          isAssistant
+                            ? "border-emerald-100 bg-emerald-50/70 hover:border-emerald-200"
+                            : "border-blue-100 bg-white hover:border-blue-200"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p
+                            className={`text-[10px] font-black uppercase tracking-[0.18em] ${
+                              isAssistant ? "text-emerald-700" : "text-slate-400"
+                            }`}
+                          >
+                            {showAssistantAnswers
+                              ? isAssistant
+                                ? "Chatbot answer"
+                                : "Client question"
+                              : `Question ${index + 1}`}
+                          </p>
+                          <p className="shrink-0 text-[10px] font-bold text-slate-400">
+                            {formatChatTime(message.createdAt)}
+                          </p>
+                        </div>
+                        <div className="mt-2 break-words">
+                          <FormattedAdminTranscriptMessage content={message.content} isAssistant={isAssistant} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5 text-center text-sm font-bold text-slate-500">
-                  No client questions were found for this visitor yet.
+                  No client questions or saved transcript messages were found for this visitor yet.
                 </div>
               )}
             </div>
