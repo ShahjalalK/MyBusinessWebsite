@@ -271,8 +271,16 @@ function decodeLocationHeader(value: string | null, maxLength = 120): string {
   }
 }
 
-function isLocalDashboardRequest(req: NextRequest): boolean {
-  const host = String(req.nextUrl.hostname || "").toLowerCase();
+function getCountryName(countryCode: string): string {
+  const code = cleanCountryCode(countryCode);
+  if (!code) return "";
+
+  return COUNTRY_NAMES[code] || code;
+}
+
+function isLocalHostname(value: string): boolean {
+  const host = String(value || "").toLowerCase().trim();
+
   return (
     host === "localhost" ||
     host === "127.0.0.1" ||
@@ -282,17 +290,33 @@ function isLocalDashboardRequest(req: NextRequest): boolean {
   );
 }
 
-function getTrustedEdgeCountryCode(req: NextRequest): string {
-  // Use trusted edge-provider headers only. Avoid generic x-country-code because it can be
-  // client/proxy supplied and can make a visitor look like the hosting/proxy region.
-  return cleanCountryCode(req.headers.get("x-vercel-ip-country")) || cleanCountryCode(req.headers.get("cf-ipcountry"));
+function getHeaderHostname(value: string | null): string {
+  const raw = cleanHeader(value, 500);
+  if (!raw) return "";
+
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return "";
+  }
 }
 
-function getCountryName(countryCode: string): string {
-  const code = cleanCountryCode(countryCode);
-  if (!code) return "";
+function isLocalDashboardRequest(req: NextRequest): boolean {
+  // Local development can accidentally call the deployed API if an app URL env points
+  // to production. In that case the request host is production, but Origin/Referer
+  // still reveals localhost. Treat it as local test data instead of saving a
+  // misleading edge-network country.
+  const requestHost = String(req.nextUrl.hostname || "").toLowerCase();
+  const originHost = getHeaderHostname(req.headers.get("origin"));
+  const refererHost = getHeaderHostname(req.headers.get("referer"));
 
-  return COUNTRY_NAMES[code] || code;
+  return isLocalHostname(requestHost) || isLocalHostname(originHost) || isLocalHostname(refererHost);
+}
+
+function getTrustedEdgeCountryCode(req: NextRequest): string {
+  // Use trusted edge-provider headers only. Avoid generic x-country-code because it
+  // can be client/proxy supplied and can make the dashboard look more certain than it is.
+  return cleanCountryCode(req.headers.get("x-vercel-ip-country")) || cleanCountryCode(req.headers.get("cf-ipcountry"));
 }
 
 function detectBrowser(userAgent: string): string {

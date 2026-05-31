@@ -62,7 +62,7 @@ function isUnknownLocationValue(value?: string) {
   return !text || text === "unknown" || text === "xx" || text === "zz";
 }
 
-function getApproxLocation(session: ReportChatSessionRow) {
+function getNetworkLocationLabel(session: ReportChatSessionRow) {
   const countryName = String(session.countryName || "").trim();
   const countryCode = String(session.countryCode || "").trim().toUpperCase();
   const region = String(session.region || "").trim();
@@ -81,6 +81,13 @@ function getApproxLocation(session: ReportChatSessionRow) {
     .filter((item, index, array) => array.indexOf(item) === index);
 
   return parts.length ? parts.join(", ") : "Unknown";
+}
+
+function getNetworkLocationDisplay(session: ReportChatSessionRow) {
+  const label = getNetworkLocationLabel(session);
+  if (label === "Local test") return "Local test";
+  if (label === "Unknown") return "Network unknown";
+  return `Network: ${label}`;
 }
 
 function formatChatTime(value?: string) {
@@ -369,7 +376,7 @@ export default function ChatInsightsPanel({
               </div>
               <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Client intent dashboard</h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
-                Grouped by website/report, then separated by visitor session. Location is approximate and based on trusted edge headers, so use it as context—not final identity.
+                Grouped by website/report, then separated by visitor session. Network location is approximate, just like large SaaS analytics tools; use it as context, not final identity.
               </p>
             </div>
 
@@ -409,7 +416,7 @@ export default function ChatInsightsPanel({
               <input
                 value={chatInsights.search}
                 onChange={(event) => setChatInsightsSearch(event.target.value)}
-                placeholder="Search website, approx. location, device, or question..."
+                placeholder="Search website, network location, device, or question..."
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </label>
@@ -587,7 +594,7 @@ export default function ChatInsightsPanel({
                             <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[260px]">
                               <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                                 <Globe2 size={14} />
-                                Approx. {getApproxLocation(session)}
+                                {getNetworkLocationDisplay(session)}
                               </span>
                               <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                                 <MonitorSmartphone size={14} />
@@ -638,7 +645,7 @@ export default function ChatInsightsPanel({
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500">
                 <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                  Approx. {getApproxLocation(selectedSession)}
+                  {getNetworkLocationDisplay(selectedSession)}
                 </span>
                 <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                   {selectedSession.deviceType || "Device unknown"}
@@ -652,7 +659,7 @@ export default function ChatInsightsPanel({
               </div>
 
               <p className="mt-2 text-[11px] font-semibold leading-5 text-slate-400">
-                Location is approximate. VPNs, proxies, localhost, and ISP routing can make it different from the real physical location.
+                Network location is approximate, not GPS. VPNs, proxies, ISP routing, localhost, and edge detection can make it different from the real physical location.
               </p>
 
               <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
