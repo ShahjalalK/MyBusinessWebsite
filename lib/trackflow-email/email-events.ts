@@ -97,7 +97,9 @@ async function collectEmailEventDocIds(query: any, limitCount = 500): Promise<st
   const ids: string[] = [];
   try {
     const snap = await query.limit(limitCount).get();
-    snap.docs.forEach((doc) => ids.push(doc.id));
+    for (const docSnap of (snap.docs || []) as Array<{ id: string }>) {
+    if (docSnap?.id) ids.push(docSnap.id);
+  }
   } catch {
     // Best-effort cleanup only. A missing index or field should not break report cleanup.
   }
