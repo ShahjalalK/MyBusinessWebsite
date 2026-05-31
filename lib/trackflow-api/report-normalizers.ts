@@ -953,12 +953,15 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   );
 
   if (alertSignupContext) {
-    recommendations = [
-      "Verify alert signup and notification form actions inside GA4 DebugView, GTM Preview, Google Ads diagnostics, CRM, SMS/email platform, or server logs where relevant.",
-      "Confirm expected events such as sign_up, subscribe, generate_lead, or form_submit fire once per real customer action.",
-      "Test the alert signup / notification form journey and confirm the final action inside the relevant account or server systems.",
-      "Keep browser-visible evidence separate from final account-level confirmation in client communication.",
-    ];
+    recommendations = normalizeRecommendationArray(
+      [
+        "Verify alert signup and notification form actions inside GA4 DebugView, GTM Preview, Google Ads diagnostics, CRM, SMS/email platform, or server logs where relevant.",
+        "Confirm expected events such as sign_up, subscribe, generate_lead, or form_submit fire once per real customer action.",
+        "Test the alert signup / notification form journey and confirm the final action inside the relevant account or server systems.",
+        "Keep browser-visible evidence separate from final account-level confirmation in client communication.",
+      ],
+      4,
+    );
     verificationPlan = alertSignupVerificationPlanObjects();
     whatChecked = normalizeStringArray([
       "Alert signup and notification form journey signals.",
