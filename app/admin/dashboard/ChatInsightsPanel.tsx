@@ -365,7 +365,7 @@ export default function ChatInsightsPanel({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_500px] 2xl:grid-cols-[minmax(0,1fr)_560px]">
       <div className="space-y-6">
         <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -633,54 +633,54 @@ export default function ChatInsightsPanel({
         </div>
       </div>
 
-      <aside className="rounded-[32px] border border-slate-100 bg-white p-5 shadow-sm xl:sticky xl:top-24 xl:flex xl:h-[calc(100vh-7rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden">
+      <aside className="rounded-[32px] border border-slate-100 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:flex xl:h-[calc(100vh-5.5rem)] xl:min-h-0 xl:flex-col xl:overflow-hidden">
         {selectedSession ? (
           <div className="flex h-full min-h-[520px] flex-col xl:min-h-0">
-            <div className="shrink-0 border-b border-slate-100 pb-4">
+            <div className="shrink-0 border-b border-slate-100 pb-3">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Selected visitor</p>
               <h3 className="mt-2 text-xl font-black text-slate-950">{getClientLabel(selectedSession)}</h3>
               <p className="mt-1 text-xs font-bold text-slate-400">
                 Session: {selectedSession.id.slice(0, 8)} · {getQuestionCount(selectedSession)} question{getQuestionCount(selectedSession) === 1 ? "" : "s"}
               </p>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500">
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
+                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
                   {getNetworkLocationDisplay(selectedSession)}
                 </span>
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
                   {selectedSession.deviceType || "Device unknown"}
                 </span>
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
                   {selectedSession.browser || "Browser unknown"}
                 </span>
-                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-1.5">
                   {selectedSession.os || "OS unknown"}
                 </span>
               </div>
 
-              <p className="mt-2 text-[11px] font-semibold leading-5 text-slate-400">
-                Network location is approximate, not GPS. VPNs, proxies, ISP routing, localhost, and edge detection can make it different from the real physical location.
+              <p className="mt-2 text-[10px] font-semibold leading-4 text-slate-400">
+                Network location is approximate, not GPS. VPN/proxy/ISP routing can change it.
               </p>
 
-              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-800">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Report PDF activity</p>
                 <p className="mt-1">
                   {selectedReportGroup?.pdfDownloads
                     ? `This report was downloaded ${selectedReportGroup.pdfDownloads > 1 ? `${selectedReportGroup.pdfDownloads} times` : "once"}${selectedReportGroup.latestPdfDownloadedAt ? ` · Last: ${formatChatTime(selectedReportGroup.latestPdfDownloadedAt)}` : ""}`
                     : "PDF not downloaded for this report yet."}
                 </p>
-                <p className="mt-2 text-[11px] font-semibold leading-5 text-emerald-700/80">
-                  PDF download is tracked at report level, so it is not assigned to every visitor session.
+                <p className="mt-1.5 text-[10px] font-semibold leading-4 text-emerald-700/80">
+                  Report-level activity, not assigned to every visitor.
                 </p>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap gap-2">
                 {selectedSession.reportUrl ? (
                   <a
                     href={selectedSession.reportUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-blue-700"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-white transition hover:bg-blue-700"
                   >
                     Open report
                     <ExternalLink size={14} />
@@ -691,7 +691,7 @@ export default function ChatInsightsPanel({
                   type="button"
                   onClick={() => void markChatSessionReviewed(selectedSession)}
                   disabled={chatInsights.actionLoading}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {chatInsights.actionLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
                   Mark reviewed
@@ -699,7 +699,7 @@ export default function ChatInsightsPanel({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 pr-1 pb-8">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-3 pr-1.5 pb-10">
               {chatInsights.transcriptLoading ? (
                 <div className="flex items-center justify-center gap-3 p-8 text-sm font-bold text-blue-600">
                   <Loader2 size={18} className="animate-spin" />
@@ -707,21 +707,26 @@ export default function ChatInsightsPanel({
                 </div>
               ) : clientQuestions.length ? (
                 <div className="space-y-3">
-                  <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
-                      Questions asked by this visitor
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-blue-700/80">
-                      Assistant answers are hidden here. Open the secure report if you need to review the full chat.
+                  <div className="sticky top-0 z-10 rounded-2xl border border-blue-100 bg-blue-50/95 px-3.5 py-2.5 backdrop-blur">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                        Visitor questions
+                      </p>
+                      <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
+                        {clientQuestions.length}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] font-bold leading-4 text-blue-700/80">
+                      Assistant answers stay hidden here. Open report only when full chat review is needed.
                     </p>
                   </div>
 
                   {clientQuestions.map((message, index) => (
                     <div
                       key={`${message.createdAt || index}-${message.content}`}
-                      className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm"
+                      className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm transition hover:border-blue-100 hover:shadow-md"
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                           Question {index + 1}
                         </p>
@@ -729,14 +734,14 @@ export default function ChatInsightsPanel({
                           {formatChatTime(message.createdAt)}
                         </p>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-6 text-slate-800">
+                      <p className="mt-2 whitespace-pre-wrap break-words text-[15px] font-bold leading-7 text-slate-900">
                         {message.content}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6 text-center text-sm font-bold text-slate-500">
+                <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5 text-center text-sm font-bold text-slate-500">
                   No client questions were found for this visitor yet.
                 </div>
               )}
