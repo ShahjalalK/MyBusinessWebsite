@@ -46,6 +46,7 @@ type CleanupPanelProps = {
   allowFootprintMemory: (email: string) => Promise<void>;
   forgetFootprintMemory: (email: string) => Promise<void>;
   forgetOldFootprintMemories: () => Promise<void>;
+  deleteOldSuppressionFootprints: () => Promise<void>;
 };
 
 const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
@@ -316,6 +317,7 @@ export default function CleanupPanel({
   allowFootprintMemory,
   forgetFootprintMemory,
   forgetOldFootprintMemories,
+  deleteOldSuppressionFootprints,
 }: CleanupPanelProps) {
   const reportCleanupInput = reportAssetCleanup.input.trim();
   const reportCleanupDisabled = reportAssetCleanup.loading || !reportCleanupInput;
@@ -339,7 +341,12 @@ export default function CleanupPanel({
   const selectedReportActionLabel =
     reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Reports";
   const footprintRows = footprintMemory.rows.slice(0, 100);
-  const blockedFootprintCount = footprintMemory.rows.filter((row) => row.status !== "allowed_again").length;
+  const blockedFootprintCount = footprintMemory.rows.filter(
+    (row) => row.status !== "allowed_again" && row.source !== "suppression_list" && row.source !== "combined",
+  ).length;
+  const suppressionFootprintCount = footprintMemory.rows.filter((row) => row.source === "suppression_list" || row.source === "combined").length;
+  const showingSuppressionFootprints = footprintMemory.filter === "suppression";
+  const showingOldFootprints = footprintMemory.filter === "old";
 
   return (
     <div className="space-y-6">
@@ -379,6 +386,7 @@ export default function CleanupPanel({
         <StatCard label="Selected reports" value={selectedReportCount} icon={<MousePointer2 size={22} />} tone="orange" />
         <StatCard label="Footprints" value={footprintMemory.rows.length} icon={<Database size={22} />} tone="blue" />
         <StatCard label="Blocked" value={blockedFootprintCount} icon={<CheckCircle2 size={22} />} tone="green" />
+        <StatCard label="Protected" value={suppressionFootprintCount} icon={<ShieldCheck size={22} />} tone="orange" />
       </div>
 
       <div className="bg-white border border-gray-100 rounded-[35px] p-5 shadow-sm space-y-5">
@@ -848,7 +856,9 @@ export default function CleanupPanel({
 
           <div className="flex flex-wrap gap-2">
             {([
-              ["blocked", "Blocked"],
+              ["blocked", "Blocked Emails"],
+              ["old", "Old Footprints"],
+              ["suppression", "Suppression"],
               ["allowed", "Allowed"],
               ["all", "All"],
             ] as const).map(([filter, label]) => (
@@ -856,7 +866,11 @@ export default function CleanupPanel({
                 key={filter}
                 type="button"
                 onClick={() => {
-                  setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, filter }));
+                  setFootprintMemory((prev: FootprintMemoryState) => ({
+                    ...prev,
+                    filter,
+                    olderThanDays: filter === "suppression" && Number(prev.olderThanDays || 0) < 180 ? 365 : prev.olderThanDays,
+                  }));
                 }}
                 className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase ${footprintMemory.filter === filter ? "bg-black text-white" : "bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-blue-600"}`}
               >
@@ -867,13 +881,19 @@ export default function CleanupPanel({
         </div>
 
         <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-          Keep blocked is the default. Use Allow again when a client asks to be contacted again or when you are testing. Use Forget memory only for old, fake, or test records you no longer need.
+          Keep this simple: Blocked Emails are for search + Allow again. Old Footprints removes old contact-memory records by age. Suppression/Unsubscribe is protected and only deletes after typing DELETE SUPPRESSION.
         </div>
 
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-2xl bg-gray-50 border border-gray-100 p-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Date-based memory cleanup</p>
-            <p className="text-xs font-bold text-gray-500 mt-1">Deletes only footprint records. It does not touch reports, PDFs, leads, Sheet rows, or tracking history.</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+              {showingSuppressionFootprints ? "Protected suppression cleanup" : "Date-based footprint cleanup"}
+            </p>
+            <p className="text-xs font-bold text-gray-500 mt-1">
+              {showingSuppressionFootprints
+                ? "Deletes old suppression/unsubscribe/bounce/spam records only after the DELETE SUPPRESSION confirmation. Use this only for very old records."
+                : "Deletes only old contact-memory footprints. It does not touch reports, PDFs, outreach leads, Sheet rows, or tracking history."}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <select
@@ -881,18 +901,29 @@ export default function CleanupPanel({
               onChange={(event: ChangeEvent<HTMLSelectElement>) => setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, olderThanDays: Number(event.target.value) }))}
               className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-[10px] font-black uppercase text-gray-600 outline-none"
             >
-              <option value={30}>Older than 30 days</option>
-              <option value={60}>Older than 60 days</option>
-              <option value={90}>Older than 90 days</option>
-              <option value={180}>Older than 180 days</option>
+              {showingSuppressionFootprints ? (
+                <>
+                  <option value={180}>Older than 180 days</option>
+                  <option value={365}>Older than 365 days</option>
+                  <option value={730}>Older than 730 days</option>
+                </>
+              ) : (
+                <>
+                  <option value={45}>Older than 45 days</option>
+                  <option value={90}>Older than 90 days</option>
+                  <option value={180}>Older than 180 days</option>
+                  <option value={365}>Older than 365 days</option>
+                </>
+              )}
             </select>
             <button
               type="button"
-              disabled={footprintMemory.actionLoading}
-              onClick={forgetOldFootprintMemories}
-              className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
+              disabled={footprintMemory.actionLoading || (!showingOldFootprints && !showingSuppressionFootprints)}
+              onClick={showingSuppressionFootprints ? deleteOldSuppressionFootprints : forgetOldFootprintMemories}
+              className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase disabled:opacity-40 ${showingSuppressionFootprints ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}
+              title={showingOldFootprints || showingSuppressionFootprints ? "Delete records older than the selected age." : "Choose Old Footprints or Suppression first."}
             >
-              Forget Old Memories
+              {showingSuppressionFootprints ? "Delete Protected Records" : "Delete Old Footprints"}
             </button>
           </div>
         </div>
@@ -938,7 +969,8 @@ export default function CleanupPanel({
                     </td>
                     <td className="p-4 align-top min-w-[220px]">
                       <p className="text-xs font-black text-gray-900 uppercase">{formatFootprintReason(row)}</p>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1">{row.source === "suppression_list" ? "Suppression" : row.source === "combined" ? "Memory + suppression" : "Contact memory"}</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-1">{row.source === "suppression_list" ? "Protected suppression" : row.source === "combined" ? "Memory + suppression" : row.source === "outreach_lead" ? "Outreach lead record" : "Contact memory"}</p>
+                      {row.leadCount ? <p className="text-[10px] font-bold text-blue-500 mt-1">{row.leadCount} linked lead record{row.leadCount === 1 ? "" : "s"}</p> : null}
                     </td>
                     <td className="p-4 align-top min-w-[200px]">
                       <p className="text-xs font-black text-gray-900">{row.lastActivityAt ? formatDate(row.lastActivityAt) : "N/A"}</p>
@@ -951,22 +983,31 @@ export default function CleanupPanel({
                     </td>
                     <td className="p-4 align-top min-w-[220px]">
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={footprintMemory.actionLoading || row.status === "allowed_again"}
-                          onClick={() => allowFootprintMemory(row.emailLower || row.email)}
-                          className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase disabled:opacity-40"
-                        >
-                          Allow again
-                        </button>
-                        <button
-                          type="button"
-                          disabled={footprintMemory.actionLoading}
-                          onClick={() => forgetFootprintMemory(row.emailLower || row.email)}
-                          className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
-                        >
-                          Forget memory
-                        </button>
+                        {row.source === "suppression_list" || row.source === "combined" ? (
+                          <span className="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-[10px] font-black uppercase">
+                            Protected
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={footprintMemory.actionLoading || row.status === "allowed_again"}
+                            onClick={() => allowFootprintMemory(row.emailLower || row.email)}
+                            className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase disabled:opacity-40"
+                          >
+                            Allow again
+                          </button>
+                        )}
+                        {showingOldFootprints && row.source === "contact_memory" ? (
+                          <button
+                            type="button"
+                            disabled={footprintMemory.actionLoading}
+                            onClick={() => forgetFootprintMemory(row.emailLower || row.email)}
+                            className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
+                            title="Delete this contact-memory footprint only."
+                          >
+                            Delete footprint
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

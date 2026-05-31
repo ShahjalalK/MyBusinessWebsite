@@ -96,6 +96,8 @@ type OutreachPanelProps = {
   sheetLoading: boolean;
   sheetStatus: string;
   selectedOutreachSheetRow: number | null;
+  keepUnderSheetAudit: boolean;
+  setKeepUnderSheetAudit: SetState<boolean>;
   loadSheetLeads: (force?: boolean) => Promise<void>;
   fillOutreachFromSheet: (lead: SheetLead) => void;
   handleSenderChange: (senderId: string) => void;
@@ -154,6 +156,8 @@ export default function OutreachPanel({
   sheetLoading,
   sheetStatus,
   selectedOutreachSheetRow,
+  keepUnderSheetAudit,
+  setKeepUnderSheetAudit,
   loadSheetLeads,
   fillOutreachFromSheet,
   handleSenderChange,
@@ -577,9 +581,25 @@ export default function OutreachPanel({
                 <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Professional Email Composer</h2>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Clean body, cursor tags, direct send</p>
                 {selectedOutreachSheetRow ? (
-                  <p className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase text-blue-700">
-                    Loaded from Sheet row {selectedOutreachSheetRow}
-                  </p>
+                  <div className="mt-2 space-y-2">
+                    <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase text-blue-700">
+                      Loaded from Sheet row {selectedOutreachSheetRow}
+                    </p>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={keepUnderSheetAudit}
+                        onChange={(event) => setKeepUnderSheetAudit(event.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="block text-[10px] font-black uppercase text-blue-700">Keep under this Sheet audit/report</span>
+                        <span className="block text-[10px] leading-relaxed text-slate-500">
+                          Checked: changed recipients stay linked to this Sheet/report and are cleaned up with it. Unchecked: this becomes a manual report-linked lead.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
                 ) : null}
               </div>
               <Type className="text-blue-600" size={22} />

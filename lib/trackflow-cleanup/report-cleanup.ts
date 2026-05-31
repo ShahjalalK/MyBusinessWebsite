@@ -344,12 +344,29 @@ function getReportB2Key(report: AnyRecord, lead: AnyRecord): string {
   return "";
 }
 
+
+function isReportCleanupLinkedLead(data: AnyRecord = {}): boolean {
+  const source = clean(data.source).toLowerCase();
+  const sourceOrigin = clean(data.sourceOrigin).toLowerCase();
+  const sourceRole = clean(data.sourceRole).toLowerCase();
+
+  if (sourceRole === "manual_report_linked" || data.keepUnderSheetAudit === false) return false;
+  if (sourceRole === "sheet_primary" || sourceRole === "sheet_additional" || sourceRole === "sheet_additional_recipient") return true;
+  if (data.keepUnderSheetAudit === true || sourceOrigin === "sheet") return true;
+  if (source.includes("google_sheet") || source.includes("sheet_queue")) return true;
+  if (Number(data.sheetRowNumber || 0) > 0 && data.keepUnderSheetAudit !== false) return true;
+  return false;
+}
+
 async function getLeadsByIdOrReportToken(leadId: string, reportToken: string): Promise<Array<{ id: string; data: AnyRecord }>> {
   const leads = new Map<string, { id: string; data: AnyRecord }>();
 
   if (leadId) {
     const snap = await adminDb.collection("outreach_leads").doc(leadId).get();
-    if (snap.exists) leads.set(snap.id, { id: snap.id, data: asRecord(snap.data()) });
+    if (snap.exists) {
+      const data = asRecord(snap.data());
+      if (isReportCleanupLinkedLead(data)) leads.set(snap.id, { id: snap.id, data });
+    }
   }
 
   if (reportToken) {
@@ -358,7 +375,8 @@ async function getLeadsByIdOrReportToken(leadId: string, reportToken: string): P
       try {
         const snap = await adminDb.collection("outreach_leads").where(field, "==", reportToken).limit(50).get();
         snap.docs.forEach((doc: any) => {
-          if (!leads.has(doc.id)) leads.set(doc.id, { id: doc.id, data: asRecord(doc.data()) });
+          const data = asRecord(doc.data());
+          if (!leads.has(doc.id) && isReportCleanupLinkedLead(data)) leads.set(doc.id, { id: doc.id, data });
         });
       } catch {
         // Best-effort lookup. Missing composite/index should not block cleanup manifest.

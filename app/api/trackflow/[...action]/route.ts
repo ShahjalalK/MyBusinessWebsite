@@ -39,7 +39,7 @@ import {
   unsubscribeUrl,
 } from "@/lib/trackflow-api/security";
 import { getActiveContactMemoryWarning } from "@/lib/trackflow-email/contact-memory";
-import { addEmailEvent } from "@/lib/trackflow-email/email-events";
+import { addEmailEvent, deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
 import { getSenderFromBody, getSenderFromLead, mapSharedSender } from "@/lib/trackflow-email/sender-selection";
 import { addSuppression, isSuppressed } from "@/lib/trackflow-email/suppression";
 import { createReportCleanupHandlers } from "@/lib/trackflow-cleanup/report-cleanup";
@@ -186,6 +186,13 @@ type LeadData = {
   sheetRowNumber?: number;
   sheetWebsiteUrl?: string;
   sheetFinalEmail?: string;
+  keepUnderSheetAudit?: boolean;
+  sourceOrigin?: string;
+  sourceRole?: string;
+  parentSheetEmail?: string;
+  parentSheetRowNumber?: number;
+  parentSheetWebsiteUrl?: string;
+  parentReportToken?: string;
   source?: string;
   [key: string]: any;
 };
@@ -403,6 +410,13 @@ const SendInitialBodySchema = z
     sheetWebsiteUrl: z.string().optional(),
     websiteUrl: z.string().optional(),
     sheetFinalEmail: z.string().optional(),
+    keepUnderSheetAudit: z.boolean().optional(),
+    sourceOrigin: z.string().optional(),
+    sourceRole: z.string().optional(),
+    parentSheetEmail: z.string().optional(),
+    parentSheetRowNumber: z.any().optional(),
+    parentSheetWebsiteUrl: z.string().optional(),
+    parentReportToken: z.string().optional(),
     source: z.string().optional(),
   })
   .passthrough()
@@ -1865,7 +1879,27 @@ async function sendInitialFromBody(rawBody: any) {
   }
   const reportButtonText = String(body.reportButtonText || "View short audit note").trim().slice(0, 80);
   const source = String(body.source || "").trim();
-  const requiresReviewedReport = source === "google_sheet_queue" || source === "sheet_queue";
+  const rawSheetRowNumber = Number(body.sheetRowNumber || body.parentSheetRowNumber || 0) || 0;
+  const rawSheetFinalEmail = String(body.sheetFinalEmail || body.parentSheetEmail || "").trim();
+  const rawSheetWebsiteUrl = String(body.sheetWebsiteUrl || body.parentSheetWebsiteUrl || body.websiteUrl || "").trim();
+  const rawReportToken = normalizeReportToken(body.reportToken || body.report_token || body.parentReportToken || "");
+  const sourceLower = source.toLowerCase();
+  const hasSheetContext = rawSheetRowNumber > 0 || Boolean(rawSheetFinalEmail || rawSheetWebsiteUrl);
+  const explicitKeepUnderSheetAudit = typeof body.keepUnderSheetAudit === "boolean";
+  const keepUnderSheetAudit = hasSheetContext && (explicitKeepUnderSheetAudit ? body.keepUnderSheetAudit === true : sourceLower.includes("google_sheet") || sourceLower.includes("sheet_queue"));
+  const sourceOrigin = keepUnderSheetAudit ? "sheet" : String(body.sourceOrigin || (rawReportToken || reportUrl ? "manual" : "manual")).trim().toLowerCase();
+  const sourceRole = (() => {
+    const requested = String(body.sourceRole || "").trim().toLowerCase();
+    if (requested === "test") return "test";
+    if (keepUnderSheetAudit) {
+      const sheetEmailLower = normalizeEmail(rawSheetFinalEmail);
+      return sheetEmailLower && sheetEmailLower === emailLower ? "sheet_primary" : "sheet_additional_recipient";
+    }
+    if (rawReportToken || reportUrl) return "manual_report_linked";
+    return requested || "manual";
+  })();
+  const normalizedSource = source || (keepUnderSheetAudit ? "google_sheet_send_email_drawer" : sourceRole === "manual_report_linked" ? "manual_report_linked" : "dashboard");
+  const requiresReviewedReport = normalizedSource === "google_sheet_queue" || normalizedSource === "sheet_queue";
 
   if (requiresReviewedReport) {
     const reportToken = normalizeReportToken(body.reportToken || body.report_token || "");
@@ -1969,15 +2003,22 @@ async function sendInitialFromBody(rawBody: any) {
     signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
     reportUrl,
     reportButtonText,
-    reportToken: normalizeReportToken(body.reportToken || body.report_token || ""),
+    reportToken: rawReportToken,
     pdfFileId: String(body.pdfFileId || body.pdf_file_id || "").trim(),
     pdfViewUrl: sanitizeOptionalUrl(body.pdfViewUrl || body.pdf_view_url || ""),
     pdfDownloadUrl: sanitizeOptionalUrl(body.pdfDownloadUrl || body.pdf_download_url || ""),
     pdfExpiresAt: body.pdfExpiresAt || body.pdf_expires_at || null,
-    sheetRowNumber: Number(body.sheetRowNumber || 0) || null,
-    sheetWebsiteUrl: String(body.sheetWebsiteUrl || body.websiteUrl || "").trim(),
-    sheetFinalEmail: String(body.sheetFinalEmail || body.email || "").trim(),
-    source: source || "dashboard",
+    sheetRowNumber: keepUnderSheetAudit ? rawSheetRowNumber || null : null,
+    sheetWebsiteUrl: keepUnderSheetAudit ? rawSheetWebsiteUrl : "",
+    sheetFinalEmail: keepUnderSheetAudit ? rawSheetFinalEmail : "",
+    keepUnderSheetAudit,
+    sourceOrigin,
+    sourceRole,
+    parentSheetRowNumber: rawSheetRowNumber || null,
+    parentSheetEmail: rawSheetFinalEmail,
+    parentSheetWebsiteUrl: rawSheetWebsiteUrl,
+    parentReportToken: rawReportToken,
+    source: normalizedSource,
     cooldownOverride: allowCooldownOverride === true,
     cooldownOverrideAt: allowCooldownOverride === true ? admin.firestore.FieldValue.serverTimestamp() : null,
     subject,
@@ -7392,7 +7433,18 @@ function serializeManagedLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSnap)
     deletedAt: serializeApiMillis(data.deletedAt),
     deleteReason: data.deleteReason || "",
     source: data.source || "",
+    sourceOrigin: data.sourceOrigin || "",
+    sourceRole: data.sourceRole || "",
+    keepUnderSheetAudit: data.keepUnderSheetAudit === true,
+    parentSheetRowNumber: data.parentSheetRowNumber || null,
+    parentSheetEmail: data.parentSheetEmail || "",
+    parentSheetWebsiteUrl: data.parentSheetWebsiteUrl || "",
+    parentReportToken: data.parentReportToken || "",
+    sourceKind: getLeadSourceKind(data as LeadData),
     sheetRowNumber: data.sheetRowNumber || null,
+    sheetFinalEmail: data.sheetFinalEmail || "",
+    sheetWebsiteUrl: data.sheetWebsiteUrl || "",
+    reportToken: data.reportToken || "",
     reportUrl: data.reportUrl || "",
     trackingId: data.trackingId || "",
     tracking_history: serializeRecentTrackingHistory(data.tracking_history, 10),
@@ -7438,6 +7490,7 @@ async function handleLeadsGet(req: Request) {
   const limitParam = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 20), 50));
   const view = (String(url.searchParams.get("view") || "active").trim() || "active") as LeadManagementView;
   const status = String(url.searchParams.get("status") || "All").trim();
+  const sourceFilter = String(url.searchParams.get("source") || "all").trim().toLowerCase();
   const month = String(url.searchParams.get("month") || "").trim();
   const cursor = Number(url.searchParams.get("cursor") || 0);
   const fetchLimit = Math.min(Math.max(limitParam * 6, limitParam), 300);
@@ -7459,6 +7512,13 @@ async function handleLeadsGet(req: Request) {
     const data = docSnap.data() || {};
     if (!isLeadInManagementView(data, view)) continue;
     if (status && status !== "All" && String(data.status || "") !== status) continue;
+    const leadSourceKind = getLeadSourceKind(data as LeadData);
+    const leadSourceRole = getLeadSourceRole(data as LeadData);
+    const normalizedSourceFilter = sourceFilter === "manual" ? "cold" : sourceFilter;
+    if (["cold", "sheet", "test"].includes(normalizedSourceFilter) && leadSourceKind !== normalizedSourceFilter) continue;
+    if (normalizedSourceFilter === "manual_report_linked" && leadSourceRole !== "manual_report_linked") continue;
+    if (normalizedSourceFilter === "sheet_primary" && leadSourceRole !== "sheet_primary") continue;
+    if (normalizedSourceFilter === "sheet_additional" && leadSourceRole !== "sheet_additional") continue;
     rows.push(serializeManagedLead(docSnap));
     if (rows.length >= limitParam) break;
   }
@@ -7475,6 +7535,7 @@ async function handleLeadsGet(req: Request) {
     rows,
     view,
     status,
+    source: sourceFilter || "all",
     month: month || "All",
     hasMore: snap.docs.length === fetchLimit && Boolean(nextCursor),
     nextCursor,
@@ -7496,6 +7557,68 @@ async function updateLeadsInChunks(ids: string[], buildUpdate: (id: string) => R
 }
 
 
+
+function getLeadContactMemoryPayload(lead: LeadData, actor: string, mode: "manual_delete" | "report_cleanup" = "manual_delete"): Record<string, any> {
+  const emailLower = normalizeEmail(lead.emailLower || lead.email || "");
+  const now = Date.now();
+  const lastContactedMs = Math.max(
+    toMillis(lead.lastEngagedAt),
+    toMillis(lead.lastClickedAt),
+    toMillis(lead.lastOpenedAt),
+    toMillis(lead.sentAt),
+    toMillis(lead.createdAt),
+    now,
+  );
+
+  return {
+    emailLower,
+    lastOutcome: String(lead.status || "manual_deleted_keep_memory"),
+    lastContactedAt: admin.firestore.Timestamp.fromMillis(lastContactedMs),
+    cooldownUntil: admin.firestore.Timestamp.fromMillis(now + 45 * 86_400_000),
+    memoryExpiresAt: admin.firestore.Timestamp.fromMillis(now + 45 * 86_400_000),
+    companyName: lead.company_name || "",
+    website: lead.website || lead.sheetWebsiteUrl || "",
+    service: lead.service || "",
+    openCount: Number(lead.open_count || 0),
+    clickCount: Number(lead.click_count || 0),
+    sourceLeadId: lead.id || "",
+    source: mode,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedBy: actor,
+  };
+}
+
+async function deleteManualLeadRecord(leadId: string, lead: LeadData, options: { actor: string; keepMemory: boolean; reason: string }) {
+  const sourceKind = getLeadSourceKind(lead);
+  if (sourceKind === "sheet") {
+    return { leadId, ok: false, skipped: true, reason: "sheet_audit_lead_use_report_cleanup" };
+  }
+
+  const emailLower = normalizeEmail(lead.emailLower || lead.email || "");
+  if (options.keepMemory && emailLower) {
+    await adminDb.collection("contact_memory").doc(emailDocId(emailLower)).set(getLeadContactMemoryPayload({ ...lead, id: leadId }, options.actor), { merge: true });
+  } else if (emailLower) {
+    await adminDb.collection("contact_memory").doc(emailDocId(emailLower)).delete().catch(() => undefined);
+  }
+
+  await deleteEmailEventsForReport({
+    reportToken: getLeadReportTokenForCleanup(lead),
+    leadIds: [leadId],
+    maxDocs: 1500,
+  }).catch(() => ({ ok: false, reason: "email_event_cleanup_best_effort_failed" }));
+
+  await adminDb.collection("outreach_leads").doc(leadId).delete();
+
+  return {
+    leadId,
+    ok: true,
+    skipped: false,
+    email: emailLower,
+    keptMemory: options.keepMemory,
+    reason: options.reason,
+  };
+}
+
 /** POST /api/trackflow/leads/bulk-action */
 async function handleLeadsBulkAction(req: Request) {
   const adminUser: any = await requireAdmin(req);
@@ -7506,9 +7629,41 @@ async function handleLeadsBulkAction(req: Request) {
     : [];
 
   if (!ids.length) throw new ApiError("Select at least one lead", 400);
-  if (!["archive", "restore", "trash", "delete_permanent"].includes(action)) throw new ApiError("Invalid bulk action", 400);
+  if (!["archive", "restore", "trash", "delete_permanent", "delete_manual_keep_memory", "delete_manual_no_footprint"].includes(action)) throw new ApiError("Invalid bulk action", 400);
 
   const actor = normalizeEmail(adminUser.email || "admin");
+
+  if (action === "delete_manual_keep_memory" || action === "delete_manual_no_footprint") {
+    const keepMemory = action === "delete_manual_keep_memory";
+    const reason = String(body.reason || action).slice(0, 160);
+    const results: any[] = [];
+
+    for (const leadId of ids) {
+      const ref = adminDb.collection("outreach_leads").doc(leadId);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        results.push({ leadId, ok: false, reason: "lead_not_found" });
+        continue;
+      }
+
+      const lead = { id: snap.id, ...(snap.data() || {}) } as LeadData;
+      results.push(await deleteManualLeadRecord(leadId, lead, { actor, keepMemory, reason }));
+    }
+
+    const deletedIds = results.filter((item) => item.ok && !item.skipped).map((item) => item.leadId);
+    const skippedCount = results.filter((item) => item.skipped).length;
+
+    return json({
+      success: true,
+      action,
+      count: deletedIds.length,
+      skippedCount,
+      failedCount: results.filter((item) => !item.ok && !item.skipped).length,
+      deletedIds,
+      results,
+      message: `${deletedIds.length} manual/test lead(s) deleted.${skippedCount ? ` ${skippedCount} sheet audit lead(s) skipped; use Report Cleanup.` : ""}`,
+    });
+  }
 
   if (action === "delete_permanent") {
     const sheetMode = ["delete", "mark", "skip"].includes(String(body.sheetMode || process.env.PERMANENT_DELETE_SHEET_MODE || "mark"))
@@ -7528,6 +7683,10 @@ async function handleLeadsBulkAction(req: Request) {
       }
 
       const lead = { id: snap.id, ...(snap.data() || {}) } as LeadData;
+      if (getLeadSourceKind(lead) === "sheet") {
+        results.push({ leadId, email: lead.emailLower || lead.email || "", ok: false, skipped: true, reason: "sheet_audit_lead_use_report_cleanup" });
+        continue;
+      }
       if (dryRun) {
         results.push({
           leadId,
@@ -7843,11 +8002,30 @@ function isCleanupProcessingBlocked(lead: LeadData): string[] {
   return blockers;
 }
 
-function getLeadSourceKind(lead: LeadData): "sheet" | "cold" | "test" {
+function getLeadSourceRole(lead: LeadData): "manual" | "manual_report_linked" | "sheet_primary" | "sheet_additional" | "test" {
   const source = String(lead.source || "").toLowerCase();
+  const sourceOrigin = String(lead.sourceOrigin || "").toLowerCase();
+  const sourceRole = String(lead.sourceRole || "").toLowerCase();
   const email = normalizeEmail(lead.emailLower || lead.email || "");
-  if (source.includes("test") || email.includes("test@") || email === normalizeEmail(MAIN_INBOX_EMAIL)) return "test";
-  if (source.includes("google_sheet") || Number(lead.sheetRowNumber || 0) > 1 || lead.sheetFinalEmail || lead.sheetWebsiteUrl) return "sheet";
+
+  if (sourceRole === "test" || source.includes("test") || email.includes("test@") || email === normalizeEmail(MAIN_INBOX_EMAIL)) return "test";
+  if (sourceRole === "sheet_primary") return "sheet_primary";
+  if (sourceRole === "sheet_additional_recipient" || sourceRole === "sheet_additional") return "sheet_additional";
+  if (sourceRole === "manual_report_linked") return "manual_report_linked";
+  if (lead.keepUnderSheetAudit === true || sourceOrigin === "sheet") {
+    const sheetEmail = normalizeEmail(lead.sheetFinalEmail || lead.parentSheetEmail || "");
+    return sheetEmail && sheetEmail !== email ? "sheet_additional" : "sheet_primary";
+  }
+  if (source.includes("google_sheet") && lead.keepUnderSheetAudit !== false) return "sheet_primary";
+  if (Number(lead.sheetRowNumber || 0) > 0 && lead.keepUnderSheetAudit !== false) return "sheet_primary";
+  if (lead.reportToken || lead.reportUrl) return "manual_report_linked";
+  return "manual";
+}
+
+function getLeadSourceKind(lead: LeadData): "sheet" | "cold" | "test" {
+  const role = getLeadSourceRole(lead);
+  if (role === "test") return "test";
+  if (role === "sheet_primary" || role === "sheet_additional") return "sheet";
   return "cold";
 }
 
@@ -8265,40 +8443,90 @@ function getFootprintDocActivityMs(data: Record<string, any> = {}): number {
   );
 }
 
-function serializeFootprintMemoryRow(emailKey: string, memory: Record<string, any> | null, suppression: Record<string, any> | null) {
-  const emailLower = normalizeEmail(String(memory?.emailLower || suppression?.emailLower || decodeURIComponent(emailKey || "").replace(/%2E/gi, ".")));
+function getLeadFootprintActivityMs(lead: Record<string, any> = {}): number {
+  return Math.max(
+    toMillis(lead.updatedAt),
+    toMillis(lead.createdAt),
+    toMillis(lead.sentAt),
+    toMillis(lead.scheduledAt),
+    toMillis(lead.lastOpenedAt),
+    toMillis(lead.lastClickedAt),
+    toMillis(lead.lastEngagedAt),
+    toMillis(lead.lastFollowUp)
+  );
+}
+
+function isActiveFootprintLead(lead: Record<string, any> = {}): boolean {
+  const status = String(lead.status || "").trim().toLowerCase();
+  if (["failed", "cancelled", "blocked_daily_limit", "draft"].includes(status)) return false;
+  if (lead.deleted === true) return false;
+  return Boolean(lead.id || lead.emailLower || lead.email);
+}
+
+function serializeFootprintMemoryRow(
+  emailKey: string,
+  memory: Record<string, any> | null,
+  suppression: Record<string, any> | null,
+  leads: Record<string, any>[] = [],
+) {
+  const primaryLead = leads
+    .slice()
+    .sort((a, b) => getLeadFootprintActivityMs(b) - getLeadFootprintActivityMs(a))[0] || null;
+  const emailLower = normalizeEmail(
+    String(memory?.emailLower || suppression?.emailLower || primaryLead?.emailLower || primaryLead?.email || decodeURIComponent(emailKey || "").replace(/%2E/gi, ".")),
+  );
   const cooldownMs = toMillis(memory?.cooldownUntil);
   const memoryExpiresMs = toMillis(memory?.memoryExpiresAt);
   const nowMs = Date.now();
   const suppressionActive = Boolean(suppression && !suppression.allowedAgainAt);
   const contactMemoryActive = Boolean(memory && cooldownMs > nowMs && (!memoryExpiresMs || memoryExpiresMs > nowMs) && !memory.allowedAgainAt);
-  const allowedAgain = Boolean(memory?.allowedAgainAt || suppression?.allowedAgainAt) || (!suppressionActive && !contactMemoryActive);
-  const status = allowedAgain ? "allowed_again" : suppressionActive ? "requires_permission" : "blocked";
-  const lastActivityMs = Math.max(getFootprintDocActivityMs(memory || {}), getFootprintDocActivityMs(suppression || {}));
+  const activeLeadCount = leads.filter(isActiveFootprintLead).length;
+  const leadBlocked = activeLeadCount > 0;
+  const allowedAgain = Boolean(memory?.allowedAgainAt) || (!suppressionActive && !contactMemoryActive && !leadBlocked);
+  const status = suppressionActive ? "requires_permission" : allowedAgain ? "allowed_again" : "blocked";
+  const lastActivityMs = Math.max(
+    getFootprintDocActivityMs(memory || {}),
+    getFootprintDocActivityMs(suppression || {}),
+    ...leads.map(getLeadFootprintActivityMs),
+  );
+
+  const hasMemory = Boolean(memory);
+  const hasSuppression = Boolean(suppression);
+  const hasLeads = leads.length > 0;
+  const source = hasSuppression && (hasMemory || hasLeads)
+    ? "combined"
+    : hasSuppression
+      ? "suppression_list"
+      : hasMemory
+        ? "contact_memory"
+        : "outreach_lead";
 
   return {
     email: emailLower,
     emailLower,
-    companyName: String(memory?.companyName || suppression?.companyName || ""),
-    website: String(memory?.website || suppression?.website || ""),
-    service: String(memory?.service || ""),
-    reason: String(memory?.cleanupReason || suppression?.reason || memory?.lastOutcome || "safety_memory"),
-    lastOutcome: String(memory?.lastOutcome || suppression?.reason || "safety_memory"),
+    companyName: String(memory?.companyName || suppression?.companyName || primaryLead?.company_name || primaryLead?.companyName || ""),
+    website: String(memory?.website || suppression?.website || primaryLead?.website || primaryLead?.sheetWebsiteUrl || ""),
+    service: String(memory?.service || primaryLead?.service || ""),
+    reason: String(memory?.cleanupReason || suppression?.reason || memory?.lastOutcome || (hasLeads ? "existing_outreach_lead" : "safety_memory")),
+    lastOutcome: String(memory?.lastOutcome || suppression?.reason || primaryLead?.status || (hasLeads ? "existing_outreach_lead" : "safety_memory")),
     status,
-    statusLabel: status === "allowed_again" ? "Allowed again" : status === "requires_permission" ? "Requires permission" : "Blocked",
-    source: memory && suppression ? "combined" : suppression ? "suppression_list" : "contact_memory",
+    statusLabel: status === "allowed_again" ? "Allowed again" : status === "requires_permission" ? "Suppression protected" : hasLeads ? "Lead record exists" : "Blocked",
+    source,
     lastActivityAt: lastActivityMs ? new Date(lastActivityMs).toISOString() : "",
-    lastContactedAt: serializeTimestampIso(memory?.lastContactedAt),
+    lastContactedAt: serializeTimestampIso(memory?.lastContactedAt || primaryLead?.sentAt || primaryLead?.createdAt),
     cooldownUntil: serializeTimestampIso(memory?.cooldownUntil),
     memoryExpiresAt: serializeTimestampIso(memory?.memoryExpiresAt),
-    updatedAt: serializeTimestampIso(memory?.updatedAt || suppression?.updatedAt),
-    openCount: Number(memory?.openCount || 0),
-    clickCount: Number(memory?.clickCount || 0),
-    sourceLeadId: String(memory?.sourceLeadId || suppression?.sourceLeadId || ""),
+    updatedAt: serializeTimestampIso(memory?.updatedAt || suppression?.updatedAt || primaryLead?.updatedAt),
+    openCount: Number(memory?.openCount || primaryLead?.open_count || 0),
+    clickCount: Number(memory?.clickCount || primaryLead?.click_count || 0),
+    sourceLeadId: String(memory?.sourceLeadId || suppression?.sourceLeadId || primaryLead?.id || ""),
     suppressionReason: String(suppression?.reason || ""),
+    leadCount: leads.length,
+    activeLeadCount,
+    protected: hasSuppression,
+    deletable: hasMemory && !hasSuppression,
   };
 }
-
 function footprintMatchesSearch(row: any, queryText: string): boolean {
   const q = queryText.trim().toLowerCase();
   if (!q) return true;
@@ -8322,31 +8550,72 @@ async function handleFootprintMemoryList(req: Request) {
   const queryText = String(url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
   const filter = String(url.searchParams.get("filter") || "blocked").toLowerCase();
   const max = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 100), 200));
+  const olderThanDays = Math.max(1, Math.min(Number(url.searchParams.get("olderThanDays") || 90), 3650));
+  const olderThanCutoffMs = Date.now() - olderThanDays * 86_400_000;
 
-  const [memorySnap, suppressionSnap] = await Promise.all([
-    adminDb.collection("contact_memory").limit(Math.min(max * 3, 500)).get(),
-    adminDb.collection("suppression_list").limit(Math.min(max * 3, 500)).get(),
+  const maybeEmailQuery = isValidEmail(queryText) ? normalizeEmail(queryText) : "";
+  const memoryLimit = maybeEmailQuery ? 1 : Math.min(max * 4, 800);
+  const suppressionLimit = maybeEmailQuery ? 1 : Math.min(max * 4, 800);
+  const leadLimit = maybeEmailQuery ? 25 : Math.min(max * 6, 1000);
+
+  const [memorySnap, suppressionSnap, leadSnap] = await Promise.all([
+    maybeEmailQuery
+      ? adminDb.collection("contact_memory").where("emailLower", "==", maybeEmailQuery).limit(memoryLimit).get()
+      : adminDb.collection("contact_memory").limit(memoryLimit).get(),
+    maybeEmailQuery
+      ? adminDb.collection("suppression_list").where("emailLower", "==", maybeEmailQuery).limit(suppressionLimit).get()
+      : adminDb.collection("suppression_list").limit(suppressionLimit).get(),
+    maybeEmailQuery
+      ? adminDb.collection("outreach_leads").where("emailLower", "==", maybeEmailQuery).limit(leadLimit).get()
+      : adminDb.collection("outreach_leads").limit(leadLimit).get(),
   ]);
 
-  const byEmail = new Map<string, { memory: Record<string, any> | null; suppression: Record<string, any> | null }>();
+  const byEmail = new Map<string, { memory: Record<string, any> | null; suppression: Record<string, any> | null; leads: Record<string, any>[] }>();
+  const ensureEntry = (emailLower: string) => {
+    const current = byEmail.get(emailLower) || { memory: null, suppression: null, leads: [] };
+    byEmail.set(emailLower, current);
+    return current;
+  };
 
   memorySnap.docs.forEach((docSnap: any) => {
     const data = docSnap.data() || {};
     const emailLower = normalizeEmail(data.emailLower || decodeURIComponent(docSnap.id).replace(/%2E/gi, "."));
     if (!emailLower) return;
-    byEmail.set(emailLower, { ...(byEmail.get(emailLower) || { memory: null, suppression: null }), memory: data });
+    ensureEntry(emailLower).memory = data;
   });
 
   suppressionSnap.docs.forEach((docSnap: any) => {
     const data = docSnap.data() || {};
     const emailLower = normalizeEmail(data.emailLower || decodeURIComponent(docSnap.id).replace(/%2E/gi, "."));
     if (!emailLower) return;
-    byEmail.set(emailLower, { ...(byEmail.get(emailLower) || { memory: null, suppression: null }), suppression: data });
+    ensureEntry(emailLower).suppression = data;
   });
 
-  let rows = Array.from(byEmail.entries()).map(([email, value]) => serializeFootprintMemoryRow(email, value.memory, value.suppression));
+  leadSnap.docs.forEach((docSnap: any) => {
+    const data = { id: docSnap.id, ...(docSnap.data() || {}) };
+    const emailLower = normalizeEmail(data.emailLower || data.email || "");
+    if (!emailLower) return;
+    ensureEntry(emailLower).leads.push(data);
+  });
 
-  if (filter === "blocked") rows = rows.filter((row: any) => row.status !== "allowed_again");
+  let rows = Array.from(byEmail.entries()).map(([email, value]) => serializeFootprintMemoryRow(email, value.memory, value.suppression, value.leads));
+
+  if (filter === "blocked") {
+    rows = rows.filter(
+      (row: any) =>
+        row.status !== "allowed_again" && row.source !== "suppression_list" && row.source !== "combined",
+    );
+  }
+  if (filter === "old") {
+    rows = rows.filter(
+      (row: any) =>
+        row.source === "contact_memory" &&
+        row.status !== "allowed_again" &&
+        toMillis(row.lastActivityAt) > 0 &&
+        toMillis(row.lastActivityAt) <= olderThanCutoffMs,
+    );
+  }
+  if (filter === "suppression") rows = rows.filter((row: any) => row.source === "suppression_list" || row.source === "combined");
   if (filter === "allowed") rows = rows.filter((row: any) => row.status === "allowed_again");
   rows = rows.filter((row: any) => footprintMatchesSearch(row, queryText));
   rows.sort((a: any, b: any) => toMillis(b.lastActivityAt) - toMillis(a.lastActivityAt));
@@ -8358,6 +8627,7 @@ async function handleFootprintMemoryList(req: Request) {
     checked: byEmail.size,
     filter,
     query: queryText,
+    olderThanDays,
     rows,
   });
 }
@@ -8367,8 +8637,9 @@ async function deleteFootprintDocsForEmails(emails: string[]) {
   let count = 0;
   emails.forEach((emailLower) => {
     const docId = emailDocId(emailLower);
+    // Only contact_memory is removed here. Suppression/unsubscribe/bounce records
+    // are protected and must not be removed by a general footprint-memory action.
     batch.delete(adminDb.collection("contact_memory").doc(docId));
-    batch.delete(adminDb.collection("suppression_list").doc(docId));
     count += 1;
   });
   if (count > 0) await batch.commit();
@@ -8393,7 +8664,8 @@ async function allowFootprintDocsForEmails(emails: string[], actor: string) {
       },
       { merge: true }
     );
-    batch.delete(adminDb.collection("suppression_list").doc(docId));
+    // Do not delete suppression_list here. A suppressed/unsubscribed/bounced email
+    // remains protected even when contact memory is allowed again.
   });
   await batch.commit();
   return emails.length;
@@ -8401,18 +8673,10 @@ async function allowFootprintDocsForEmails(emails: string[], actor: string) {
 
 async function forgetFootprintDocsOlderThan(days: number) {
   const cutoffMs = Date.now() - days * 86_400_000;
-  const [memorySnap, suppressionSnap] = await Promise.all([
-    adminDb.collection("contact_memory").limit(500).get(),
-    adminDb.collection("suppression_list").limit(500).get(),
-  ]);
+  const memorySnap = await adminDb.collection("contact_memory").limit(500).get();
 
   const refs: any[] = [];
   memorySnap.docs.forEach((docSnap: any) => {
-    const data = docSnap.data() || {};
-    const activityMs = getFootprintDocActivityMs(data);
-    if (activityMs && activityMs <= cutoffMs) refs.push(docSnap.ref);
-  });
-  suppressionSnap.docs.forEach((docSnap: any) => {
     const data = docSnap.data() || {};
     const activityMs = getFootprintDocActivityMs(data);
     if (activityMs && activityMs <= cutoffMs) refs.push(docSnap.ref);
@@ -8426,6 +8690,30 @@ async function forgetFootprintDocsOlderThan(days: number) {
     deleted += refs.slice(index, index + 450).length;
   }
   return deleted;
+}
+async function deleteSuppressionDocsOlderThan(days: number) {
+  // Protected suppression cleanup is intentionally separate from normal footprint cleanup.
+  // It only removes old suppression_list rows after a strong confirmation phrase.
+  const safeDays = Math.max(90, Math.min(Number(days || 365), 3650));
+  const cutoffMs = Date.now() - safeDays * 86_400_000;
+  const suppressionSnap = await adminDb.collection("suppression_list").limit(500).get();
+
+  const refs: any[] = [];
+  suppressionSnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    const activityMs = getFootprintDocActivityMs(data);
+    if (activityMs && activityMs <= cutoffMs) refs.push(docSnap.ref);
+  });
+
+  let deleted = 0;
+  for (let index = 0; index < refs.length; index += 450) {
+    const batch = adminDb.batch();
+    const chunk = refs.slice(index, index + 450);
+    chunk.forEach((ref) => batch.delete(ref));
+    await batch.commit();
+    deleted += chunk.length;
+  }
+  return { deleted, days: safeDays };
 }
 
 async function handleFootprintMemoryAction(req: Request) {
@@ -8455,6 +8743,20 @@ async function handleFootprintMemoryAction(req: Request) {
     const days = Math.max(1, Math.min(Number(body.olderThanDays || 90), 3650));
     const count = await forgetFootprintDocsOlderThan(days);
     return json({ success: true, action, count, olderThanDays: days, message: `Forgot ${count} footprint memor${count === 1 ? "y" : "ies"} older than ${days} days.` });
+  }
+
+  if (action === "delete_suppression_older") {
+    if (String(body.confirm || "").trim().toUpperCase() !== "DELETE SUPPRESSION") {
+      throw new ApiError("Type DELETE SUPPRESSION to delete protected suppression records", 400);
+    }
+    const result = await deleteSuppressionDocsOlderThan(Number(body.olderThanDays || 365));
+    return json({
+      success: true,
+      action,
+      count: result.deleted,
+      olderThanDays: result.days,
+      message: `Deleted ${result.deleted} protected suppression record${result.deleted === 1 ? "" : "s"} older than ${result.days} days.`,
+    });
   }
 
   throw new ApiError("Unknown footprint memory action", 400);

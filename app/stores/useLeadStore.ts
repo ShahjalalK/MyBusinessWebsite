@@ -7,6 +7,7 @@ import { create } from "zustand";
 import { auth } from "@/lib/firebase";
 
 export type LeadViewFilter = "active" | "archived" | "trash" | "all";
+export type LeadSourceFilter = "all" | "manual" | "manual_report_linked" | "sheet" | "sheet_primary" | "sheet_additional" | "test";
 
 export type CachedLead = {
   id: string;
@@ -24,6 +25,16 @@ export type CachedLead = {
   service?: string;
   reportUrl?: string;
   reportToken?: string;
+  sourceOrigin?: string;
+  sourceRole?: string;
+  keepUnderSheetAudit?: boolean;
+  sheetRowNumber?: number | null;
+  sheetFinalEmail?: string;
+  sheetWebsiteUrl?: string;
+  parentSheetEmail?: string;
+  parentSheetRowNumber?: number | null;
+  parentSheetWebsiteUrl?: string;
+  parentReportToken?: string;
   reportReady?: boolean;
   reportViewedAt?: any;
   pdfFileId?: string;
@@ -50,6 +61,7 @@ type LeadFetchOptions = {
   view?: LeadViewFilter;
   month?: string;
   status?: string;
+  source?: LeadSourceFilter;
   reportReadyOnly?: boolean;
 };
 
@@ -69,6 +81,7 @@ type LeadStoreState = {
     view: LeadViewFilter;
     month: string;
     status: string;
+    source: LeadSourceFilter;
     reportReadyOnly: boolean;
   };
   fetchLatestLeads: (options?: LeadFetchOptions) => Promise<void>;
@@ -89,12 +102,13 @@ function normalizeFetchFilters(state: LeadStoreState, options: LeadFetchOptions 
     view: options.view || state.filters.view || "active",
     month: options.month || state.filters.month || "All",
     status: options.status || state.filters.status || "All",
+    source: options.source || state.filters.source || "all",
     reportReadyOnly: options.reportReadyOnly ?? state.filters.reportReadyOnly ?? false,
   };
 }
 
 function buildFetchKey(filters: LeadStoreState["filters"]) {
-  return `${filters.view}|${filters.month}|${filters.status}|reportReady:${filters.reportReadyOnly ? "1" : "0"}`;
+  return `${filters.view}|${filters.month}|${filters.status}|source:${filters.source}|reportReady:${filters.reportReadyOnly ? "1" : "0"}`;
 }
 
 function isCacheFresh(lastFetchedAt: number | null, ttlMs: number) {
@@ -123,6 +137,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
     view: "active",
     month: "All",
     status: "All",
+    source: "all",
     reportReadyOnly: false,
   },
 
@@ -155,6 +170,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
 
       if (filters.month && filters.month !== "All") params.set("month", filters.month);
       if (filters.status && filters.status !== "All") params.set("status", filters.status);
+      if (filters.source && filters.source !== "all") params.set("source", filters.source);
       if (filters.reportReadyOnly) params.set("reportReadyOnly", "true");
 
       const response = await fetch(`/api/trackflow/leads?${params.toString()}`, {
@@ -204,6 +220,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
 
       if (state.filters.month && state.filters.month !== "All") params.set("month", state.filters.month);
       if (state.filters.status && state.filters.status !== "All") params.set("status", state.filters.status);
+      if (state.filters.source && state.filters.source !== "all") params.set("source", state.filters.source);
       if (state.filters.reportReadyOnly) params.set("reportReadyOnly", "true");
 
       const response = await fetch(`/api/trackflow/leads?${params.toString()}`, {
@@ -287,6 +304,7 @@ export const useLeadStore = create<LeadStoreState>((set, get) => ({
         view: "active",
         month: "All",
         status: "All",
+        source: "all",
         reportReadyOnly: false,
       },
     });

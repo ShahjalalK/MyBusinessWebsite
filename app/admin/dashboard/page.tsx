@@ -57,7 +57,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import AdminGuard from "@/app/components/AdminGuard";
 import Navbar from "@/app/components/navbar";
 import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, getColdEmailTemplateForService, applyColdEmailMergeTags, type SenderAccount } from "../../../lib/senders";
-import { useLeadStore, type LeadViewFilter } from "../../stores/useLeadStore";
+import { useLeadStore, type LeadSourceFilter, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
 
 import type {
@@ -399,6 +399,42 @@ function activityToneClass(tone: LeadRecentActivityItem["tone"]) {
   return "bg-slate-50 text-slate-600 border-slate-100";
 }
 
+type DashboardLeadSourceKind = "manual" | "manual_report_linked" | "sheet_primary" | "sheet_additional" | "test";
+
+function getDashboardLeadSourceKind(lead: Lead): DashboardLeadSourceKind {
+  const source = String(lead.source || "").toLowerCase();
+  const sourceOrigin = String(lead.sourceOrigin || "").toLowerCase();
+  const sourceRole = String(lead.sourceRole || "").toLowerCase();
+  const email = String(lead.emailLower || lead.email || "").toLowerCase();
+  const keepUnderSheetAudit = lead.keepUnderSheetAudit === true;
+
+  if (sourceRole === "test" || source.includes("test") || email.includes("test@") || email === MAIN_INBOX_EMAIL.toLowerCase()) return "test";
+  if (sourceRole === "sheet_primary") return "sheet_primary";
+  if (sourceRole === "sheet_additional_recipient" || sourceRole === "sheet_additional") return "sheet_additional";
+  if (sourceRole === "manual_report_linked") return "manual_report_linked";
+  if (keepUnderSheetAudit || sourceOrigin === "sheet") {
+    const sheetEmail = String(lead.sheetFinalEmail || lead.parentSheetEmail || "").trim().toLowerCase();
+    return sheetEmail && sheetEmail !== email ? "sheet_additional" : "sheet_primary";
+  }
+  if (source.includes("google_sheet") && lead.keepUnderSheetAudit !== false) return "sheet_primary";
+  if (Number(lead.sheetRowNumber || 0) > 0 && lead.keepUnderSheetAudit !== false) return "sheet_primary";
+  if (lead.reportToken || lead.reportUrl) return "manual_report_linked";
+  return "manual";
+}
+
+function doesLeadMatchSourceFilter(lead: Lead, filter: LeadSourceFilter): boolean {
+  if (filter === "all") return true;
+  const kind = getDashboardLeadSourceKind(lead);
+  if (filter === "sheet") return kind === "sheet_primary" || kind === "sheet_additional";
+  if (filter === "manual") return kind === "manual";
+  return kind === filter;
+}
+
+function isManualDashboardLead(lead: Lead): boolean {
+  const kind = getDashboardLeadSourceKind(lead);
+  return kind === "manual" || kind === "manual_report_linked" || kind === "test";
+}
+
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<MainTab>("overview");
@@ -425,6 +461,7 @@ export default function DashboardPage() {
   const [secureReports, setSecureReports] = useState<SecureReportListState>(() => emptySecureReportListState());
   const [chatInsights, setChatInsights] = useState<ChatInsightsState>(() => emptyChatInsightsState());
   const [footprintMemory, setFootprintMemory] = useState<FootprintMemoryState>(() => emptyFootprintMemoryState());
+  const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSourceFilter>("all");
 
   const {
     // Lead screen UI state kept in Zustand so filter/selection state survives tab switches.
@@ -562,6 +599,7 @@ export default function DashboardPage() {
   const [draftReady, setDraftReady] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
   const [selectedOutreachSheetRow, setSelectedOutreachSheetRow] = useState<number | null>(null);
+  const [keepUnderSheetAudit, setKeepUnderSheetAudit] = useState(false);
   const [leadRefreshLoading, setLeadRefreshLoading] = useState(false);
   const [leadRefreshStatus, setLeadRefreshStatus] = useState("");
 
@@ -652,7 +690,7 @@ export default function DashboardPage() {
     };
   }, [selectedLead]);
 
-  const refreshLeadsSmooth = async (input?: { view: LeadViewFilter; month: string; status: string }) => {
+  const refreshLeadsSmooth = async (input?: { view: LeadViewFilter; month: string; status: string; source?: LeadSourceFilter }) => {
     setLeadRefreshLoading(true);
     setLeadRefreshStatus("Refreshing latest leads...");
 
@@ -674,9 +712,9 @@ export default function DashboardPage() {
     // FIREBASE FREE-LIMIT NOTE:
     // Lead data is cached in Zustand. Tab switching will not trigger a Firestore read.
     // Changing view/month/status intentionally reloads the current professional lead view.
-    fetchLatestLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter }).catch((error) => console.error("Lead cache initial load error:", error));
+    fetchLatestLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter }).catch((error) => console.error("Lead cache initial load error:", error));
     setSelectedLeadIds([]);
-  }, [fetchLatestLeads, leadView, selectedMonth, leadStatusFilter]);
+  }, [fetchLatestLeads, leadView, selectedMonth, leadStatusFilter, leadSourceFilter]);
 
   useEffect(() => {
     if (!selectedLead) return;
@@ -1105,11 +1143,26 @@ export default function DashboardPage() {
     if (!currentUser) return window.alert("Please login again.");
     if (!ids.length) return window.alert("Select at least one lead first.");
 
+    const selectedRows = leads.filter((lead) => ids.includes(lead.id));
+    const manualRows = selectedRows.filter(isManualDashboardLead);
+    const sheetRows = selectedRows.filter((lead) => {
+      const kind = getDashboardLeadSourceKind(lead);
+      return kind === "sheet_primary" || kind === "sheet_additional";
+    });
+    const finalIds = action === "delete_manual_keep_memory" || action === "delete_manual_no_footprint" ? manualRows.map((lead) => lead.id) : ids;
+
+    if ((action === "delete_manual_keep_memory" || action === "delete_manual_no_footprint") && !finalIds.length) {
+      window.alert("No manual/test leads selected. Sheet audit leads must be deleted from Report Cleanup.");
+      return;
+    }
+
     const labelMap: Record<BulkLeadAction, string> = {
-      archive: `Archive ${ids.length} lead(s)? Automation will stop for them.`,
-      restore: `Restore ${ids.length} lead(s)? Automation will not auto-resume.`,
+      archive: `Hide ${ids.length} lead(s) from Active? History stays and automation stops.`,
+      restore: `Show ${ids.length} lead(s) in Active again? Automation will not auto-resume automatically.`,
       trash: `Move ${ids.length} lead(s) to trash? Automation will stop for them.`,
-      delete_permanent: `Permanently delete ${ids.length} lead(s)? This cannot be undone.`,
+      delete_permanent: `Permanently delete ${ids.length} lead(s)? Sheet audit leads will be skipped.`,
+      delete_manual_keep_memory: `Delete ${finalIds.length} manual/test lead(s) and keep tiny contact memory?${sheetRows.length ? ` ${sheetRows.length} sheet audit lead(s) will be skipped.` : ""}`,
+      delete_manual_no_footprint: `Delete ${finalIds.length} manual/test lead(s) with no footprint?${sheetRows.length ? ` ${sheetRows.length} sheet audit lead(s) will be skipped.` : ""} This cannot be undone.`,
     };
 
     if (!window.confirm(labelMap[action])) return;
@@ -1124,13 +1177,15 @@ export default function DashboardPage() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ action, ids }),
+        body: JSON.stringify({ action, ids: finalIds }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Lead action failed");
 
-      if (action === "delete_permanent") {
-        removeLeadsFromCache(ids);
+      const completedIds = Array.isArray(data.deletedIds) && data.deletedIds.length ? data.deletedIds : finalIds;
+
+      if (action === "delete_permanent" || action === "delete_manual_keep_memory" || action === "delete_manual_no_footprint") {
+        removeLeadsFromCache(completedIds);
       } else if (action === "archive") {
         if (leadView === "all") {
           patchLeadsInCache(ids, { archived: true, deleted: false, stopAutomation: true, nextFollowupStatus: "blocked", nextFollowupReason: "archived_by_admin" });
@@ -1212,6 +1267,7 @@ export default function DashboardPage() {
         String(lead.website || "").toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesService = activeService === "All" || lead.service === activeService;
+      const matchesSource = doesLeadMatchSourceFilter(lead, leadSourceFilter);
       const matchesStep = activeStep === "All" || Number(lead.follow_up_count || 0) === activeStep;
 
       let matchesMonth = true;
@@ -1226,9 +1282,9 @@ export default function DashboardPage() {
         (leadView === "trash" && lead.deleted === true);
       const matchesStatus = leadStatusFilter === "All" || String(lead.status || "") === leadStatusFilter;
 
-      return matchesSearch && matchesService && matchesMonth && matchesStep && matchesView && matchesStatus;
+      return matchesSearch && matchesService && matchesSource && matchesMonth && matchesStep && matchesView && matchesStatus;
     });
-  }, [leads, searchTerm, activeService, selectedMonth, activeStep, leadView, leadStatusFilter]);
+  }, [leads, searchTerm, activeService, leadSourceFilter, selectedMonth, activeStep, leadView, leadStatusFilter]);
 
   const sortedHotLeads = useMemo(() => {
     return [...leads].filter((lead) => leadScore(lead) > 0).sort((a, b) => leadScore(b) - leadScore(a)).slice(0, 8);
@@ -1393,12 +1449,14 @@ export default function DashboardPage() {
     setScheduledTime("");
     setReportUrl("");
     setSelectedOutreachSheetRow(null);
+    setKeepUnderSheetAudit(false);
     setEmailError("");
     setDuplicateLead(null);
     setAllowDuplicateSend(false);
     setContactMemoryWarning(null);
     setAllowCooldownOverride(false);
     setSelectedOutreachSheetRow(null);
+    setKeepUnderSheetAudit(false);
     window.localStorage.removeItem(OUTREACH_DRAFT_KEY);
     setLastDraftSavedAt("");
   };
@@ -1490,6 +1548,18 @@ export default function DashboardPage() {
       const scheduledAtISO = scheduledTime ? new Date(scheduledTime).toISOString() : null;
       const sheetLeadForSend = selectedOutreachSheetLead;
       const sheetRowNumberForSend = sheetLeadForSend ? Number(sheetLeadForSend.rowNumber || 0) : 0;
+      const sheetFinalEmailForSend = sheetLeadForSend ? sheetValue(sheetLeadForSend, "Final Email") : "";
+      const sheetReportTokenForSend = sheetLeadForSend ? sheetValue(sheetLeadForSend, "Report Token") : "";
+      const keepUnderSelectedSheetAudit = Boolean(sheetLeadForSend && keepUnderSheetAudit);
+      const sourceRoleForSend = sheetLeadForSend
+        ? keepUnderSelectedSheetAudit
+          ? String(email || "").trim().toLowerCase() === String(sheetFinalEmailForSend || "").trim().toLowerCase()
+            ? "sheet_primary"
+            : "sheet_additional_recipient"
+          : "manual_report_linked"
+        : normalizeOptionalUrl(reportUrl)
+          ? "manual_report_linked"
+          : "manual";
 
       if (sheetRowNumberForSend) {
         await patchSheetLead(sheetRowNumberForSend, {
@@ -1526,17 +1596,24 @@ export default function DashboardPage() {
           allowDuplicateSend,
           allowCooldownOverride,
           senderId: activeSender.id,
+          sourceOrigin: sheetLeadForSend ? (keepUnderSelectedSheetAudit ? "sheet" : "manual") : "manual",
+          sourceRole: sourceRoleForSend,
+          keepUnderSheetAudit: keepUnderSelectedSheetAudit,
           ...(sheetLeadForSend
             ? {
-                reportToken: sheetValue(sheetLeadForSend, "Report Token"),
+                reportToken: sheetReportTokenForSend,
                 pdfFileId: sheetValue(sheetLeadForSend, "PDF File ID"),
                 pdfViewUrl: sheetValue(sheetLeadForSend, "PDF View URL"),
                 pdfDownloadUrl: sheetValue(sheetLeadForSend, "PDF Download URL"),
                 pdfExpiresAt: sheetValue(sheetLeadForSend, "PDF Expires At"),
-                sheetRowNumber: sheetRowNumberForSend,
-                sheetWebsiteUrl: sheetValue(sheetLeadForSend, "Website URL"),
-                sheetFinalEmail: sheetValue(sheetLeadForSend, "Final Email"),
-                source: "google_sheet_send_email_drawer",
+                sheetRowNumber: keepUnderSelectedSheetAudit ? sheetRowNumberForSend : undefined,
+                sheetWebsiteUrl: keepUnderSelectedSheetAudit ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
+                sheetFinalEmail: keepUnderSelectedSheetAudit ? sheetFinalEmailForSend : undefined,
+                parentSheetRowNumber: sheetRowNumberForSend,
+                parentSheetEmail: sheetFinalEmailForSend,
+                parentSheetWebsiteUrl: sheetValue(sheetLeadForSend, "Website URL"),
+                parentReportToken: sheetReportTokenForSend,
+                source: keepUnderSelectedSheetAudit ? "google_sheet_send_email_drawer" : "manual_report_linked_from_sheet_composer",
               }
             : {}),
         }),
@@ -1589,9 +1666,17 @@ export default function DashboardPage() {
             trackingId: data.trackingId || "",
             reportUrl: normalizeOptionalUrl(reportUrl),
             reportButtonText,
-            sheetRowNumber: sheetRowNumberForSend || undefined,
-            sheetWebsiteUrl: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : website,
-            sheetFinalEmail: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Final Email") : email,
+            reportToken: sheetLeadForSend ? sheetReportTokenForSend : undefined,
+            sourceOrigin: sheetLeadForSend ? (keepUnderSelectedSheetAudit ? "sheet" : "manual") : "manual",
+            sourceRole: sourceRoleForSend,
+            keepUnderSheetAudit: keepUnderSelectedSheetAudit,
+            sheetRowNumber: keepUnderSelectedSheetAudit ? sheetRowNumberForSend || undefined : undefined,
+            sheetWebsiteUrl: keepUnderSelectedSheetAudit && sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
+            sheetFinalEmail: keepUnderSelectedSheetAudit ? sheetFinalEmailForSend : undefined,
+            parentSheetRowNumber: sheetLeadForSend ? sheetRowNumberForSend || undefined : undefined,
+            parentSheetEmail: sheetLeadForSend ? sheetFinalEmailForSend : undefined,
+            parentSheetWebsiteUrl: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
+            parentReportToken: sheetLeadForSend ? sheetReportTokenForSend : undefined,
             open_count: 0,
             click_count: 0,
           });
@@ -2093,7 +2178,7 @@ export default function DashboardPage() {
       if (!dryRun) {
         await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
         await loadSecureReports(true);
-        await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
+        await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
       }
     } catch (error: any) {
       console.error("Bulk report cleanup error:", error);
@@ -2238,7 +2323,7 @@ export default function DashboardPage() {
 
       await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
       await loadSecureReports(true);
-      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
     } catch (error: any) {
       console.error("Report cleanup run error:", error);
       setReportAssetCleanup((prev) => ({
@@ -2336,7 +2421,7 @@ export default function DashboardPage() {
       const failed = Array.isArray(data.results) ? data.results.filter((item: any) => !item.ok).length : 0;
       setLeadCleanup((prev: CleanupState) => ({ ...prev, status: `Deleted ${ok}. Failed/skipped ${failed}.` }));
       setSelectedCleanupIds([]);
-      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter });
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
       await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
     } catch (error: any) {
       console.error("Cleanup delete error:", error);
@@ -2407,6 +2492,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams({
         limit: "100",
         filter: footprintMemory.filter,
+        olderThanDays: String(footprintMemory.olderThanDays || 90),
       });
       const searchText = footprintMemory.search.trim();
       if (searchText) params.set("q", searchText);
@@ -2500,6 +2586,27 @@ export default function DashboardPage() {
       await loadFootprintMemories(true);
     } catch (error: any) {
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Bulk forget failed", status: "" }));
+    }
+  };
+
+  const deleteOldSuppressionFootprints = async () => {
+    const days = Math.max(90, Number(footprintMemory.olderThanDays || 365));
+    const typed = window.prompt(`Type DELETE SUPPRESSION to permanently delete protected suppression/unsubscribe/bounce/spam records older than ${days} days.`);
+    if (String(typed || "").trim().toUpperCase() !== "DELETE SUPPRESSION") return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: `Deleting protected suppression records older than ${days} days...`, error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: "delete_suppression_older", olderThanDays: days, confirm: "DELETE SUPPRESSION" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Protected suppression cleanup failed");
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || `Deleted ${data.count || 0} protected suppression records.`, filter: "suppression" }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Protected suppression cleanup failed", status: "" }));
     }
   };
 
@@ -2635,7 +2742,7 @@ export default function DashboardPage() {
       loadFootprintMemories(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, footprintMemory.filter]);
+  }, [activeTab, footprintMemory.filter, footprintMemory.olderThanDays]);
 
   const patchSheetLead = async (rowNumber: number, updates: Record<string, any>) => {
     const headers = await getAuthHeaders();
@@ -2744,6 +2851,7 @@ export default function DashboardPage() {
     const emailCopy = getSheetEmailCopyForComposer(lead);
 
     setSelectedOutreachSheetRow(Number(lead.rowNumber) || null);
+    setKeepUnderSheetAudit(true);
     setAllowDuplicateSend(false);
     setAllowCooldownOverride(false);
     setEmail(sheetValue(lead, "Final Email"));
@@ -2817,6 +2925,13 @@ export default function DashboardPage() {
         sheetWebsiteUrl: sheetValue(lead, "Website URL"),
         sheetFinalEmail: finalEmail,
         source: "google_sheet",
+        sourceOrigin: "sheet",
+        sourceRole: "sheet_primary",
+        keepUnderSheetAudit: true,
+        parentSheetRowNumber: lead.rowNumber,
+        parentSheetEmail: finalEmail,
+        parentSheetWebsiteUrl: sheetValue(lead, "Website URL"),
+        parentReportToken: sheetValue(lead, "Report Token"),
         senderId: activeSender.id,
       }),
     });
@@ -2988,12 +3103,12 @@ export default function DashboardPage() {
 
   const handleDelete = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
-    await applyLeadBulkAction("trash", [id]);
+    await applyLeadBulkAction("delete_manual_keep_memory", [id]);
   };
 
   const handlePermanentDeleteLead = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
-    await applyLeadBulkAction("delete_permanent", [id]);
+    await applyLeadBulkAction("delete_manual_no_footprint", [id]);
   };
 
   const addVariant = () => {
@@ -3211,6 +3326,8 @@ export default function DashboardPage() {
       sheetLoading={sheetLoading}
       sheetStatus={sheetStatus}
       selectedOutreachSheetRow={selectedOutreachSheetRow}
+      keepUnderSheetAudit={keepUnderSheetAudit}
+      setKeepUnderSheetAudit={setKeepUnderSheetAudit}
       loadSheetLeads={loadEmailDrawerSheetLeads}
       fillOutreachFromSheet={fillOutreachFromSheet}
       handleSenderChange={handleSenderChange}
@@ -3249,6 +3366,7 @@ export default function DashboardPage() {
       leadView={leadView}
       selectedMonth={selectedMonth}
       leadStatusFilter={leadStatusFilter}
+      leadSourceFilter={leadSourceFilter}
       activeService={activeService}
       searchTerm={searchTerm}
       loading={leadRefreshLoading}
@@ -3261,6 +3379,7 @@ export default function DashboardPage() {
       setLeadView={setLeadView}
       setSelectedMonth={setSelectedMonth}
       setLeadStatusFilter={setLeadStatusFilter}
+      setLeadSourceFilter={setLeadSourceFilter}
       setActiveService={setActiveService}
       setSearchTerm={setSearchTerm}
       setSelectedLeadIds={setSelectedLeadIds}
@@ -3656,6 +3775,7 @@ export default function DashboardPage() {
               allowFootprintMemory={allowFootprintMemory}
               forgetFootprintMemory={forgetFootprintMemory}
               forgetOldFootprintMemories={forgetOldFootprintMemories}
+              deleteOldSuppressionFootprints={deleteOldSuppressionFootprints}
             />
           )}
           {activeTab === "automation" && renderFollowups()}

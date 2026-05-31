@@ -1,4 +1,5 @@
 export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights";
+export type LeadSourceFilter = "all" | "manual" | "manual_report_linked" | "sheet" | "sheet_primary" | "sheet_additional" | "test";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
 
 export type ServiceId = "Email Signature" | "Google Ads" | "Server Side Tracking";
@@ -78,6 +79,13 @@ export type Lead = {
   sender_email?: string;
   sender_name?: string;
   source?: string;
+  sourceOrigin?: "manual" | "sheet" | "test" | string;
+  sourceRole?: "manual" | "manual_report_linked" | "sheet_primary" | "sheet_additional_recipient" | "test" | string;
+  keepUnderSheetAudit?: boolean;
+  parentSheetEmail?: string;
+  parentSheetRowNumber?: number;
+  parentSheetWebsiteUrl?: string;
+  parentReportToken?: string;
   sheetRowNumber?: number;
   sheetFinalEmail?: string;
   sheetWebsiteUrl?: string;
@@ -264,7 +272,7 @@ export type CleanupState = {
 
 
 
-export type FootprintMemoryFilter = "blocked" | "allowed" | "all";
+export type FootprintMemoryFilter = "blocked" | "old" | "suppression" | "allowed" | "all";
 
 export type FootprintMemoryRow = {
   email: string;
@@ -276,7 +284,11 @@ export type FootprintMemoryRow = {
   lastOutcome?: string;
   status?: "blocked" | "requires_permission" | "allowed_again" | "expired";
   statusLabel?: string;
-  source?: "contact_memory" | "suppression_list" | "combined";
+  source?: "contact_memory" | "suppression_list" | "combined" | "outreach_lead";
+  protected?: boolean;
+  deletable?: boolean;
+  leadCount?: number;
+  activeLeadCount?: number;
   lastActivityAt?: string;
   lastContactedAt?: string;
   cooldownUntil?: string;
@@ -314,7 +326,7 @@ export type ContactMemoryWarning = {
   sourceLeadId?: string;
 };
 
-export type BulkLeadAction = "archive" | "restore" | "trash" | "delete_permanent";
+export type BulkLeadAction = "archive" | "restore" | "trash" | "delete_permanent" | "delete_manual_keep_memory" | "delete_manual_no_footprint";
 
 export type ReportAssetCleanupMode = "soft" | "hard" | "assets_only";
 export type ReportAssetCleanupLeadMode = "none" | "archive" | "trash" | "delete" | "delete_no_memory";
