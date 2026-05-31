@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { deletePdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import { deleteReportChatHistory } from "@/lib/supabase-admin";
 import { cleanupGoogleSheetReportRow, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
+import { deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
 
 type AnyRecord = Record<string, any>;
 
@@ -33,6 +34,8 @@ type CleanupManifest = {
   reportUrl: string;
   leadId: string;
   leadFound: boolean;
+  linkedLeadIds: string[];
+  linkedLeadCount: number;
   emailLower: string;
   sheetRowNumber: number | null;
   b2PdfKey: string;
@@ -341,24 +344,29 @@ function getReportB2Key(report: AnyRecord, lead: AnyRecord): string {
   return "";
 }
 
-async function getLeadByIdOrReportToken(leadId: string, reportToken: string): Promise<{ id: string; data: AnyRecord } | null> {
+async function getLeadsByIdOrReportToken(leadId: string, reportToken: string): Promise<Array<{ id: string; data: AnyRecord }>> {
+  const leads = new Map<string, { id: string; data: AnyRecord }>();
+
   if (leadId) {
     const snap = await adminDb.collection("outreach_leads").doc(leadId).get();
-    if (snap.exists) return { id: snap.id, data: asRecord(snap.data()) };
+    if (snap.exists) leads.set(snap.id, { id: snap.id, data: asRecord(snap.data()) });
   }
 
-  if (!reportToken) return null;
-
-  const fields = ["reportToken", "report_token", "token"];
-  for (const field of fields) {
-    const snap = await adminDb.collection("outreach_leads").where(field, "==", reportToken).limit(1).get();
-    if (!snap.empty) {
-      const doc = snap.docs[0];
-      return { id: doc.id, data: asRecord(doc.data()) };
+  if (reportToken) {
+    const fields = ["reportToken", "report_token", "token"];
+    for (const field of fields) {
+      try {
+        const snap = await adminDb.collection("outreach_leads").where(field, "==", reportToken).limit(50).get();
+        snap.docs.forEach((doc: any) => {
+          if (!leads.has(doc.id)) leads.set(doc.id, { id: doc.id, data: asRecord(doc.data()) });
+        });
+      } catch {
+        // Best-effort lookup. Missing composite/index should not block cleanup manifest.
+      }
     }
   }
 
-  return null;
+  return Array.from(leads.values());
 }
 
 
@@ -484,15 +492,17 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     report.outreach_lead_id,
   );
 
-  const leadResult = await getLeadByIdOrReportToken(leadId, token);
-  const leadFound = Boolean(leadResult);
-  const lead: AnyRecord = leadResult ? { ...asRecord(leadResult.data), id: leadResult.id } : {};
+  const leadResults = await getLeadsByIdOrReportToken(leadId, token);
+  const leadFound = leadResults.length > 0;
+  const lead: AnyRecord = leadFound ? { ...asRecord(leadResults[0].data), id: leadResults[0].id } : {};
+  const linkedLeadIds = uniqueStrings(leadResults.map((item) => item.id), 80);
+  const contactHistories = leadResults.map((item) => detectLeadContactHistory({ ...asRecord(item.data), id: item.id }));
+  const contactedHistory = contactHistories.find((item) => item.contacted) || { contacted: false, reason: "" };
 
   const domainSlug = normalizeSlug(report.domainSlug || report.domain_slug || report.domain || report.websiteUrl || lead.website || "website");
   const normalizedDomain = normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website, lead.website);
   const domainIndexIds = await collectDomainIndexIds(report, token);
   const sheetRowNumber = Number(report.sheetRowNumber || report.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
-  const leadContactHistory = detectLeadContactHistory(lead);
 
   const manifest: CleanupManifest = {
     reportToken: token,
@@ -502,6 +512,8 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     reportUrl: firstCleanString(report.reportUrl, report.report_url, lead.reportUrl, lead.report_url),
     leadId: firstCleanString(lead.id, leadId),
     leadFound,
+    linkedLeadIds,
+    linkedLeadCount: linkedLeadIds.length,
     emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || report.emailLower || report.email_lower || report.email),
     sheetRowNumber,
     b2PdfKey: getReportB2Key(report, lead),
@@ -509,8 +521,8 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     domainIndexIds,
     pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
     cleanupStatus: firstCleanString(report.cleanupStatus, report.cleanup_status),
-    leadContacted: leadContactHistory.contacted,
-    leadContactReason: leadContactHistory.reason,
+    leadContacted: contactedHistory.contacted,
+    leadContactReason: contactedHistory.reason,
   };
 
   return { manifest, report, lead };
@@ -674,6 +686,34 @@ async function deleteSupabaseChatStep(manifest: CleanupManifest): Promise<Cleanu
   }
 }
 
+async function cleanupReportEmailEventsStep(manifest: CleanupManifest): Promise<CleanupStep> {
+  try {
+    const result = await deleteEmailEventsForReport({
+      reportToken: manifest.reportToken,
+      leadIds: manifest.linkedLeadIds || [],
+      dryRun: false,
+    });
+
+    return {
+      service: "firestore",
+      action: "delete_report_email_events",
+      status: result.ok ? "ok" : "error",
+      target: manifest.reportToken,
+      message: `Deleted ${result.deletedCount || 0} report-linked email event row(s).`,
+      details: result as unknown as AnyRecord,
+    };
+  } catch (error: any) {
+    return {
+      service: "firestore",
+      action: "delete_report_email_events",
+      status: "error",
+      target: manifest.reportToken,
+      error: safeError(error),
+      message: "Report-linked email event cleanup failed, but the remaining cleanup steps continued.",
+    };
+  }
+}
+
 async function writeSheetCleanupStep(
   manifest: CleanupManifest,
   sheetMode: SheetCleanupMode,
@@ -721,13 +761,21 @@ async function writeSheetCleanupStep(
 }
 
 async function writeContactMemoryForLead(lead: AnyRecord, manifest: CleanupManifest, actor: string, reason: string): Promise<void> {
-  const emailLower = manifest.emailLower;
+  const emailLower = cleanEmail(lead.emailLower || lead.email_lower || lead.email || manifest.emailLower);
   if (!emailLower) return;
 
   const now = admin.firestore.FieldValue.serverTimestamp();
-  const lastContactedMs = Math.max(toMillis(lead.lastFollowUp), toMillis(lead.sentAt), toMillis(lead.createdAt), Date.now());
-  const cooldownUntil = admin.firestore.Timestamp.fromMillis(Date.now() + 180 * 86_400_000);
-  const memoryExpiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 86_400_000);
+  const lastContactedMs = Math.max(
+    toMillis(lead.lastEngagedAt),
+    toMillis(lead.lastClickedAt),
+    toMillis(lead.lastOpenedAt),
+    toMillis(lead.lastFollowUp),
+    toMillis(lead.sentAt),
+    toMillis(lead.createdAt),
+    Date.now(),
+  );
+  const cooldownUntil = admin.firestore.Timestamp.fromMillis(Date.now() + 45 * 86_400_000);
+  const memoryExpiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 45 * 86_400_000);
 
   await adminDb.collection("contact_memory").doc(encodeURIComponent(emailLower).replace(/\./g, "%2E")).set(
     {
@@ -739,7 +787,12 @@ async function writeContactMemoryForLead(lead: AnyRecord, manifest: CleanupManif
       companyName: clean(lead.company_name || lead.companyName || ""),
       website: clean(lead.website || lead.sheetWebsiteUrl || ""),
       service: clean(lead.service || ""),
-      sourceLeadId: manifest.leadId,
+      openCount: numericLeadValue(lead.open_count || lead.openCount),
+      clickCount: numericLeadValue(lead.click_count || lead.clickCount),
+      sourceLeadId: clean(lead.id || manifest.leadId),
+      sourceReportToken: manifest.reportToken,
+      reportToken: manifest.reportToken,
+      reportDeletedAt: now,
       cleanupActor: actor,
       cleanupReason: reason,
       updatedAt: now,
@@ -754,62 +807,73 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
     return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup was skipped by request." };
   }
 
-  if (!manifest.leadId || !manifest.leadFound) {
-    return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "No linked contact record found." };
+  const targetLeadIds = uniqueStrings([manifest.leadId, ...(manifest.linkedLeadIds || [])], 100);
+  if (!targetLeadIds.length) {
+    return { service: "firestore", action: "lead_cleanup", status: "skipped", message: "No linked contact records found for this report token." };
   }
 
-  const ref = adminDb.collection("outreach_leads").doc(manifest.leadId);
+  if (leadMode === "delete_no_memory" && manifest.leadContacted) {
+    return {
+      service: "firestore",
+      action: "delete_lead_no_memory",
+      status: "error",
+      target: `${targetLeadIds.length} contact(s)`,
+      message: "No-footprint delete was blocked because at least one linked contact has outreach history. Use the keep-footprint delete option instead.",
+      details: { leadContactReason: manifest.leadContactReason || "outreach_history_detected", linkedLeadIds: targetLeadIds },
+    };
+  }
+
   const now = admin.firestore.FieldValue.serverTimestamp();
   const reason = `report_cleanup_${leadMode}`;
+  const results: AnyRecord[] = [];
 
   try {
-    if (leadMode === "delete_no_memory") {
-      if (manifest.leadContacted) {
-        return {
-          service: "firestore",
-          action: "delete_lead_no_memory",
-          status: "error",
-          target: manifest.leadId,
-          message: "This contact has outreach history, so no-memory delete was blocked. Use the keep-safety-memory delete option instead.",
-          details: { leadContactReason: manifest.leadContactReason || "outreach_history_detected" },
-        };
+    for (const leadId of targetLeadIds) {
+      const ref = adminDb.collection("outreach_leads").doc(leadId);
+      const snap = await ref.get();
+
+      if (!snap.exists) {
+        results.push({ leadId, ok: true, status: "missing" });
+        continue;
       }
 
-      await ref.delete();
-      return {
-        service: "firestore",
-        action: "delete_lead_no_memory",
-        status: "ok",
-        target: manifest.leadId,
-        message: "Test contact deleted. No contact memory was saved because no outreach history was found.",
-      };
-    }
+      const leadData = { ...asRecord(snap.data()), id: leadId };
 
-    const memorySaved = shouldSaveContactMemory(leadMode, manifest);
-    if (memorySaved) {
-      await writeContactMemoryForLead(lead, manifest, actor, reason);
-    }
+      if (shouldSaveContactMemory(leadMode, manifest)) {
+        await writeContactMemoryForLead(leadData, manifest, actor, reason);
+      }
 
-    if (leadMode === "delete") {
-      await ref.delete();
-      return {
-        service: "firestore",
-        action: "delete_lead_keep_memory",
-        status: "ok",
-        target: manifest.leadId,
-        message: memorySaved
-          ? "Contact record deleted after tiny safety memory was saved."
-          : "Contact record deleted.",
-      };
-    }
+      if (leadMode === "delete" || leadMode === "delete_no_memory") {
+        await ref.delete();
+        results.push({ leadId, ok: true, status: "deleted" });
+        continue;
+      }
 
-    if (leadMode === "trash") {
+      if (leadMode === "trash") {
+        await ref.set(
+          {
+            deleted: true,
+            deletedAt: now,
+            deleteReason: reason,
+            status: "cancelled",
+            stopAutomation: true,
+            nextFollowupStatus: "blocked",
+            nextFollowupReason: reason,
+            automationLock: admin.firestore.FieldValue.delete(),
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+        results.push({ leadId, ok: true, status: "trashed" });
+        continue;
+      }
+
       await ref.set(
         {
           archived: true,
-          deleted: true,
-          deletedAt: now,
-          deleteReason: reason,
+          archivedAt: now,
+          archiveReason: reason,
+          status: "cancelled",
           stopAutomation: true,
           nextFollowupStatus: "blocked",
           nextFollowupReason: reason,
@@ -817,45 +881,28 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
         },
         { merge: true },
       );
-
-      return {
-        service: "firestore",
-        action: "trash_lead",
-        status: "ok",
-        target: manifest.leadId,
-        message: memorySaved
-          ? "Contact moved to trash and safety memory was kept."
-          : "Contact moved to trash. No safety memory was needed because no outreach history was found.",
-      };
+      results.push({ leadId, ok: true, status: "archived" });
     }
 
-    await ref.set(
-      {
-        archived: true,
-        deleted: false,
-        archivedAt: now,
-        archiveReason: reason,
-        stopAutomation: true,
-        nextFollowupStatus: "blocked",
-        nextFollowupReason: reason,
-        updatedAt: now,
-      },
-      { merge: true },
-    );
-
+    const failed = results.filter((item) => item.ok === false);
     return {
       service: "firestore",
-      action: "archive_lead",
-      status: "ok",
-      target: manifest.leadId,
-      message: memorySaved
-        ? "Contact archived, automation stopped, and safety memory was kept."
-        : "Contact archived and automation stopped. No safety memory was needed because no outreach history was found.",
+      action: leadMode === "delete_no_memory" ? "delete_leads_no_memory" : leadMode === "delete" ? "delete_leads_keep_memory" : `${leadMode}_leads`,
+      status: failed.length ? "error" : "ok",
+      target: `${targetLeadIds.length} contact(s)`,
+      message:
+        leadMode === "delete_no_memory"
+          ? `Deleted ${targetLeadIds.length} linked contact record(s) with no footprint.`
+          : leadMode === "delete"
+            ? `Deleted ${targetLeadIds.length} linked contact record(s) and kept tiny safety memory when possible.`
+            : `${leadMode} cleanup completed for ${targetLeadIds.length} linked contact record(s).`,
+      details: { linkedLeadIds: targetLeadIds, results },
     };
   } catch (error: any) {
-    return { service: "firestore", action: "lead_cleanup", status: "error", target: manifest.leadId, error: safeError(error) };
+    return { service: "firestore", action: "lead_cleanup", status: "error", target: `${targetLeadIds.length} contact(s)`, error: safeError(error), details: { linkedLeadIds: targetLeadIds, results } };
   }
 }
+
 async function cleanupFirestoreReportStep(manifest: CleanupManifest, mode: CleanupMode, actor: string): Promise<CleanupStep> {
   if (!manifest.reportFound) {
     return { service: "firestore", action: "cleanup_report_document", status: "skipped", message: "Report document was not found." };
@@ -1033,6 +1080,13 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
       ? plannedStep("vercel_blob", "delete_preview_images", undefined, "Blob preview image target(s) would be deleted.", { targets: manifest.blobImageTargets })
       : { service: "vercel_blob", action: "delete_preview_images", status: "skipped", message: "No Vercel Blob preview image target found." },
     plannedStep("supabase", "delete_report_chat", manifest.reportToken, "Supabase chat rows would be deleted when configured."),
+    plannedStep(
+      "firestore",
+      "delete_report_email_events",
+      manifest.reportToken,
+      "Email send/open/click event rows linked to this report token or linked contacts would be deleted.",
+      { linkedLeadIds: manifest.linkedLeadIds || [], linkedLeadCount: manifest.linkedLeadCount || 0 },
+    ),
     manifest.reportFound
       ? plannedStep("firestore", mode === "hard" ? "delete_report_document" : "mark_report_cleaned", manifest.reportToken)
       : { service: "firestore", action: "cleanup_report_document", status: "skipped", message: "Report document was not found." },
@@ -1097,6 +1151,7 @@ async function runCleanup(input: {
   steps.push(await runCleanupStep("delete_pdf", () => deleteB2PdfStep(input.manifest)));
   steps.push(await runCleanupStep("delete_preview_images", () => deleteBlobImagesStep(input.manifest)));
   steps.push(await runCleanupStep("delete_report_chat", () => deleteSupabaseChatStep(input.manifest)));
+  steps.push(await runCleanupStep("delete_report_email_events", () => cleanupReportEmailEventsStep(input.manifest)));
   steps.push(await runCleanupStep("cleanup_report_document", () => cleanupFirestoreReportStep(input.manifest, input.mode, input.actor)));
   steps.push(await runCleanupStep("cleanup_domain_indexes", () => cleanupDomainIndexStep(input.manifest, input.mode, input.actor)));
   steps.push(await runCleanupStep("cleanup_sheet_row", () => writeSheetCleanupStep(input.manifest, input.sheetMode, input.mode, input.actor)));

@@ -419,21 +419,50 @@ const SendInitialBodySchema = z
 // contact-memory and lightweight email-event logging now live under lib/trackflow-*.
 type EmailTrackingContext = {
   leadId?: string;
+  reportToken?: string;
+  messageId?: string;
+  trackingId?: string;
   tag?: string;
   emailLower?: string;
 };
 
+function hasEmailTrackingIdentity(context: EmailTrackingContext = {}): boolean {
+  return Boolean(
+    String(context.leadId || "").trim() ||
+      normalizeReportToken(context.reportToken || "") ||
+      String(context.messageId || "").trim() ||
+      String(context.trackingId || "").trim()
+  );
+}
+
+function appendEmailTrackingParams(trackingUrl: URL, context: EmailTrackingContext = {}) {
+  const leadId = String(context.leadId || "").trim();
+  const reportToken = normalizeReportToken(context.reportToken || "");
+  const messageId = String(context.messageId || "").trim().replace(/[\r\n]/g, "").slice(0, 180);
+  const trackingId = String(context.trackingId || "").trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 100);
+
+  if (leadId) trackingUrl.searchParams.set("lid", leadId);
+  if (reportToken) {
+    trackingUrl.searchParams.set("rt", reportToken);
+    trackingUrl.searchParams.set("reportToken", reportToken);
+  }
+  if (messageId) {
+    trackingUrl.searchParams.set("mid", messageId);
+    trackingUrl.searchParams.set("messageId", messageId);
+  }
+  if (trackingId) trackingUrl.searchParams.set("trackingId", trackingId);
+  if (context.tag) trackingUrl.searchParams.set("t", context.tag);
+  if (context.emailLower) trackingUrl.searchParams.set("email", context.emailLower);
+}
+
 function buildTrackedClickUrl(targetUrl: string, context: EmailTrackingContext = {}): string {
   const safeTarget = sanitizeOptionalUrl(targetUrl || "");
-  const leadId = String(context.leadId || "").trim();
 
-  if (!safeTarget || !leadId) return safeTarget || targetUrl || "";
+  if (!safeTarget || !hasEmailTrackingIdentity(context)) return safeTarget || targetUrl || "";
 
   try {
     const trackingUrl = new URL(`${appBaseUrl()}/api/trackflow/track/click`);
-    trackingUrl.searchParams.set("lid", leadId);
-    if (context.tag) trackingUrl.searchParams.set("t", context.tag);
-    if (context.emailLower) trackingUrl.searchParams.set("email", context.emailLower);
+    appendEmailTrackingParams(trackingUrl, context);
     trackingUrl.searchParams.set("url", safeTarget);
     return trackingUrl.toString();
   } catch {
@@ -442,14 +471,11 @@ function buildTrackedClickUrl(targetUrl: string, context: EmailTrackingContext =
 }
 
 function buildOpenTrackingPixel(context: EmailTrackingContext = {}): string {
-  const leadId = String(context.leadId || "").trim();
-  if (!leadId) return "";
+  if (!hasEmailTrackingIdentity(context)) return "";
 
   try {
     const trackingUrl = new URL(`${appBaseUrl()}/api/trackflow/track/open`);
-    trackingUrl.searchParams.set("lid", leadId);
-    if (context.tag) trackingUrl.searchParams.set("t", context.tag);
-    if (context.emailLower) trackingUrl.searchParams.set("email", context.emailLower);
+    appendEmailTrackingParams(trackingUrl, context);
 
     return `<img src="${escapeHtml(trackingUrl.toString())}" width="1" height="1" alt="" border="0" style="display:none;width:1px;height:1px;max-width:1px;max-height:1px;overflow:hidden;opacity:0;mso-hide:all;" />`;
   } catch {
@@ -473,7 +499,7 @@ function shouldTrackHref(value: string): boolean {
 }
 
 function rewriteHtmlLinksForTracking(html: string, context: EmailTrackingContext = {}): string {
-  if (!context.leadId || !html) return html;
+  if (!hasEmailTrackingIdentity(context) || !html) return html;
 
   return String(html).replace(
     /<a\b([^>]*?)\bhref=(["'])(.*?)\2([^>]*)>/gi,
@@ -497,7 +523,7 @@ function buildReportLinkBlock(
   const safeUrl = sanitizePublicReportUrl(reportUrl || "");
   if (!safeUrl) return "";
 
-  const clickUrl = trackingContext.leadId ? buildTrackedClickUrl(safeUrl, trackingContext) : safeUrl;
+  const clickUrl = hasEmailTrackingIdentity(trackingContext) ? buildTrackedClickUrl(safeUrl, trackingContext) : safeUrl;
   const safeText = escapeHtml(buttonText || "View private audit note").slice(0, 80);
 
   // Agency-style, Outlook-safe CTA. Keep it as a table so Brevo/Outlook render consistently.
@@ -1496,10 +1522,16 @@ function buildEmailHtml(
     signatureMode?: SignatureMode;
     includeReportLink?: boolean;
     leadId?: string;
+    reportToken?: string;
+    messageId?: string;
+    trackingId?: string;
   } = {}
 ) {
   const trackingContext: EmailTrackingContext = {
     leadId: options.leadId,
+    reportToken: normalizeReportToken(options.reportToken || extractReportTokenFromUrl(options.reportUrl || "")),
+    messageId: options.messageId,
+    trackingId: options.trackingId || (tag ? tag.split("_step")[0] : ""),
     tag,
     emailLower,
   };
@@ -2008,6 +2040,9 @@ async function sendInitialFromBody(rawBody: any) {
         signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
         includeReportLink: true,
         leadId: leadRef.id,
+        reportToken: baseLead.reportToken,
+        messageId: customMessageId,
+        trackingId,
       }),
       tag,
       customMessageId,
@@ -2034,13 +2069,24 @@ async function sendInitialFromBody(rawBody: any) {
         subject,
         trackingTag: tag,
         messageId: data.messageId || "",
+        customMessageId,
+        trackingId,
+        reportToken: baseLead.reportToken,
         includeSignature,
         reportUrl,
         sentAt,
       }),
     });
 
-    await addEmailEvent(leadRef.id, "sent", { emailLower, step: 1, trackingTag: tag, messageId: data.messageId || "" });
+    await addEmailEvent(leadRef.id, "sent", {
+      emailLower,
+      step: 1,
+      trackingTag: tag,
+      messageId: data.messageId || customMessageId,
+      customMessageId,
+      trackingId,
+      reportToken: baseLead.reportToken,
+    });
 
     return json({ success: true, leadId: leadRef.id, messageId: data.messageId, trackingId });
   } catch (error: any) {
@@ -2222,6 +2268,9 @@ async function handleCronScheduledInitials(req: Request) {
             signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "full", "full"),
             includeReportLink: true,
             leadId: String((lead as AnyRecord).id || leadRef.id),
+            reportToken: normalizeReportToken(lead.reportToken || (lead as AnyRecord).report_token || extractReportTokenFromUrl(lead.reportUrl || (lead as AnyRecord).report_url || "")),
+            messageId: customMessageId,
+            trackingId: String(lead.trackingId || lead.id || leadRef.id || ""),
           }),
           tag,
           customMessageId,
@@ -2249,13 +2298,24 @@ async function handleCronScheduledInitials(req: Request) {
             subject: legacySubject,
             trackingTag: tag,
             messageId: data.messageId || "",
+            customMessageId,
+            trackingId: String(lead.trackingId || lead.id || leadRef.id || ""),
+            reportToken: normalizeReportToken(lead.reportToken || (lead as AnyRecord).report_token || extractReportTokenFromUrl(lead.reportUrl || (lead as AnyRecord).report_url || "")),
             includeSignature: lead.include_signature !== false,
             reportUrl: lead.reportUrl || "",
             sentAt,
           }),
         });
 
-        await addEmailEvent(leadRef.id, "sent", { emailLower, step: 1, trackingTag: tag, messageId: data.messageId || "" });
+        await addEmailEvent(leadRef.id, "sent", {
+          emailLower,
+          step: 1,
+          trackingTag: tag,
+          messageId: data.messageId || customMessageId,
+          customMessageId,
+          trackingId: String(lead.trackingId || lead.id || leadRef.id || ""),
+          reportToken: normalizeReportToken(lead.reportToken || (lead as AnyRecord).report_token || extractReportTokenFromUrl(lead.reportUrl || (lead as AnyRecord).report_url || "")),
+        });
         sent.push(emailLower);
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error: any) {
@@ -3014,6 +3074,9 @@ async function handleCronFollowups(req: Request) {
         signatureMode: "compact",
         includeReportLink: false,
         leadId: String(lockedLead.id || ""),
+        reportToken: normalizeReportToken(lockedLead.reportToken || (lockedLead as AnyRecord).report_token || extractReportTokenFromUrl(lockedLead.reportUrl || (lockedLead as AnyRecord).report_url || "")),
+        messageId: customMessageId,
+        trackingId: String(lockedLead.trackingId || lockedLead.id || ""),
       });
 
       const data = await sendViaBrevo({
@@ -3063,6 +3126,8 @@ async function handleCronFollowups(req: Request) {
           variantId: selectedVariant.id || "",
           messageId: data.messageId || "",
           customMessageId,
+          trackingId: String(lockedLead.trackingId || lockedLead.id || ""),
+          reportToken: normalizeReportToken(lockedLead.reportToken || (lockedLead as AnyRecord).report_token || extractReportTokenFromUrl(lockedLead.reportUrl || (lockedLead as AnyRecord).report_url || "")),
           inReplyTo: threadHeaders["In-Reply-To"] || "",
           references: threadHeaders.References || "",
           threadRootMessageId: threadHeaders["X-TFP-Thread-Root"] || "",
@@ -3076,8 +3141,10 @@ async function handleCronFollowups(req: Request) {
         followupNumber: nextFollowupNumber,
         step: lockedDecision.trackingStepNumber,
         trackingTag: tag,
-        messageId: data.messageId || "",
+        messageId: data.messageId || customMessageId,
         customMessageId,
+        trackingId: String(lockedLead.trackingId || lockedLead.id || ""),
+        reportToken: normalizeReportToken(lockedLead.reportToken || (lockedLead as AnyRecord).report_token || extractReportTokenFromUrl(lockedLead.reportUrl || (lockedLead as AnyRecord).report_url || "")),
         inReplyTo: threadHeaders["In-Reply-To"] || "",
         references: threadHeaders.References || "",
         eligibilityReasons: lockedDecision.reasons,
@@ -3398,14 +3465,29 @@ async function handleBrevoWebhook(req: Request) {
     if (Object.keys(sheetUpdates).length) await patchSheetRowSafely(sheetRowNumber, sheetUpdates);
   }
 
+  const reportToken = normalizeReportToken(leadData.reportToken || (leadData as AnyRecord).report_token || extractReportTokenFromUrl(leadData.reportUrl || (leadData as AnyRecord).report_url || ""));
+  if (reportToken && (openRecorded || clickRecorded)) {
+    await recordReportEmailEngagement(reportToken, openRecorded ? "opened" : "clicked", eventTime, {
+      targetUrl: body.url || "",
+      messageId: rawMessageId || "",
+      trackingId: String(leadData.trackingId || ""),
+      tag: receivedTag || "",
+      leadId: leadDoc.id,
+      emailLower: dbEmailLower || emailLower,
+    });
+  }
+
   await addEmailEvent(leadDoc.id, event || "unknown", {
     emailLower: dbEmailLower || emailLower,
     trackingTag: receivedTag || "",
     rawMessageId: rawMessageId || "",
+    messageId: rawMessageId || "",
     url: body.url || "",
     ip: body.ip || "",
     userAgent: body["user-agent"] || "",
     eventTime,
+    reportToken,
+    trackingId: String(leadData.trackingId || ""),
   });
 
   return json({ message: "Webhook processed" });
@@ -3443,12 +3525,31 @@ async function resolveLeadForSelfHostedTracking(req: Request): Promise<{
   leadData: LeadData | null;
   tag: string;
   emailLower: string;
+  reportToken: string;
+  messageId: string;
+  trackingId: string;
 }> {
   const url = new URL(req.url);
   const leadId = cleanTrackingIdentifier(url.searchParams.get("lid") || url.searchParams.get("leadId") || "");
   const tag = cleanTrackingIdentifier(url.searchParams.get("t") || url.searchParams.get("tag") || "", 140);
   const emailLower = normalizeEmail(url.searchParams.get("email") || "");
-  const trackingId = cleanTrackingIdentifier(url.searchParams.get("trackingId") || (tag ? tag.split("_step")[0] : ""), 100);
+  const reportToken = normalizeReportToken(
+    url.searchParams.get("rt") ||
+      url.searchParams.get("reportToken") ||
+      url.searchParams.get("report_token") ||
+      extractReportTokenFromUrl(url.searchParams.get("url") || ""),
+  );
+  const messageId = String(
+    url.searchParams.get("mid") ||
+      url.searchParams.get("messageId") ||
+      url.searchParams.get("message_id") ||
+      url.searchParams.get("customMessageId") ||
+      "",
+  )
+    .trim()
+    .replace(/[\r\n]/g, "")
+    .slice(0, 180);
+  const trackingId = cleanTrackingIdentifier(url.searchParams.get("trackingId") || url.searchParams.get("tid") || (tag ? tag.split("_step")[0] : ""), 100);
   const outreachRef = adminDb.collection("outreach_leads");
 
   let leadDoc: FirestoreDocSnap | null = null;
@@ -3463,8 +3564,76 @@ async function resolveLeadForSelfHostedTracking(req: Request): Promise<{
     if (!trackingSnap.empty) leadDoc = trackingSnap.docs[0];
   }
 
+  if (!leadDoc && reportToken) {
+    for (const field of ["reportToken", "report_token", "token"]) {
+      const reportSnap = await outreachRef.where(field, "==", reportToken).limit(10).get();
+      if (reportSnap.empty) continue;
+
+      const matchingEmailDoc = emailLower
+        ? reportSnap.docs.find((docSnap: any) => {
+            const data = docSnap.data() as LeadData;
+            return (data.emailLower || normalizeEmail(data.email || "")) === emailLower;
+          })
+        : null;
+
+      leadDoc = matchingEmailDoc || reportSnap.docs[0];
+      if (leadDoc) break;
+    }
+  }
+
   const leadData = leadDoc?.exists ? (leadDoc.data() as LeadData) : null;
-  return { url, leadDoc, leadData, tag, emailLower };
+  return { url, leadDoc, leadData, tag, emailLower, reportToken, messageId, trackingId };
+}
+
+async function recordReportEmailEngagement(
+  reportToken: string,
+  event: "opened" | "clicked",
+  eventTime: any,
+  meta: { targetUrl?: string; messageId?: string; trackingId?: string; tag?: string; leadId?: string; emailLower?: string } = {},
+) {
+  const token = normalizeReportToken(reportToken);
+  if (!token) return;
+
+  const updatePayload: AnyRecord = {
+    lastEmailEngagedAt: eventTime,
+    last_email_engaged_at: eventTime,
+    lastEngagedAt: eventTime,
+    engagementSource: "email",
+    engagement_source: "email",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (event === "opened") {
+    updatePayload.emailOpenCount = admin.firestore.FieldValue.increment(1);
+    updatePayload.email_open_count = admin.firestore.FieldValue.increment(1);
+    updatePayload.lastEmailOpenedAt = eventTime;
+    updatePayload.last_email_opened_at = eventTime;
+    updatePayload.reportEmailStatus = "email_opened";
+    updatePayload.report_email_status = "email_opened";
+  }
+
+  if (event === "clicked") {
+    updatePayload.emailClickCount = admin.firestore.FieldValue.increment(1);
+    updatePayload.email_click_count = admin.firestore.FieldValue.increment(1);
+    updatePayload.lastEmailClickedAt = eventTime;
+    updatePayload.last_email_clicked_at = eventTime;
+    updatePayload.lastEmailClickedUrl = meta.targetUrl || "";
+    updatePayload.last_email_clicked_url = meta.targetUrl || "";
+    updatePayload.reportEmailStatus = "email_clicked";
+    updatePayload.report_email_status = "email_clicked";
+  }
+
+  if (meta.messageId) updatePayload.lastEmailMessageId = meta.messageId;
+  if (meta.trackingId) updatePayload.lastEmailTrackingId = meta.trackingId;
+  if (meta.tag) updatePayload.lastEmailTrackingTag = meta.tag;
+  if (meta.leadId) updatePayload.lastEmailLeadId = meta.leadId;
+  if (meta.emailLower) updatePayload.lastEmailRecipient = meta.emailLower;
+
+  try {
+    await adminDb.collection("audit_reports").doc(token).set(updatePayload, { merge: true });
+  } catch (error) {
+    console.warn("Report email engagement update failed:", error);
+  }
 }
 
 async function recordSelfHostedEmailEngagement(
@@ -3472,16 +3641,20 @@ async function recordSelfHostedEmailEngagement(
   leadData: LeadData,
   event: "opened" | "clicked",
   tag: string,
-  meta: { targetUrl?: string; req?: Request } = {},
+  meta: { targetUrl?: string; req?: Request; reportToken?: string; messageId?: string; trackingId?: string; emailLower?: string } = {},
 ) {
   const docRef = leadDoc.ref || adminDb.collection("outreach_leads").doc(leadDoc.id);
   const eventTime = admin.firestore.Timestamp.now();
   const updatePayload: AnyRecord = {};
   const nowMs = eventTime.toMillis();
+  const reportToken = normalizeReportToken(meta.reportToken || leadData.reportToken || (leadData as AnyRecord).report_token || extractReportTokenFromUrl(leadData.reportUrl || (leadData as AnyRecord).report_url || ""));
   const trackingEntryBase = {
     time: eventTime,
     step_tag: tag || "self_hosted",
     source: "trackflow_self_hosted_tracking",
+    reportToken,
+    messageId: meta.messageId || "",
+    trackingId: meta.trackingId || leadData.trackingId || "",
   };
 
   if (event === "opened") {
@@ -3548,6 +3721,17 @@ async function recordSelfHostedEmailEngagement(
     await docRef.update(updatePayload);
   }
 
+  if (reportToken) {
+    await recordReportEmailEngagement(reportToken, event, eventTime, {
+      targetUrl: meta.targetUrl || "",
+      messageId: meta.messageId || "",
+      trackingId: meta.trackingId || String(leadData.trackingId || ""),
+      tag,
+      leadId: leadDoc.id,
+      emailLower: meta.emailLower || leadData.emailLower || normalizeEmail(leadData.email || ""),
+    });
+  }
+
   const sheetRowNumber = Number(leadData.sheetRowNumber || 0);
   if (sheetRowNumber > 1) {
     const sheetUpdates: AnyRecord = {};
@@ -3562,6 +3746,9 @@ async function recordSelfHostedEmailEngagement(
     url: meta.targetUrl || "",
     source: "trackflow_self_hosted_tracking",
     eventTime,
+    reportToken,
+    messageId: meta.messageId || "",
+    trackingId: meta.trackingId || leadData.trackingId || "",
   });
 
   return { recorded: true, reason: event };
@@ -3569,13 +3756,35 @@ async function recordSelfHostedEmailEngagement(
 
 async function handleSelfHostedEmailOpen(req: Request) {
   try {
-    const { leadDoc, leadData, tag, emailLower } = await resolveLeadForSelfHostedTracking(req);
+    const { leadDoc, leadData, tag, emailLower, reportToken, messageId, trackingId } = await resolveLeadForSelfHostedTracking(req);
 
     if (leadDoc && leadData) {
       const dbEmailLower = leadData.emailLower || normalizeEmail(leadData.email || "");
       if (!emailLower || !dbEmailLower || emailLower === dbEmailLower) {
-        await recordSelfHostedEmailEngagement(leadDoc, leadData, "opened", tag, { req });
+        await recordSelfHostedEmailEngagement(leadDoc, leadData, "opened", tag, {
+          req,
+          reportToken,
+          messageId,
+          trackingId,
+          emailLower,
+        });
       }
+    } else if (reportToken) {
+      await recordReportEmailEngagement(reportToken, "opened", admin.firestore.Timestamp.now(), {
+        messageId,
+        trackingId,
+        tag,
+        emailLower,
+      });
+      await addEmailEvent("", "opened", {
+        emailLower,
+        trackingTag: tag || "",
+        source: "trackflow_self_hosted_tracking_report_only",
+        eventTime: admin.firestore.Timestamp.now(),
+        reportToken,
+        messageId,
+        trackingId,
+      });
     }
   } catch (error) {
     console.warn("Self-hosted email open tracking failed:", error);
@@ -3585,7 +3794,7 @@ async function handleSelfHostedEmailOpen(req: Request) {
 }
 
 async function handleSelfHostedEmailClick(req: Request) {
-  const { url, leadDoc, leadData, tag, emailLower } = await resolveLeadForSelfHostedTracking(req);
+  const { url, leadDoc, leadData, tag, emailLower, reportToken, messageId, trackingId } = await resolveLeadForSelfHostedTracking(req);
   const rawTarget = String(url.searchParams.get("url") || "").trim();
   const targetUrl = sanitizeOptionalUrl(rawTarget) || appBaseUrl();
 
@@ -3593,8 +3802,33 @@ async function handleSelfHostedEmailClick(req: Request) {
     if (leadDoc && leadData) {
       const dbEmailLower = leadData.emailLower || normalizeEmail(leadData.email || "");
       if (!emailLower || !dbEmailLower || emailLower === dbEmailLower) {
-        await recordSelfHostedEmailEngagement(leadDoc, leadData, "clicked", tag, { targetUrl, req });
+        await recordSelfHostedEmailEngagement(leadDoc, leadData, "clicked", tag, {
+          targetUrl,
+          req,
+          reportToken,
+          messageId,
+          trackingId,
+          emailLower,
+        });
       }
+    } else if (reportToken) {
+      await recordReportEmailEngagement(reportToken, "clicked", admin.firestore.Timestamp.now(), {
+        targetUrl,
+        messageId,
+        trackingId,
+        tag,
+        emailLower,
+      });
+      await addEmailEvent("", "clicked", {
+        emailLower,
+        trackingTag: tag || "",
+        url: targetUrl,
+        source: "trackflow_self_hosted_tracking_report_only",
+        eventTime: admin.firestore.Timestamp.now(),
+        reportToken,
+        messageId,
+        trackingId,
+      });
     }
   } catch (error) {
     console.warn("Self-hosted email click tracking failed:", error);
@@ -3650,6 +3884,7 @@ async function markRepliesBatch(docs: FirestoreQueryDocSnap[], clientEmail: stri
       addEmailEvent(docSnap.id, "replied", {
         emailLower: clientEmail,
         source: "reply_webhook",
+        reportToken: normalizeReportToken((docSnap.data() || {}).reportToken || (docSnap.data() || {}).report_token || extractReportTokenFromUrl((docSnap.data() || {}).reportUrl || (docSnap.data() || {}).report_url || "")),
       })
     )
   );
@@ -3722,6 +3957,7 @@ async function unsubscribeEmail(emailLower: string, source: string) {
       addEmailEvent(docSnap.id, "unsubscribed", {
         emailLower,
         source,
+        reportToken: normalizeReportToken((docSnap.data() || {}).reportToken || (docSnap.data() || {}).report_token || extractReportTokenFromUrl((docSnap.data() || {}).reportUrl || (docSnap.data() || {}).report_url || "")),
       })
     )
   );

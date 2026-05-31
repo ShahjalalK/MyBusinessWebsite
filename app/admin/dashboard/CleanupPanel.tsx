@@ -51,8 +51,8 @@ type CleanupPanelProps = {
 const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
   {
     id: "hard",
-    label: "Delete Everywhere",
-    note: "Deletes the secure report, PDF, preview image, chat history, Google Sheet row, and linked contact data. Your only decision is whether to keep a tiny footprint memory.",
+    label: "Delete All Data",
+    note: "Deletes the secure report, PDF, preview image, chat history, Sheet report data, and all email-send/event data linked to this report token. Choose whether to keep a tiny footprint memory.",
   },
   {
     id: "assets_only",
@@ -62,8 +62,8 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
 ];
 
 const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string; note: string }> = [
-  { id: "delete", label: "Keep Footprint", note: "Best for contacted/no-reply leads. Deletes full data but keeps tiny safety memory to avoid future duplicate outreach." },
-  { id: "delete_no_memory", label: "No Footprint", note: "Only for test or never-contacted leads. Backend blocks this when outreach history exists." },
+  { id: "delete", label: "Delete All Data — Keep Footprint", note: "Best for contacted/no-reply leads. Deletes full report-linked data but keeps tiny 45-day safety memory to avoid duplicate outreach." },
+  { id: "delete_no_memory", label: "Delete All Data — No Footprint", note: "Only for test or never-contacted leads. Backend blocks this when outreach history exists." },
 ];
 
 const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = [
@@ -123,8 +123,9 @@ function reportStepActionLabel(step: ReportCleanupStep): string {
   if (action.includes("delete_pdf")) return "Remove file";
   if (action.includes("delete_preview")) return "Remove image";
   if (action.includes("delete_report_chat")) return "Remove chat";
+  if (action.includes("delete_report_email_events")) return "Remove email activity";
   if (action.includes("delete_report_document")) return "Delete record";
-  if (action.includes("mark_report_cleaned")) return "Archive report";
+  if (action.includes("mark_report_cleaned")) return "Mark report cleaned";
   if (action.includes("cleanup_domain") || action.includes("delete_domain")) return "Update lookup";
   if (action.includes("delete_sheet_row")) return "Delete Sheet row";
   if (action.includes("clear_report_fields")) return "Clear Sheet fields";
@@ -159,7 +160,7 @@ function reportStepMessage(step: ReportCleanupStep): string {
 
 function reportModeActionLabel(mode: ReportAssetCleanupMode): string {
   if (mode === "assets_only") return "Remove Files Only";
-  return "Delete Everywhere";
+  return "Delete All Data";
 }
 
 function secureReportChannelLabel(channel?: SecureReportRow["channel"]): string {
