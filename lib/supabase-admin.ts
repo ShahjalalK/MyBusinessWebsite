@@ -96,6 +96,22 @@ function cleanText(value: unknown, maxLength = 3000): string {
     .slice(0, maxLength);
 }
 
+function cleanCountryCode(value: unknown): string {
+  const code = cleanText(value, 12).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+  if (code === "XX" || code === "ZZ") return "";
+  return code;
+}
+
+function cleanCountryName(value: unknown): string {
+  const text = cleanText(value, 80);
+  if (!text) return "";
+  if (/^(unknown|xx|zz)$/i.test(text)) return "Unknown";
+  if (/^local test$/i.test(text)) return "Local test";
+  return text;
+}
+
+
 function cleanNumber(value: unknown, fallback = 0): number {
   const next = Number(value);
   return Number.isFinite(next) && next >= 0 ? Math.floor(next) : fallback;
@@ -428,8 +444,8 @@ export async function logReportChatSession(input: {
     domain_slug: cleanText(input.domainSlug, 180),
     domain: cleanText(input.domain, 180),
     company_name: cleanText(input.companyName, 180),
-    country_code: cleanText(visit.countryCode, 12),
-    country_name: cleanText(visit.countryName, 80),
+    country_code: cleanCountryCode(visit.countryCode),
+    country_name: cleanCountryName(visit.countryName),
     region: cleanText(visit.region, 120),
     city: cleanText(visit.city, 120),
     device_type: cleanText(visit.deviceType || "Unknown", 40),
@@ -670,8 +686,8 @@ function normalizeSessionRow(row: SupabaseSessionRow): StoredReportChatSession |
     domain: cleanText(row.domain, 180),
     domainSlug: cleanText(row.domain_slug, 180),
     companyName: cleanText(row.company_name, 180),
-    countryCode: cleanText(row.country_code, 12),
-    countryName: cleanText(row.country_name, 80),
+    countryCode: cleanCountryCode(row.country_code),
+    countryName: cleanCountryName(row.country_name),
     region: cleanText(row.region, 120),
     city: cleanText(row.city, 120),
     deviceType: cleanText(row.device_type, 40),

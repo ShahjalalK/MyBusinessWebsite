@@ -253,9 +253,44 @@ function cleanHeader(value: string | null, maxLength = 120): string {
     .slice(0, maxLength);
 }
 
+function cleanCountryCode(value: string | null): string {
+  const code = cleanHeader(value, 8).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+  if (code === "XX" || code === "ZZ") return "";
+  return code;
+}
+
+function decodeLocationHeader(value: string | null, maxLength = 120): string {
+  const cleaned = cleanHeader(value, maxLength);
+  if (!cleaned) return "";
+
+  try {
+    return decodeURIComponent(cleaned.replace(/\+/g, " ")).slice(0, maxLength);
+  } catch {
+    return cleaned;
+  }
+}
+
+function isLocalDashboardRequest(req: NextRequest): boolean {
+  const host = String(req.nextUrl.hostname || "").toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local")
+  );
+}
+
+function getTrustedEdgeCountryCode(req: NextRequest): string {
+  // Use trusted edge-provider headers only. Avoid generic x-country-code because it can be
+  // client/proxy supplied and can make a visitor look like the hosting/proxy region.
+  return cleanCountryCode(req.headers.get("x-vercel-ip-country")) || cleanCountryCode(req.headers.get("cf-ipcountry"));
+}
+
 function getCountryName(countryCode: string): string {
-  const code = cleanHeader(countryCode, 8).toUpperCase();
-  if (!code || code === "XX") return "";
+  const code = cleanCountryCode(countryCode);
+  if (!code) return "";
 
   return COUNTRY_NAMES[code] || code;
 }
@@ -298,20 +333,28 @@ function detectDeviceType(userAgent: string): string {
 }
 
 function getVisitInfo(req: NextRequest): ReportChatVisitInfo {
-  const countryCode = cleanHeader(
-    req.headers.get("x-vercel-ip-country") ||
-      req.headers.get("cf-ipcountry") ||
-      req.headers.get("x-country-code"),
-    12,
-  ).toUpperCase();
-
   const userAgent = cleanHeader(req.headers.get("user-agent"), 600);
+
+  if (isLocalDashboardRequest(req)) {
+    return {
+      countryCode: "",
+      countryName: "Local test",
+      region: "",
+      city: "",
+      deviceType: detectDeviceType(userAgent),
+      browser: detectBrowser(userAgent),
+      os: detectOs(userAgent),
+    };
+  }
+
+  const countryCode = getTrustedEdgeCountryCode(req);
+  const countryName = getCountryName(countryCode);
 
   return {
     countryCode,
-    countryName: getCountryName(countryCode),
-    region: cleanHeader(req.headers.get("x-vercel-ip-country-region") || req.headers.get("x-region"), 120),
-    city: cleanHeader(req.headers.get("x-vercel-ip-city") || req.headers.get("x-city"), 120),
+    countryName: countryName || "Unknown",
+    region: decodeLocationHeader(req.headers.get("x-vercel-ip-country-region"), 120),
+    city: decodeLocationHeader(req.headers.get("x-vercel-ip-city"), 120),
     deviceType: detectDeviceType(userAgent),
     browser: detectBrowser(userAgent),
     os: detectOs(userAgent),

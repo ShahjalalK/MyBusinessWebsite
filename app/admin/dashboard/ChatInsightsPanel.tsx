@@ -45,6 +45,7 @@ type ChatInsightGroup = {
   visitorCount: number;
   totalQuestions: number;
   pdfDownloads: number;
+  latestPdfDownloadedAt: string;
   needsReview: number;
   latestActive: string;
   latestQuestion: string;
@@ -54,6 +55,32 @@ type ChatInsightGroup = {
 function safeText(value: unknown, fallback = "Unknown") {
   const text = String(value || "").trim();
   return text || fallback;
+}
+
+function isUnknownLocationValue(value?: string) {
+  const text = String(value || "").trim().toLowerCase();
+  return !text || text === "unknown" || text === "xx" || text === "zz";
+}
+
+function getApproxLocation(session: ReportChatSessionRow) {
+  const countryName = String(session.countryName || "").trim();
+  const countryCode = String(session.countryCode || "").trim().toUpperCase();
+  const region = String(session.region || "").trim();
+  const city = String(session.city || "").trim();
+
+  if (countryName.toLowerCase() === "local test") return "Local test";
+
+  const country = !isUnknownLocationValue(countryName)
+    ? countryName
+    : !isUnknownLocationValue(countryCode)
+      ? countryCode
+      : "";
+
+  const parts = [city, region, country]
+    .filter((item) => !isUnknownLocationValue(item))
+    .filter((item, index, array) => array.indexOf(item) === index);
+
+  return parts.length ? parts.join(", ") : "Unknown";
 }
 
 function formatChatTime(value?: string) {
@@ -85,8 +112,25 @@ function getPdfDownloadCount(session: ReportChatSessionRow) {
   return Math.max(0, Number(session.pdfDownloadCount || 0));
 }
 
+function getPdfDownloadedAt(session: ReportChatSessionRow) {
+  return session.lastPdfDownloadedAt || session.pdfDownloadedAt || "";
+}
+
 function hasPdfDownload(session: ReportChatSessionRow) {
-  return Boolean(session.lastPdfDownloadedAt || session.pdfDownloadedAt || getPdfDownloadCount(session) > 0);
+  return Boolean(getPdfDownloadedAt(session) || getPdfDownloadCount(session) > 0);
+}
+
+function getReportPdfDownloadCount(sessions: ReportChatSessionRow[]) {
+  // PDF download activity is currently report-level. Some backend responses can repeat
+  // the same report-level PDF count on every visitor row, so never sum it per visitor.
+  return sessions.reduce((maxCount, session) => Math.max(maxCount, getPdfDownloadCount(session)), 0);
+}
+
+function getReportLatestPdfDownloadedAt(sessions: ReportChatSessionRow[]) {
+  return sessions
+    .map(getPdfDownloadedAt)
+    .filter(Boolean)
+    .sort((a, b) => getTimeValue(b) - getTimeValue(a))[0] || "";
 }
 
 function getQuestionCount(session: ReportChatSessionRow) {
@@ -117,7 +161,6 @@ function getSessionIntent(session: ReportChatSessionRow): IntentLevel {
 
   if (String(session.lastUserQuestion || "").trim()) score += 1;
   if (getQuestionCount(session) >= 2) score += 2;
-  if (hasPdfDownload(session)) score += 2;
   if (!session.reviewedAt) score += 1;
 
   if (/\b(cost|price|pricing|quote|proposal|fix|setup|install|access|call|meeting|book|hire|next step|how soon)\b/.test(question)) {
@@ -142,7 +185,7 @@ function getIntentClass(intent: IntentLevel) {
 }
 
 function sessionNeedsAttention(session: ReportChatSessionRow) {
-  return !session.reviewedAt && (Boolean(String(session.lastUserQuestion || "").trim()) || hasPdfDownload(session));
+  return !session.reviewedAt && Boolean(String(session.lastUserQuestion || "").trim());
 }
 
 function buildGroups(rows: ReportChatSessionRow[]): ChatInsightGroup[] {
@@ -160,7 +203,8 @@ function buildGroups(rows: ReportChatSessionRow[]): ChatInsightGroup[] {
       const sortedSessions = [...sessions].sort((a, b) => getTimeValue(getLastActive(b)) - getTimeValue(getLastActive(a)));
       const primary = sortedSessions[0];
       const totalQuestions = sortedSessions.reduce((total, session) => total + getQuestionCount(session), 0);
-      const pdfDownloads = sortedSessions.reduce((total, session) => total + getPdfDownloadCount(session), 0);
+      const pdfDownloads = getReportPdfDownloadCount(sortedSessions);
+      const latestPdfDownloadedAt = getReportLatestPdfDownloadedAt(sortedSessions);
       const needsReview = sortedSessions.filter((session) => !session.reviewedAt).length;
       const latestQuestion =
         sortedSessions.find((session) => String(session.lastUserQuestion || "").trim())?.lastUserQuestion || "";
@@ -176,6 +220,7 @@ function buildGroups(rows: ReportChatSessionRow[]): ChatInsightGroup[] {
         visitorCount: sortedSessions.length,
         totalQuestions,
         pdfDownloads,
+        latestPdfDownloadedAt,
         needsReview,
         latestActive: getLastActive(primary),
         latestQuestion,
@@ -215,6 +260,8 @@ export default function ChatInsightsPanel({
         session.reportToken,
         session.countryName,
         session.countryCode,
+        session.region,
+        session.city,
         session.deviceType,
         session.browser,
         session.os,
@@ -241,6 +288,8 @@ export default function ChatInsightsPanel({
   }, [activeFilter, attentionRows, searchedRows]);
 
   const groupedRows = useMemo(() => buildGroups(visibleRows), [visibleRows]);
+  const searchedGroups = useMemo(() => buildGroups(searchedRows), [searchedRows]);
+  const allGroups = useMemo(() => buildGroups(chatInsights.rows), [chatInsights.rows]);
 
   const defaultExpandedGroupKeys = useMemo(() => {
     const priorityGroups = groupedRows.filter((group) => group.intent === "High" || group.needsReview > 0);
@@ -270,10 +319,13 @@ export default function ChatInsightsPanel({
 
   const totalConversations = chatInsights.rows.length;
   const needsReview = chatInsights.rows.filter((session) => !session.reviewedAt).length;
-  const pdfDownloads = chatInsights.rows.reduce((total, session) => total + getPdfDownloadCount(session), 0);
+  const pdfDownloads = allGroups.reduce((total, group) => total + group.pdfDownloads, 0);
   const totalQuestions = chatInsights.rows.reduce((total, session) => total + getQuestionCount(session), 0);
-  const countries = new Set(chatInsights.rows.map((session) => session.countryCode || session.countryName).filter(Boolean));
   const selectedSession = chatInsights.selectedSession;
+  const selectedReportGroup = useMemo(
+    () => (selectedSession ? allGroups.find((group) => group.key === getReportKey(selectedSession)) || null : null),
+    [allGroups, selectedSession],
+  );
 
   const clientQuestions = useMemo<ReportChatMessageRow[]>(() => {
     const transcriptQuestions = chatInsights.messages.filter(
@@ -301,7 +353,7 @@ export default function ChatInsightsPanel({
   const filterItems: Array<{ id: ChatInsightFilter; label: string; count: number }> = [
     { id: "attention", label: "Needs attention", count: attentionRows.length },
     { id: "all", label: "All visitors", count: searchedRows.length },
-    { id: "pdf", label: "PDF downloaded", count: searchedRows.filter(hasPdfDownload).length },
+    { id: "pdf", label: "PDF downloaded", count: searchedGroups.filter((group) => group.pdfDownloads > 0).length },
     { id: "reviewed", label: "Reviewed", count: searchedRows.filter((session) => Boolean(session.reviewedAt)).length },
   ];
 
@@ -317,7 +369,7 @@ export default function ChatInsightsPanel({
               </div>
               <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Client intent dashboard</h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
-                Grouped by website/report, then separated by visitor session. Use this to spot questions, PDF downloads, and follow-up priority without clutter.
+                Grouped by website/report, then separated by visitor session. Location is approximate and based on trusted edge headers, so use it as context—not final identity.
               </p>
             </div>
 
@@ -357,7 +409,7 @@ export default function ChatInsightsPanel({
               <input
                 value={chatInsights.search}
                 onChange={(event) => setChatInsightsSearch(event.target.value)}
-                placeholder="Search website, country, device, or question..."
+                placeholder="Search website, approx. location, device, or question..."
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </label>
@@ -453,6 +505,11 @@ export default function ChatInsightsPanel({
                               Latest question: {group.latestQuestion}
                             </p>
                           ) : null}
+                          {group.pdfDownloads ? (
+                            <p className="mt-2 text-xs font-bold text-emerald-700">
+                              Report-level PDF activity{group.latestPdfDownloadedAt ? ` · Last download: ${formatChatTime(group.latestPdfDownloadedAt)}` : ""}
+                            </p>
+                          ) : null}
                         </div>
 
                         <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[280px]">
@@ -463,7 +520,7 @@ export default function ChatInsightsPanel({
                             {group.totalQuestions} question{group.totalQuestions === 1 ? "" : "s"}
                           </span>
                           <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                            {group.pdfDownloads} PDF download{group.pdfDownloads === 1 ? "" : "s"}
+                            {group.pdfDownloads} report PDF download{group.pdfDownloads === 1 ? "" : "s"}
                           </span>
                           <span className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
                             Last: {formatChatTime(group.latestActive)}
@@ -481,7 +538,6 @@ export default function ChatInsightsPanel({
                         {group.sessions.map((session, index) => {
                       const isSelected = selectedSession?.id === session.id && selectedSession.reportToken === session.reportToken;
                       const reviewed = Boolean(session.reviewedAt);
-                      const pdfDownloaded = hasPdfDownload(session);
                       const topic = getQuestionTopic(session.lastUserQuestion);
                       const intent = getSessionIntent(session);
                       const questionCount = getQuestionCount(session);
@@ -506,11 +562,6 @@ export default function ChatInsightsPanel({
                                 <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${getIntentClass(intent)}`}>
                                   {intent}
                                 </span>
-                                {pdfDownloaded ? (
-                                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                                    PDF downloaded
-                                  </span>
-                                ) : null}
                                 {reviewed ? (
                                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
                                     <CheckCircle2 size={12} />
@@ -531,18 +582,12 @@ export default function ChatInsightsPanel({
                                 {session.lastUserQuestion || "No client question saved for this visitor yet."}
                               </p>
 
-                              {pdfDownloaded ? (
-                                <p className="mt-2 text-xs font-bold text-emerald-700">
-                                  PDF downloaded {getPdfDownloadCount(session) > 1 ? `${getPdfDownloadCount(session)} times` : "once"}
-                                  {session.lastPdfDownloadedAt || session.pdfDownloadedAt ? ` · Last: ${formatChatTime(session.lastPdfDownloadedAt || session.pdfDownloadedAt)}` : ""}
-                                </p>
-                              ) : null}
                             </div>
 
                             <div className="grid shrink-0 grid-cols-2 gap-2 text-xs font-bold text-slate-500 lg:min-w-[260px]">
                               <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                                 <Globe2 size={14} />
-                                {session.countryName || session.countryCode || "Unknown"}
+                                Approx. {getApproxLocation(session)}
                               </span>
                               <span className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                                 <MonitorSmartphone size={14} />
@@ -593,7 +638,7 @@ export default function ChatInsightsPanel({
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500">
                 <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                  {selectedSession.countryName || selectedSession.countryCode || "Country unknown"}
+                  Approx. {getApproxLocation(selectedSession)}
                 </span>
                 <span className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
                   {selectedSession.deviceType || "Device unknown"}
@@ -606,12 +651,19 @@ export default function ChatInsightsPanel({
                 </span>
               </div>
 
+              <p className="mt-2 text-[11px] font-semibold leading-5 text-slate-400">
+                Location is approximate. VPNs, proxies, localhost, and ISP routing can make it different from the real physical location.
+              </p>
+
               <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">PDF activity</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Report PDF activity</p>
                 <p className="mt-1">
-                  {selectedSession.lastPdfDownloadedAt || selectedSession.pdfDownloadedAt
-                    ? `Downloaded ${getPdfDownloadCount(selectedSession) > 1 ? `${getPdfDownloadCount(selectedSession)} times` : "once"} · Last: ${formatChatTime(selectedSession.lastPdfDownloadedAt || selectedSession.pdfDownloadedAt)}`
-                    : "PDF not downloaded by this visitor yet."}
+                  {selectedReportGroup?.pdfDownloads
+                    ? `This report was downloaded ${selectedReportGroup.pdfDownloads > 1 ? `${selectedReportGroup.pdfDownloads} times` : "once"}${selectedReportGroup.latestPdfDownloadedAt ? ` · Last: ${formatChatTime(selectedReportGroup.latestPdfDownloadedAt)}` : ""}`
+                    : "PDF not downloaded for this report yet."}
+                </p>
+                <p className="mt-2 text-[11px] font-semibold leading-5 text-emerald-700/80">
+                  PDF download is tracked at report level, so it is not assigned to every visitor session.
                 </p>
               </div>
 
