@@ -14,6 +14,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactElement,
+  type ReactNode,
 } from "react";
 import {
   Bot,
@@ -260,7 +261,12 @@ function normalizeStoredMessages(value: unknown): ChatMessage[] {
       const record = item as StoredChatMessage;
       const role: ChatRole | "" =
         record.role === "assistant" ? "assistant" : record.role === "user" ? "user" : "";
-      const content = String(record.content || "").replace(/\s+/g, " ").trim();
+      const content = String(record.content || "")
+        .replace(/\r/g, "")
+        .replace(/[\t\f\v ]+/g, " ")
+        .replace(/ *\n */g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
 
       if (!role || !content) return null;
 
@@ -297,11 +303,95 @@ function cleanDisplayLine(value: string): string {
     .trim();
 }
 
+const ASSISTANT_DISPLAY_HEADINGS = [
+  "Short answer",
+  "What this means",
+  "What to verify next",
+  "Important note",
+  "Evidence to review",
+  "Next step",
+  "Best next step",
+  "Recommended first step",
+  "Why it matters",
+  "How to think about it",
+  "Recommended action",
+  "Verification plan",
+  "Minimum access for diagnosis",
+  "Only if you approve implementation",
+  "Not needed",
+  "Best practice",
+  "How we reduce risk",
+  "What we do not need",
+  "Recommended access order",
+  "When higher access may be needed",
+  "Safer way",
+  "Why this is safer",
+  "What we may need instead",
+  "Safety note",
+  "Access safety",
+  "What we may need",
+  "What we can do without access",
+  "For this review",
+  "If campaign work is approved",
+  "If campaign management is approved",
+  "How we normally approach it",
+  "For campaign review",
+  "For campaign setup or management",
+  "What we can review safely",
+  "What we will not do in read-only mode",
+  "Recommended order",
+  "Best way to contact",
+  "Book a call",
+  "Direct contact",
+  "Marketplace option",
+  "Before sharing access",
+  "What to prepare",
+  "How we would proceed",
+  "Contact email",
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeAssistantContentForDisplay(value: string): string {
+  let text = String(value || "").replace(/\r/g, "").trim();
+
+  if (!text) return "";
+
+  text = text
+    .replace(/Best\s*next\s*step/gi, "Recommended first step")
+    .replace(/Recommended\s*first\s*step/gi, "Recommended first step")
+    .replace(/Recommended\s*order/gi, "Recommended order")
+    .replace(/Important\s*note/gi, "Important note")
+    .replace(/Direct\s*contact/gi, "Direct contact")
+    .replace(/Marketplace\s*option/gi, "Marketplace option")
+    .replace(/Access\s*safety/gi, "Access safety");
+
+  // Repair old saved answers where newlines were collapsed into one paragraph.
+  // Example: "Short answer Yes. Recommended order: • Confirm..."
+  text = text.replace(/\s*[•]\s+/g, "\n- ");
+
+  for (const heading of ASSISTANT_DISPLAY_HEADINGS) {
+    const pattern = new RegExp(`(^|\\s)(${escapeRegExp(heading)})\\s*[:：]\\s*`, "gi");
+    text = text.replace(pattern, (_match, prefix: string, title: string) => {
+      const leading = prefix && prefix.trim() ? "\n\n" : "";
+      return `${leading}${title}:\n`;
+    });
+  }
+
+  return text
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function isAssistantHeading(value: string): boolean {
   const text = cleanDisplayLine(value).replace(/[:：]\s*$/, "");
   if (!text || text.length > 62) return false;
 
-  return /^(short answer|what this means|what to verify next|important note|evidence to review|next step|why it matters|how to think about it|recommended action|verification plan)$/i.test(
+  return /^(short answer|what this means|what to verify next|important note|evidence to review|next step|best next step|recommended first step|why it matters|how to think about it|recommended action|verification plan|minimum access for diagnosis|only if you approve implementation|not needed|best practice|how we reduce risk|what we do not need|recommended access order|when higher access may be needed|safer way|why this is safer|what we may need instead|safety note|access safety|what we may need|what we can do without access|for this review|if campaign work is approved|if campaign management is approved|how we normally approach it|for campaign review|for campaign setup or management|what we can review safely|what we will not do in read-only mode|recommended order|best way to contact|book a call|direct contact|marketplace option|before sharing access|what to prepare|how we would proceed|contact email)$/i.test(
     text,
   );
 }
@@ -309,7 +399,7 @@ function isAssistantHeading(value: string): boolean {
 function splitKnownHeading(value: string): { title: string; body: string } | null {
   const cleaned = cleanDisplayLine(value);
   const match = cleaned.match(
-    /^(Short answer|What this means|What to verify next|Important note|Evidence to review|Next step|Why it matters|How to think about it|Recommended action|Verification plan)\s*[:：]\s*(.+)$/i,
+    /^(Short answer|What this means|What to verify next|Important note|Evidence to review|Next step|Best next step|Recommended first step|Why it matters|How to think about it|Recommended action|Verification plan|Minimum access for diagnosis|Only if you approve implementation|Not needed|Best practice|How we reduce risk|What we do not need|Recommended access order|When higher access may be needed|Safer way|Why this is safer|What we may need instead|Safety note|Access safety|What we may need|What we can do without access|For this review|If campaign work is approved|If campaign management is approved|How we normally approach it|For campaign review|For campaign setup or management|What we can review safely|What we will not do in read-only mode|Recommended order|Best way to contact|Book a call|Direct contact|Marketplace option|Before sharing access|What to prepare|How we would proceed|Contact email)\s*[:：]\s*(.+)$/i,
   );
 
   if (!match) return null;
@@ -320,11 +410,49 @@ function splitKnownHeading(value: string): { title: string; body: string } | nul
   };
 }
 
+function InlineText({ text }: { text: string }) {
+  const value = String(text || "");
+  const parts: ReactNode[] = [];
+  const pattern = /(https?:\/\/[^\s]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+  let lastIndex = 0;
+
+  for (const match of value.matchAll(pattern)) {
+    const raw = match[0];
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      parts.push(value.slice(lastIndex, index));
+    }
+
+    const clean = raw.replace(/[),.;:!?]+$/g, "");
+    const trailing = raw.slice(clean.length);
+    const href = clean.includes("@") && !clean.startsWith("http") ? `mailto:${clean}` : clean;
+
+    parts.push(
+      <a
+        key={`${clean}-${index}`}
+        href={href}
+        target={href.startsWith("http") ? "_blank" : undefined}
+        rel={href.startsWith("http") ? "noreferrer" : undefined}
+        className="font-black text-blue-700 underline decoration-blue-300 underline-offset-4 hover:text-blue-800"
+      >
+        {clean}
+      </a>,
+    );
+
+    if (trailing) parts.push(trailing);
+    lastIndex = index + raw.length;
+  }
+
+  if (lastIndex < value.length) {
+    parts.push(value.slice(lastIndex));
+  }
+
+  return <>{parts.length ? parts : value}</>;
+}
+
 function FormattedAssistantMessage({ content }: { content: string }) {
-  const lines = String(content || "")
-    .replace(/\r/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .split("\n");
+  const lines = normalizeAssistantContentForDisplay(content).split("\n");
 
   const elements: ReactElement[] = [];
   let paragraphLines: string[] = [];
@@ -349,7 +477,9 @@ function FormattedAssistantMessage({ content }: { content: string }) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
             {headingPair.title}
           </p>
-          <p className="mt-1.5 text-sm font-semibold leading-6 text-slate-700">{headingPair.body}</p>
+          <p className="mt-1.5 text-sm font-semibold leading-6 text-slate-700">
+            <InlineText text={headingPair.body} />
+          </p>
         </div>,
       );
       return;
@@ -357,7 +487,7 @@ function FormattedAssistantMessage({ content }: { content: string }) {
 
     elements.push(
       <p key={`p-${elements.length}`} className="text-sm font-semibold leading-6 text-slate-700">
-        {paragraph}
+        <InlineText text={paragraph} />
       </p>,
     );
   };
@@ -373,7 +503,7 @@ function FormattedAssistantMessage({ content }: { content: string }) {
         {items.map((item, index) => (
           <li key={`${item}-${index}`} className="flex gap-2.5 text-sm font-semibold leading-6 text-slate-700">
             <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-            <span>{item}</span>
+            <span><InlineText text={item} /></span>
           </li>
         ))}
       </ul>,
@@ -393,7 +523,7 @@ function FormattedAssistantMessage({ content }: { content: string }) {
             <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-slate-900 text-[10px] font-black text-white">
               {index + 1}
             </span>
-            <span>{item}</span>
+            <span><InlineText text={item} /></span>
           </li>
         ))}
       </ol>,
@@ -454,7 +584,7 @@ function FormattedAssistantMessage({ content }: { content: string }) {
   if (!elements.length) {
     return (
       <p className="text-sm font-semibold leading-6 text-slate-700">
-        {cleanDisplayLine(content)}
+        <InlineText text={cleanDisplayLine(content)} />
       </p>
     );
   }

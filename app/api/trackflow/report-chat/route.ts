@@ -42,6 +42,9 @@ export const dynamic = "force-dynamic";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
+const TRACKFLOW_CONTACT_EMAIL = "shahjalal@trackflowpro.com";
+const TRACKFLOW_CALENDLY_URL = "https://calendly.com/webanalystshahjalal/freeconsultation";
+
 const PREMIUM_CHAT_FORMAT_INSTRUCTIONS = `
 Premium chat formatting rules:
 - Answer in polished English only.
@@ -54,6 +57,22 @@ Premium chat formatting rules:
 - Use simple hyphen bullets or numbered steps when listing items.
 - Do not use Markdown bold markers, tables, code blocks, emojis, or long wall-of-text paragraphs.
 - Do not invent evidence. Do not claim final account-level truth without approved access.
+
+Trust, access, security, and service-scope rules:
+- Never ask the client to share passwords.
+- Recommend adding TrackFlow Pro as a separate user with the lowest useful permission.
+- Start with read-only/viewer access for diagnosis whenever possible.
+- Only mention edit/publish access when implementation work is approved.
+- Do not ask for billing access, payment access, owner access, campaign budget control, or unrelated account settings.
+- Explain that account access has operational risk and should be limited, approved, documented, and removable.
+- TrackFlow Pro can support tracking verification, Google Ads campaign setup, and ongoing Google Ads management when separately approved.
+- Keep tracking verification and campaign setup/management as separate workstreams.
+- Recommend confirming conversion tracking before campaign optimization decisions.
+- Do not promise guaranteed leads, revenue, ROI, rankings, or ad performance.
+- Do not suggest changing budgets, bids, campaigns, or payment settings without explicit approval and scope.
+- If the client asks how to contact, book, hire, or continue, provide the official contact email and Calendly link calmly.
+- Do not push Fiverr or Upwork unless the client asks about marketplace-based work.
+- If marketplace work is discussed, keep it secondary to scope confirmation and remind the client not to share passwords.
 `.trim();
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -230,6 +249,444 @@ function resolveStableReportSessionId(req: NextRequest, token: string, rawSessio
   return uuidFromHash(getStableRequestFingerprint(req, token));
 }
 
+function normalizeIntentText(value: unknown): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isAccessSecurityQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+
+  if (!text) return false;
+
+  return /\b(access|permission|permissions|login|log in|credential|credentials|password|invite|add you|user role|admin|owner|viewer|read only|read-only|edit access|publish access|grant access|account access|risk|safe|safety|secure|security|trust|danger|privacy|control|billing|payment|budget|2fa|two factor|two-factor|what do you need|what will you need|what information|what details|required from us|need from us|need to fix|need to solve)\b/.test(text);
+}
+
+function isGoogleAdsServiceQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+
+  if (!text) return false;
+
+  const mentionsAds =
+    /\b(google ads|adwords|paid ads|ppc|search ads|display ads|performance max|pmax|campaign|campaigns|ad group|ad groups|keywords?|bids?|bidding|negative keywords?|landing page|landing pages)\b/.test(text);
+
+  const asksService =
+    /\b(setup|set up|create|build|launch|manage|management|run ads|run campaigns|optimize|optimise|optimization|optimisation|improve|scale|audit|review campaigns?|campaign review|after tracking|ads management|campaign management|google ads management|google ads setup|ppc management|can you also|do you also|service|support)\b/.test(text);
+
+  const asksTrackingFirst =
+    /\b(should tracking|fix tracking first|tracking before|before campaign|before ads|after tracking is fixed|conversion tracking before)\b/.test(text);
+
+  return (mentionsAds && asksService) || asksTrackingFirst;
+}
+
+function buildAccountAccessListAnswer(context: AnyRecord): string {
+  const companyName = String(context.companyName || context.company_name || "your team").trim() || "your team";
+  const domain = String(context.domain || "").trim();
+  const target = companyName === "your team" ? "this review" : `${companyName}${domain ? ` (${domain})` : ""}`;
+
+  return `
+Short answer:
+For ${target}, we should start with the minimum access needed. Read-only access is usually enough to diagnose the issue before any change is made.
+
+Minimum access for diagnosis:
+- GA4 Viewer or Analyst access to check events, conversions, DebugView, Realtime, and attribution signals.
+- Google Ads read access to review conversion actions, diagnostics, tag status, and account-side settings.
+- GTM read access to inspect tags, triggers, variables, and preview behavior.
+- CRM, call-tracking, booking, or form-platform read access only if lead/call/booking records need to be matched.
+
+Only if you approve implementation:
+- GTM publish access may be needed to publish tracking fixes.
+- Website/CMS/developer access may be needed if form, button, script, or theme code must be changed.
+- Google Ads conversion settings access may be needed if the conversion setup must be corrected.
+
+Not needed:
+- Password sharing.
+- Billing or payment access.
+- Campaign budget control.
+- Full owner access as the first step.
+
+Best practice:
+Add TrackFlow Pro as a separate user with the lowest useful permission. Keep owner access and 2FA with your team.
+`.trim();
+}
+
+function buildAccessRiskAnswer(): string {
+  return `
+Short answer:
+Yes, there is some operational risk whenever an outside specialist receives account access. The safe approach is limited access, read-only first, approved changes only, and access removal after the work is complete.
+
+How we reduce risk:
+- Add TrackFlow Pro as a separate user instead of sharing passwords.
+- Start with Viewer or read-only access for diagnosis.
+- Keep owner access, recovery options, and 2FA with your team.
+- Confirm any implementation change before it is published.
+- Remove or reduce access after the review or fix is complete.
+
+What we do not need:
+- Your password.
+- Billing or payment access.
+- Full owner access at the start.
+- Campaign budget control or unrelated account settings.
+
+Important note:
+Read-only access lets us verify evidence without changing your setup. Edit or publish access should only be granted when you approve implementation work.
+`.trim();
+}
+
+function buildAdminAccessAnswer(): string {
+  return `
+Short answer:
+No. Admin or owner access is not usually needed at the start. For diagnosis, read-only or limited role access is safer and normally enough.
+
+Recommended access order:
+- Start with GA4 Viewer/Analyst, Google Ads read access, and GTM read access.
+- Review the issue and confirm what needs to be changed.
+- Grant edit or publish access only if you approve implementation.
+- Remove or reduce access after the work is complete.
+
+When higher access may be needed:
+- GTM publish access may be needed if tags must be published.
+- Website/CMS access may be needed if code or form tracking must be changed.
+- Google Ads conversion settings access may be needed if conversion setup has to be corrected.
+
+Not needed:
+Passwords, billing access, payment access, owner access as the first step, or campaign budget control.
+`.trim();
+}
+
+function buildPasswordSharingAnswer(): string {
+  return `
+Short answer:
+No. Please do not share passwords.
+
+Safer way:
+- Add TrackFlow Pro as a separate user inside GA4, Google Ads, GTM, CMS, CRM, or the relevant platform.
+- Use the lowest permission level needed.
+- Keep 2FA, owner access, recovery email, and billing control with your team.
+- Remove access after the work is complete.
+
+Why this is safer:
+A separate user invitation creates a clear access trail and can be revoked anytime. Password sharing is harder to control and should be avoided.
+`.trim();
+}
+
+function buildBillingPaymentAnswer(): string {
+  return `
+Short answer:
+No. Billing, payment methods, and campaign budget control are not needed for a tracking review.
+
+What we may need instead:
+- Read-only access to check conversion actions, analytics events, GTM setup, and diagnostics.
+- Limited edit or publish access only if you approve a tracking implementation.
+- CRM, call-tracking, or booking-platform read access only if lead matching must be verified.
+
+Safety note:
+TrackFlow Pro should not change budgets, payment methods, billing settings, or unrelated campaign settings as part of a tracking verification unless there is separate written approval.
+`.trim();
+}
+
+function buildGoogleAdsServiceAnswer(context: AnyRecord, question: string): string {
+  if (!isGoogleAdsServiceQuestion(question)) return "";
+
+  const text = normalizeIntentText(question);
+  const companyName = String(context.companyName || context.company_name || "your team").trim() || "your team";
+  const domain = String(context.domain || "").trim();
+  const target = companyName === "your team" ? "this account" : `${companyName}${domain ? ` (${domain})` : ""}`;
+
+  const asksTrackingFirst =
+    /\b(should tracking|fix tracking first|tracking before|before campaign|before ads|after tracking is fixed|conversion tracking before)\b/.test(text);
+  const asksReviewOnly =
+    /\b(review campaigns?|audit campaigns?|check campaigns?|without changing|read only|read-only|no changes)\b/.test(text);
+  const asksAccess =
+    /\b(access|permission|permissions|admin|edit access|manage access|standard access|what do you need|what access)\b/.test(text);
+  const asksManagement =
+    /\b(manage|management|ongoing|optimize|optimise|optimization|optimisation|improve|scale|run ads|run campaigns|ppc management|google ads management)\b/.test(text);
+
+  if (asksTrackingFirst) {
+    return `
+Short answer:
+Yes. Tracking should be verified before serious campaign optimization. If conversions are not recorded correctly, Google Ads decisions can be based on incomplete or misleading data.
+
+Recommended order:
+- Confirm GA4, GTM, Google Ads conversions, calls, forms, bookings, and lead-path events.
+- Check whether Google Ads is receiving the right conversion signals.
+- Fix or publish tracking updates only after approval.
+- Then review campaign structure, keywords, ads, landing pages, budgets, and optimization priorities.
+
+Why it matters:
+Campaign management works best when the account can trust the conversion data. Otherwise, optimization may increase spend without clearly showing which leads or actions are actually valuable.
+`.trim();
+  }
+
+  if (asksAccess) {
+    return `
+Short answer:
+For Google Ads campaign setup or management, access depends on the scope. We can start with read-only access for review, then request limited edit access only if you approve campaign work.
+
+For campaign review:
+- Google Ads read access is usually enough.
+- GA4 and GTM read access help confirm whether conversion signals are reliable.
+- No billing or payment access is needed.
+
+For campaign setup or management:
+- Google Ads standard/edit access may be needed to create or adjust campaigns, keywords, ads, conversion settings, and tracking-related settings.
+- GTM or website access may be needed only if tracking or landing-page changes are part of the approved scope.
+- Any budget, bid, campaign, or conversion-setting change should be approved before it is made.
+
+Important note:
+Owner access, passwords, billing access, and payment methods are not needed as the first step.
+`.trim();
+  }
+
+  if (asksReviewOnly) {
+    return `
+Short answer:
+Yes. TrackFlow Pro can review Google Ads campaigns without changing anything if you provide read-only access.
+
+What we can review safely:
+- Campaign structure and conversion focus.
+- Search terms, keywords, match types, negative keywords, and ad groups.
+- Conversion actions and whether optimization is using the right goals.
+- Landing-page alignment and tracking gaps.
+- Budget distribution and wasted-spend signals.
+
+What we will not do in read-only mode:
+We will not change campaigns, budgets, bids, ads, conversion actions, billing, or account settings. Any implementation work should be approved separately.
+`.trim();
+  }
+
+  if (asksManagement) {
+    return `
+Short answer:
+Yes. TrackFlow Pro can support Google Ads campaign setup and ongoing management, but it should be treated as a separate approved workstream from this tracking review.
+
+How we normally approach it:
+- First verify conversion tracking so campaign decisions are based on reliable lead data.
+- Then review the current campaign structure, keywords, ads, search terms, landing pages, and conversion goals.
+- If approved, we can help with campaign setup, restructuring, optimization, negative keywords, ad copy direction, and ongoing performance management.
+- Any budget, bid, campaign, or conversion-setting change should be approved under a clear scope.
+
+Access safety:
+For review, read-only access is usually enough. For active setup or management, limited edit access may be required, but billing/payment access and owner access are not needed as the first step.
+
+Important note:
+We can improve structure, measurement, and optimization discipline, but no agency should guarantee exact leads, revenue, or ROI from ads.
+`.trim();
+  }
+
+  return `
+Short answer:
+Yes. TrackFlow Pro can support both conversion tracking verification and Google Ads campaign setup or management, but they should be handled as separate scopes.
+
+For this review:
+The first priority is to confirm whether leads, calls, forms, bookings, and other important actions are being tracked correctly.
+
+If campaign work is approved:
+We can help with Google Ads setup, campaign structure, keyword/ad group planning, ad direction, conversion-focused optimization, and ongoing management.
+
+Access safety:
+Read-only access is usually enough for review. Edit access is only needed if you approve campaign or tracking implementation. Billing access, payment access, passwords, and owner access are not needed as the first step.
+`.trim();
+}
+
+function isSafestNextStepQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+
+  if (!text) return false;
+
+  return /\b(safest next step|safe next step|best next step|next step|what should we do next|what should we verify first|what to do next|how should we proceed)\b/.test(text);
+}
+
+function buildSafestNextStepAnswer(context: AnyRecord, question: string): string {
+  if (!isSafestNextStepQuestion(question)) return "";
+
+  const companyName = String(context.companyName || context.company_name || "this account").trim() || "this account";
+  const domain = String(context.domain || "").trim();
+  const target = companyName === "this account" ? "this tracking review" : `${companyName}${domain ? ` (${domain})` : ""}`;
+
+  return `
+Short answer:
+The safest next step for ${target} is to verify one high-priority conversion path end to end before making final tracking or campaign decisions.
+
+Recommended order:
+- Choose one important action to test, such as a lead form, phone call, booking, or contact enquiry.
+- Run one controlled test from the website or landing page.
+- Check GTM Preview to confirm the right tag and trigger fired.
+- Check GA4 DebugView or Realtime to confirm the event was received correctly.
+- Check Google Ads conversion diagnostics or recent conversion activity if Google Ads is part of the setup.
+- Match the same test against the CRM, call-tracking platform, booking tool, or server-side record where relevant.
+
+Why it matters:
+A public page review can show visible tracking evidence, but final confirmation should happen inside GA4, GTM, Google Ads, CRM, call-tracking, or server-side logs.
+
+Important note:
+Avoid campaign optimization or budget decisions until the conversion path is confirmed with approved account-level access.
+`.trim();
+}
+
+function isContactBookingQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+
+  if (!text) return false;
+
+  // Do not confuse tracking questions about phone calls with contact/booking intent.
+  if (/\b(phone call tracking|call tracking|click[-\s]?to[-\s]?call|calls? being tracked|calls? tracking|test calls?)\b/.test(text)) {
+    return false;
+  }
+
+  const asksContact =
+    /\b(contact|reach you|reach trackflow|email|mail|message you|talk to you|talk to someone|speak to you|speak with|human|support)\b/.test(text);
+
+  const asksBooking =
+    /\b(book|booking|schedule|calendly|calendar|call|meeting|consultation|consult|demo|appointment|free consultation|verification call)\b/.test(text);
+
+  const asksHiring =
+    /\b(hire|work with you|work together|get started|start working|continue with you|can you fix this for us|can you verify this for us|can trackflow pro verify this for us|want to proceed|next step to work)\b/.test(text);
+
+  const asksMarketplace =
+    /\b(fiverr|upwork|marketplace|freelance platform|platform-based|platform based)\b/.test(text);
+
+  return asksContact || asksBooking || asksHiring || asksMarketplace;
+}
+
+function buildContactBookingAnswer(context: AnyRecord, question: string): string {
+  if (!isContactBookingQuestion(question)) return "";
+
+  const text = normalizeIntentText(question);
+  const companyName = String(context.companyName || context.company_name || "your team").trim() || "your team";
+  const domain = String(context.domain || "").trim();
+  const target = companyName === "your team" ? "this tracking review" : `${companyName}${domain ? ` (${domain})` : ""}`;
+
+  const asksMarketplace = /\b(fiverr|upwork|marketplace|freelance platform|platform-based|platform based)\b/.test(text);
+  const asksEmail = /\b(email|mail|contact email|send you)\b/.test(text);
+  const asksBooking = /\b(book|booking|schedule|calendly|calendar|call|meeting|consultation|consult|appointment|free consultation|verification call)\b/.test(text);
+  const asksFixOrHire = /\b(hire|work with you|work together|get started|start working|continue with you|can you fix this for us|can you verify this for us|can trackflow pro verify this for us|want to proceed|next step to work)\b/.test(text);
+
+  if (asksMarketplace) {
+    return `
+Short answer:
+Yes. If your team prefers marketplace-based hiring, TrackFlow Pro can continue through Upwork or Fiverr where available.
+
+Recommended first step:
+For a technical tracking issue, the cleanest first step is to confirm the scope before opening any paid workstream. You can book a short verification call here:
+${TRACKFLOW_CALENDLY_URL}
+
+Direct contact:
+You can also email:
+${TRACKFLOW_CONTACT_EMAIL}
+
+Marketplace option:
+After the scope is clear, the work can continue directly or through your preferred marketplace process.
+
+Important note:
+Please do not share passwords through chat or marketplace messages. Add TrackFlow Pro as a separate user with the minimum required permission.
+`.trim();
+  }
+
+  if (asksEmail && !asksBooking) {
+    return `
+Short answer:
+You can contact TrackFlow Pro by email at:
+${TRACKFLOW_CONTACT_EMAIL}
+
+Best way to contact:
+Send the secure review link, the website/domain, and what you want verified or fixed first.
+
+Book a call:
+If you prefer a quick discussion, you can book a free consultation here:
+${TRACKFLOW_CALENDLY_URL}
+
+Before sharing access:
+Please do not send passwords. If account access is needed, add TrackFlow Pro as a separate user with the lowest useful permission.
+`.trim();
+  }
+
+  if (asksBooking) {
+    return `
+Short answer:
+Yes. You can book a short free consultation with TrackFlow Pro here:
+${TRACKFLOW_CALENDLY_URL}
+
+Best use of the call:
+Use the call to confirm what the review found, what access is needed, and whether this is only a tracking fix or a wider Google Ads setup/management project.
+
+What to prepare:
+- The secure review link.
+- The website or landing page being reviewed.
+- Any GA4, GTM, Google Ads, CRM, call-tracking, or form-platform access questions.
+- The main business goal, such as calls, forms, bookings, or qualified leads.
+
+Important note:
+No passwords are needed for the call. If access is required later, it should be added through separate user invitations.
+`.trim();
+  }
+
+  if (asksFixOrHire) {
+    return `
+Short answer:
+Yes. TrackFlow Pro can help verify the issue and, if approved, support the tracking fix or Google Ads setup/management work.
+
+Recommended first step:
+Book a short verification call here:
+${TRACKFLOW_CALENDLY_URL}
+
+Direct contact:
+You can also email:
+${TRACKFLOW_CONTACT_EMAIL}
+
+How we would proceed:
+- Confirm the tracking issue and business goal.
+- Share the minimum access checklist.
+- Start with read-only access where possible.
+- Approve any implementation, campaign, budget, or conversion-setting change before it is made.
+
+Important note:
+Tracking verification and Google Ads campaign management should be treated as separate approved scopes.
+`.trim();
+  }
+
+  return `
+Short answer:
+You can contact TrackFlow Pro by email or book a short verification call.
+
+Contact email:
+${TRACKFLOW_CONTACT_EMAIL}
+
+Book a call:
+${TRACKFLOW_CALENDLY_URL}
+
+Recommended first step:
+A short call is usually the fastest way to confirm the issue, explain what access is needed, and decide whether this is only a tracking fix or a wider Google Ads setup/management project for ${target}.
+
+Important note:
+Please do not share passwords. If access is needed, add TrackFlow Pro as a separate user with the minimum required permission.
+`.trim();
+}
+
+function buildAccessSecurityAnswer(
+  context: AnyRecord,
+  question: string,
+): string {
+  if (!isAccessSecurityQuestion(question)) return "";
+
+  const text = normalizeIntentText(question);
+
+  const asksPassword = /\b(password|login|log in|credential|credentials|2fa|two factor|two-factor)\b/.test(text);
+  const asksBilling = /\b(billing|payment|budget|campaign budget|payment method|card|invoice)\b/.test(text);
+  const asksAdmin = /\b(admin|owner|full access|administrator|publish access|edit access|highest permission)\b/.test(text);
+  const asksRisk = /\b(risk|safe|safety|secure|security|trust|danger|privacy|control|is it risky|any risk)\b/.test(text);
+  const asksAccessList = /\b(what access|which access|what permission|which permission|what do you need|what will you need|what information|what details|required from us|need from us|need to fix|need to solve|grant access|account access)\b/.test(text);
+
+  if (asksPassword) return buildPasswordSharingAnswer();
+  if (asksBilling) return buildBillingPaymentAnswer();
+  if (asksAdmin) return buildAdminAccessAnswer();
+  if (asksRisk) return buildAccessRiskAnswer();
+  if (asksAccessList) return buildAccountAccessListAnswer(context);
+
+  return buildAccountAccessListAnswer(context);
+}
 
 async function loadReportByToken(token: string): Promise<AnyRecord | null> {
   try {
@@ -703,6 +1160,110 @@ export async function POST(req: NextRequest) {
     });
   } catch {
     // Optional logging only.
+  }
+
+  const contactBookingAnswer = buildContactBookingAnswer(context, question);
+
+  if (contactBookingAnswer) {
+    const answer = validateAssistantAnswer(contactBookingAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "contact_booking_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "contact_booking_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const googleAdsServiceAnswer = buildGoogleAdsServiceAnswer(context, question);
+
+  if (googleAdsServiceAnswer) {
+    const answer = validateAssistantAnswer(googleAdsServiceAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "google_ads_service_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "google_ads_service_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const accessSecurityAnswer = buildAccessSecurityAnswer(context, question);
+
+  if (accessSecurityAnswer) {
+    const answer = validateAssistantAnswer(accessSecurityAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "access_security_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "access_security_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const safestNextStepAnswer = buildSafestNextStepAnswer(context, question);
+
+  if (safestNextStepAnswer) {
+    const answer = validateAssistantAnswer(safestNextStepAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "safest_next_step_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "safest_next_step_answer",
+      sessionCookieHeaders,
+    );
   }
 
   const deterministic = buildDeterministicAnswer(context, question);

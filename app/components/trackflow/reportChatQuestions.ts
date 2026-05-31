@@ -71,6 +71,13 @@ const BROAD_FALLBACK_POOL = [
   "What should we test on the lead path?",
   "Can this affect lead reporting?",
   "What is the safest next step?",
+  "Is it risky to give account access?",
+  "Can we start with read-only access?",
+  "Can you also manage Google Ads campaigns?",
+  "Should tracking be fixed before campaign changes?",
+  "Can we book a verification call?",
+  "How can we contact TrackFlow Pro?",
+  "Do you work through Upwork or Fiverr?",
   "Can TrackFlow Pro verify this for us?",
   "Who prepared this review?",
 ];
@@ -252,6 +259,20 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
 
   pushQuestion(
     rules,
+    hasAny(text, [/\bgoogle ads\b/, /\bads\b/, /\bcampaigns?\b/, /\bppc\b/, /\bad performance\b/]),
+    "Should tracking be fixed before campaign changes?",
+    89,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bgoogle ads\b/, /\bcampaigns?\b/, /\bppc\b/, /\bad performance\b/]),
+    "Can you also manage Google Ads campaigns?",
+    71,
+  );
+
+  pushQuestion(
+    rules,
     hasAny(text, [/\bmeta\b/, /\bpixel\b/, /\bcapi\b/, /\bfacebook\b/]),
     "Does Meta Pixel need verification too?",
     72,
@@ -262,6 +283,13 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
     hasAny(text, [/\bserver-side\b/, /\bserver side\b/, /\bserver logs\b/, /\bcrm\b/, /\bcall-tracking\b/, /\bcall tracking\b/]),
     "Why does this need account or server access?",
     88,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\baccount access\b/, /\bpermissions?\b/, /\bread[-\s]?only\b/, /\bsecurity\b/, /\brisk\b/]),
+    "Is it risky to give account access?",
+    83,
   );
 
   pushQuestion(
@@ -283,14 +311,197 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
     { question: "Can you explain the main finding?", priority: 92 },
     { question: "What evidence was visible in the review?", priority: 84 },
     { question: "What is the safest next step?", priority: 82 },
+    { question: "Can we book a verification call?", priority: 73 },
     { question: "Can TrackFlow Pro verify this for us?", priority: 70 },
+    { question: "How can we contact TrackFlow Pro?", priority: 62 },
   );
 
   return rules.sort((a, b) => b.priority - a.priority);
 }
 
+function looksLikeAccessSecurityAnswer(text: string): boolean {
+  return hasAny(text, [
+    /\bread[-\s]?only\b/,
+    /\bviewer\b/,
+    /\bpermission\b/,
+    /\bseparate user\b/,
+    /\bshare passwords?\b/,
+    /\bowner access\b/,
+    /\badmin access\b/,
+    /\bbilling\b/,
+    /\bpayment\b/,
+    /\b2fa\b/,
+    /\bgtm publish access\b/,
+    /\baccess can be removed\b/,
+  ]);
+}
+
+function buildAccessSecurityFollowUpRules(text: string): QuestionRule[] {
+  const rules: QuestionRule[] = [];
+
+  pushQuestion(
+    rules,
+    !hasAny(text, [/\bread[-\s]?only\b/]),
+    "Can we start with read-only access?",
+    100,
+  );
+
+  pushQuestion(
+    rules,
+    !hasAny(text, [/\bpassword\b/, /\bsharing passwords?\b/]),
+    "Should we share passwords?",
+    98,
+  );
+
+  pushQuestion(
+    rules,
+    !hasAny(text, [/\bbilling\b/, /\bpayment\b/]),
+    "Do you need billing access?",
+    96,
+  );
+
+  rules.push(
+    { question: "What access is needed to confirm this?", priority: 94 },
+    { question: "Can you also manage Google Ads campaigns?", priority: 90 },
+    { question: "What should we verify first?", priority: 88 },
+    { question: "Can TrackFlow Pro verify this for us?", priority: 82 },
+  );
+
+  return rules.sort((a, b) => b.priority - a.priority);
+}
+
+function looksLikeGoogleAdsServiceAnswer(text: string): boolean {
+  return hasAny(text, [
+    /\bgoogle ads campaign\b/,
+    /\bgoogle ads campaigns\b/,
+    /\bgoogle ads setup\b/,
+    /\bgoogle ads management\b/,
+    /\bcampaign setup\b/,
+    /\bcampaign management\b/,
+    /\bongoing management\b/,
+    /\bperformance management\b/,
+    /\bkeyword\b/,
+    /\bad group\b/,
+    /\bnegative keyword\b/,
+    /\bad copy\b/,
+    /\bbudget\b/,
+    /\bbid\b/,
+    /\bads management\b/,
+    /\bconversion tracking before\b/,
+    /\btracking should be verified\b/,
+    /\bcampaign decisions are based on reliable\b/,
+    /\bno agency should guarantee\b/,
+  ]);
+}
+
+function buildGoogleAdsServiceFollowUpRules(_text: string): QuestionRule[] {
+  // Keep these suggestions tied to the Google Ads service conversation.
+  // Do not hide them just because the answer mentioned tracking, access, or read-only review.
+  // getUnaskedQuestions() will remove only questions the visitor already asked/clicked.
+  return [
+    { question: "Should tracking be fixed before campaign changes?", priority: 100 },
+    { question: "Can you review campaigns without changing anything?", priority: 98 },
+    { question: "What Google Ads access is needed for management?", priority: 96 },
+    { question: "What should we check in Google Ads?", priority: 92 },
+    { question: "Can TrackFlow Pro verify this for us?", priority: 84 },
+    { question: "What is the safest next step?", priority: 80 },
+  ];
+}
+
+function looksLikeContactBookingAnswer(text: string): boolean {
+  return hasAny(text, [
+    /\bcalendly\.com\b/,
+    /\bfree consultation\b/,
+    /\bbook a short\b/,
+    /\bbook a call\b/,
+    /\bverification call\b/,
+    /\bcontact trackflow pro\b/,
+    /\bshahjalal@trackflowpro\.com\b/,
+    /\bmarketplace-based hiring\b/,
+    /\bupwork\b/,
+    /\bfiverr\b/,
+  ]);
+}
+
+function buildContactBookingFollowUpRules(text: string): QuestionRule[] {
+  const rules: QuestionRule[] = [];
+
+  pushQuestion(
+    rules,
+    !hasAny(text, [/\baccess checklist\b/, /\bminimum required permission\b/, /\bminimum access\b/]),
+    "What access is needed before the call?",
+    100,
+  );
+
+  pushQuestion(
+    rules,
+    !hasAny(text, [/\bgoogle ads\b/, /\bcampaign\b/]),
+    "Can you also manage Google Ads campaigns?",
+    96,
+  );
+
+  pushQuestion(
+    rules,
+    !hasAny(text, [/\btracking should be verified\b/, /\btracking first\b/]),
+    "Should tracking be fixed before campaign changes?",
+    94,
+  );
+
+  rules.push(
+    { question: "Can TrackFlow Pro verify this for us?", priority: 92 },
+    { question: "What is the safest next step?", priority: 88 },
+    { question: "Do you work through Upwork or Fiverr?", priority: 76 },
+  );
+
+  return rules.sort((a, b) => b.priority - a.priority);
+}
+
+function looksLikeSafestNextStepAnswer(text: string): boolean {
+  return hasAny(text, [
+    /\bsafest next step\b/,
+    /\bhigh-priority conversion path\b/,
+    /\bone controlled test\b/,
+    /\bgtm preview\b/,
+    /\bga4 debugview\b/,
+    /\bconversion path is confirmed\b/,
+    /\bapproved account-level access\b/,
+    /\bverify one high-priority conversion path\b/,
+    /\bmaking final tracking or campaign decisions\b/,
+    /\bavoid campaign optimization or budget decisions\b/,
+  ]);
+}
+
+function buildSafestNextStepFollowUpRules(_text: string): QuestionRule[] {
+  return [
+    { question: "What access is needed to confirm this?", priority: 100 },
+    { question: "What should we check inside GA4?", priority: 96 },
+    { question: "What should we check in GTM Preview?", priority: 94 },
+    { question: "What should we check in Google Ads?", priority: 92 },
+    { question: "What should we test on the lead path?", priority: 90 },
+    { question: "Can we book a verification call?", priority: 86 },
+  ];
+}
+
 function buildFollowUpRules(latestAssistantContent: string, context?: ReportChatQuestionContext): QuestionRule[] {
-  const text = `${cleanText(latestAssistantContent)} ${contextToSearchText(context)}`.toLowerCase();
+  const latestText = cleanText(latestAssistantContent).toLowerCase();
+  const text = `${latestText} ${contextToSearchText(context)}`.toLowerCase();
+
+  if (looksLikeContactBookingAnswer(latestText)) {
+    return buildContactBookingFollowUpRules(latestText);
+  }
+
+  if (looksLikeSafestNextStepAnswer(latestText)) {
+    return buildSafestNextStepFollowUpRules(latestText);
+  }
+
+  if (looksLikeGoogleAdsServiceAnswer(latestText)) {
+    return buildGoogleAdsServiceFollowUpRules(latestText);
+  }
+
+  if (looksLikeAccessSecurityAnswer(latestText)) {
+    return buildAccessSecurityFollowUpRules(latestText);
+  }
+
   const rules: QuestionRule[] = [];
 
   pushQuestion(
@@ -338,6 +549,8 @@ function buildFollowUpRules(latestAssistantContent: string, context?: ReportChat
   rules.push(
     { question: "What is the safest next step?", priority: 84 },
     { question: "Why does this need account access?", priority: 82 },
+    { question: "Should tracking be fixed before campaign changes?", priority: 78 },
+    { question: "Can we book a verification call?", priority: 76 },
     { question: "Can TrackFlow Pro verify this for us?", priority: 74 },
   );
 
