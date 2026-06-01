@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 import { del } from "@vercel/blob";
 import { adminDb } from "@/lib/firebase-admin";
-import { deletePdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
+import { buildReportPdfB2Key, deletePdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import { deleteReportChatHistory } from "@/lib/supabase-admin";
 import { cleanupGoogleSheetReportRow, isCleanupSheetConfigured, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
 import { deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
@@ -45,6 +45,27 @@ type CleanupManifest = {
   cleanupStatus: string;
   leadContacted: boolean;
   leadContactReason: string;
+  orphanRecovery: {
+    reportDocumentMissing: boolean;
+    domainIndexFound: boolean;
+    b2KeyReconstructed: boolean;
+    blobTargetsReconstructed: boolean;
+    reportUrlHintUsed: boolean;
+  };
+};
+
+type CleanupManifestHints = {
+  reportUrl?: string;
+  domainSlug?: string;
+  domain?: string;
+  websiteUrl?: string;
+  b2PdfKey?: string;
+  blobImageTarget?: string;
+};
+
+type DomainIndexRecord = {
+  id: string;
+  data: AnyRecord;
 };
 
 export type ReportCleanupHandlerDeps = {
@@ -237,6 +258,35 @@ function extractReportTokenFromUrl(value: any): string {
   } catch {}
 
   return "";
+}
+
+function extractReportSlugFromUrl(value: any): string {
+  const raw = clean(value);
+  if (!raw) return "";
+
+  const directMatch = raw.match(/\/tracking-review\/([^/]+)\/[a-zA-Z0-9_-]{8,128}\/?/);
+  if (directMatch?.[1]) return normalizeSlug(directMatch[1]);
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://trackflowpro.com${raw.startsWith("/") ? "" : "/"}${raw}`);
+    const pathMatch = url.pathname.match(/\/tracking-review\/([^/]+)\/[a-zA-Z0-9_-]{8,128}\/?/);
+    if (pathMatch?.[1]) return normalizeSlug(pathMatch[1]);
+  } catch {}
+
+  return "";
+}
+
+function isLikelyConfigError(error: any): boolean {
+  const text = safeError(error).toLowerCase();
+  return (
+    text.includes("missing b2_") ||
+    text.includes("missing backblaze") ||
+    text.includes("missing blob_read_write_token") ||
+    text.includes("missing google_sheet") ||
+    text.includes("missing google_client_email") ||
+    text.includes("missing google_private_key") ||
+    text.includes("not configured")
+  );
 }
 
 function safeB2Key(...values: any[]): string {
@@ -471,43 +521,90 @@ function shouldSaveContactMemory(leadMode: LeadCleanupMode, manifest: CleanupMan
   return Boolean(manifest.leadContacted);
 }
 
-async function collectDomainIndexIds(report: AnyRecord, token: string): Promise<string[]> {
+async function collectDomainIndexRecords(report: AnyRecord, token: string, hints: CleanupManifestHints = {}): Promise<DomainIndexRecord[]> {
+  const records = new Map<string, DomainIndexRecord>();
+
   const directIds = uniqueStrings(
     [
-      report.domainSlug,
-      report.domain_slug,
-      normalizeSlug(report.domainSlug || report.domain_slug || report.domain || report.websiteUrl || report.website),
-      normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website),
-    ],
-    8,
+      report.normalizedDomain,
+      report.normalized_domain,
+      report.domain,
+      report.websiteUrl,
+      report.website_url,
+      report.website,
+      hints.domain,
+      hints.websiteUrl,
+    ]
+      .map((value) => normalizeDomainKey(value))
+      .filter(Boolean),
+    12,
   );
 
-  const ids = new Set<string>(directIds.filter(Boolean));
-
-  for (const field of ["token", "reportToken"]) {
+  for (const id of directIds) {
     try {
-      const snap = await adminDb.collection("audit_report_domains").where(field, "==", token).limit(10).get();
-      snap.docs.forEach((doc: any) => ids.add(doc.id));
+      const snap = await adminDb.collection("audit_report_domains").doc(id).get();
+      if (snap.exists) records.set(snap.id, { id: snap.id, data: asRecord(snap.data()) });
     } catch {
-      // Domain index lookup is best-effort only.
+      // Direct domain index lookup is best-effort only.
     }
   }
 
-  return Array.from(ids).filter(Boolean);
+  if (token) {
+    for (const field of ["token", "reportToken", "report_token"]) {
+      try {
+        const snap = await adminDb.collection("audit_report_domains").where(field, "==", token).limit(20).get();
+        snap.docs.forEach((doc: any) => {
+          if (!records.has(doc.id)) records.set(doc.id, { id: doc.id, data: asRecord(doc.data()) });
+        });
+      } catch {
+        // Domain index lookup is best-effort only.
+      }
+    }
+  }
+
+  return Array.from(records.values());
 }
 
-async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupManifest; report: AnyRecord; lead: AnyRecord }> {
+function firstDomainIndexData(records: DomainIndexRecord[]): AnyRecord {
+  return records.length ? asRecord(records[0].data) : {};
+}
+
+function buildFallbackB2PdfKey(reportToken: string, domainSlug: string): string {
+  if (!reportToken || !domainSlug) return "";
+  try {
+    return buildReportPdfB2Key({ token: reportToken, domainSlug });
+  } catch {
+    return "";
+  }
+}
+
+function buildFallbackBlobImageTargets(reportToken: string, domainSlug: string): string[] {
+  if (!reportToken || !domainSlug) return [];
+  return uniqueStrings(
+    [
+      `reports/${domainSlug}/${reportToken}/preview/og-card.jpg`,
+      `reports/${domainSlug}/${reportToken}/preview/og-card.png`,
+      `reports/${domainSlug}/${reportToken}/preview/og-card.webp`,
+    ].map(normalizeBlobDeleteTarget),
+    6,
+  );
+}
+
+async function buildCleanupManifest(token: string, hints: CleanupManifestHints = {}): Promise<{ manifest: CleanupManifest; report: AnyRecord; lead: AnyRecord }> {
   const reportSnap = await adminDb.collection("audit_reports").doc(token).get();
   const reportFound = Boolean(reportSnap.exists);
   const report: AnyRecord = reportFound ? asRecord(reportSnap.data()) : {};
+  const domainIndexRecords = await collectDomainIndexRecords(report, token, hints);
+  const domainIndex = firstDomainIndexData(domainIndexRecords);
+  const reportLike: AnyRecord = { ...domainIndex, ...report };
 
   const leadId = firstCleanString(
-    report.leadId,
-    report.lead_id,
-    report.firestoreLeadId,
-    report.firestore_lead_id,
-    report.outreachLeadId,
-    report.outreach_lead_id,
+    reportLike.leadId,
+    reportLike.lead_id,
+    reportLike.firestoreLeadId,
+    reportLike.firestore_lead_id,
+    reportLike.outreachLeadId,
+    reportLike.outreach_lead_id,
   );
 
   const leadResults = await getLeadsByIdOrReportToken(leadId, token);
@@ -517,33 +614,76 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
   const contactHistories = leadResults.map((item) => detectLeadContactHistory({ ...asRecord(item.data), id: item.id }));
   const contactedHistory = contactHistories.find((item) => item.contacted) || { contacted: false, reason: "" };
 
-  const domainSlug = normalizeSlug(report.domainSlug || report.domain_slug || report.domain || report.websiteUrl || lead.website || "website");
-  const normalizedDomain = normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website, lead.website);
-  const domainIndexIds = await collectDomainIndexIds(report, token);
-  const sheetRowNumber = Number(report.sheetRowNumber || report.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
+  const hintedReportSlug = extractReportSlugFromUrl(hints.reportUrl || reportLike.reportUrl || reportLike.report_url || "");
+  const domainSlug = normalizeSlug(
+    firstCleanString(
+      reportLike.domainSlug,
+      reportLike.domain_slug,
+      hints.domainSlug,
+      hintedReportSlug,
+      reportLike.domain,
+      reportLike.websiteUrl,
+      reportLike.website_url,
+      lead.domainSlug,
+      lead.domain_slug,
+      lead.website,
+      hints.domain,
+      hints.websiteUrl,
+      "website",
+    ),
+  );
+  const normalizedDomain = normalizeDomainKey(
+    reportLike.normalizedDomain,
+    reportLike.normalized_domain,
+    reportLike.domain,
+    reportLike.websiteUrl,
+    reportLike.website_url,
+    reportLike.website,
+    lead.website,
+    hints.domain,
+    hints.websiteUrl,
+  );
+  const domainIndexIds = uniqueStrings(domainIndexRecords.map((item) => item.id), 40);
+  const sheetRowNumber = Number(reportLike.sheetRowNumber || reportLike.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
+
+  const explicitB2Key = getReportB2Key(reportLike, lead) || safeB2Key(hints.b2PdfKey || "");
+  const fallbackB2Key = explicitB2Key ? "" : buildFallbackB2PdfKey(token, domainSlug);
+  const b2PdfKey = explicitB2Key || fallbackB2Key;
+
+  const explicitBlobTargets = collectBlobImageTargets(reportLike, lead);
+  const hintedBlobTarget = normalizeBlobDeleteTarget(hints.blobImageTarget || "");
+  const fallbackBlobTargets = explicitBlobTargets.length || hintedBlobTarget ? [] : buildFallbackBlobImageTargets(token, domainSlug);
+  const blobImageTargets = uniqueStrings([...explicitBlobTargets, hintedBlobTarget, ...fallbackBlobTargets], 12);
 
   const manifest: CleanupManifest = {
     reportToken: token,
     reportFound,
     domainSlug,
     normalizedDomain,
-    reportUrl: firstCleanString(report.reportUrl, report.report_url, lead.reportUrl, lead.report_url),
+    reportUrl: firstCleanString(reportLike.reportUrl, reportLike.report_url, lead.reportUrl, lead.report_url, hints.reportUrl),
     leadId: firstCleanString(lead.id, leadId),
     leadFound,
     linkedLeadIds,
     linkedLeadCount: linkedLeadIds.length,
-    emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || report.emailLower || report.email_lower || report.email),
+    emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || reportLike.emailLower || reportLike.email_lower || reportLike.email),
     sheetRowNumber,
-    b2PdfKey: getReportB2Key(report, lead),
-    blobImageTargets: collectBlobImageTargets(report, lead),
+    b2PdfKey,
+    blobImageTargets,
     domainIndexIds,
-    pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
-    cleanupStatus: firstCleanString(report.cleanupStatus, report.cleanup_status),
+    pdfExpiresAt: toIso(reportLike.pdfExpiresAt || reportLike.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
+    cleanupStatus: firstCleanString(reportLike.cleanupStatus, reportLike.cleanup_status),
     leadContacted: contactedHistory.contacted,
     leadContactReason: contactedHistory.reason,
+    orphanRecovery: {
+      reportDocumentMissing: !reportFound,
+      domainIndexFound: domainIndexRecords.length > 0,
+      b2KeyReconstructed: Boolean(fallbackB2Key),
+      blobTargetsReconstructed: fallbackBlobTargets.length > 0,
+      reportUrlHintUsed: Boolean(hints.reportUrl),
+    },
   };
 
-  return { manifest, report, lead };
+  return { manifest, report: reportLike, lead };
 }
 
 function isConfirmed(body: AnyRecord, mode: CleanupMode): boolean {
@@ -619,6 +759,17 @@ async function deleteB2PdfStep(manifest: CleanupManifest): Promise<CleanupStep> 
         status: "ok",
         target: manifest.b2PdfKey,
         message: "B2 PDF was already removed.",
+      };
+    }
+
+    if (isLikelyConfigError(error)) {
+      return {
+        service: "backblaze_b2",
+        action: "delete_pdf",
+        status: "warning",
+        target: manifest.b2PdfKey,
+        error: safeError(error),
+        message: "B2 cleanup could not run because storage ENV is not configured on this server. Other cleanup steps continued.",
       };
     }
 
@@ -1099,10 +1250,10 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
   const steps: CleanupStep[] = [
     manifest.b2PdfKey
       ? plannedStep("backblaze_b2", "delete_pdf", manifest.b2PdfKey, "B2 PDF would be deleted.")
-      : { service: "backblaze_b2", action: "delete_pdf", status: "skipped", message: "No B2 PDF key found." },
+      : { service: "backblaze_b2", action: "delete_pdf", status: "skipped", message: "No B2 PDF key found or reconstructable from token/domainSlug.", details: { orphanRecovery: manifest.orphanRecovery } },
     manifest.blobImageTargets.length
       ? plannedStep("vercel_blob", "delete_preview_images", undefined, "Blob preview image target(s) would be deleted.", { targets: manifest.blobImageTargets })
-      : { service: "vercel_blob", action: "delete_preview_images", status: "skipped", message: "No Vercel Blob preview image target found." },
+      : { service: "vercel_blob", action: "delete_preview_images", status: "skipped", message: "No Vercel Blob preview image target found or reconstructable from token/domainSlug.", details: { orphanRecovery: manifest.orphanRecovery } },
     plannedStep("supabase", "delete_report_chat", manifest.reportToken, "Supabase chat rows would be deleted when configured."),
     plannedStep(
       "firestore",
@@ -1463,7 +1614,12 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
     const mode = parseMode(url.searchParams.get("mode") || "soft");
     const leadMode = parseLeadMode(url.searchParams.get("leadMode") || "none");
     const sheetMode = parseSheetMode(url.searchParams.get("sheetMode") || "delete");
-    const { manifest } = await buildCleanupManifest(token);
+    const { manifest } = await buildCleanupManifest(token, {
+      reportUrl: url.searchParams.get("reportUrl") || "",
+      domainSlug: url.searchParams.get("domainSlug") || url.searchParams.get("domain_slug") || "",
+      domain: url.searchParams.get("domain") || "",
+      websiteUrl: url.searchParams.get("websiteUrl") || url.searchParams.get("website_url") || "",
+    });
 
     return {
       token,
@@ -1551,7 +1707,14 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
     const sheetMode = parseSheetMode(body.sheetMode || body.sheet_mode || "delete");
     const dryRun = body.dryRun !== false;
     const actor = cleanEmail(adminUser.email || "admin") || "admin";
-    const { manifest, report, lead } = await buildCleanupManifest(token);
+    const { manifest, report, lead } = await buildCleanupManifest(token, {
+      reportUrl: body.reportUrl || body.report_url || "",
+      domainSlug: body.domainSlug || body.domain_slug || "",
+      domain: body.domain || "",
+      websiteUrl: body.websiteUrl || body.website_url || "",
+      b2PdfKey: body.b2PdfKey || body.b2Key || body.pdfStorageKey || "",
+      blobImageTarget: body.ogImagePathname || body.previewImagePathname || body.ogImageUrl || body.previewImageUrl || "",
+    });
     const steps = dryRunSteps(manifest, mode, leadMode, sheetMode);
 
     if (dryRun) {

@@ -124,6 +124,11 @@ function getSearchEndColumn(): string {
   return /^[A-Z]{1,3}$/.test(raw) ? raw : DEFAULT_SEARCH_END_COLUMN;
 }
 
+function sheetRowNumberFallbackAllowed(): boolean {
+  const raw = clean(process.env.ALLOW_SHEET_ROW_NUMBER_FALLBACK_DELETE || process.env.TRACKFLOW_ALLOW_SHEET_ROW_NUMBER_FALLBACK || "").toLowerCase();
+  return ["1", "true", "yes", "y", "on"].includes(raw);
+}
+
 function getSheetEnv() {
   const spreadsheetId = cleanEnv(process.env.GOOGLE_SHEET_ID || process.env.TRACKFLOW_GOOGLE_SHEET_ID || "");
   const clientEmail = cleanEnv(
@@ -346,7 +351,7 @@ async function findSheetRowsByReportToken(
   return { headers, matchedRows };
 }
 
-function normalizeTargetRows(input: { rowNumber: number | null; matchedRows: number[] }): number[] {
+function normalizeTargetRows(input: { rowNumber: number | null; matchedRows: number[]; reportToken: string }): { rows: number[]; fallbackUsed: boolean; fallbackAllowed: boolean } {
   const seen = new Set<number>();
   const output: number[] = [];
 
@@ -359,11 +364,17 @@ function normalizeTargetRows(input: { rowNumber: number | null; matchedRows: num
 
   input.matchedRows.forEach(add);
 
-  // Fallback only when no report-token match was found. This avoids deleting the wrong
-  // row if Google Sheet rows have shifted after earlier deletions.
-  if (!output.length) add(input.rowNumber);
+  const fallbackAllowed = !input.reportToken || sheetRowNumberFallbackAllowed();
+  let fallbackUsed = false;
 
-  return output.sort((a, b) => a - b);
+  // Token search is the safest path. Row-number fallback is disabled by default when a
+  // report token exists, because Google Sheet rows can shift after previous deletions.
+  if (!output.length && fallbackAllowed) {
+    add(input.rowNumber);
+    fallbackUsed = output.length > 0;
+  }
+
+  return { rows: output.sort((a, b) => a - b), fallbackUsed, fallbackAllowed };
 }
 
 async function readSingleSheetRow(sheets: any, spreadsheetId: string, headers: string[], rowNumber: number): Promise<AnyRecord> {
@@ -461,7 +472,8 @@ export async function cleanupGoogleSheetReportRow(input: {
   try {
     const { sheets, spreadsheetId } = await getSheetsClient();
     const { headers, matchedRows } = await findSheetRowsByReportToken(sheets, spreadsheetId, reportToken);
-    const targetRows = normalizeTargetRows({ rowNumber, matchedRows });
+    const targetRowResult = normalizeTargetRows({ rowNumber, matchedRows, reportToken });
+    const targetRows = targetRowResult.rows;
 
     if (!targetRows.length) {
       return {
@@ -479,6 +491,8 @@ export async function cleanupGoogleSheetReportRow(input: {
           searchedUntilColumn: getSearchEndColumn(),
           reportTokenFound: false,
           matchedRows,
+          rowNumberFallbackAllowed: targetRowResult.fallbackAllowed,
+          rowNumberFallbackUsed: targetRowResult.fallbackUsed,
         },
       };
     }
@@ -502,6 +516,8 @@ export async function cleanupGoogleSheetReportRow(input: {
           sheetName: SHEET_NAME,
           matchedByReportToken: matchedRows,
           deletedRows: targetRows,
+          rowNumberFallbackAllowed: targetRowResult.fallbackAllowed,
+          rowNumberFallbackUsed: targetRowResult.fallbackUsed,
         },
       };
     }
@@ -535,6 +551,8 @@ export async function cleanupGoogleSheetReportRow(input: {
         sheetName: SHEET_NAME,
         matchedByReportToken: matchedRows,
         updatedRows: targetRows,
+        rowNumberFallbackAllowed: targetRowResult.fallbackAllowed,
+        rowNumberFallbackUsed: targetRowResult.fallbackUsed,
       },
     };
   } catch (error) {
