@@ -15,10 +15,12 @@ export type SheetCleanupResult = {
   deletedCount?: number;
   updatedCount?: number;
   error?: string;
+  details?: AnyRecord;
 };
 
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || "Sheet1";
 const MAX_CELL_CHARS = 45000;
+const DEFAULT_SEARCH_END_COLUMN = "ZZ";
 
 const HEADERS = [
   "Export Date",
@@ -86,6 +88,10 @@ function clean(value: unknown, fallback = ""): string {
   return (text || fallback).slice(0, MAX_CELL_CHARS);
 }
 
+function cleanEnv(value: unknown): string {
+  return String(value ?? "").trim().replace(/^['"]|['"]$/g, "");
+}
+
 function errorMessage(error: unknown, fallback = "Unknown error"): string {
   if (error instanceof Error && error.message) return error.message.slice(0, 700);
   if (typeof error === "string" && error.trim()) return error.slice(0, 700);
@@ -109,19 +115,35 @@ function columnLetter(index: number): string {
   return letter;
 }
 
-function lastColumnLetter(): string {
-  return columnLetter(HEADERS.length - 1);
+function lastColumnLetterForCount(count: number): string {
+  return columnLetter(Math.max(0, count - 1));
+}
+
+function getSearchEndColumn(): string {
+  const raw = clean(process.env.GOOGLE_SHEET_SEARCH_END_COLUMN || process.env.TRACKFLOW_SHEET_SEARCH_END_COLUMN || DEFAULT_SEARCH_END_COLUMN).toUpperCase();
+  return /^[A-Z]{1,3}$/.test(raw) ? raw : DEFAULT_SEARCH_END_COLUMN;
 }
 
 function getSheetEnv() {
-  const spreadsheetId = clean(process.env.GOOGLE_SHEET_ID || process.env.TRACKFLOW_GOOGLE_SHEET_ID || "");
-  const clientEmail = clean(process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "");
-  const privateKey = clean(process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  const spreadsheetId = cleanEnv(process.env.GOOGLE_SHEET_ID || process.env.TRACKFLOW_GOOGLE_SHEET_ID || "");
+  const clientEmail = cleanEnv(
+    process.env.GOOGLE_CLIENT_EMAIL ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      process.env.TRACKFLOW_GOOGLE_CLIENT_EMAIL ||
+      "",
+  );
+  const privateKey = cleanEnv(
+    process.env.GOOGLE_PRIVATE_KEY ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
+      process.env.TRACKFLOW_GOOGLE_PRIVATE_KEY ||
+      "",
+  ).replace(/\\n/g, "\n");
 
   return {
     spreadsheetId,
     clientEmail,
     privateKey,
+    sheetName: SHEET_NAME,
     configured: Boolean(spreadsheetId && clientEmail && privateKey),
   };
 }
@@ -168,58 +190,104 @@ async function getWorksheetId(sheets: any, spreadsheetId: string): Promise<numbe
   return sheetId;
 }
 
-async function deleteSingleSheetRow(sheets: any, spreadsheetId: string, rowNumber: number): Promise<void> {
+async function deleteSheetRows(sheets: any, spreadsheetId: string, rowNumbers: number[]): Promise<void> {
   const sheetId = await getWorksheetId(sheets, spreadsheetId);
+  const rowsToDelete = [...new Set(rowNumbers)]
+    .map((rowNumber) => Number(rowNumber || 0))
+    .filter((rowNumber) => Number.isFinite(rowNumber) && rowNumber > 1)
+    .sort((a, b) => b - a);
+
+  if (!rowsToDelete.length) return;
+
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
-      requests: [
-        {
-          deleteDimension: {
-            range: {
-              sheetId,
-              dimension: "ROWS",
-              startIndex: rowNumber - 1,
-              endIndex: rowNumber,
-            },
+      requests: rowsToDelete.map((rowNumber) => ({
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex: rowNumber - 1,
+            endIndex: rowNumber,
           },
         },
-      ],
+      })),
     },
   });
 }
 
-async function ensureHeaderRow(sheets: any, spreadsheetId: string): Promise<void> {
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `${SHEET_NAME}!A1:${lastColumnLetter()}1`,
-    valueInputOption: "RAW",
-    requestBody: { values: [HEADERS] },
-  });
+function normalizeHeaderName(value: unknown): string {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[\s_-]+/g, " ")
+    .trim();
 }
 
-function rowToObject(row: any[] = [], rowNumber?: number): AnyRecord {
+function mergeHeaderRow(rawHeaders: any[] = []): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (value: unknown) => {
+    const header = clean(value);
+    if (!header) return;
+    const key = normalizeHeaderName(header);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(header);
+  };
+
+  rawHeaders.forEach(add);
+  HEADERS.forEach(add);
+
+  return output.length ? output : [...HEADERS];
+}
+
+function findHeaderIndex(headers: string[], header: HeaderName | string): number {
+  const target = normalizeHeaderName(header);
+  return headers.findIndex((item) => normalizeHeaderName(item) === target);
+}
+
+function rowToObject(row: any[] = [], headers: string[], rowNumber?: number): AnyRecord {
   const record: AnyRecord = {};
-  HEADERS.forEach((header, index) => {
+  headers.forEach((header, index) => {
     record[header] = clean(row[index] || "");
   });
   if (rowNumber) record.rowNumber = rowNumber;
   return record;
 }
 
-function rowObjectToArray(row: AnyRecord): string[] {
-  return HEADERS.map((header) => clean(row[header] || ""));
+function rowObjectToArray(row: AnyRecord, headers: string[]): string[] {
+  return headers.map((header) => clean(row[header] || ""));
 }
 
-
-function headerIndex(header: HeaderName): number {
-  return HEADERS.indexOf(header);
-}
-
-function cellAt(row: any[] = [], header: HeaderName): string {
-  const index = headerIndex(header);
+function cellAt(row: any[] = [], headers: string[], header: HeaderName | string): string {
+  const index = findHeaderIndex(headers, header);
   if (index < 0) return "";
   return clean(row[index] || "");
+}
+
+async function readSheetTable(sheets: any, spreadsheetId: string): Promise<{ headers: string[]; rows: any[][] }> {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${SHEET_NAME}!A1:${getSearchEndColumn()}`,
+  });
+
+  const values = response.data.values || [];
+  const headers = mergeHeaderRow(values[0] || []);
+  const rows = values.slice(1);
+
+  return { headers, rows };
+}
+
+async function ensureHeaderRow(sheets: any, spreadsheetId: string): Promise<string[]> {
+  const { headers } = await readSheetTable(sheets, spreadsheetId);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${SHEET_NAME}!A1:${lastColumnLetterForCount(headers.length)}1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [headers] },
+  });
+  return headers;
 }
 
 function normalizeTokenForMatch(value: unknown): string {
@@ -229,44 +297,53 @@ function normalizeTokenForMatch(value: unknown): string {
     .slice(0, 128);
 }
 
-function sheetRowMatchesReportToken(row: any[] = [], reportToken: string): boolean {
+function cellTextContainsToken(value: unknown, token: string): boolean {
+  const raw = clean(value).toLowerCase();
+  if (!raw || !token) return false;
+  if (raw.includes(token)) return true;
+  return normalizeTokenForMatch(raw).includes(token);
+}
+
+function sheetRowMatchesReportToken(row: any[] = [], headers: string[], reportToken: string): boolean {
   const token = normalizeTokenForMatch(reportToken);
   if (!token) return false;
 
-  const exactToken = normalizeTokenForMatch(cellAt(row, "Report Token"));
+  const exactToken = normalizeTokenForMatch(cellAt(row, headers, "Report Token"));
   if (exactToken && exactToken === token) return true;
 
-  const searchableCells = [
-    cellAt(row, "Report URL"),
-    cellAt(row, "PDF View URL"),
-    cellAt(row, "PDF Download URL"),
-    cellAt(row, "Notes"),
-  ]
-    .join(" ")
-    .toLowerCase();
+  const knownReportCells = [
+    cellAt(row, headers, "Report URL"),
+    cellAt(row, headers, "PDF View URL"),
+    cellAt(row, headers, "PDF Download URL"),
+    cellAt(row, headers, "Notes"),
+  ];
 
-  return Boolean(searchableCells && searchableCells.includes(token));
+  if (knownReportCells.some((value) => cellTextContainsToken(value, token))) return true;
+
+  // Last-resort safety net:
+  // Some older Sheet versions had different header order. Search the whole row
+  // for the report token so cleanup does not silently miss existing rows.
+  return row.some((value) => cellTextContainsToken(value, token));
 }
 
-async function findSheetRowsByReportToken(sheets: any, spreadsheetId: string, reportToken: string): Promise<number[]> {
+async function findSheetRowsByReportToken(
+  sheets: any,
+  spreadsheetId: string,
+  reportToken: string,
+): Promise<{ headers: string[]; matchedRows: number[] }> {
   const token = normalizeTokenForMatch(reportToken);
-  if (!token) return [];
+  const { headers, rows } = await readSheetTable(sheets, spreadsheetId);
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${SHEET_NAME}!A2:${lastColumnLetter()}`,
-  });
+  if (!token) return { headers, matchedRows: [] };
 
-  const rows = response.data.values || [];
-  const matches: number[] = [];
-
+  const matchedRows: number[] = [];
   rows.forEach((row: any[], index: number) => {
-    if (sheetRowMatchesReportToken(row, token)) {
-      matches.push(index + 2);
+    if (sheetRowMatchesReportToken(row, headers, token)) {
+      matchedRows.push(index + 2);
     }
   });
 
-  return matches;
+  return { headers, matchedRows };
 }
 
 function normalizeTargetRows(input: { rowNumber: number | null; matchedRows: number[] }): number[] {
@@ -289,21 +366,21 @@ function normalizeTargetRows(input: { rowNumber: number | null; matchedRows: num
   return output.sort((a, b) => a - b);
 }
 
-async function readSingleSheetRow(sheets: any, spreadsheetId: string, rowNumber: number): Promise<AnyRecord> {
+async function readSingleSheetRow(sheets: any, spreadsheetId: string, headers: string[], rowNumber: number): Promise<AnyRecord> {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${SHEET_NAME}!A${rowNumber}:${lastColumnLetter()}${rowNumber}`,
+    range: `${SHEET_NAME}!A${rowNumber}:${lastColumnLetterForCount(headers.length)}${rowNumber}`,
   });
   const row = response.data.values?.[0] || [];
-  return rowToObject(row, rowNumber);
+  return rowToObject(row, headers, rowNumber);
 }
 
-async function updateSingleSheetRow(sheets: any, spreadsheetId: string, rowNumber: number, row: AnyRecord): Promise<void> {
+async function updateSingleSheetRow(sheets: any, spreadsheetId: string, headers: string[], rowNumber: number, row: AnyRecord): Promise<void> {
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!A${rowNumber}:${lastColumnLetter()}${rowNumber}`,
+    range: `${SHEET_NAME}!A${rowNumber}:${lastColumnLetterForCount(headers.length)}${rowNumber}`,
     valueInputOption: "RAW",
-    requestBody: { values: [rowObjectToArray(row)] },
+    requestBody: { values: [rowObjectToArray(row, headers)] },
   });
 }
 
@@ -347,34 +424,43 @@ export async function cleanupGoogleSheetReportRow(input: {
 }): Promise<SheetCleanupResult> {
   const rowNumber = Number(input.rowNumber || 0) || null;
   const reportToken = normalizeTokenForMatch(input.reportToken);
+  const config = getSheetEnv();
 
   if (input.mode === "skip") {
     return {
-      configured: isCleanupSheetConfigured(),
+      configured: config.configured,
       skipped: true,
       rowNumber,
       rowNumbers: rowNumber ? [rowNumber] : [],
       mode: input.mode,
       ok: true,
       message: "Sheet cleanup skipped by request.",
+      details: { sheetName: config.sheetName },
     };
   }
 
-  if (!isCleanupSheetConfigured()) {
+  if (!config.configured) {
     return {
       configured: false,
-      skipped: true,
+      skipped: false,
       rowNumber,
       rowNumbers: rowNumber ? [rowNumber] : [],
       mode: input.mode,
-      ok: true,
-      message: "Google Sheet cleanup skipped because Sheet service account ENV is not configured on the deployed server.",
+      ok: false,
+      message: "Google Sheet cleanup could not run because Sheet service account ENV is not configured on the deployed cleanup server.",
+      error: "Missing GOOGLE_SHEET_ID, GOOGLE_CLIENT_EMAIL, or GOOGLE_PRIVATE_KEY on the deployed cleanup server.",
+      details: {
+        sheetName: config.sheetName,
+        hasSpreadsheetId: Boolean(config.spreadsheetId),
+        hasClientEmail: Boolean(config.clientEmail),
+        hasPrivateKey: Boolean(config.privateKey),
+      },
     };
   }
 
   try {
     const { sheets, spreadsheetId } = await getSheetsClient();
-    const matchedRows = await findSheetRowsByReportToken(sheets, spreadsheetId, reportToken);
+    const { headers, matchedRows } = await findSheetRowsByReportToken(sheets, spreadsheetId, reportToken);
     const targetRows = normalizeTargetRows({ rowNumber, matchedRows });
 
     if (!targetRows.length) {
@@ -388,14 +474,17 @@ export async function cleanupGoogleSheetReportRow(input: {
         message: reportToken
           ? "No matching Google Sheet row was found for this report token."
           : "No valid Google Sheet row number or report token was found for this report.",
+        details: {
+          sheetName: SHEET_NAME,
+          searchedUntilColumn: getSearchEndColumn(),
+          reportTokenFound: false,
+          matchedRows,
+        },
       };
     }
 
     if (input.mode === "delete") {
-      const rowsToDelete = [...targetRows].sort((a, b) => b - a);
-      for (const targetRow of rowsToDelete) {
-        await deleteSingleSheetRow(sheets, spreadsheetId, targetRow);
-      }
+      await deleteSheetRows(sheets, spreadsheetId, targetRows);
 
       return {
         configured: true,
@@ -409,10 +498,15 @@ export async function cleanupGoogleSheetReportRow(input: {
           targetRows.length === 1
             ? `Sheet row ${targetRows[0]} deleted.`
             : `${targetRows.length} Sheet rows deleted: ${targetRows.join(", ")}.`,
+        details: {
+          sheetName: SHEET_NAME,
+          matchedByReportToken: matchedRows,
+          deletedRows: targetRows,
+        },
       };
     }
 
-    await ensureHeaderRow(sheets, spreadsheetId);
+    const updatedHeaders = await ensureHeaderRow(sheets, spreadsheetId);
     const updates = makeCleanupUpdates({
       mode: input.mode,
       cleanupMode: input.cleanupMode,
@@ -421,8 +515,8 @@ export async function cleanupGoogleSheetReportRow(input: {
     });
 
     for (const targetRow of targetRows) {
-      const existing = await readSingleSheetRow(sheets, spreadsheetId, targetRow);
-      await updateSingleSheetRow(sheets, spreadsheetId, targetRow, { ...existing, ...updates });
+      const existing = await readSingleSheetRow(sheets, spreadsheetId, updatedHeaders, targetRow);
+      await updateSingleSheetRow(sheets, spreadsheetId, updatedHeaders, targetRow, { ...existing, ...updates });
     }
 
     return {
@@ -437,6 +531,11 @@ export async function cleanupGoogleSheetReportRow(input: {
         input.mode === "clear"
           ? `${targetRows.length} Sheet row(s) report fields cleared.`
           : `${targetRows.length} Sheet row(s) marked cleaned.`,
+      details: {
+        sheetName: SHEET_NAME,
+        matchedByReportToken: matchedRows,
+        updatedRows: targetRows,
+      },
     };
   } catch (error) {
     return {
@@ -448,6 +547,10 @@ export async function cleanupGoogleSheetReportRow(input: {
       ok: false,
       message: "Google Sheet cleanup failed.",
       error: errorMessage(error),
+      details: {
+        sheetName: SHEET_NAME,
+        searchedUntilColumn: getSearchEndColumn(),
+      },
     };
   }
 }

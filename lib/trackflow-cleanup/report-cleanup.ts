@@ -3,7 +3,7 @@ import { del } from "@vercel/blob";
 import { adminDb } from "@/lib/firebase-admin";
 import { deletePdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import { deleteReportChatHistory } from "@/lib/supabase-admin";
-import { cleanupGoogleSheetReportRow, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
+import { cleanupGoogleSheetReportRow, isCleanupSheetConfigured, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
 import { deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
 
 type AnyRecord = Record<string, any>;
@@ -747,12 +747,18 @@ async function writeSheetCleanupStep(
       reportToken: manifest.reportToken,
     });
 
+    const target = Array.isArray(result.rowNumbers) && result.rowNumbers.length
+      ? result.rowNumbers.join(", ")
+      : result.rowNumber
+        ? String(result.rowNumber)
+        : undefined;
+
     if (result.skipped) {
       return {
         service: "google_sheet",
         action: sheetCleanupAction(sheetMode),
-        status: "skipped",
-        target: Array.isArray(result.rowNumbers) && result.rowNumbers.length ? result.rowNumbers.join(", ") : result.rowNumber ? String(result.rowNumber) : undefined,
+        status: sheetMode === "skip" ? "skipped" : "warning",
+        target,
         message: result.message,
         details: result as unknown as AnyRecord,
       };
@@ -762,7 +768,7 @@ async function writeSheetCleanupStep(
       service: "google_sheet",
       action: sheetCleanupAction(sheetMode),
       status: result.ok ? "ok" : "error",
-      target: Array.isArray(result.rowNumbers) && result.rowNumbers.length ? result.rowNumbers.join(", ") : result.rowNumber ? String(result.rowNumber) : undefined,
+      target,
       message: result.message,
       error: result.error,
       details: result as unknown as AnyRecord,
@@ -1120,7 +1126,7 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
           sheetMode === "delete"
             ? "Google Sheet row(s) would be found by report token first, then deleted. Row number is used only as a fallback."
             : "Google Sheet row(s) would be found by report token first, then updated. Row number is used only as a fallback.",
-          { sheetRowNumber: manifest.sheetRowNumber, reportToken: manifest.reportToken },
+          { sheetRowNumber: manifest.sheetRowNumber, reportToken: manifest.reportToken, sheetConfigured: isCleanupSheetConfigured() },
         ),
     leadMode === "none"
       ? { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup would be skipped." }
