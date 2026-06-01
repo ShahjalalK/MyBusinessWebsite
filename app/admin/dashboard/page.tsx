@@ -2553,6 +2553,39 @@ export default function DashboardPage() {
     }
   };
 
+  const allowSuppressionFootprint = async (email: string) => {
+    const emailText = String(email || "").trim();
+    if (!emailText) return;
+    const typed = window.prompt(`Type ALLOW SUPPRESSION to allow the protected footprint for ${emailText}. Unsubscribe, spam, and bounce records will stay protected.`);
+    if (String(typed || "").trim().toUpperCase() !== "ALLOW SUPPRESSION") return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Allowing protected footprint...", error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: "allow_suppression", emails: [emailText], confirm: "ALLOW SUPPRESSION" }),
+      });
+      const data = await response.json();
+      if ((!response.ok && response.status !== 207) || !data.success) {
+        throw new Error(data.error || data.message || "Allow protected footprint failed");
+      }
+      setFootprintMemory((prev: FootprintMemoryState) => ({
+        ...prev,
+        actionLoading: false,
+        status: data.message || "Protected footprint allowed again.",
+      }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({
+        ...prev,
+        actionLoading: false,
+        error: error?.message || "Allow protected footprint failed",
+        status: "",
+      }));
+    }
+  };
+
   const forgetFootprintMemory = async (email: string) => {
     const emailText = String(email || "").trim();
     if (!emailText) return;
@@ -3780,6 +3813,7 @@ export default function DashboardPage() {
               setFootprintMemory={setFootprintMemory}
               loadFootprintMemories={loadFootprintMemories}
               allowFootprintMemory={allowFootprintMemory}
+              allowSuppressionFootprint={allowSuppressionFootprint}
               forgetFootprintMemory={forgetFootprintMemory}
               forgetOldFootprintMemories={forgetOldFootprintMemories}
               deleteOldSuppressionFootprints={deleteOldSuppressionFootprints}

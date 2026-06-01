@@ -44,6 +44,7 @@ type CleanupPanelProps = {
   setFootprintMemory: (value: FootprintMemoryState | ((prev: FootprintMemoryState) => FootprintMemoryState)) => void;
   loadFootprintMemories: (force?: boolean) => Promise<void>;
   allowFootprintMemory: (email: string) => Promise<void>;
+  allowSuppressionFootprint: (email: string) => Promise<void>;
   forgetFootprintMemory: (email: string) => Promise<void>;
   forgetOldFootprintMemories: () => Promise<void>;
   deleteOldSuppressionFootprints: () => Promise<void>;
@@ -315,6 +316,7 @@ export default function CleanupPanel({
   setFootprintMemory,
   loadFootprintMemories,
   allowFootprintMemory,
+  allowSuppressionFootprint,
   forgetFootprintMemory,
   forgetOldFootprintMemories,
   deleteOldSuppressionFootprints,
@@ -910,6 +912,7 @@ export default function CleanupPanel({
                 </>
               ) : (
                 <>
+                  <option value={30}>Older than 30 days</option>
                   <option value={45}>Older than 45 days</option>
                   <option value={90}>Older than 90 days</option>
                   <option value={180}>Older than 180 days</option>
@@ -985,9 +988,21 @@ export default function CleanupPanel({
                     <td className="p-4 align-top min-w-[220px]">
                       <div className="flex flex-wrap gap-2">
                         {row.source === "suppression_list" || row.source === "combined" ? (
-                          <span className="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-[10px] font-black uppercase">
-                            Protected
-                          </span>
+                          row.status === "allowed_again" ? (
+                            <span className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">
+                              Allowed
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={footprintMemory.actionLoading}
+                              onClick={() => allowSuppressionFootprint(row.emailLower || row.email)}
+                              className="px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-[10px] font-black uppercase disabled:opacity-40"
+                              title="Allows non-hard suppression records such as replied/manual blocks. Unsubscribe, spam, and bounce records stay protected."
+                            >
+                              Allow protected
+                            </button>
+                          )
                         ) : (
                           <button
                             type="button"

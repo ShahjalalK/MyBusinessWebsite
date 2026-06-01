@@ -8627,13 +8627,15 @@ function serializeTimestampIso(value: any): string {
 }
 
 function getFootprintDocActivityMs(data: Record<string, any> = {}): number {
+  // Use real touch/contact timestamps only.
+  // Do not use cooldownUntil or memoryExpiresAt here because those are future
+  // safety-window dates; including them makes old-footprint filters never match.
   return Math.max(
     toMillis(data.updatedAt),
     toMillis(data.createdAt),
     toMillis(data.lastContactedAt),
-    toMillis(data.allowAgainAt),
-    toMillis(data.memoryExpiresAt),
-    toMillis(data.cooldownUntil)
+    toMillis(data.allowedAgainAt),
+    toMillis(data.allowAgainAt)
   );
 }
 
@@ -8672,11 +8674,13 @@ function serializeFootprintMemoryRow(
   const cooldownMs = toMillis(memory?.cooldownUntil);
   const memoryExpiresMs = toMillis(memory?.memoryExpiresAt);
   const nowMs = Date.now();
-  const suppressionActive = Boolean(suppression && !suppression.allowedAgainAt);
-  const contactMemoryActive = Boolean(memory && cooldownMs > nowMs && (!memoryExpiresMs || memoryExpiresMs > nowMs) && !memory.allowedAgainAt);
+  const suppressionAllowedAgain = Boolean(suppression?.allowedAgain || suppression?.allowedAgainAt || suppression?.allowAgainAt);
+  const memoryAllowedAgain = Boolean(memory?.allowedAgain || memory?.allowedAgainAt || memory?.allowAgainAt);
+  const suppressionActive = Boolean(suppression && !suppressionAllowedAgain);
+  const contactMemoryActive = Boolean(memory && cooldownMs > nowMs && (!memoryExpiresMs || memoryExpiresMs > nowMs) && !memoryAllowedAgain);
   const activeLeadCount = leads.filter(isActiveFootprintLead).length;
   const leadBlocked = activeLeadCount > 0;
-  const allowedAgain = Boolean(memory?.allowedAgainAt) || (!suppressionActive && !contactMemoryActive && !leadBlocked);
+  const allowedAgain = !leadBlocked && (memoryAllowedAgain || suppressionAllowedAgain || (!suppressionActive && !contactMemoryActive));
   const status = suppressionActive ? "requires_permission" : allowedAgain ? "allowed_again" : "blocked";
   const lastActivityMs = Math.max(
     getFootprintDocActivityMs(memory || {}),
@@ -8850,7 +8854,9 @@ async function allowFootprintDocsForEmails(emails: string[], actor: string) {
       {
         emailLower,
         allowedAgain: true,
+        allowedAgainAt: admin.firestore.FieldValue.serverTimestamp(),
         allowAgainAt: admin.firestore.FieldValue.serverTimestamp(),
+        allowedAgainBy: actor,
         allowAgainBy: actor,
         cooldownUntil: now,
         memoryExpiresAt: now,
@@ -8910,6 +8916,75 @@ async function deleteSuppressionDocsOlderThan(days: number) {
   return { deleted, days: safeDays };
 }
 
+const SUPPRESSION_ALLOWABLE_REASONS = new Set([
+  "replied",
+  "reply",
+  "manual",
+  "manual_block",
+  "previous_contact",
+  "not_interested",
+]);
+
+const HARD_SUPPRESSION_REASONS = new Set([
+  "unsubscribed",
+  "unsubscribe",
+  "spam",
+  "hard_bounce",
+  "bounced",
+  "bounce",
+  "blocked_suppressed",
+]);
+
+function normalizeSuppressionReason(value: any): string {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+async function allowSuppressionDocsForEmails(emails: string[], actor: string) {
+  const results: AnyRecord[] = [];
+
+  for (const emailLower of emails) {
+    const docId = emailDocId(emailLower);
+    const ref = adminDb.collection("suppression_list").doc(docId);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      results.push({ email: emailLower, ok: true, skipped: true, reason: "suppression_not_found" });
+      continue;
+    }
+
+    const data = snap.data() || {};
+    const reason = normalizeSuppressionReason(data.reason || data.status || data.lastOutcome || "");
+
+    if (HARD_SUPPRESSION_REASONS.has(reason) && !SUPPRESSION_ALLOWABLE_REASONS.has(reason)) {
+      results.push({
+        email: emailLower,
+        ok: false,
+        skipped: true,
+        reason: `protected_hard_suppression:${reason || "unknown"}`,
+      });
+      continue;
+    }
+
+    await ref.set(
+      {
+        emailLower,
+        allowedAgain: true,
+        allowedAgainAt: admin.firestore.FieldValue.serverTimestamp(),
+        allowAgainAt: admin.firestore.FieldValue.serverTimestamp(),
+        allowedAgainBy: actor,
+        allowAgainBy: actor,
+        previousReason: data.reason || "",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    results.push({ email: emailLower, ok: true, skipped: false, reason: reason || "suppression_allowed" });
+  }
+
+  return results;
+}
+
 async function handleFootprintMemoryAction(req: Request) {
   const adminUser: any = await requireAdmin(req);
   const body = await readJson(req);
@@ -8922,6 +8997,30 @@ async function handleFootprintMemoryAction(req: Request) {
     if (!emails.length) throw new ApiError("At least one valid email is required", 400);
     const count = await allowFootprintDocsForEmails(emails, actor);
     return json({ success: true, action, count, message: `Allowed ${count} email(s) again.` });
+  }
+
+  if (action === "allow_suppression") {
+    if (String(body.confirm || "").trim().toUpperCase() !== "ALLOW SUPPRESSION") {
+      throw new ApiError("Type ALLOW SUPPRESSION to allow this protected footprint again", 400);
+    }
+    const emails = normalizeFootprintEmails(body);
+    if (!emails.length) throw new ApiError("At least one valid email is required", 400);
+
+    await allowFootprintDocsForEmails(emails, actor);
+    const results = await allowSuppressionDocsForEmails(emails, actor);
+    const allowedCount = results.filter((item) => item.ok && !item.skipped).length;
+    const blockedCount = results.filter((item) => !item.ok).length;
+
+    return json({
+      success: true,
+      action,
+      count: allowedCount,
+      blockedCount,
+      results,
+      message: blockedCount
+        ? `${allowedCount} protected footprint(s) allowed. ${blockedCount} hard suppression record(s) stayed protected.`
+        : `Allowed ${allowedCount} protected footprint(s) again.`,
+    }, blockedCount ? 207 : 200);
   }
 
   if (action === "forget") {

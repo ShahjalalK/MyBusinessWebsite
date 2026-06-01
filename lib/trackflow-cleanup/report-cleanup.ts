@@ -851,6 +851,27 @@ async function writeSheetCleanupStep(
   }
 }
 
+function contactMemoryDocId(emailLower: string): string {
+  return encodeURIComponent(emailLower).replace(/\./g, "%2E");
+}
+
+async function deleteContactMemoryForLead(lead: AnyRecord, manifest: CleanupManifest): Promise<void> {
+  const emails = uniqueStrings(
+    [
+      lead.emailLower,
+      lead.email_lower,
+      lead.email,
+      manifest.emailLower,
+    ].map(cleanEmail),
+    5,
+  );
+
+  for (const emailLower of emails) {
+    if (!emailLower) continue;
+    await adminDb.collection("contact_memory").doc(contactMemoryDocId(emailLower)).delete().catch(() => undefined);
+  }
+}
+
 async function writeContactMemoryForLead(lead: AnyRecord, manifest: CleanupManifest, actor: string, reason: string): Promise<void> {
   const emailLower = cleanEmail(lead.emailLower || lead.email_lower || lead.email || manifest.emailLower);
   if (!emailLower) return;
@@ -868,7 +889,7 @@ async function writeContactMemoryForLead(lead: AnyRecord, manifest: CleanupManif
   const cooldownUntil = admin.firestore.Timestamp.fromMillis(Date.now() + 45 * 86_400_000);
   const memoryExpiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 45 * 86_400_000);
 
-  await adminDb.collection("contact_memory").doc(encodeURIComponent(emailLower).replace(/\./g, "%2E")).set(
+  await adminDb.collection("contact_memory").doc(contactMemoryDocId(emailLower)).set(
     {
       emailLower,
       lastOutcome: reason,
@@ -930,7 +951,9 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
 
       const leadData = { ...asRecord(snap.data()), id: leadId };
 
-      if (shouldSaveContactMemory(leadMode, manifest)) {
+      if (leadMode === "delete_no_memory") {
+        await deleteContactMemoryForLead(leadData, manifest);
+      } else if (shouldSaveContactMemory(leadMode, manifest)) {
         await writeContactMemoryForLead(leadData, manifest, actor, reason);
       }
 

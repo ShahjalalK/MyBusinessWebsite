@@ -30,6 +30,7 @@ export async function getActiveContactMemoryWarning(emailLower: string) {
   const memoryExpiresMs = toMillis(memory.memoryExpiresAt);
   const nowMs = Date.now();
 
+  if (memory.allowedAgain === true || toMillis(memory.allowedAgainAt) || toMillis(memory.allowAgainAt)) return null;
   if (memoryExpiresMs && memoryExpiresMs <= nowMs) return null;
   if (!cooldownMs || cooldownMs <= nowMs) return null;
 
