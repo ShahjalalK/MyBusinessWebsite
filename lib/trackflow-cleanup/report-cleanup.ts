@@ -752,7 +752,7 @@ async function writeSheetCleanupStep(
         service: "google_sheet",
         action: sheetCleanupAction(sheetMode),
         status: "skipped",
-        target: result.rowNumber ? String(result.rowNumber) : undefined,
+        target: Array.isArray(result.rowNumbers) && result.rowNumbers.length ? result.rowNumbers.join(", ") : result.rowNumber ? String(result.rowNumber) : undefined,
         message: result.message,
         details: result as unknown as AnyRecord,
       };
@@ -762,7 +762,7 @@ async function writeSheetCleanupStep(
       service: "google_sheet",
       action: sheetCleanupAction(sheetMode),
       status: result.ok ? "ok" : "error",
-      target: result.rowNumber ? String(result.rowNumber) : undefined,
+      target: Array.isArray(result.rowNumbers) && result.rowNumbers.length ? result.rowNumbers.join(", ") : result.rowNumber ? String(result.rowNumber) : undefined,
       message: result.message,
       error: result.error,
       details: result as unknown as AnyRecord,
@@ -1116,8 +1116,11 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
       : plannedStep(
           "google_sheet",
           sheetCleanupAction(sheetMode),
-          String(manifest.sheetRowNumber || ""),
-          sheetMode === "delete" ? "Sheet row would be deleted if row number is available." : "Sheet row would be updated if row number is available.",
+          String(manifest.sheetRowNumber || manifest.reportToken || ""),
+          sheetMode === "delete"
+            ? "Google Sheet row(s) would be found by report token first, then deleted. Row number is used only as a fallback."
+            : "Google Sheet row(s) would be found by report token first, then updated. Row number is used only as a fallback.",
+          { sheetRowNumber: manifest.sheetRowNumber, reportToken: manifest.reportToken },
         ),
     leadMode === "none"
       ? { service: "firestore", action: "lead_cleanup", status: "skipped", message: "Contact record cleanup would be skipped." }

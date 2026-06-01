@@ -2329,6 +2329,7 @@ export default function DashboardPage() {
 
       await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
       await loadSecureReports(true);
+      await loadSheetLeads(true);
       await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
     } catch (error: any) {
       console.error("Report cleanup run error:", error);

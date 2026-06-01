@@ -53,7 +53,7 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
   {
     id: "hard",
     label: "Delete All Data",
-    note: "Deletes the secure report, PDF, preview image, chat history, Sheet report data, and all email-send/event data linked to this report token. Choose whether to keep a tiny footprint memory.",
+    note: "Deletes the secure report, PDF, preview image, chat history, Google Sheet row, and all email-send/event data linked to this report token. Choose whether to keep only a tiny footprint memory.",
   },
   {
     id: "assets_only",
@@ -63,8 +63,8 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
 ];
 
 const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string; note: string }> = [
-  { id: "delete", label: "Delete All Data — Keep Footprint", note: "Best for contacted/no-reply leads. Deletes full report-linked data but keeps tiny 45-day safety memory to avoid duplicate outreach." },
-  { id: "delete_no_memory", label: "Delete All Data — No Footprint", note: "Only for test or never-contacted leads. Backend blocks this when outreach history exists." },
+  { id: "delete", label: "Delete All Data — Keep Footprint", note: "Best for contacted/no-reply leads. Deletes full report-linked data, including the Google Sheet row, but keeps tiny 45-day safety memory to avoid duplicate outreach." },
+  { id: "delete_no_memory", label: "Delete All Data — No Footprint", note: "Only for test or never-contacted leads. Deletes full report-linked data, including the Google Sheet row. Backend blocks this when outreach history exists." },
 ];
 
 const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = [
@@ -690,6 +690,7 @@ export default function CleanupPanel({
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-[12px] text-gray-600 font-semibold leading-relaxed">
           <span className="font-black text-gray-900">Footprint rule:</span>{" "}
           Choose <span className="font-black">Keep Footprint</span> for contacted leads so they are not emailed again later.
+          The Google Sheet row is still cleaned/deleted during Delete All Data; only the tiny email safety memory remains.
           Choose <span className="font-black">No Footprint</span> only for test or never-contacted leads; the backend blocks it if outreach history exists.
         </div>
 

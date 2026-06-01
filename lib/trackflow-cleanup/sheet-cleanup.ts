@@ -8,9 +8,12 @@ export type SheetCleanupResult = {
   configured: boolean;
   skipped: boolean;
   rowNumber: number | null;
+  rowNumbers?: number[];
   mode: SheetCleanupMode;
   ok: boolean;
   message: string;
+  deletedCount?: number;
+  updatedCount?: number;
   error?: string;
 };
 
@@ -208,6 +211,84 @@ function rowObjectToArray(row: AnyRecord): string[] {
   return HEADERS.map((header) => clean(row[header] || ""));
 }
 
+
+function headerIndex(header: HeaderName): number {
+  return HEADERS.indexOf(header);
+}
+
+function cellAt(row: any[] = [], header: HeaderName): string {
+  const index = headerIndex(header);
+  if (index < 0) return "";
+  return clean(row[index] || "");
+}
+
+function normalizeTokenForMatch(value: unknown): string {
+  return clean(value)
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .toLowerCase()
+    .slice(0, 128);
+}
+
+function sheetRowMatchesReportToken(row: any[] = [], reportToken: string): boolean {
+  const token = normalizeTokenForMatch(reportToken);
+  if (!token) return false;
+
+  const exactToken = normalizeTokenForMatch(cellAt(row, "Report Token"));
+  if (exactToken && exactToken === token) return true;
+
+  const searchableCells = [
+    cellAt(row, "Report URL"),
+    cellAt(row, "PDF View URL"),
+    cellAt(row, "PDF Download URL"),
+    cellAt(row, "Notes"),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return Boolean(searchableCells && searchableCells.includes(token));
+}
+
+async function findSheetRowsByReportToken(sheets: any, spreadsheetId: string, reportToken: string): Promise<number[]> {
+  const token = normalizeTokenForMatch(reportToken);
+  if (!token) return [];
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${SHEET_NAME}!A2:${lastColumnLetter()}`,
+  });
+
+  const rows = response.data.values || [];
+  const matches: number[] = [];
+
+  rows.forEach((row: any[], index: number) => {
+    if (sheetRowMatchesReportToken(row, token)) {
+      matches.push(index + 2);
+    }
+  });
+
+  return matches;
+}
+
+function normalizeTargetRows(input: { rowNumber: number | null; matchedRows: number[] }): number[] {
+  const seen = new Set<number>();
+  const output: number[] = [];
+
+  const add = (value: number | null | undefined) => {
+    const rowNumber = Number(value || 0) || 0;
+    if (!Number.isFinite(rowNumber) || rowNumber <= 1 || seen.has(rowNumber)) return;
+    seen.add(rowNumber);
+    output.push(rowNumber);
+  };
+
+  input.matchedRows.forEach(add);
+
+  // Fallback only when no report-token match was found. This avoids deleting the wrong
+  // row if Google Sheet rows have shifted after earlier deletions.
+  if (!output.length) add(input.rowNumber);
+
+  return output.sort((a, b) => a - b);
+}
+
 async function readSingleSheetRow(sheets: any, spreadsheetId: string, rowNumber: number): Promise<AnyRecord> {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
@@ -265,26 +346,17 @@ export async function cleanupGoogleSheetReportRow(input: {
   reportToken: string;
 }): Promise<SheetCleanupResult> {
   const rowNumber = Number(input.rowNumber || 0) || null;
+  const reportToken = normalizeTokenForMatch(input.reportToken);
 
   if (input.mode === "skip") {
     return {
       configured: isCleanupSheetConfigured(),
       skipped: true,
       rowNumber,
+      rowNumbers: rowNumber ? [rowNumber] : [],
       mode: input.mode,
       ok: true,
       message: "Sheet cleanup skipped by request.",
-    };
-  }
-
-  if (!rowNumber || rowNumber <= 1) {
-    return {
-      configured: isCleanupSheetConfigured(),
-      skipped: true,
-      rowNumber,
-      mode: input.mode,
-      ok: true,
-      message: "No valid Google Sheet row number was found for this report.",
     };
   }
 
@@ -293,6 +365,7 @@ export async function cleanupGoogleSheetReportRow(input: {
       configured: false,
       skipped: true,
       rowNumber,
+      rowNumbers: rowNumber ? [rowNumber] : [],
       mode: input.mode,
       ok: true,
       message: "Google Sheet cleanup skipped because Sheet service account ENV is not configured on the deployed server.",
@@ -301,21 +374,45 @@ export async function cleanupGoogleSheetReportRow(input: {
 
   try {
     const { sheets, spreadsheetId } = await getSheetsClient();
+    const matchedRows = await findSheetRowsByReportToken(sheets, spreadsheetId, reportToken);
+    const targetRows = normalizeTargetRows({ rowNumber, matchedRows });
+
+    if (!targetRows.length) {
+      return {
+        configured: true,
+        skipped: true,
+        rowNumber,
+        rowNumbers: [],
+        mode: input.mode,
+        ok: true,
+        message: reportToken
+          ? "No matching Google Sheet row was found for this report token."
+          : "No valid Google Sheet row number or report token was found for this report.",
+      };
+    }
 
     if (input.mode === "delete") {
-      await deleteSingleSheetRow(sheets, spreadsheetId, rowNumber);
+      const rowsToDelete = [...targetRows].sort((a, b) => b - a);
+      for (const targetRow of rowsToDelete) {
+        await deleteSingleSheetRow(sheets, spreadsheetId, targetRow);
+      }
+
       return {
         configured: true,
         skipped: false,
-        rowNumber,
+        rowNumber: targetRows[0] || rowNumber,
+        rowNumbers: targetRows,
         mode: input.mode,
         ok: true,
-        message: `Sheet row ${rowNumber} deleted.`,
+        deletedCount: targetRows.length,
+        message:
+          targetRows.length === 1
+            ? `Sheet row ${targetRows[0]} deleted.`
+            : `${targetRows.length} Sheet rows deleted: ${targetRows.join(", ")}.`,
       };
     }
 
     await ensureHeaderRow(sheets, spreadsheetId);
-    const existing = await readSingleSheetRow(sheets, spreadsheetId, rowNumber);
     const updates = makeCleanupUpdates({
       mode: input.mode,
       cleanupMode: input.cleanupMode,
@@ -323,21 +420,30 @@ export async function cleanupGoogleSheetReportRow(input: {
       reportToken: input.reportToken,
     });
 
-    await updateSingleSheetRow(sheets, spreadsheetId, rowNumber, { ...existing, ...updates });
+    for (const targetRow of targetRows) {
+      const existing = await readSingleSheetRow(sheets, spreadsheetId, targetRow);
+      await updateSingleSheetRow(sheets, spreadsheetId, targetRow, { ...existing, ...updates });
+    }
 
     return {
       configured: true,
       skipped: false,
-      rowNumber,
+      rowNumber: targetRows[0] || rowNumber,
+      rowNumbers: targetRows,
       mode: input.mode,
       ok: true,
-      message: input.mode === "clear" ? `Sheet row ${rowNumber} report fields cleared.` : `Sheet row ${rowNumber} marked cleaned.`,
+      updatedCount: targetRows.length,
+      message:
+        input.mode === "clear"
+          ? `${targetRows.length} Sheet row(s) report fields cleared.`
+          : `${targetRows.length} Sheet row(s) marked cleaned.`,
     };
   } catch (error) {
     return {
       configured: true,
       skipped: false,
       rowNumber,
+      rowNumbers: rowNumber ? [rowNumber] : [],
       mode: input.mode,
       ok: false,
       message: "Google Sheet cleanup failed.",
