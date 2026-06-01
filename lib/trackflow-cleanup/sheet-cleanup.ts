@@ -65,6 +65,13 @@ const HEADERS = [
   "Queue Lock ID",
   "Queue Locked At",
   "Queue Attempt ID",
+  "Source Type",
+  "Outreach Channel",
+  "Lead Source",
+  "Audit Source",
+  "Source Context",
+  "Email Outreach Allowed",
+  "LinkedIn Outreach Allowed",
 ] as const;
 
 type HeaderName = (typeof HEADERS)[number];

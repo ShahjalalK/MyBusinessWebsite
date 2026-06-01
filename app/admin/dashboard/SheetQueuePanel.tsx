@@ -18,10 +18,13 @@ import type { SenderAccount } from "../../../lib/senders";
 import type { SheetLead } from "./types";
 import { normalizeOptionalUrl, normalizeSheetEmailCopy, normalizeSheetService, stripHtml } from "./utils";
 import {
+  canOpenSheetEmailComposer,
   getSheetChannelStatus,
   getSheetOutreachChannel,
   getSheetReadiness,
   getSheetReportStatus,
+  getSheetSourceKind,
+  getSheetSourceLabel,
   isSheetEmailOutreachCandidate,
   isSheetLinkedInOutreachCandidate,
   isSheetReportReady,
@@ -29,7 +32,7 @@ import {
   type SheetOutreachChannel,
 } from "./sheet-readiness";
 
-type SheetSourceFilter = "all" | "email" | "linkedin" | "needs_review" | "report_ready" | "sent";
+type SheetSourceFilter = "all" | "email" | "linkedin" | "python_search" | "linkedin_audit" | "needs_review" | "report_ready" | "sent";
 
 type SheetQueuePanelProps = {
   sheetLeads: SheetLead[];
@@ -104,6 +107,29 @@ function ChannelBadge({ channel, note }: { channel: SheetOutreachChannel; note?:
   );
 }
 
+function SourceBadge({ label }: { label: string }) {
+  const lower = label.toLowerCase();
+  const className = lower.includes("linkedin")
+    ? "bg-indigo-50 text-indigo-700 border-indigo-100"
+    : lower.includes("python")
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+      : lower.includes("manual")
+        ? "bg-amber-50 text-amber-700 border-amber-100"
+        : "bg-slate-50 text-slate-600 border-slate-100";
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[9px] font-black uppercase ${className}`} title={label}>
+      {label}
+    </span>
+  );
+}
+
+function sheetSendStatusActionLabel(lead: SheetLead) {
+  const status = sheetValue(lead, "Send Status").toLowerCase();
+  if (["sent", "scheduled", "queued"].includes(status)) return "Add Recipient";
+  return "Open in Send Email";
+}
+
 function DetailLine({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
@@ -142,9 +168,11 @@ export default function SheetQueuePanel({
   const stats = useMemo(() => {
     const email = sheetLeads.filter((lead) => getSheetOutreachChannel(lead) === "email").length;
     const linkedin = sheetLeads.filter((lead) => getSheetOutreachChannel(lead) === "linkedin").length;
+    const pythonSearch = sheetLeads.filter((lead) => getSheetSourceKind(lead) === "python_search").length;
+    const linkedinAudit = sheetLeads.filter((lead) => getSheetSourceKind(lead) === "linkedin_audit").length;
     const reportReady = sheetLeads.filter(isSheetReportReady).length;
     const needsReview = sheetLeads.filter((lead) => !getSheetReadiness(lead).ready).length;
-    return { email, linkedin, reportReady, needsReview };
+    return { email, linkedin, pythonSearch, linkedinAudit, reportReady, needsReview };
   }, [sheetLeads]);
 
   const visibleRows = useMemo(() => {
@@ -152,11 +180,14 @@ export default function SheetQueuePanel({
 
     return sheetLeads.filter((lead) => {
       const channel = getSheetOutreachChannel(lead);
+      const sourceKind = getSheetSourceKind(lead);
       const readiness = getSheetReadiness(lead);
       const sendStatus = sheetValue(lead, "Send Status").toLowerCase();
 
       if (sourceFilter === "email" && channel !== "email") return false;
       if (sourceFilter === "linkedin" && channel !== "linkedin") return false;
+      if (sourceFilter === "python_search" && sourceKind !== "python_search") return false;
+      if (sourceFilter === "linkedin_audit" && sourceKind !== "linkedin_audit") return false;
       if (sourceFilter === "needs_review" && readiness.ready) return false;
       if (sourceFilter === "report_ready" && !isSheetReportReady(lead)) return false;
       if (sourceFilter === "sent" && !["sent", "scheduled", "queued"].includes(sendStatus)) return false;
@@ -171,6 +202,11 @@ export default function SheetQueuePanel({
         sheetValue(lead, "Lead Label"),
         sheetValue(lead, "Main Issue"),
         sheetValue(lead, "Proof Points"),
+        sheetValue(lead, "Source Type"),
+        sheetValue(lead, "Outreach Channel"),
+        sheetValue(lead, "Lead Source"),
+        sheetValue(lead, "Audit Source"),
+        sheetValue(lead, "Source Context"),
         String(lead.rowNumber || ""),
       ].join(" ").toLowerCase();
       return haystack.includes(search);
@@ -199,7 +235,7 @@ export default function SheetQueuePanel({
         leadLabel: sheetValue(selectedLead, "Lead Label") || sheetValue(selectedLead, "Lead Status"),
       })
     : null;
-  const canOpenEmailComposer = selectedLead ? isSheetEmailOutreachCandidate(selectedLead) : false;
+  const canOpenEmailComposer = selectedLead ? canOpenSheetEmailComposer(selectedLead) : false;
   const canUseLinkedIn = selectedLead ? isSheetLinkedInOutreachCandidate(selectedLead) : false;
 
   const openInSendEmail = (lead: SheetLead) => {
@@ -222,8 +258,10 @@ export default function SheetQueuePanel({
 
   const filterButtons: { id: SheetSourceFilter; label: string; count?: number }[] = [
     { id: "all", label: "All", count: sheetLeads.length },
-    { id: "email", label: "Email", count: stats.email },
-    { id: "linkedin", label: "LinkedIn", count: stats.linkedin },
+    { id: "email", label: "Email Workflow", count: stats.email },
+    { id: "linkedin", label: "LinkedIn Workflow", count: stats.linkedin },
+    { id: "python_search", label: "Python Search", count: stats.pythonSearch },
+    { id: "linkedin_audit", label: "LinkedIn Audit", count: stats.linkedinAudit },
     { id: "needs_review", label: "Needs Review", count: stats.needsReview },
     { id: "report_ready", label: "Report Ready", count: stats.reportReady },
     { id: "sent", label: "Sent/Scheduled" },
@@ -367,7 +405,7 @@ export default function SheetQueuePanel({
                     const channelStatus = getSheetChannelStatus(lead);
                     const readiness = getSheetReadiness(lead);
                     const reportStatus = getSheetReportStatus(lead);
-                    const rowCanOpenEmail = isSheetEmailOutreachCandidate(lead);
+                    const rowCanOpenEmail = canOpenSheetEmailComposer(lead);
 
                     return (
                       <tr
@@ -379,6 +417,9 @@ export default function SheetQueuePanel({
                           <p className="font-black text-gray-900">{sheetValue(lead, "Business Name") || "Unnamed Lead"}</p>
                           <p className="text-xs text-gray-500 font-semibold mt-1">{sheetValue(lead, "Final Email") || "No email"}</p>
                           <p className="text-[10px] text-gray-400 font-black uppercase mt-1">Row {rowNumber}</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            <SourceBadge label={getSheetSourceLabel(lead)} />
+                          </div>
                         </td>
 
                         <td className="p-4 align-top min-w-[150px]">
@@ -415,7 +456,7 @@ export default function SheetQueuePanel({
                             disabled={!rowCanOpenEmail}
                             className="w-full rounded-xl bg-gray-900 px-3 py-2 text-[10px] font-black uppercase text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
                           >
-                            Open in Send Email
+                            {sheetSendStatusActionLabel(lead)}
                           </button>
                         </td>
                       </tr>
@@ -459,6 +500,7 @@ export default function SheetQueuePanel({
                 <DetailLine label="Email" value={sheetValue(selectedLead, "Final Email") || "No email"} />
                 <DetailLine label="Send status" value={sheetValue(selectedLead, "Send Status") || "Not Sent"} />
                 <DetailLine label="Approval" value={sheetValue(selectedLead, "Approval Status") || "Pending"} />
+                <DetailLine label="Source" value={getSheetSourceLabel(selectedLead)} />
                 <DetailLine label="Tracking" value={`Open ${sheetValue(selectedLead, "Open Count") || "0"} / Click ${sheetValue(selectedLead, "Click Count") || "0"}`} />
               </div>
 
@@ -469,7 +511,7 @@ export default function SheetQueuePanel({
                   disabled={!canOpenEmailComposer}
                   className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black uppercase text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
                 >
-                  <Send size={14} /> Open in Send Email
+                  <Send size={14} /> {selectedLead ? sheetSendStatusActionLabel(selectedLead) : "Open in Send Email"}
                 </button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

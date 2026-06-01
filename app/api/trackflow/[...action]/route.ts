@@ -4080,6 +4080,13 @@ const HEADERS = [
   'Queue Lock ID',
   'Queue Locked At',
   'Queue Attempt ID',
+  'Source Type',
+  'Outreach Channel',
+  'Lead Source',
+  'Audit Source',
+  'Source Context',
+  'Email Outreach Allowed',
+  'LinkedIn Outreach Allowed',
 ] as const;
 
 type HeaderName = (typeof HEADERS)[number];
@@ -4124,6 +4131,20 @@ const UPDATE_KEY_MAP: Record<string, HeaderName> = {
   finalEmail: 'Final Email',
   email: 'Final Email',
   emailSource: 'Email Source',
+  sourceType: 'Source Type',
+  source_type: 'Source Type',
+  outreachChannel: 'Outreach Channel',
+  outreach_channel: 'Outreach Channel',
+  leadSource: 'Lead Source',
+  lead_source: 'Lead Source',
+  auditSource: 'Audit Source',
+  audit_source: 'Audit Source',
+  sourceContext: 'Source Context',
+  source_context: 'Source Context',
+  emailOutreachAllowed: 'Email Outreach Allowed',
+  email_outreach_allowed: 'Email Outreach Allowed',
+  linkedinOutreachAllowed: 'LinkedIn Outreach Allowed',
+  linkedin_outreach_allowed: 'LinkedIn Outreach Allowed',
   socialPlatform: 'Social Platform',
   socialLink: 'Social Link',
   whatsapp: 'WhatsApp',
@@ -4755,6 +4776,138 @@ function getContactQuality(audit?: AnyRecord, lead?: AnyRecord): string {
   );
 }
 
+
+
+function textHasAny(value: string, patterns: string[]) {
+  const text = String(value || '').toLowerCase();
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
+function normalizeSourceTypeForSheet(value: unknown): 'search' | 'linkedin' | 'manual' | '' {
+  const text = clean(value).toLowerCase();
+  if (!text) return '';
+  if (textHasAny(text, ['linkedin', 'linked in'])) return 'linkedin';
+  if (textHasAny(text, ['python_search', 'python search', 'search_result', 'search result', 'website search', 'google search', 'source type: search', 'python'])) return 'search';
+  if (textHasAny(text, ['manual_audit', 'manual audit', 'source type: manual'])) return 'manual';
+  if (['search', 'linkedin', 'manual'].includes(text)) return text as 'search' | 'linkedin' | 'manual';
+  return '';
+}
+
+function sourceBooleanCell(value: unknown, fallback = ''): string {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  const text = clean(value);
+  if (!text) return fallback;
+  const lower = text.toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'allowed', 'allow'].includes(lower)) return 'Yes';
+  if (['0', 'false', 'no', 'n', 'blocked', 'disallow'].includes(lower)) return 'No';
+  return cleanCell(text);
+}
+
+function getSourceMetadata(audit?: AnyRecord, lead?: AnyRecord): Record<'Source Type' | 'Outreach Channel' | 'Lead Source' | 'Audit Source' | 'Source Context' | 'Email Outreach Allowed' | 'LinkedIn Outreach Allowed', string> {
+  const explicitSourceType = firstValidValue(
+    lead?.sourceType,
+    lead?.source_type,
+    audit?.sourceType,
+    audit?.source_type,
+    audit?.nextjs_payload?.sourceType,
+    audit?.nextjs_payload?.source_type,
+  );
+  const explicitLeadSource = firstValidValue(
+    lead?.leadSource,
+    lead?.lead_source,
+    audit?.leadSource,
+    audit?.lead_source,
+    audit?.nextjs_payload?.leadSource,
+    audit?.nextjs_payload?.lead_source,
+  );
+  const explicitAuditSource = firstValidValue(
+    lead?.auditSource,
+    lead?.audit_source,
+    audit?.auditSource,
+    audit?.audit_source,
+    audit?.nextjs_payload?.auditSource,
+    audit?.nextjs_payload?.audit_source,
+    audit?.audit_source,
+    lead?.source,
+  );
+  const explicitSourceContext = firstValidValue(
+    lead?.sourceContext,
+    lead?.source_context,
+    audit?.sourceContext,
+    audit?.source_context,
+    audit?.nextjs_payload?.sourceContext,
+    audit?.nextjs_payload?.source_context,
+  );
+  const explicitChannel = firstValidValue(
+    lead?.outreachChannel,
+    lead?.outreach_channel,
+    audit?.outreachChannel,
+    audit?.outreach_channel,
+    audit?.nextjs_payload?.outreachChannel,
+    audit?.nextjs_payload?.outreach_channel,
+  );
+
+  const social = getBestSocial(audit, lead);
+  const finalEmail = getFinalEmail(audit, lead).email;
+  const hasReportMetadata = Boolean(getReportToken(audit, lead) || getReportUrl(audit, lead) || getPdfFileId(audit, lead));
+  const sourceText = lowerSheetText(
+    explicitSourceType,
+    explicitLeadSource,
+    explicitAuditSource,
+    explicitSourceContext,
+    explicitChannel,
+    social.platform,
+    social.url,
+    lead?.linkedin,
+    lead?.linkedinUrl,
+    lead?.linkedin_url,
+    audit?.linkedin_profile_url,
+    audit?.linkedinProfileUrl,
+    audit?.source_context,
+    audit?.audit_source,
+  );
+
+  let sourceType = normalizeSourceTypeForSheet(explicitSourceType) || normalizeSourceTypeForSheet(explicitLeadSource) || normalizeSourceTypeForSheet(explicitAuditSource) || normalizeSourceTypeForSheet(explicitSourceContext);
+  if (!sourceType && textHasAny(sourceText, ['linkedin', 'linked in'])) sourceType = 'linkedin';
+  if (!sourceType && textHasAny(sourceText, ['python', 'search_result', 'search result', 'website search', 'google search'])) sourceType = 'search';
+  if (!sourceType && hasReportMetadata) sourceType = 'search';
+  if (!sourceType && textHasAny(sourceText, ['manual_audit', 'manual audit'])) sourceType = 'manual';
+
+  const normalizedExplicitChannel = clean(explicitChannel).toLowerCase();
+  const outreachChannel =
+    normalizedExplicitChannel.includes('linkedin')
+      ? 'linkedin'
+      : normalizedExplicitChannel.includes('email')
+        ? 'email'
+        : sourceType === 'linkedin'
+          ? 'linkedin'
+          : sourceType === 'search'
+            ? 'email'
+            : sourceType === 'manual'
+              ? (isValidEmailAddress(finalEmail) ? 'email' : 'manual')
+              : isValidEmailAddress(finalEmail)
+                ? 'email'
+                : '';
+
+  const leadSource = cleanCell(explicitLeadSource || (sourceType === 'linkedin' ? 'linkedin_audit' : sourceType === 'search' ? 'python_search' : sourceType === 'manual' ? 'manual_audit' : ''));
+  const auditSource = cleanCell(explicitAuditSource || (sourceType === 'linkedin' ? 'linkedin_manual_audit' : sourceType === 'search' ? 'python_sheet_export' : sourceType === 'manual' ? 'manual_audit' : ''));
+  const sourceContext = cleanCell(explicitSourceContext || auditSource || leadSource || sourceType);
+
+  const explicitEmailAllowed = lead?.emailOutreachAllowed ?? lead?.email_outreach_allowed ?? audit?.emailOutreachAllowed ?? audit?.email_outreach_allowed;
+  const explicitLinkedInAllowed = lead?.linkedinOutreachAllowed ?? lead?.linkedin_outreach_allowed ?? audit?.linkedinOutreachAllowed ?? audit?.linkedin_outreach_allowed;
+
+  return {
+    'Source Type': cleanCell(sourceType),
+    'Outreach Channel': cleanCell(outreachChannel),
+    'Lead Source': leadSource,
+    'Audit Source': auditSource,
+    'Source Context': sourceContext,
+    'Email Outreach Allowed': sourceBooleanCell(explicitEmailAllowed, outreachChannel === 'email' && isValidEmailAddress(finalEmail) ? 'Yes' : 'No'),
+    'LinkedIn Outreach Allowed': sourceBooleanCell(explicitLinkedInAllowed, outreachChannel === 'linkedin' ? 'Yes' : 'No'),
+  };
+}
+
 function getExistingOrDefault(
   existing: AnyRecord | undefined,
   header: HeaderName,
@@ -4772,6 +4925,7 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
   const finalEmail = getFinalEmail(audit, lead);
   const social = getBestSocial(audit, lead);
   const decisionMaker = getDecisionMaker(audit, lead);
+  const sourceMeta = getSourceMetadata(audit, lead);
 
   const generated: Record<HeaderName, string> = {
     'Export Date': todayDhaka(),
@@ -4809,6 +4963,14 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
     'Decision Maker': decisionMaker.name,
     'Decision Maker Title': decisionMaker.title,
     'Contact Quality': getContactQuality(audit, lead),
+
+    'Source Type': getExistingOrDefault(existing, 'Source Type', sourceMeta['Source Type'], lead?.sourceType || lead?.source_type),
+    'Outreach Channel': getExistingOrDefault(existing, 'Outreach Channel', sourceMeta['Outreach Channel'], lead?.outreachChannel || lead?.outreach_channel),
+    'Lead Source': getExistingOrDefault(existing, 'Lead Source', sourceMeta['Lead Source'], lead?.leadSource || lead?.lead_source),
+    'Audit Source': getExistingOrDefault(existing, 'Audit Source', sourceMeta['Audit Source'], lead?.auditSource || lead?.audit_source),
+    'Source Context': getExistingOrDefault(existing, 'Source Context', sourceMeta['Source Context'], lead?.sourceContext || lead?.source_context),
+    'Email Outreach Allowed': getExistingOrDefault(existing, 'Email Outreach Allowed', sourceMeta['Email Outreach Allowed'], lead?.emailOutreachAllowed ?? lead?.email_outreach_allowed),
+    'LinkedIn Outreach Allowed': getExistingOrDefault(existing, 'LinkedIn Outreach Allowed', sourceMeta['LinkedIn Outreach Allowed'], lead?.linkedinOutreachAllowed ?? lead?.linkedin_outreach_allowed),
 
     'Tracking ID': getExistingOrDefault(existing, 'Tracking ID', '', lead?.trackingId),
     'Firestore Lead ID': getExistingOrDefault(existing, 'Firestore Lead ID', '', lead?.firestoreLeadId || lead?.leadId),
@@ -4863,6 +5025,13 @@ function normalizeSheetRowForDashboard(row: AnyRecord): AnyRecord {
   if (!clean(next['Reply Status'])) next['Reply Status'] = 'No Reply';
   if (!clean(next['Open Count'])) next['Open Count'] = '0';
   if (!clean(next['Click Count'])) next['Click Count'] = '0';
+  if (!clean(next['Source Type'])) {
+    const sourceText = [next['Email Source'], next['Lead Source'], next['Audit Source'], next['Source Context'], next['Social Platform'], next['Social Link'], next['Notes']]
+      .map((value) => String(value || '').toLowerCase())
+      .join(' ');
+    if (sourceText.includes('linkedin') || sourceText.includes('linked in')) next['Source Type'] = 'linkedin';
+    else if (sourceText.includes('search') || sourceText.includes('python')) next['Source Type'] = 'search';
+  }
   return next;
 }
 

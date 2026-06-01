@@ -769,6 +769,8 @@ export default function DashboardPage() {
         setScheduledTime(String(draft.scheduledTime || ""));
         setReportUrl(String(draft.reportUrl || ""));
         setReportButtonText(String(draft.reportButtonText || "View short audit note"));
+        setSelectedOutreachSheetRow(draft.selectedOutreachSheetRow ? Number(draft.selectedOutreachSheetRow) || null : null);
+        setKeepUnderSheetAudit(Boolean(draft.keepUnderSheetAudit));
         setIncludeSignature(draft.includeSignature !== false);
 
         if (draft.selectedService && SERVICE_NAMES.includes(draft.selectedService as ServiceId)) {
@@ -822,6 +824,8 @@ export default function DashboardPage() {
       includeSignature,
       reportUrl,
       reportButtonText,
+      selectedOutreachSheetRow,
+      keepUnderSheetAudit,
       savedAt: new Date().toISOString(),
     };
 
@@ -848,6 +852,8 @@ export default function DashboardPage() {
     includeSignature,
     reportUrl,
     reportButtonText,
+    selectedOutreachSheetRow,
+    keepUnderSheetAudit,
   ]);
 
   useEffect(() => {
@@ -1561,7 +1567,7 @@ export default function DashboardPage() {
           ? "manual_report_linked"
           : "manual";
 
-      if (sheetRowNumberForSend) {
+      if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
         await patchSheetLead(sheetRowNumberForSend, {
           "Email Subject": currentSubject,
           "Email Body": currentMessage,
@@ -1622,7 +1628,7 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (data.success) {
-        if (sheetRowNumberForSend) {
+        if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
               "Email Subject": currentSubject,
@@ -1693,7 +1699,7 @@ export default function DashboardPage() {
         void loadFollowupSummary(true);
         resetOutreachForm();
       } else if (data.warningOnly && data.code === "cooldown_active") {
-        if (sheetRowNumberForSend) {
+        if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
               "Send Status": "Needs Review",
@@ -1708,7 +1714,7 @@ export default function DashboardPage() {
         setAllowCooldownOverride(false);
         setSendStatus("Cooldown warning: review and enable override if you still want to send.");
       } else {
-        if (sheetRowNumberForSend) {
+        if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
               "Send Status": "Failed",
@@ -1723,7 +1729,7 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error(error);
-      if (selectedOutreachSheetLead?.rowNumber) {
+      if (keepUnderSheetAudit && selectedOutreachSheetLead?.rowNumber) {
         try {
           await patchSheetLead(Number(selectedOutreachSheetLead.rowNumber), {
             "Send Status": "Failed",

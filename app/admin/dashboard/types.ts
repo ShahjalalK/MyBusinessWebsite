@@ -147,6 +147,13 @@ export type SheetLead = {
   "Queue Lock ID"?: string;
   "Queue Locked At"?: string;
   "Queue Attempt ID"?: string;
+  "Source Type"?: string;
+  "Outreach Channel"?: string;
+  "Lead Source"?: string;
+  "Audit Source"?: string;
+  "Source Context"?: string;
+  "Email Outreach Allowed"?: string;
+  "LinkedIn Outreach Allowed"?: string;
   [key: string]: any;
 };
 

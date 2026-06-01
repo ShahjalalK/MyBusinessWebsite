@@ -2,6 +2,7 @@ import type { SheetLead } from "./types";
 import { isEmailPatternValid, normalizeOptionalUrl, stripHtml } from "./utils";
 
 export type SheetOutreachChannel = "email" | "linkedin" | "unknown";
+export type SheetSourceKind = "python_search" | "linkedin_audit" | "manual" | "unknown";
 
 export function sheetValue(lead: SheetLead | null | undefined, key: keyof SheetLead | string) {
   return String(lead?.[key as keyof SheetLead] || "").trim();
@@ -10,6 +11,70 @@ export function sheetValue(lead: SheetLead | null | undefined, key: keyof SheetL
 function lowerSheetText(...values: string[]) {
   return values.map((value) => String(value || "").toLowerCase()).join(" ");
 }
+
+function explicitSourceFieldText(lead: SheetLead) {
+  return lowerSheetText(
+    sheetValue(lead, "Source Type"),
+    sheetValue(lead, "sourceType"),
+    sheetValue(lead, "Lead Source"),
+    sheetValue(lead, "leadSource"),
+    sheetValue(lead, "Audit Source"),
+    sheetValue(lead, "auditSource"),
+    sheetValue(lead, "Source Context"),
+    sheetValue(lead, "sourceContext"),
+    sheetValue(lead, "Outreach Channel"),
+    sheetValue(lead, "outreachChannel"),
+  );
+}
+
+function fallbackSourceFieldText(lead: SheetLead) {
+  return lowerSheetText(
+    sheetValue(lead, "Social Platform"),
+    sheetValue(lead, "Social Link"),
+    sheetValue(lead, "Notes"),
+  );
+}
+
+function sourceKindFromText(text: string, allowManual: boolean): SheetSourceKind {
+  if (text.includes("linkedin") || text.includes("linked in")) return "linkedin_audit";
+  if (
+    text.includes("python_search") ||
+    text.includes("python search") ||
+    text.includes("search_result") ||
+    text.includes("search result") ||
+    text.includes("website search") ||
+    text.includes("google search") ||
+    text.includes("source type: search") ||
+    text.includes("lead_source: python_search") ||
+    text.includes("lead source: python_search") ||
+    text.includes(" search") ||
+    text.includes("search ") ||
+    text.includes("python")
+  ) {
+    return "python_search";
+  }
+  if (allowManual && (text.includes("manual_audit") || text.includes("manual audit") || text.includes("source type: manual"))) return "manual";
+  return "unknown";
+}
+
+export function getSheetSourceKind(lead: SheetLead): SheetSourceKind {
+  const explicit = explicitSourceFieldText(lead);
+  const explicitKind = sourceKindFromText(explicit, true);
+  if (explicitKind !== "unknown") return explicitKind;
+
+  // Fallback is deliberately conservative. "Email Source: Manual / verified by user"
+  // means the email address was manually verified, not that the audit source is manual.
+  return sourceKindFromText(fallbackSourceFieldText(lead), false);
+}
+
+export function getSheetSourceLabel(lead: SheetLead): string {
+  const kind = getSheetSourceKind(lead);
+  if (kind === "python_search") return "Python Search";
+  if (kind === "linkedin_audit") return "LinkedIn Audit";
+  if (kind === "manual") return "Manual Source";
+  return "Source Unknown";
+}
+
 
 function normalizedSendStatus(lead: SheetLead) {
   return sheetValue(lead, "Send Status").toLowerCase();
@@ -84,13 +149,20 @@ export function isSheetSendStatusReady(lead: SheetLead) {
 
 export function getSheetOutreachChannel(lead: SheetLead): SheetOutreachChannel {
   const explicitChannel = lowerSheetText(
-    sheetValue(lead, "outreachChannel"),
     sheetValue(lead, "Outreach Channel"),
+    sheetValue(lead, "outreachChannel"),
     sheetValue(lead, "Channel"),
+    sheetValue(lead, "Email Outreach Allowed"),
+    sheetValue(lead, "LinkedIn Outreach Allowed"),
   );
+
+  const emailAllowed = sheetValue(lead, "Email Outreach Allowed").toLowerCase();
+  const linkedinAllowed = sheetValue(lead, "LinkedIn Outreach Allowed").toLowerCase();
 
   if (explicitChannel.includes("linkedin")) return "linkedin";
   if (explicitChannel.includes("email")) return "email";
+  if (["yes", "true", "1", "allowed"].includes(emailAllowed) && !["yes", "true", "1", "allowed"].includes(linkedinAllowed)) return "email";
+  if (["yes", "true", "1", "allowed"].includes(linkedinAllowed) && !["yes", "true", "1", "allowed"].includes(emailAllowed)) return "linkedin";
 
   const emailSource = sheetValue(lead, "Email Source").toLowerCase();
   const searchText = lowerSheetText(
@@ -100,9 +172,13 @@ export function getSheetOutreachChannel(lead: SheetLead): SheetOutreachChannel {
     sheetValue(lead, "Lead Status"),
     sheetValue(lead, "Lead Label"),
     sheetValue(lead, "Notes"),
+    sheetValue(lead, "Source Type"),
     sheetValue(lead, "sourceType"),
+    sheetValue(lead, "Lead Source"),
     sheetValue(lead, "leadSource"),
+    sheetValue(lead, "Audit Source"),
     sheetValue(lead, "auditSource"),
+    sheetValue(lead, "Source Context"),
     sheetValue(lead, "sourceContext"),
   );
 
@@ -220,8 +296,21 @@ export function getSheetChannelStatus(lead: SheetLead) {
   };
 }
 
+export function canOpenSheetEmailComposer(lead: SheetLead) {
+  return getSheetOutreachChannel(lead) === "email" && isSheetEmailReady(lead) && isSheetReportReady(lead);
+}
+
 export function getSheetEmailQueueStatus(lead: SheetLead) {
   if (!isSheetEmailOutreachCandidate(lead)) {
+    const sendStatus = normalizedSendStatus(lead);
+    if (["sent", "scheduled", "queued"].includes(sendStatus) && canOpenSheetEmailComposer(lead)) {
+      return {
+        label: "Sent — add recipient",
+        note: "Primary send is already recorded. Open manually only when adding another recipient under this report.",
+        tone: "bg-blue-50 text-blue-700 border-blue-100",
+      };
+    }
+
     return {
       label: "Hidden",
       note: "This row is not part of the email review queue.",
