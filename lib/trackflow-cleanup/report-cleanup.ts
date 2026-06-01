@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 import { del } from "@vercel/blob";
 import { adminDb } from "@/lib/firebase-admin";
-import { deletePdfFromB2, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
+import { buildReportPdfB2Key, deletePdfFromB2WithVersions, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import { deleteReportChatHistory } from "@/lib/supabase-admin";
 import { cleanupGoogleSheetReportRow, isCleanupSheetConfigured, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
 import { deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
@@ -303,7 +303,7 @@ function collectBlobImageTargets(report: AnyRecord, lead: AnyRecord): string[] {
   );
 }
 
-function getReportB2Key(report: AnyRecord, lead: AnyRecord): string {
+function getReportB2Key(report: AnyRecord, lead: AnyRecord, reportToken = "", domainSlug = "website"): string {
   const provider = firstCleanString(
     report.storageProvider,
     report.storage_provider,
@@ -330,18 +330,49 @@ function getReportB2Key(report: AnyRecord, lead: AnyRecord): string {
 
   if (explicit) return explicit;
 
-  if (provider.includes("backblaze") || provider.includes("b2")) {
-    return safeB2Key(
-      report.blobPathname,
-      report.blob_pathname,
-      report.pdfFileId,
-      report.pdf_file_id,
-      lead.blobPathname,
-      lead.pdfFileId,
-    );
-  }
+  const providerLinkedKey = provider.includes("backblaze") || provider.includes("b2")
+    ? safeB2Key(
+        report.blobPathname,
+        report.blob_pathname,
+        report.pdfFileId,
+        report.pdf_file_id,
+        lead.blobPathname,
+        lead.pdfFileId,
+      )
+    : "";
 
-  return "";
+  if (providerLinkedKey) return providerLinkedKey;
+
+  const token = getReportTokenFromAny(
+    reportToken,
+    report.reportToken,
+    report.report_token,
+    report.token,
+    lead.reportToken,
+    lead.report_token,
+    lead.token,
+  );
+
+  if (!token) return "";
+
+  const slug = normalizeSlug(
+    domainSlug ||
+      report.domainSlug ||
+      report.domain_slug ||
+      report.normalizedDomain ||
+      report.domain ||
+      report.websiteUrl ||
+      report.website ||
+      lead.domainSlug ||
+      lead.domain_slug ||
+      lead.website,
+  );
+
+  try {
+    return sanitizeB2Key(buildReportPdfB2Key({ domainSlug: slug, token }));
+  } catch {
+    return "";
+  }
 }
 
 
@@ -534,7 +565,7 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     linkedLeadCount: linkedLeadIds.length,
     emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || report.emailLower || report.email_lower || report.email),
     sheetRowNumber,
-    b2PdfKey: getReportB2Key(report, lead),
+    b2PdfKey: getReportB2Key(report, lead, token, domainSlug),
     blobImageTargets: collectBlobImageTargets(report, lead),
     domainIndexIds,
     pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
@@ -603,13 +634,27 @@ async function deleteB2PdfStep(manifest: CleanupManifest): Promise<CleanupStep> 
   }
 
   try {
-    const deleted = await deletePdfFromB2(manifest.b2PdfKey);
+    const result = await deletePdfFromB2WithVersions(manifest.b2PdfKey);
+    const details = {
+      deletedCount: result.deletedCount,
+      versionCount: result.versionCount,
+      deleteMarkerCount: result.deleteMarkerCount,
+      attemptedVersionCleanup: result.attemptedVersionCleanup,
+      fallbackUsed: result.fallbackUsed,
+      errors: result.errors,
+    };
+
     return {
       service: "backblaze_b2",
       action: "delete_pdf",
       status: "ok",
       target: manifest.b2PdfKey,
-      message: deleted ? "B2 PDF deleted." : "B2 PDF was already missing.",
+      message: result.deleted
+        ? result.deletedCount > 1
+          ? `B2 PDF deleted, including ${result.deletedCount} stored version(s).`
+          : "B2 PDF deleted."
+        : "B2 PDF was already missing.",
+      details,
     };
   } catch (error: any) {
     if (isAlreadyMissingError(error)) {
@@ -631,6 +676,7 @@ async function deleteB2PdfStep(manifest: CleanupManifest): Promise<CleanupStep> 
     };
   }
 }
+
 
 async function deleteBlobImagesStep(manifest: CleanupManifest): Promise<CleanupStep> {
   if (!manifest.blobImageTargets.length) {

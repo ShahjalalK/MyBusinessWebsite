@@ -27,6 +27,19 @@ export type B2ReadResult = {
   buffer: Buffer;
 };
 
+
+export type B2DeleteResult = {
+  key: string;
+  bucket: string;
+  deleted: boolean;
+  deletedCount: number;
+  versionCount: number;
+  deleteMarkerCount: number;
+  attemptedVersionCleanup: boolean;
+  fallbackUsed: boolean;
+  errors: string[];
+};
+
 function clean(value: unknown, fallback = ""): string {
   const text = String(value ?? "").trim();
   return text || fallback;
@@ -161,18 +174,45 @@ function canonicalHeadersFrom(headers: Record<string, string>): string {
     .join("");
 }
 
+type B2QueryValue = string | number | boolean | null | undefined;
+
+function encodeAwsQueryValue(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function canonicalQueryStringFrom(queryParams: Record<string, B2QueryValue> = {}): string {
+  return Object.entries(queryParams)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([name, value]) => [encodeAwsQueryValue(name), encodeAwsQueryValue(String(value))] as const)
+    .sort(([nameA, valueA], [nameB, valueB]) => (nameA === nameB ? valueA.localeCompare(valueB) : nameA.localeCompare(nameB)))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&");
+}
+
+function envFlag(...names: string[]): boolean | null {
+  for (const name of names) {
+    const raw = clean(process.env[name]).toLowerCase();
+    if (!raw) continue;
+    if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+    if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  }
+  return null;
+}
+
 function buildSignedRequest(params: {
   method: "GET" | "PUT" | "DELETE" | "HEAD";
   key: string;
   contentType?: string;
   payloadHash?: string;
   extraHeaders?: Record<string, string>;
+  queryParams?: Record<string, B2QueryValue>;
 }): { url: string; headers: Record<string, string>; bucket: string } {
   const config = getB2Config();
   const key = normalizeObjectKey(params.key);
   const endpoint = new URL(config.endpoint);
   const canonicalUri = `/${encodeURIComponent(config.bucket)}/${encodeS3Key(key)}`;
-  const url = `${config.endpoint}${canonicalUri}`;
+  const canonicalQueryString = canonicalQueryStringFrom(params.queryParams || {});
+  const url = `${config.endpoint}${canonicalUri}${canonicalQueryString ? `?${canonicalQueryString}` : ""}`;
   const { amzDate, dateStamp } = amzDateParts();
   const payloadHash = params.payloadHash || "UNSIGNED-PAYLOAD";
 
@@ -189,7 +229,54 @@ function buildSignedRequest(params: {
   const canonicalRequest = [
     params.method,
     canonicalUri,
-    "",
+    canonicalQueryString,
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+
+  const algorithm = "AWS4-HMAC-SHA256";
+  const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`;
+  const stringToSign = [
+    algorithm,
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n");
+
+  const signature = createHmac("sha256", signingKey(config.applicationKey, dateStamp, config.region))
+    .update(stringToSign)
+    .digest("hex");
+
+  headers.authorization = `${algorithm} Credential=${config.keyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return { url, headers, bucket: config.bucket };
+}
+
+function buildSignedBucketRequest(params: {
+  method: "GET";
+  queryParams?: Record<string, B2QueryValue>;
+}): { url: string; headers: Record<string, string>; bucket: string } {
+  const config = getB2Config();
+  const endpoint = new URL(config.endpoint);
+  const canonicalUri = `/${encodeURIComponent(config.bucket)}`;
+  const canonicalQueryString = canonicalQueryStringFrom(params.queryParams || {});
+  const url = `${config.endpoint}${canonicalUri}${canonicalQueryString ? `?${canonicalQueryString}` : ""}`;
+  const { amzDate, dateStamp } = amzDateParts();
+  const payloadHash = "UNSIGNED-PAYLOAD";
+
+  const headers: Record<string, string> = {
+    host: endpoint.host,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate,
+  };
+
+  const signedHeaders = signedHeadersFrom(headers);
+  const canonicalHeaders = canonicalHeadersFrom(headers);
+  const canonicalRequest = [
+    params.method,
+    canonicalUri,
+    canonicalQueryString,
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -456,7 +543,183 @@ export async function readPdfFromB2(key: string): Promise<B2ReadResult> {
   };
 }
 
-export async function deleteB2Object(key: string): Promise<boolean> {
+type B2ObjectVersion = {
+  key: string;
+  versionId: string;
+  isDeleteMarker: boolean;
+};
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, "<")
+    .replace(/&amp;/g, "&");
+}
+
+function extractXmlText(block: string, tagName: string): string {
+  const match = block.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, "i"));
+  return match?.[1] ? decodeXmlEntities(match[1]).trim() : "";
+}
+
+function extractXmlBlocks(xml: string, tagName: string): string[] {
+  const blocks: string[] = [];
+  const pattern = new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, "gi");
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(xml))) {
+    blocks.push(match[1] || "");
+  }
+
+  return blocks;
+}
+
+function parseB2ObjectVersionsXml(xml: string, exactKey: string): {
+  versions: B2ObjectVersion[];
+  isTruncated: boolean;
+  nextKeyMarker: string;
+  nextVersionIdMarker: string;
+} {
+  const versions: B2ObjectVersion[] = [];
+
+  for (const block of extractXmlBlocks(xml, "Version")) {
+    const key = extractXmlText(block, "Key");
+    const versionId = extractXmlText(block, "VersionId");
+    if (key === exactKey && versionId) {
+      versions.push({ key, versionId, isDeleteMarker: false });
+    }
+  }
+
+  for (const block of extractXmlBlocks(xml, "DeleteMarker")) {
+    const key = extractXmlText(block, "Key");
+    const versionId = extractXmlText(block, "VersionId");
+    if (key === exactKey && versionId) {
+      versions.push({ key, versionId, isDeleteMarker: true });
+    }
+  }
+
+  return {
+    versions,
+    isTruncated: extractXmlText(xml, "IsTruncated").toLowerCase() === "true",
+    nextKeyMarker: extractXmlText(xml, "NextKeyMarker"),
+    nextVersionIdMarker: extractXmlText(xml, "NextVersionIdMarker"),
+  };
+}
+
+function shouldAttemptVersionCleanup(): boolean {
+  const flag = envFlag(
+    "B2_DELETE_ALL_VERSIONS_ON_DELETE",
+    "B2_PURGE_PDF_VERSIONS_ON_DELETE",
+    "B2_PURGE_PDF_VERSIONS_BEFORE_UPLOAD",
+  );
+
+  return flag !== false;
+}
+
+function shouldRequireVersionCleanup(): boolean {
+  return envFlag(
+    "B2_REQUIRE_VERSION_PURGE_ON_DELETE",
+    "B2_REQUIRE_VERSION_PURGE_BEFORE_UPLOAD",
+  ) === true;
+}
+
+async function listB2ObjectVersions(key: string): Promise<{ bucket: string; versions: B2ObjectVersion[] }> {
+  const objectKey = normalizeObjectKey(key);
+  const maxPages = numberEnv("B2_VERSION_LIST_MAX_PAGES", 10, 1, 50);
+  const versions: B2ObjectVersion[] = [];
+  let bucket = "";
+  let keyMarker = "";
+  let versionIdMarker = "";
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const queryParams: Record<string, B2QueryValue> = {
+      versions: "",
+      prefix: objectKey,
+      "max-keys": 1000,
+    };
+
+    if (keyMarker) queryParams["key-marker"] = keyMarker;
+    if (versionIdMarker) queryParams["version-id-marker"] = versionIdMarker;
+
+    const signed = buildSignedBucketRequest({
+      method: "GET",
+      queryParams,
+    });
+
+    bucket = signed.bucket;
+
+    const response = await fetch(signed.url, {
+      method: "GET",
+      headers: signed.headers,
+    });
+
+    const text = await response.text().catch(() => "");
+
+    if (!response.ok) {
+      throw new Error(`Backblaze B2 object version list failed (${response.status}): ${text.slice(0, 500)}`);
+    }
+
+    const parsed = parseB2ObjectVersionsXml(text, objectKey);
+    versions.push(...parsed.versions);
+
+    if (!parsed.isTruncated) break;
+    keyMarker = parsed.nextKeyMarker;
+    versionIdMarker = parsed.nextVersionIdMarker;
+
+    if (!keyMarker && !versionIdMarker) break;
+  }
+
+  return { bucket, versions };
+}
+
+async function headB2ObjectExists(key: string): Promise<boolean> {
+  const objectKey = normalizeObjectKey(key);
+  const signed = buildSignedRequest({
+    method: "HEAD",
+    key: objectKey,
+  });
+
+  const response = await fetch(signed.url, {
+    method: "HEAD",
+    headers: signed.headers,
+  });
+
+  if (response.status === 404) return false;
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Backblaze B2 object check failed (${response.status}): ${text.slice(0, 500)}`);
+  }
+
+  return true;
+}
+
+async function deleteB2ObjectVersion(key: string, versionId: string): Promise<boolean> {
+  const objectKey = normalizeObjectKey(key);
+  const cleanVersionId = clean(versionId);
+  if (!cleanVersionId) return false;
+
+  const signed = buildSignedRequest({
+    method: "DELETE",
+    key: objectKey,
+    queryParams: { versionId: cleanVersionId },
+  });
+
+  const response = await fetch(signed.url, {
+    method: "DELETE",
+    headers: signed.headers,
+  });
+
+  if (response.status === 404) return false;
+  if (!response.ok && response.status !== 204) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Backblaze B2 object version delete failed (${response.status}): ${text.slice(0, 500)}`);
+  }
+
+  return true;
+}
+
+async function deleteLatestB2Object(key: string): Promise<{ bucket: string; deleted: boolean }> {
   const objectKey = normalizeObjectKey(key);
   const signed = buildSignedRequest({
     method: "DELETE",
@@ -468,15 +731,87 @@ export async function deleteB2Object(key: string): Promise<boolean> {
     headers: signed.headers,
   });
 
-  if (response.status === 404) return false;
+  if (response.status === 404) return { bucket: signed.bucket, deleted: false };
   if (!response.ok && response.status !== 204) {
     const text = await response.text().catch(() => "");
     throw new Error(`Backblaze B2 object delete failed (${response.status}): ${text.slice(0, 500)}`);
   }
 
-  return true;
+  return { bucket: signed.bucket, deleted: true };
+}
+
+export async function deleteB2ObjectWithVersions(key: string): Promise<B2DeleteResult> {
+  const objectKey = normalizeObjectKey(key);
+  const result: B2DeleteResult = {
+    key: objectKey,
+    bucket: "",
+    deleted: false,
+    deletedCount: 0,
+    versionCount: 0,
+    deleteMarkerCount: 0,
+    attemptedVersionCleanup: false,
+    fallbackUsed: false,
+    errors: [],
+  };
+
+  if (shouldAttemptVersionCleanup()) {
+    result.attemptedVersionCleanup = true;
+
+    try {
+      const listed = await listB2ObjectVersions(objectKey);
+      result.bucket = listed.bucket;
+      result.versionCount = listed.versions.filter((item) => !item.isDeleteMarker).length;
+      result.deleteMarkerCount = listed.versions.filter((item) => item.isDeleteMarker).length;
+
+      for (const item of listed.versions) {
+        const deleted = await deleteB2ObjectVersion(item.key, item.versionId);
+        if (deleted) result.deletedCount += 1;
+      }
+
+      result.deleted = result.deletedCount > 0;
+
+      if (listed.versions.length > 0) {
+        return result;
+      }
+    } catch (error: any) {
+      const message = String(error?.message || error || "Unknown B2 version cleanup error").slice(0, 700);
+      result.errors.push(message);
+
+      if (shouldRequireVersionCleanup()) {
+        throw error;
+      }
+    }
+  }
+
+  const exists = await headB2ObjectExists(objectKey).catch((error: any) => {
+    result.errors.push(String(error?.message || error || "Unknown B2 head error").slice(0, 700));
+    if (shouldRequireVersionCleanup()) throw error;
+    return true;
+  });
+
+  if (!exists) {
+    return result;
+  }
+
+  const deleted = await deleteLatestB2Object(objectKey);
+  result.bucket = result.bucket || deleted.bucket;
+  result.fallbackUsed = true;
+  result.deleted = deleted.deleted;
+  result.deletedCount += deleted.deleted ? 1 : 0;
+
+  return result;
+}
+
+export async function deleteB2Object(key: string): Promise<boolean> {
+  const result = await deleteB2ObjectWithVersions(key);
+  return result.deleted;
+}
+
+export async function deletePdfFromB2WithVersions(key: string): Promise<B2DeleteResult> {
+  return deleteB2ObjectWithVersions(key);
 }
 
 export async function deletePdfFromB2(key: string): Promise<boolean> {
   return deleteB2Object(key);
 }
+
