@@ -4778,6 +4778,30 @@ function getContactQuality(audit?: AnyRecord, lead?: AnyRecord): string {
 
 
 
+function lowerSheetText(...values: unknown[]): string {
+  return values
+    .map((value) => {
+      if (value === undefined || value === null) return '';
+      if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean).join(' ');
+      if (typeof value === 'object') {
+        try {
+          return Object.values(value as AnyRecord).map((item) => clean(item)).filter(Boolean).join(' ');
+        } catch {
+          return '';
+        }
+      }
+      return clean(value);
+    })
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function isValidEmailAddress(value: unknown): boolean {
+  const email = clean(value).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function textHasAny(value: string, patterns: string[]) {
   const text = String(value || '').toLowerCase();
   return patterns.some((pattern) => text.includes(pattern));
