@@ -7797,6 +7797,7 @@ async function deleteManualLeadRecord(leadId: string, lead: LeadData, options: {
   await deleteEmailEventsForReport({
     reportToken: getLeadReportTokenForCleanup(lead),
     leadIds: [leadId],
+    matchReportToken: false,
     maxDocs: 1500,
   }).catch(() => ({ ok: false, reason: "email_event_cleanup_best_effort_failed" }));
 

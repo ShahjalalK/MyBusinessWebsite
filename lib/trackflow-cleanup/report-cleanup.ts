@@ -751,10 +751,28 @@ async function deleteSupabaseChatStep(manifest: CleanupManifest): Promise<Cleanu
 }
 
 async function cleanupReportEmailEventsStep(manifest: CleanupManifest): Promise<CleanupStep> {
+  const linkedLeadIds = uniqueStrings(manifest.linkedLeadIds || [], 100);
+
+  if (!linkedLeadIds.length) {
+    return {
+      service: "firestore",
+      action: "delete_report_email_events",
+      status: "skipped",
+      target: manifest.reportToken,
+      message: "No Sheet-linked outreach leads were found, so email history was not deleted. Manual + Report history is preserved.",
+      details: {
+        reportToken: manifest.reportToken,
+        linkedLeadIds,
+        manualReportLinkedProtected: true,
+      },
+    };
+  }
+
   try {
     const result = await deleteEmailEventsForReport({
       reportToken: manifest.reportToken,
-      leadIds: manifest.linkedLeadIds || [],
+      leadIds: linkedLeadIds,
+      matchReportToken: false,
       dryRun: false,
     });
 
@@ -762,9 +780,12 @@ async function cleanupReportEmailEventsStep(manifest: CleanupManifest): Promise<
       service: "firestore",
       action: "delete_report_email_events",
       status: result.ok ? "ok" : "error",
-      target: manifest.reportToken,
-      message: `Deleted ${result.deletedCount || 0} report-linked email event row(s).`,
-      details: result as unknown as AnyRecord,
+      target: `${linkedLeadIds.length} Sheet-linked contact(s)`,
+      message: `Deleted ${result.deletedCount || 0} email event row(s) for Sheet Primary/Additional leads only. Manual + Report history was preserved.`,
+      details: {
+        ...(result as unknown as AnyRecord),
+        manualReportLinkedProtected: true,
+      },
     };
   } catch (error: any) {
     return {
@@ -773,7 +794,7 @@ async function cleanupReportEmailEventsStep(manifest: CleanupManifest): Promise<
       status: "error",
       target: manifest.reportToken,
       error: safeError(error),
-      message: "Report-linked email event cleanup failed, but the remaining cleanup steps continued.",
+      message: "Sheet-linked email event cleanup failed, but Manual + Report history was not targeted and the remaining cleanup steps continued.",
     };
   }
 }
@@ -1168,9 +1189,15 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
     plannedStep(
       "firestore",
       "delete_report_email_events",
-      manifest.reportToken,
-      "Email send/open/click event rows linked to this report token or linked contacts would be deleted.",
-      { linkedLeadIds: manifest.linkedLeadIds || [], linkedLeadCount: manifest.linkedLeadCount || 0 },
+      manifest.linkedLeadIds.length ? `${manifest.linkedLeadIds.length} Sheet-linked contact(s)` : manifest.reportToken,
+      manifest.linkedLeadIds.length
+        ? "Email send/open/click event rows would be deleted only for Sheet Primary/Additional leads. Manual + Report history would be preserved."
+        : "No Sheet-linked outreach leads were found, so Manual + Report email history would be preserved.",
+      {
+        linkedLeadIds: manifest.linkedLeadIds || [],
+        linkedLeadCount: manifest.linkedLeadCount || 0,
+        manualReportLinkedProtected: true,
+      },
     ),
     manifest.reportFound
       ? plannedStep("firestore", mode === "hard" ? "delete_report_document" : "mark_report_cleaned", manifest.reportToken)

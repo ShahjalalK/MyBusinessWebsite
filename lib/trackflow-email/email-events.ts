@@ -128,14 +128,21 @@ export async function deleteEmailEventsForReport(input: {
   leadIds?: string[];
   dryRun?: boolean;
   maxDocs?: number;
+  /**
+   * Defaults to true for old callers.
+   * Set to false when report cleanup must protect Manual + Report leads that share
+   * the same report token but are not under the Sheet audit/report.
+   */
+  matchReportToken?: boolean;
 }) {
   const reportToken = cleanToken(input.reportToken || "");
   const leadIds = uniqueStrings((input.leadIds || []).map((value) => cleanToken(value)).filter(Boolean), 100);
   const maxDocs = Math.max(1, Math.min(Number(input.maxDocs || 1000), 2000));
+  const matchReportToken = input.matchReportToken !== false;
   const docIds: string[] = [];
   const eventsRef = adminDb.collection("email_events");
 
-  if (reportToken) {
+  if (reportToken && matchReportToken) {
     docIds.push(...(await collectEmailEventDocIds(eventsRef.where("reportToken", "==", reportToken), maxDocs)));
     docIds.push(...(await collectEmailEventDocIds(eventsRef.where("report_token", "==", reportToken), maxDocs)));
   }
@@ -154,6 +161,8 @@ export async function deleteEmailEventsForReport(input: {
       dryRun: true,
       reportToken,
       leadIds,
+      matchReportToken,
+      matchedByReportToken: Boolean(reportToken && matchReportToken),
       matchedCount: uniqueIds.length,
       deletedCount: 0,
       capped: uniqueIds.length >= maxDocs,
@@ -166,6 +175,8 @@ export async function deleteEmailEventsForReport(input: {
     dryRun: false,
     reportToken,
     leadIds,
+    matchReportToken,
+    matchedByReportToken: Boolean(reportToken && matchReportToken),
     matchedCount: uniqueIds.length,
     deletedCount,
     capped: uniqueIds.length >= maxDocs,
