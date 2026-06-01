@@ -316,6 +316,7 @@ export type FootprintMemoryState = {
   search: string;
   filter: FootprintMemoryFilter;
   olderThanDays: number;
+  selectedEmails: string[];
   rows: FootprintMemoryRow[];
 };
 

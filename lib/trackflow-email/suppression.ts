@@ -30,6 +30,11 @@ export async function addSuppression(emailLower: string, reason: string, extra: 
     {
       emailLower,
       reason,
+      allowedAgain: false,
+      allowedAgainAt: admin.firestore.FieldValue.delete(),
+      allowAgainAt: admin.firestore.FieldValue.delete(),
+      allowedAgainBy: admin.firestore.FieldValue.delete(),
+      allowAgainBy: admin.firestore.FieldValue.delete(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       ...extra,

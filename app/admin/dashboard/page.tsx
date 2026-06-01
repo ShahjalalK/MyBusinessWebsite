@@ -203,6 +203,7 @@ function emptyFootprintMemoryState(): FootprintMemoryState {
     search: "",
     filter: "blocked",
     olderThanDays: 90,
+    selectedEmails: [],
     rows: [],
   };
 }
@@ -2518,6 +2519,7 @@ export default function DashboardPage() {
         status: `Loaded ${data.count || 0} footprint memor${Number(data.count || 0) === 1 ? "y" : "ies"}.`,
         loadedAt: Date.now(),
         rows: Array.isArray(data.rows) ? data.rows : [],
+        selectedEmails: [],
       }));
     } catch (error: any) {
       console.error("Footprint memory load error:", error);
@@ -2766,6 +2768,94 @@ export default function DashboardPage() {
       setSheetLoading(false);
     }
   };
+
+  const toggleFootprintMemorySelection = (email: string) => {
+    const emailText = String(email || "").trim().toLowerCase();
+    if (!emailText) return;
+    setFootprintMemory((prev: FootprintMemoryState) => {
+      const current = new Set(prev.selectedEmails || []);
+      if (current.has(emailText)) current.delete(emailText);
+      else current.add(emailText);
+      return { ...prev, selectedEmails: Array.from(current) };
+    });
+  };
+
+  const selectAllVisibleFootprintMemories = () => {
+    setFootprintMemory((prev: FootprintMemoryState) => {
+      const visibleEmails = (prev.rows || [])
+        .slice(0, 100)
+        .map((row) => String(row.emailLower || row.email || "").trim().toLowerCase())
+        .filter(Boolean);
+      const allSelected = visibleEmails.length > 0 && visibleEmails.every((email) => (prev.selectedEmails || []).includes(email));
+      return { ...prev, selectedEmails: allSelected ? [] : Array.from(new Set(visibleEmails)) };
+    });
+  };
+
+  const clearFootprintMemorySelection = () => {
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, selectedEmails: [] }));
+  };
+
+  const allowSelectedFootprintMemories = async () => {
+    const emails = Array.from(new Set((footprintMemory.selectedEmails || []).map((email) => String(email || "").trim().toLowerCase()).filter(Boolean)));
+    if (!emails.length) return window.alert("Select at least one footprint row first.");
+
+    const hasSuppression = footprintMemory.rows.some(
+      (row) => emails.includes(String(row.emailLower || row.email || "").trim().toLowerCase()) && (row.source === "suppression_list" || row.source === "combined"),
+    );
+    const confirmText = hasSuppression ? "ALLOW SUPPRESSION" : "ALLOW";
+    const typed = window.prompt(
+      hasSuppression
+        ? `Type ${confirmText} to allow ${emails.length} selected email(s) again. Hard unsubscribe/spam/bounce records may remain protected unless you delete those protected records separately.`
+        : `Type ${confirmText} to allow ${emails.length} selected email(s) again.`,
+    );
+    if (typed !== confirmText) return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Allowing selected emails again...", error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: hasSuppression ? "allow_suppression" : "allow", emails, confirm: confirmText }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Allow selected failed");
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, selectedEmails: [], status: data.message || "Selected emails allowed again." }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Allow selected failed", status: "" }));
+    }
+  };
+
+  const deleteSelectedFootprintMemories = async () => {
+    const emails = Array.from(new Set((footprintMemory.selectedEmails || []).map((email) => String(email || "").trim().toLowerCase()).filter(Boolean)));
+    if (!emails.length) return window.alert("Select at least one footprint row first.");
+
+    const hasSuppression = footprintMemory.rows.some(
+      (row) => emails.includes(String(row.emailLower || row.email || "").trim().toLowerCase()) && (row.source === "suppression_list" || row.source === "combined"),
+    );
+    const typed = window.prompt(
+      hasSuppression
+        ? `Type DELETE SELECTED to permanently delete/ignore ${emails.length} selected footprint email(s), including protected suppression rows. Use this only for accidental/test/old records.`
+        : `Type DELETE SELECTED to permanently delete/ignore ${emails.length} selected footprint email(s).`,
+    );
+    if (typed !== "DELETE SELECTED") return;
+
+    setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Deleting selected footprints...", error: "" }));
+    try {
+      const response = await fetch("/api/trackflow/cleanup/footprint-memory", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ action: "delete_selected", emails, includeSuppression: hasSuppression, confirm: "DELETE SELECTED" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || data.message || "Delete selected failed");
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, selectedEmails: [], status: data.message || "Selected footprints deleted." }));
+      await loadFootprintMemories(true);
+    } catch (error: any) {
+      setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Delete selected failed", status: "" }));
+    }
+  };
+
 
   useEffect(() => {
     if (activeTab === "sheet") {
@@ -3817,6 +3907,11 @@ export default function DashboardPage() {
               forgetFootprintMemory={forgetFootprintMemory}
               forgetOldFootprintMemories={forgetOldFootprintMemories}
               deleteOldSuppressionFootprints={deleteOldSuppressionFootprints}
+              toggleFootprintMemorySelection={toggleFootprintMemorySelection}
+              selectAllVisibleFootprintMemories={selectAllVisibleFootprintMemories}
+              clearFootprintMemorySelection={clearFootprintMemorySelection}
+              allowSelectedFootprintMemories={allowSelectedFootprintMemories}
+              deleteSelectedFootprintMemories={deleteSelectedFootprintMemories}
             />
           )}
           {activeTab === "automation" && renderFollowups()}

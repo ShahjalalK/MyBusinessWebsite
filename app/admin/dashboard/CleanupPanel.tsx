@@ -48,6 +48,11 @@ type CleanupPanelProps = {
   forgetFootprintMemory: (email: string) => Promise<void>;
   forgetOldFootprintMemories: () => Promise<void>;
   deleteOldSuppressionFootprints: () => Promise<void>;
+  toggleFootprintMemorySelection: (email: string) => void;
+  selectAllVisibleFootprintMemories: () => void;
+  clearFootprintMemorySelection: () => void;
+  allowSelectedFootprintMemories: () => Promise<void>;
+  deleteSelectedFootprintMemories: () => Promise<void>;
 };
 
 const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; note: string }> = [
@@ -320,6 +325,11 @@ export default function CleanupPanel({
   forgetFootprintMemory,
   forgetOldFootprintMemories,
   deleteOldSuppressionFootprints,
+  toggleFootprintMemorySelection,
+  selectAllVisibleFootprintMemories,
+  clearFootprintMemorySelection,
+  allowSelectedFootprintMemories,
+  deleteSelectedFootprintMemories,
 }: CleanupPanelProps) {
   const reportCleanupInput = reportAssetCleanup.input.trim();
   const reportCleanupDisabled = reportAssetCleanup.loading || !reportCleanupInput;
@@ -343,6 +353,11 @@ export default function CleanupPanel({
   const selectedReportActionLabel =
     reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Reports";
   const footprintRows = footprintMemory.rows.slice(0, 100);
+  const selectedFootprintEmails = footprintMemory.selectedEmails || [];
+  const visibleFootprintEmails = footprintRows
+    .map((row) => String(row.emailLower || row.email || "").trim().toLowerCase())
+    .filter(Boolean);
+  const allVisibleFootprintsSelected = visibleFootprintEmails.length > 0 && visibleFootprintEmails.every((email) => selectedFootprintEmails.includes(email));
   const blockedFootprintCount = footprintMemory.rows.filter(
     (row) => row.status !== "allowed_again" && row.source !== "suppression_list" && row.source !== "combined",
   ).length;
@@ -872,6 +887,7 @@ export default function CleanupPanel({
                   setFootprintMemory((prev: FootprintMemoryState) => ({
                     ...prev,
                     filter,
+                    selectedEmails: [],
                     olderThanDays: filter === "suppression" && Number(prev.olderThanDays || 0) < 180 ? 365 : prev.olderThanDays,
                   }));
                 }}
@@ -884,7 +900,7 @@ export default function CleanupPanel({
         </div>
 
         <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-          Keep this simple: Blocked Emails are for search + Allow again. Old Footprints removes old contact-memory records by age. Suppression/Unsubscribe is protected and only deletes after typing DELETE SUPPRESSION.
+          Keep this simple: select one or many rows, then choose Allow selected or Delete selected. Old Footprints removes old contact-memory and old outreach-block records by age. Suppression/Unsubscribe only deletes after a strong confirmation.
         </div>
 
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-2xl bg-gray-50 border border-gray-100 p-4">
@@ -937,6 +953,48 @@ export default function CleanupPanel({
             {footprintMemory.error || footprintMemory.status}
           </p>
         )}
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Selected footprint rows</p>
+            <p className="text-sm font-black text-gray-900">{selectedFootprintEmails.length} selected</p>
+            <p className="text-[11px] font-bold text-gray-500 mt-1">Allow selected removes the send block. Delete selected removes contact memory and marks old outreach rows as ignored; suppression rows are deleted only when selected and confirmed.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={footprintMemory.loading || footprintMemory.actionLoading || !footprintRows.length}
+              onClick={selectAllVisibleFootprintMemories}
+              className="px-4 py-3 rounded-2xl bg-gray-50 text-gray-600 text-[10px] font-black uppercase disabled:opacity-40"
+            >
+              {allVisibleFootprintsSelected ? "Unselect visible" : "Select visible"}
+            </button>
+            <button
+              type="button"
+              disabled={footprintMemory.actionLoading || !selectedFootprintEmails.length}
+              onClick={allowSelectedFootprintMemories}
+              className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase disabled:opacity-40"
+            >
+              Allow selected
+            </button>
+            <button
+              type="button"
+              disabled={footprintMemory.actionLoading || !selectedFootprintEmails.length}
+              onClick={deleteSelectedFootprintMemories}
+              className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
+            >
+              Delete selected
+            </button>
+            <button
+              type="button"
+              disabled={footprintMemory.actionLoading || !selectedFootprintEmails.length}
+              onClick={clearFootprintMemorySelection}
+              className="px-4 py-3 rounded-2xl bg-gray-50 text-gray-400 text-[10px] font-black uppercase disabled:opacity-40"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-[35px] shadow-sm overflow-hidden">
@@ -944,6 +1002,16 @@ export default function CleanupPanel({
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
+                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest w-12">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleFootprintsSelected}
+                    onChange={selectAllVisibleFootprintMemories}
+                    disabled={!footprintRows.length || footprintMemory.loading || footprintMemory.actionLoading}
+                    className="h-4 w-4 rounded border-gray-300"
+                    aria-label="Select all visible footprint rows"
+                  />
+                </th>
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</th>
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason</th>
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Last activity</th>
@@ -954,7 +1022,7 @@ export default function CleanupPanel({
             <tbody className="divide-y divide-gray-50">
               {footprintMemory.loading && (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-blue-600 font-black uppercase">
+                  <td colSpan={6} className="p-10 text-center text-blue-600 font-black uppercase">
                     Loading footprint memories...
                   </td>
                 </tr>
@@ -963,6 +1031,16 @@ export default function CleanupPanel({
               {!footprintMemory.loading &&
                 footprintRows.map((row: FootprintMemoryRow) => (
                   <tr key={`${row.emailLower || row.email}-${row.source || "memory"}`} className="hover:bg-gray-50/50">
+                    <td className="p-4 align-top w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedFootprintEmails.includes(String(row.emailLower || row.email || "").trim().toLowerCase())}
+                        onChange={() => toggleFootprintMemorySelection(row.emailLower || row.email)}
+                        disabled={footprintMemory.actionLoading}
+                        className="h-4 w-4 rounded border-gray-300"
+                        aria-label={`Select footprint row for ${row.email || row.emailLower}`}
+                      />
+                    </td>
                     <td className="p-4 align-top min-w-[260px]">
                       <p className="font-black text-gray-900">{row.email || row.emailLower}</p>
                       {(row.companyName || row.website) && (
@@ -1013,13 +1091,13 @@ export default function CleanupPanel({
                             Allow again
                           </button>
                         )}
-                        {showingOldFootprints && row.source === "contact_memory" ? (
+                        {row.source !== "suppression_list" && row.source !== "combined" ? (
                           <button
                             type="button"
                             disabled={footprintMemory.actionLoading}
                             onClick={() => forgetFootprintMemory(row.emailLower || row.email)}
                             className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
-                            title="Delete this contact-memory footprint only."
+                            title="Delete contact-memory footprint and stop this old outreach row from blocking a future send."
                           >
                             Delete footprint
                           </button>
@@ -1031,7 +1109,7 @@ export default function CleanupPanel({
 
               {!footprintMemory.loading && footprintRows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-gray-400 font-bold">
+                  <td colSpan={6} className="p-10 text-center text-gray-400 font-bold">
                     No footprint memories found for this view.
                   </td>
                 </tr>

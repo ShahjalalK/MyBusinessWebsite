@@ -1938,7 +1938,13 @@ async function sendInitialFromBody(rawBody: any) {
   if (!duplicateSnap.empty) {
     const existing = duplicateSnap.docs
       .map((item: any) => ({ id: item.id, ...(item.data() || {}) }))
-      .find((item: any) => !["failed", "cancelled", "blocked_daily_limit"].includes(String(item.status || "")));
+      .find((item: any) => {
+        const status = String(item.status || "").trim().toLowerCase();
+        if (["failed", "cancelled", "blocked_daily_limit"].includes(status)) return false;
+        if (item.footprintAllowedAgain === true || item.footprintIgnored === true || item.allowedAgain === true || item.allowRecontact === true) return false;
+        if (toMillis(item.footprintAllowedAgainAt) || toMillis(item.footprintIgnoredAt)) return false;
+        return true;
+      });
 
     if (existing) {
       const protectedDuplicate =
@@ -8656,6 +8662,22 @@ function isActiveFootprintLead(lead: Record<string, any> = {}): boolean {
   const status = String(lead.status || "").trim().toLowerCase();
   if (["failed", "cancelled", "blocked_daily_limit", "draft"].includes(status)) return false;
   if (lead.deleted === true) return false;
+
+  // Manual maintenance rule: when the operator uses Cleanup → Allow again
+  // or Delete footprint, old outreach rows should stop blocking a new send.
+  // The lead document can still stay for reporting/history unless the operator
+  // deletes it from the Leads tab/report cleanup flow.
+  if (
+    lead.footprintAllowedAgain === true ||
+    lead.footprintIgnored === true ||
+    lead.allowedAgain === true ||
+    lead.allowRecontact === true ||
+    toMillis(lead.footprintAllowedAgainAt) ||
+    toMillis(lead.footprintIgnoredAt)
+  ) {
+    return false;
+  }
+
   return Boolean(lead.id || lead.emailLower || lead.email);
 }
 
@@ -8807,7 +8829,8 @@ async function handleFootprintMemoryList(req: Request) {
   if (filter === "old") {
     rows = rows.filter(
       (row: any) =>
-        row.source === "contact_memory" &&
+        row.source !== "suppression_list" &&
+        row.source !== "combined" &&
         row.status !== "allowed_again" &&
         toMillis(row.lastActivityAt) > 0 &&
         toMillis(row.lastActivityAt) <= olderThanCutoffMs,
@@ -8830,14 +8853,84 @@ async function handleFootprintMemoryList(req: Request) {
   });
 }
 
+async function getOutreachLeadRefsForEmails(emails: string[], limitPerEmail = 50) {
+  const refs: any[] = [];
+  const seen = new Set<string>();
+
+  for (const emailLower of emails) {
+    const snap = await adminDb.collection("outreach_leads").where("emailLower", "==", emailLower).limit(limitPerEmail).get();
+    snap.docs.forEach((docSnap: any) => {
+      if (seen.has(docSnap.id)) return;
+      seen.add(docSnap.id);
+      refs.push(docSnap.ref);
+    });
+  }
+
+  return refs;
+}
+
+async function markOutreachLeadFootprintsForEmails(
+  emails: string[],
+  actor: string,
+  mode: "allow" | "ignore",
+) {
+  const refs = await getOutreachLeadRefsForEmails(emails);
+  let updated = 0;
+
+  for (let index = 0; index < refs.length; index += 450) {
+    const batch = adminDb.batch();
+    const chunk = refs.slice(index, index + 450);
+    chunk.forEach((ref) => {
+      batch.set(
+        ref,
+        {
+          ...(mode === "allow"
+            ? {
+                footprintAllowedAgain: true,
+                footprintAllowedAgainAt: admin.firestore.FieldValue.serverTimestamp(),
+                footprintAllowedAgainBy: actor,
+              }
+            : {
+                footprintIgnored: true,
+                footprintIgnoredAt: admin.firestore.FieldValue.serverTimestamp(),
+                footprintIgnoredBy: actor,
+              }),
+          // Stop the old automation when this row is being treated as no longer
+          // blocking a new email. This prevents an old sequence and a new send
+          // from running together for the same contact.
+          stopAutomation: true,
+          nextFollowupStatus: mode === "allow" ? "stopped_allow_again" : "stopped_footprint_deleted",
+          nextFollowupReason: mode === "allow" ? "allowed_again_from_cleanup" : "footprint_deleted_from_cleanup",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+    await batch.commit();
+    updated += chunk.length;
+  }
+
+  return updated;
+}
+
 async function deleteFootprintDocsForEmails(emails: string[]) {
   const batch = adminDb.batch();
   let count = 0;
   emails.forEach((emailLower) => {
     const docId = emailDocId(emailLower);
-    // Only contact_memory is removed here. Suppression/unsubscribe/bounce records
-    // are protected and must not be removed by a general footprint-memory action.
     batch.delete(adminDb.collection("contact_memory").doc(docId));
+    count += 1;
+  });
+  if (count > 0) await batch.commit();
+  return count;
+}
+
+async function deleteSuppressionDocsForEmails(emails: string[]) {
+  const batch = adminDb.batch();
+  let count = 0;
+  emails.forEach((emailLower) => {
+    const docId = emailDocId(emailLower);
+    batch.delete(adminDb.collection("suppression_list").doc(docId));
     count += 1;
   });
   if (count > 0) await batch.commit();
@@ -8864,37 +8957,72 @@ async function allowFootprintDocsForEmails(emails: string[], actor: string) {
       },
       { merge: true }
     );
-    // Do not delete suppression_list here. A suppressed/unsubscribed/bounced email
-    // remains protected even when contact memory is allowed again.
   });
   await batch.commit();
-  return emails.length;
+  const leadUpdatedCount = await markOutreachLeadFootprintsForEmails(emails, actor, "allow");
+  return { memoryCount: emails.length, leadUpdatedCount };
 }
 
-async function forgetFootprintDocsOlderThan(days: number) {
+async function forgetFootprintDocsOlderThan(days: number, actor = "admin") {
   const cutoffMs = Date.now() - days * 86_400_000;
-  const memorySnap = await adminDb.collection("contact_memory").limit(500).get();
+  const [memorySnap, leadSnap] = await Promise.all([
+    adminDb.collection("contact_memory").limit(500).get(),
+    adminDb.collection("outreach_leads").limit(800).get(),
+  ]);
 
-  const refs: any[] = [];
+  const memoryRefs: any[] = [];
   memorySnap.docs.forEach((docSnap: any) => {
     const data = docSnap.data() || {};
     const activityMs = getFootprintDocActivityMs(data);
-    if (activityMs && activityMs <= cutoffMs) refs.push(docSnap.ref);
+    if (activityMs && activityMs <= cutoffMs) memoryRefs.push(docSnap.ref);
+  });
+
+  const leadRefs: any[] = [];
+  leadSnap.docs.forEach((docSnap: any) => {
+    const data = docSnap.data() || {};
+    if (!isActiveFootprintLead({ id: docSnap.id, ...data })) return;
+    const activityMs = getLeadFootprintActivityMs(data);
+    if (activityMs && activityMs <= cutoffMs) leadRefs.push(docSnap.ref);
   });
 
   let deleted = 0;
-  for (let index = 0; index < refs.length; index += 450) {
+  for (let index = 0; index < memoryRefs.length; index += 450) {
     const batch = adminDb.batch();
-    refs.slice(index, index + 450).forEach((ref) => batch.delete(ref));
+    const chunk = memoryRefs.slice(index, index + 450);
+    chunk.forEach((ref) => batch.delete(ref));
     await batch.commit();
-    deleted += refs.slice(index, index + 450).length;
+    deleted += chunk.length;
   }
-  return deleted;
+
+  let leadUpdated = 0;
+  for (let index = 0; index < leadRefs.length; index += 450) {
+    const batch = adminDb.batch();
+    const chunk = leadRefs.slice(index, index + 450);
+    chunk.forEach((ref) =>
+      batch.set(
+        ref,
+        {
+          footprintIgnored: true,
+          footprintIgnoredAt: admin.firestore.FieldValue.serverTimestamp(),
+          footprintIgnoredBy: actor,
+          stopAutomation: true,
+          nextFollowupStatus: "stopped_old_footprint_cleanup",
+          nextFollowupReason: "old_footprint_cleanup",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+    await batch.commit();
+    leadUpdated += chunk.length;
+  }
+
+  return { deleted, leadUpdated };
 }
 async function deleteSuppressionDocsOlderThan(days: number) {
   // Protected suppression cleanup is intentionally separate from normal footprint cleanup.
   // It only removes old suppression_list rows after a strong confirmation phrase.
-  const safeDays = Math.max(90, Math.min(Number(days || 365), 3650));
+  const safeDays = Math.max(30, Math.min(Number(days || 365), 3650));
   const cutoffMs = Date.now() - safeDays * 86_400_000;
   const suppressionSnap = await adminDb.collection("suppression_list").limit(500).get();
 
@@ -8916,6 +9044,18 @@ async function deleteSuppressionDocsOlderThan(days: number) {
   return { deleted, days: safeDays };
 }
 
+async function deleteSelectedFootprintsForEmails(emails: string[], actor: string, includeSuppression: boolean) {
+  const memoryDeletedCount = await deleteFootprintDocsForEmails(emails);
+  const leadUpdatedCount = await markOutreachLeadFootprintsForEmails(emails, actor, "ignore");
+  const suppressionDeletedCount = includeSuppression ? await deleteSuppressionDocsForEmails(emails) : 0;
+
+  return {
+    memoryDeletedCount,
+    leadUpdatedCount,
+    suppressionDeletedCount,
+    totalChanged: memoryDeletedCount + leadUpdatedCount + suppressionDeletedCount,
+  };
+}
 const SUPPRESSION_ALLOWABLE_REASONS = new Set([
   "replied",
   "reply",
@@ -8995,8 +9135,14 @@ async function handleFootprintMemoryAction(req: Request) {
     if (String(body.confirm || "").trim().toUpperCase() !== "ALLOW") throw new ApiError("Type ALLOW to allow this email again", 400);
     const emails = normalizeFootprintEmails(body);
     if (!emails.length) throw new ApiError("At least one valid email is required", 400);
-    const count = await allowFootprintDocsForEmails(emails, actor);
-    return json({ success: true, action, count, message: `Allowed ${count} email(s) again.` });
+    const result = await allowFootprintDocsForEmails(emails, actor);
+    return json({
+      success: true,
+      action,
+      count: result.memoryCount,
+      leadUpdatedCount: result.leadUpdatedCount,
+      message: `Allowed ${emails.length} email(s) again. ${result.leadUpdatedCount} old outreach record(s) will no longer block a new send.`,
+    });
   }
 
   if (action === "allow_suppression") {
@@ -9027,15 +9173,50 @@ async function handleFootprintMemoryAction(req: Request) {
     if (String(body.confirm || "").trim().toUpperCase() !== "FORGET") throw new ApiError("Type FORGET to delete footprint memory", 400);
     const emails = normalizeFootprintEmails(body);
     if (!emails.length) throw new ApiError("At least one valid email is required", 400);
-    const count = await deleteFootprintDocsForEmails(emails);
-    return json({ success: true, action, count, message: `Forgot ${count} footprint memor${count === 1 ? "y" : "ies"}.` });
+    const result = await deleteSelectedFootprintsForEmails(emails, actor, false);
+    return json({
+      success: true,
+      action,
+      count: result.totalChanged,
+      ...result,
+      message: `Deleted/ignored ${result.totalChanged} footprint item(s). Suppression records were not deleted by this action.`,
+    });
   }
 
   if (action === "forget_older") {
     if (String(body.confirm || "").trim().toUpperCase() !== "FORGET") throw new ApiError("Type FORGET to delete old footprint memories", 400);
     const days = Math.max(1, Math.min(Number(body.olderThanDays || 90), 3650));
-    const count = await forgetFootprintDocsOlderThan(days);
-    return json({ success: true, action, count, olderThanDays: days, message: `Forgot ${count} footprint memor${count === 1 ? "y" : "ies"} older than ${days} days.` });
+    const result = await forgetFootprintDocsOlderThan(days, actor);
+    const count = result.deleted + result.leadUpdated;
+    return json({
+      success: true,
+      action,
+      count,
+      olderThanDays: days,
+      memoryDeletedCount: result.deleted,
+      leadUpdatedCount: result.leadUpdated,
+      message: `Cleaned ${count} old footprint item(s) older than ${days} days.`,
+    });
+  }
+
+  if (action === "delete_selected") {
+    if (String(body.confirm || "").trim().toUpperCase() !== "DELETE SELECTED") {
+      throw new ApiError("Type DELETE SELECTED to delete selected footprint records", 400);
+    }
+    const emails = normalizeFootprintEmails(body);
+    if (!emails.length) throw new ApiError("At least one valid email is required", 400);
+    const includeSuppression = body.includeSuppression === true;
+    const result = await deleteSelectedFootprintsForEmails(emails, actor, includeSuppression);
+    return json({
+      success: true,
+      action,
+      count: result.totalChanged,
+      ...result,
+      includeSuppression,
+      message: includeSuppression
+        ? `Deleted/ignored ${result.totalChanged} selected footprint item(s), including protected suppression rows.`
+        : `Deleted/ignored ${result.totalChanged} selected footprint item(s). Suppression rows were kept protected.`,
+    });
   }
 
   if (action === "delete_suppression_older") {
@@ -9163,7 +9344,15 @@ async function handleScheduledEmailsPatch(req: Request) {
 
     if (nextEmailLower !== normalizeEmail(current.emailLower || current.email || "")) {
       const duplicateSnap = await adminDb.collection("outreach_leads").where("emailLower", "==", nextEmailLower).limit(5).get();
-      const duplicate = duplicateSnap.docs.find((item: any) => item.id !== leadId && !["failed", "cancelled", "blocked_daily_limit"].includes(String((item.data() || {}).status || "")));
+      const duplicate = duplicateSnap.docs.find((item: any) => {
+        if (item.id === leadId) return false;
+        const data = item.data() || {};
+        const status = String(data.status || "").trim().toLowerCase();
+        if (["failed", "cancelled", "blocked_daily_limit"].includes(status)) return false;
+        if (data.footprintAllowedAgain === true || data.footprintIgnored === true || data.allowedAgain === true || data.allowRecontact === true) return false;
+        if (toMillis(data.footprintAllowedAgainAt) || toMillis(data.footprintIgnoredAt)) return false;
+        return true;
+      });
       if (duplicate) throw new ApiError("Duplicate email already exists in outreach leads.", 409);
     }
 
