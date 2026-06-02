@@ -370,6 +370,24 @@ function trackflowRequestDebugMeta(req?: Request): Record<string, any> {
   };
 }
 
+function isBrevoImageProxyOpenRequest(req?: Request): boolean {
+  const userAgent = String(req?.headers.get("user-agent") || "").toLowerCase();
+  if (!userAgent) return false;
+
+  return (
+    userAgent.includes("brevo/1.0") &&
+    (userAgent.includes("redirection-images") || userAgent.includes("image"))
+  );
+}
+
+function shouldIgnoreProviderImageProxyOpen(req?: Request): { ignore: boolean; reason: string } {
+  if (isBrevoImageProxyOpenRequest(req)) {
+    return { ignore: true, reason: "brevo_redirection_image_proxy" };
+  }
+
+  return { ignore: false, reason: "" };
+}
+
 const SERVICE_IDS = ["Email Signature", "Google Ads", "Server Side Tracking"] as const;
 const STEP_IDS = ["step1", "step2", "step3", "step4", "step5"] as const;
 
@@ -4505,6 +4523,35 @@ async function recordSelfHostedEmailEngagement(
       trackingId: meta.trackingId || leadData.trackingId || "",
       internalTestRecipient: shouldIgnoreInternalTestOpen(normalizedRecipientEmail),
     });
+
+    const providerImageProxyOpen = shouldIgnoreProviderImageProxyOpen(meta.req);
+    if (providerImageProxyOpen.ignore) {
+      trackflowEmailDebugLog("self_hosted_open_ignored_provider_image_proxy", {
+        leadId: leadDoc.id,
+        emailLower: normalizedRecipientEmail,
+        secondsAfterSent,
+        currentOpenCount: Number(leadData.open_count || 0),
+        ignoredReason: providerImageProxyOpen.reason,
+        userAgent: meta.req?.headers.get("user-agent") || "",
+      });
+
+      await addEmailEvent(leadDoc.id, "trackflow_open_ignored", {
+        emailLower: normalizedRecipientEmail,
+        trackingTag: tag || "",
+        url: meta.targetUrl || "",
+        source: "trackflow_self_hosted_tracking",
+        eventTime,
+        reportToken,
+        messageId: meta.messageId || "",
+        trackingId: meta.trackingId || leadData.trackingId || "",
+        ignoredForAutomation: true,
+        ignoredReason: providerImageProxyOpen.reason,
+        secondsAfterSent,
+        userAgent: meta.req?.headers.get("user-agent") || "",
+        forceStore: true,
+      });
+      return { recorded: false, reason: providerImageProxyOpen.reason };
+    }
 
     if (shouldIgnoreInternalTestOpen(normalizedRecipientEmail)) {
       trackflowEmailDebugLog("self_hosted_open_ignored_internal_test", {
