@@ -436,25 +436,6 @@ function isManualDashboardLead(lead: Lead): boolean {
 }
 
 
-
-function trackflowFrontendDebugLog(label: string, payload: Record<string, any> = {}) {
-  if (typeof window === "undefined") return;
-
-  const localDebugEnabled = window.localStorage.getItem("TRACKFLOW_DEBUG_EMAIL_FLOW") === "true";
-  const envDebugEnabled = process.env.NEXT_PUBLIC_TRACKFLOW_DEBUG_EMAIL_FLOW === "true";
-  if (!localDebugEnabled && !envDebugEnabled) return;
-
-  try {
-    console.log(`[TRACKFLOW_EMAIL_DEBUG_UI] ${label}`, {
-      at: new Date().toISOString(),
-      label,
-      ...payload,
-    });
-  } catch {
-    console.log(`[TRACKFLOW_EMAIL_DEBUG_UI] ${label}`, payload);
-  }
-}
-
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<MainTab>("overview");
   const {
@@ -1573,24 +1554,6 @@ export default function DashboardPage() {
       const sheetReportTokenForSend = sheetLeadForSend ? sheetValue(sheetLeadForSend, "Report Token") : "";
       const sourceRoleForSend = sheetLeadForSend || normalizeOptionalUrl(reportUrl) ? "manual_report_linked" : "manual";
 
-      trackflowFrontendDebugLog("send_email_submit_pre_api", {
-        scheduledAtISO,
-        email,
-        selectedService,
-        selectedSender: activeSender.id,
-        senderEmail: activeSender.email,
-        sourceOrigin: "manual",
-        sourceRoleForSend,
-        sheetLeadForSend: Boolean(sheetLeadForSend),
-        sheetRowNumberForSend,
-        sheetFinalEmailForSend,
-        hasReportUrl: Boolean(normalizeOptionalUrl(reportUrl)),
-        reportUrl: normalizeOptionalUrl(reportUrl),
-        reportToken: sheetReportTokenForSend || "",
-        allowDuplicateSend,
-        allowCooldownOverride,
-      });
-
       if (sheetLeadForSend && sheetRowNumberForSend) {
         await patchSheetLead(sheetRowNumberForSend, {
           "Email Subject": currentSubject,
@@ -1650,23 +1613,6 @@ export default function DashboardPage() {
 
       const data = await res.json();
 
-      trackflowFrontendDebugLog("send_email_api_response", {
-        ok: res.ok,
-        status: res.status,
-        scheduledAtISO,
-        email,
-        sourceRoleForSend,
-        sheetLeadForSend: Boolean(sheetLeadForSend),
-        leadId: data?.leadId || data?.id || "",
-        trackingId: data?.trackingId || "",
-        success: data?.success,
-        scheduled: data?.scheduled,
-        provider: data?.provider || "",
-        messageId: data?.messageId || "",
-        error: data?.error || "",
-        responseKeys: data && typeof data === "object" ? Object.keys(data).sort() : [],
-      });
-
       if (data.success) {
         if (sheetLeadForSend && sheetRowNumberForSend) {
           try {
@@ -1692,18 +1638,6 @@ export default function DashboardPage() {
         const leadIdFromResponse = String(data.leadId || data.id || "").trim();
         const nowIso = new Date().toISOString();
         if (leadIdFromResponse) {
-          trackflowFrontendDebugLog("send_email_patch_lead_cache_before", {
-            leadId: leadIdFromResponse,
-            email,
-            scheduledAtISO,
-            statusToPatch: scheduledAtISO ? "scheduled" : "sent",
-            openCountToPatch: 0,
-            clickCountToPatch: 0,
-            sourceOrigin: "manual",
-            sourceRoleForSend,
-            sheetLeadForSend: Boolean(sheetLeadForSend),
-          });
-
           patchLeadInCache(leadIdFromResponse, {
             id: leadIdFromResponse,
             email,
