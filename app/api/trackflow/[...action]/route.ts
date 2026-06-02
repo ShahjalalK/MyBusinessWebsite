@@ -380,12 +380,33 @@ function isBrevoImageProxyOpenRequest(req?: Request): boolean {
   );
 }
 
-function shouldIgnoreProviderImageProxyOpen(req?: Request): { ignore: boolean; reason: string } {
-  if (isBrevoImageProxyOpenRequest(req)) {
-    return { ignore: true, reason: "brevo_redirection_image_proxy" };
+function providerImageProxyFastOpenWindowSeconds(): number {
+  return intEnv("IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS", 30, 0, 300);
+}
+
+function shouldIgnoreProviderImageProxyOpen(
+  req?: Request,
+  secondsAfterSent?: number | null,
+): { ignore: boolean; reason: string; windowSeconds: number } {
+  const windowSeconds = providerImageProxyFastOpenWindowSeconds();
+
+  if (!isBrevoImageProxyOpenRequest(req)) {
+    return { ignore: false, reason: "", windowSeconds };
   }
 
-  return { ignore: false, reason: "" };
+  // Brevo may fetch/proxy the tracking pixel very quickly after send.
+  // Ignore only that early provider-image fetch, not every Brevo image proxy hit.
+  // Real Gmail/recipient opens can also arrive through Brevo's image proxy, so
+  // after the short safety window we allow the normal 4-hour dedupe logic to run.
+  if (typeof secondsAfterSent !== "number" || !Number.isFinite(secondsAfterSent)) {
+    return { ignore: true, reason: "brevo_redirection_image_proxy_missing_sent_time", windowSeconds };
+  }
+
+  if (windowSeconds > 0 && secondsAfterSent >= 0 && secondsAfterSent <= windowSeconds) {
+    return { ignore: true, reason: "brevo_redirection_image_proxy_fast_prefetch", windowSeconds };
+  }
+
+  return { ignore: false, reason: "", windowSeconds };
 }
 
 const SERVICE_IDS = ["Email Signature", "Google Ads", "Server Side Tracking"] as const;
@@ -4524,7 +4545,7 @@ async function recordSelfHostedEmailEngagement(
       internalTestRecipient: shouldIgnoreInternalTestOpen(normalizedRecipientEmail),
     });
 
-    const providerImageProxyOpen = shouldIgnoreProviderImageProxyOpen(meta.req);
+    const providerImageProxyOpen = shouldIgnoreProviderImageProxyOpen(meta.req, secondsAfterSent);
     if (providerImageProxyOpen.ignore) {
       trackflowEmailDebugLog("self_hosted_open_ignored_provider_image_proxy", {
         leadId: leadDoc.id,
@@ -4532,6 +4553,7 @@ async function recordSelfHostedEmailEngagement(
         secondsAfterSent,
         currentOpenCount: Number(leadData.open_count || 0),
         ignoredReason: providerImageProxyOpen.reason,
+        fastOpenWindowSeconds: providerImageProxyOpen.windowSeconds,
         userAgent: meta.req?.headers.get("user-agent") || "",
       });
 
@@ -4546,6 +4568,7 @@ async function recordSelfHostedEmailEngagement(
         trackingId: meta.trackingId || leadData.trackingId || "",
         ignoredForAutomation: true,
         ignoredReason: providerImageProxyOpen.reason,
+        fastOpenWindowSeconds: providerImageProxyOpen.windowSeconds,
         secondsAfterSent,
         userAgent: meta.req?.headers.get("user-agent") || "",
         forceStore: true,
