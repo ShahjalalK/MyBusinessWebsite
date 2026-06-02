@@ -126,8 +126,8 @@ function SourceBadge({ label }: { label: string }) {
 
 function sheetSendStatusActionLabel(lead: SheetLead) {
   const status = sheetValue(lead, "Send Status").toLowerCase();
-  if (["sent", "scheduled", "queued"].includes(status)) return "Add Recipient";
-  return "Open in Send Email";
+  if (["sent", "scheduled", "queued"].includes(status)) return "Use Report Again";
+  return "Open in Composer";
 }
 
 function DetailLine({ label, value }: { label: string; value: ReactNode }) {
@@ -379,8 +379,8 @@ export default function SheetQueuePanel({
           <div className="bg-white border border-gray-100 rounded-[35px] shadow-sm overflow-hidden">
             <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Sheet rows</p>
-                <p className="text-sm font-bold text-gray-500">Showing {visibleRows.length} of {sheetLeads.length} loaded rows</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Sheet source rows</p>
+                <p className="text-sm font-bold text-gray-500">Showing {visibleRows.length} of {sheetLeads.length} source rows</p>
               </div>
               {sheetLoading ? <Loader2 size={18} className="animate-spin text-blue-600" /> : null}
             </div>
@@ -511,7 +511,7 @@ export default function SheetQueuePanel({
                   disabled={!canOpenEmailComposer}
                   className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black uppercase text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
                 >
-                  <Send size={14} /> {selectedLead ? sheetSendStatusActionLabel(selectedLead) : "Open in Send Email"}
+                  <Send size={14} /> {selectedLead ? sheetSendStatusActionLabel(selectedLead) : "Open in Composer"}
                 </button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

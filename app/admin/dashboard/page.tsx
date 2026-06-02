@@ -178,7 +178,7 @@ function emptyReportAssetCleanupState(): ReportAssetCleanupState {
   return {
     input: "",
     mode: "hard",
-    leadMode: "delete",
+    leadMode: "delete_no_memory",
     sheetMode: "delete",
     loading: false,
     error: "",
@@ -404,16 +404,15 @@ type DashboardLeadSourceKind = "manual" | "manual_report_linked" | "sheet_primar
 
 function getDashboardLeadSourceKind(lead: Lead): DashboardLeadSourceKind {
   const source = String(lead.source || "").toLowerCase();
-  const sourceOrigin = String(lead.sourceOrigin || "").toLowerCase();
   const sourceRole = String(lead.sourceRole || "").toLowerCase();
   const email = String(lead.emailLower || lead.email || "").toLowerCase();
   const keepUnderSheetAudit = lead.keepUnderSheetAudit === true;
 
   if (sourceRole === "test" || source.includes("test") || email.includes("test@") || email === MAIN_INBOX_EMAIL.toLowerCase()) return "test";
+  if (sourceRole === "manual_report_linked") return "manual_report_linked";
   if (sourceRole === "sheet_primary") return "sheet_primary";
   if (sourceRole === "sheet_additional_recipient" || sourceRole === "sheet_additional") return "sheet_additional";
-  if (sourceRole === "manual_report_linked") return "manual_report_linked";
-  if (keepUnderSheetAudit || sourceOrigin === "sheet") {
+  if (keepUnderSheetAudit) {
     const sheetEmail = String(lead.sheetFinalEmail || lead.parentSheetEmail || "").trim().toLowerCase();
     return sheetEmail && sheetEmail !== email ? "sheet_additional" : "sheet_primary";
   }
@@ -600,7 +599,6 @@ export default function DashboardPage() {
   const [draftReady, setDraftReady] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
   const [selectedOutreachSheetRow, setSelectedOutreachSheetRow] = useState<number | null>(null);
-  const [keepUnderSheetAudit, setKeepUnderSheetAudit] = useState(false);
   const [leadRefreshLoading, setLeadRefreshLoading] = useState(false);
   const [leadRefreshStatus, setLeadRefreshStatus] = useState("");
 
@@ -771,7 +769,6 @@ export default function DashboardPage() {
         setReportUrl(String(draft.reportUrl || ""));
         setReportButtonText(String(draft.reportButtonText || "View short audit note"));
         setSelectedOutreachSheetRow(draft.selectedOutreachSheetRow ? Number(draft.selectedOutreachSheetRow) || null : null);
-        setKeepUnderSheetAudit(Boolean(draft.keepUnderSheetAudit));
         setIncludeSignature(draft.includeSignature !== false);
 
         if (draft.selectedService && SERVICE_NAMES.includes(draft.selectedService as ServiceId)) {
@@ -826,7 +823,6 @@ export default function DashboardPage() {
       reportUrl,
       reportButtonText,
       selectedOutreachSheetRow,
-      keepUnderSheetAudit,
       savedAt: new Date().toISOString(),
     };
 
@@ -854,7 +850,6 @@ export default function DashboardPage() {
     reportUrl,
     reportButtonText,
     selectedOutreachSheetRow,
-    keepUnderSheetAudit,
   ]);
 
   useEffect(() => {
@@ -1100,7 +1095,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === "scheduled") {
-      loadScheduledEmails(false);
+      // Always refresh when opening the Scheduled tab so Brevo-sent rows do not
+      // remain visible from an old local cache.
+      loadScheduledEmails(true);
     }
   }, [activeTab, sendStatus]);
 
@@ -1456,14 +1453,12 @@ export default function DashboardPage() {
     setScheduledTime("");
     setReportUrl("");
     setSelectedOutreachSheetRow(null);
-    setKeepUnderSheetAudit(false);
     setEmailError("");
     setDuplicateLead(null);
     setAllowDuplicateSend(false);
     setContactMemoryWarning(null);
     setAllowCooldownOverride(false);
     setSelectedOutreachSheetRow(null);
-    setKeepUnderSheetAudit(false);
     window.localStorage.removeItem(OUTREACH_DRAFT_KEY);
     setLastDraftSavedAt("");
   };
@@ -1548,7 +1543,7 @@ export default function DashboardPage() {
     }
 
     setSending(true);
-    setSendStatus("Launching Campaign...");
+    setSendStatus(scheduledTime ? "Scheduling with Brevo..." : "Launching Campaign...");
 
     try {
       const token = await currentUser.getIdToken();
@@ -1557,18 +1552,9 @@ export default function DashboardPage() {
       const sheetRowNumberForSend = sheetLeadForSend ? Number(sheetLeadForSend.rowNumber || 0) : 0;
       const sheetFinalEmailForSend = sheetLeadForSend ? sheetValue(sheetLeadForSend, "Final Email") : "";
       const sheetReportTokenForSend = sheetLeadForSend ? sheetValue(sheetLeadForSend, "Report Token") : "";
-      const keepUnderSelectedSheetAudit = Boolean(sheetLeadForSend && keepUnderSheetAudit);
-      const sourceRoleForSend = sheetLeadForSend
-        ? keepUnderSelectedSheetAudit
-          ? String(email || "").trim().toLowerCase() === String(sheetFinalEmailForSend || "").trim().toLowerCase()
-            ? "sheet_primary"
-            : "sheet_additional_recipient"
-          : "manual_report_linked"
-        : normalizeOptionalUrl(reportUrl)
-          ? "manual_report_linked"
-          : "manual";
+      const sourceRoleForSend = sheetLeadForSend || normalizeOptionalUrl(reportUrl) ? "manual_report_linked" : "manual";
 
-      if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
+      if (sheetLeadForSend && sheetRowNumberForSend) {
         await patchSheetLead(sheetRowNumberForSend, {
           "Email Subject": currentSubject,
           "Email Body": currentMessage,
@@ -1576,7 +1562,9 @@ export default function DashboardPage() {
           "Send Status": scheduledAtISO ? "Scheduling" : "Sending",
           "Sender ID": activeSender.id,
           "Last Synced": new Date().toISOString(),
-          Notes: scheduledAtISO ? "Opened from Send Email drawer and scheduling from composer." : "Opened from Send Email drawer and sending from composer.",
+          Notes: scheduledAtISO
+            ? "Opened from Sheet source and scheduling from composer. Sent lead will be managed independently in Firestore."
+            : "Opened from Sheet source and sending from composer. Sent lead will be managed independently in Firestore.",
         });
       }
 
@@ -1603,9 +1591,9 @@ export default function DashboardPage() {
           allowDuplicateSend,
           allowCooldownOverride,
           senderId: activeSender.id,
-          sourceOrigin: sheetLeadForSend ? (keepUnderSelectedSheetAudit ? "sheet" : "manual") : "manual",
+          sourceOrigin: "manual",
           sourceRole: sourceRoleForSend,
-          keepUnderSheetAudit: keepUnderSelectedSheetAudit,
+          keepUnderSheetAudit: false,
           ...(sheetLeadForSend
             ? {
                 reportToken: sheetReportTokenForSend,
@@ -1613,14 +1601,11 @@ export default function DashboardPage() {
                 pdfViewUrl: sheetValue(sheetLeadForSend, "PDF View URL"),
                 pdfDownloadUrl: sheetValue(sheetLeadForSend, "PDF Download URL"),
                 pdfExpiresAt: sheetValue(sheetLeadForSend, "PDF Expires At"),
-                sheetRowNumber: keepUnderSelectedSheetAudit ? sheetRowNumberForSend : undefined,
-                sheetWebsiteUrl: keepUnderSelectedSheetAudit ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
-                sheetFinalEmail: keepUnderSelectedSheetAudit ? sheetFinalEmailForSend : undefined,
-                parentSheetRowNumber: sheetRowNumberForSend,
-                parentSheetEmail: sheetFinalEmailForSend,
-                parentSheetWebsiteUrl: sheetValue(sheetLeadForSend, "Website URL"),
-                parentReportToken: sheetReportTokenForSend,
-                source: keepUnderSelectedSheetAudit ? "google_sheet_send_email_drawer" : "manual_report_linked_from_sheet_composer",
+                sourceSheetRowNumber: sheetRowNumberForSend,
+                sourceSheetEmail: sheetFinalEmailForSend,
+                sourceSheetWebsiteUrl: sheetValue(sheetLeadForSend, "Website URL"),
+                sourceReportToken: sheetReportTokenForSend,
+                source: "manual_report_linked_from_sheet_composer",
               }
             : {}),
         }),
@@ -1629,7 +1614,7 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (data.success) {
-        if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
+        if (sheetLeadForSend && sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
               "Email Subject": currentSubject,
@@ -1643,7 +1628,7 @@ export default function DashboardPage() {
               "Click Count": "0",
               "Sender ID": activeSender.id,
               "Last Synced": new Date().toISOString(),
-              Notes: scheduledAtISO ? "Scheduled from Send Email composer drawer." : "Sent from Send Email composer drawer.",
+              Notes: scheduledAtISO ? "Scheduled with Brevo from Send Email composer drawer. Delivery is provider-managed, not cron-batched." : "Sent from Send Email composer drawer.",
             });
           } catch (sheetError) {
             console.error("Sheet status update after send failed:", sheetError);
@@ -1674,16 +1659,13 @@ export default function DashboardPage() {
             reportUrl: normalizeOptionalUrl(reportUrl),
             reportButtonText,
             reportToken: sheetLeadForSend ? sheetReportTokenForSend : undefined,
-            sourceOrigin: sheetLeadForSend ? (keepUnderSelectedSheetAudit ? "sheet" : "manual") : "manual",
+            sourceOrigin: "manual",
             sourceRole: sourceRoleForSend,
-            keepUnderSheetAudit: keepUnderSelectedSheetAudit,
-            sheetRowNumber: keepUnderSelectedSheetAudit ? sheetRowNumberForSend || undefined : undefined,
-            sheetWebsiteUrl: keepUnderSelectedSheetAudit && sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
-            sheetFinalEmail: keepUnderSelectedSheetAudit ? sheetFinalEmailForSend : undefined,
-            parentSheetRowNumber: sheetLeadForSend ? sheetRowNumberForSend || undefined : undefined,
-            parentSheetEmail: sheetLeadForSend ? sheetFinalEmailForSend : undefined,
-            parentSheetWebsiteUrl: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
-            parentReportToken: sheetLeadForSend ? sheetReportTokenForSend : undefined,
+            keepUnderSheetAudit: false,
+            sourceSheetRowNumber: sheetLeadForSend ? sheetRowNumberForSend || undefined : undefined,
+            sourceSheetEmail: sheetLeadForSend ? sheetFinalEmailForSend : undefined,
+            sourceSheetWebsiteUrl: sheetLeadForSend ? sheetValue(sheetLeadForSend, "Website URL") : undefined,
+            sourceReportToken: sheetLeadForSend ? sheetReportTokenForSend : undefined,
             open_count: 0,
             click_count: 0,
           });
@@ -1696,11 +1678,11 @@ export default function DashboardPage() {
           }));
         }
 
-        setSendStatus(scheduledAtISO ? "Success! Email Scheduled." : "Success! Outreach Launched.");
+        setSendStatus(scheduledAtISO ? "Success! Email scheduled with Brevo." : "Success! Outreach Launched.");
         void loadFollowupSummary(true);
         resetOutreachForm();
       } else if (data.warningOnly && data.code === "cooldown_active") {
-        if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
+        if (sheetLeadForSend && sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
               "Send Status": "Needs Review",
@@ -1715,7 +1697,7 @@ export default function DashboardPage() {
         setAllowCooldownOverride(false);
         setSendStatus("Cooldown warning: review and enable override if you still want to send.");
       } else {
-        if (keepUnderSelectedSheetAudit && sheetRowNumberForSend) {
+        if (sheetLeadForSend && sheetRowNumberForSend) {
           try {
             await patchSheetLead(sheetRowNumberForSend, {
               "Send Status": "Failed",
@@ -1730,7 +1712,7 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error(error);
-      if (keepUnderSheetAudit && selectedOutreachSheetLead?.rowNumber) {
+      if (selectedOutreachSheetLead?.rowNumber) {
         try {
           await patchSheetLead(Number(selectedOutreachSheetLead.rowNumber), {
             "Send Status": "Failed",
@@ -2128,14 +2110,12 @@ export default function DashboardPage() {
       const actionName =
         reportAssetCleanup.mode === "assets_only"
           ? "Remove Files From Selected"
-          : "Delete Selected Reports";
+          : "Delete Selected — No Footprint";
 
       const contactModeNote =
-        reportAssetCleanup.leadMode === "delete_no_memory"
-          ? " No-memory contact delete will only run for contacts with no outreach history."
-          : reportAssetCleanup.leadMode === "delete"
-            ? " A tiny safety memory will be kept when needed."
-            : "";
+        reportAssetCleanup.mode === "assets_only"
+          ? ""
+          : " No contact footprint memory will be kept by this cleanup action.";
 
       if (!window.confirm(`${actionName} will process ${tokens.length} selected report(s).${contactModeNote} Continue?`)) return;
     }
@@ -2157,7 +2137,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           tokens,
           mode: reportAssetCleanup.mode === "assets_only" ? "assets_only" : "hard",
-          leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : reportAssetCleanup.leadMode,
+          leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : "delete_no_memory",
           sheetMode: reportAssetCleanup.mode === "assets_only" ? "skip" : "delete",
           dryRun,
           confirm: dryRun ? undefined : "DELETE",
@@ -2202,7 +2182,7 @@ export default function DashboardPage() {
     const input = reportAssetCleanup.input.trim();
     const params = new URLSearchParams({
       mode: reportAssetCleanup.mode === "assets_only" ? "assets_only" : "hard",
-      leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : reportAssetCleanup.leadMode,
+      leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : "delete_no_memory",
       sheetMode: reportAssetCleanup.mode === "assets_only" ? "skip" : "delete",
     });
 
@@ -2275,14 +2255,14 @@ export default function DashboardPage() {
     }
 
     const contactModeNote =
-      reportAssetCleanup.leadMode === "delete_no_memory"
-        ? " The linked contact will be deleted only if no outreach history is found."
-        : " A tiny footprint memory will be kept for the linked contact when possible.";
+      reportAssetCleanup.mode === "assets_only"
+        ? ""
+        : " No contact footprint memory will be kept by this cleanup action.";
 
     const confirmMessage =
       reportAssetCleanup.mode === "assets_only"
         ? "Remove Files Only will remove the PDF, preview image, and chat history but keep saved records. Continue?"
-        : `Delete Everywhere will remove the secure report, files, Sheet row, and linked contact data.${contactModeNote} Continue?`;
+        : `Delete All Data will remove the secure report, files, Sheet row, and report-linked contact data.${contactModeNote} Continue?`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -2304,7 +2284,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           ...(inputIsUrl ? { reportUrl: input } : { token: input }),
           mode: reportAssetCleanup.mode === "assets_only" ? "assets_only" : "hard",
-          leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : reportAssetCleanup.leadMode,
+          leadMode: reportAssetCleanup.mode === "assets_only" ? "none" : "delete_no_memory",
           sheetMode: reportAssetCleanup.mode === "assets_only" ? "skip" : "delete",
           dryRun: false,
           confirm: "DELETE",
@@ -2331,6 +2311,7 @@ export default function DashboardPage() {
       await loadCleanupCandidates(leadCleanup.bucket as CleanupBucket, true);
       await loadSecureReports(true);
       await loadSheetLeads(true);
+      await loadFootprintMemories(true);
       await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
     } catch (error: any) {
       console.error("Report cleanup run error:", error);
@@ -2550,6 +2531,7 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || "Allow again failed");
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || "Email allowed again." }));
       await loadFootprintMemories(true);
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
     } catch (error: any) {
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Allow again failed", status: "" }));
     }
@@ -2603,8 +2585,12 @@ export default function DashboardPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Forget memory failed");
+      const deletedLeadIds = Array.isArray(data.deletedLeadIds) ? data.deletedLeadIds.filter(Boolean) : [];
+      if (deletedLeadIds.length) removeLeadsFromCache(deletedLeadIds);
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || "Footprint memory removed." }));
       await loadFootprintMemories(true);
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
+      await loadFirebaseUsage(true);
     } catch (error: any) {
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Forget memory failed", status: "" }));
     }
@@ -2626,6 +2612,8 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || "Bulk forget failed");
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, status: data.message || `Forgot ${data.count || 0} old footprint memories.` }));
       await loadFootprintMemories(true);
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
+      await loadFirebaseUsage(true);
     } catch (error: any) {
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Bulk forget failed", status: "" }));
     }
@@ -2808,7 +2796,7 @@ export default function DashboardPage() {
         ? `Type ${confirmText} to allow ${emails.length} selected email(s) again. Hard unsubscribe/spam/bounce records may remain protected unless you delete those protected records separately.`
         : `Type ${confirmText} to allow ${emails.length} selected email(s) again.`,
     );
-    if (typed !== confirmText) return;
+    if (String(typed || "").trim().toUpperCase() !== confirmText) return;
 
     setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Allowing selected emails again...", error: "" }));
     try {
@@ -2821,6 +2809,7 @@ export default function DashboardPage() {
       if (!response.ok || !data.success) throw new Error(data.error || data.message || "Allow selected failed");
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, selectedEmails: [], status: data.message || "Selected emails allowed again." }));
       await loadFootprintMemories(true);
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
     } catch (error: any) {
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Allow selected failed", status: "" }));
     }
@@ -2838,7 +2827,7 @@ export default function DashboardPage() {
         ? `Type DELETE SELECTED to permanently delete/ignore ${emails.length} selected footprint email(s), including protected suppression rows. Use this only for accidental/test/old records.`
         : `Type DELETE SELECTED to permanently delete/ignore ${emails.length} selected footprint email(s).`,
     );
-    if (typed !== "DELETE SELECTED") return;
+    if (String(typed || "").trim().toUpperCase() !== "DELETE SELECTED") return;
 
     setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: true, status: "Deleting selected footprints...", error: "" }));
     try {
@@ -2849,8 +2838,12 @@ export default function DashboardPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || data.message || "Delete selected failed");
+      const deletedLeadIds = Array.isArray(data.deletedLeadIds) ? data.deletedLeadIds.filter(Boolean) : [];
+      if (deletedLeadIds.length) removeLeadsFromCache(deletedLeadIds);
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, selectedEmails: [], status: data.message || "Selected footprints deleted." }));
       await loadFootprintMemories(true);
+      await refreshLeads({ view: leadView, month: selectedMonth, status: leadStatusFilter, source: leadSourceFilter });
+      await loadFirebaseUsage(true);
     } catch (error: any) {
       setFootprintMemory((prev: FootprintMemoryState) => ({ ...prev, actionLoading: false, error: error?.message || "Delete selected failed", status: "" }));
     }
@@ -2981,7 +2974,6 @@ export default function DashboardPage() {
     const emailCopy = getSheetEmailCopyForComposer(lead);
 
     setSelectedOutreachSheetRow(Number(lead.rowNumber) || null);
-    setKeepUnderSheetAudit(true);
     setAllowDuplicateSend(false);
     setAllowCooldownOverride(false);
     setEmail(sheetValue(lead, "Final Email"));
@@ -3051,17 +3043,14 @@ export default function DashboardPage() {
         pdfViewUrl: sheetValue(lead, "PDF View URL"),
         pdfDownloadUrl: sheetValue(lead, "PDF Download URL"),
         pdfExpiresAt: sheetValue(lead, "PDF Expires At"),
-        sheetRowNumber: lead.rowNumber,
-        sheetWebsiteUrl: sheetValue(lead, "Website URL"),
-        sheetFinalEmail: finalEmail,
-        source: "google_sheet",
-        sourceOrigin: "sheet",
-        sourceRole: "sheet_primary",
-        keepUnderSheetAudit: true,
-        parentSheetRowNumber: lead.rowNumber,
-        parentSheetEmail: finalEmail,
-        parentSheetWebsiteUrl: sheetValue(lead, "Website URL"),
-        parentReportToken: sheetValue(lead, "Report Token"),
+        sourceSheetRowNumber: lead.rowNumber,
+        sourceSheetEmail: finalEmail,
+        sourceSheetWebsiteUrl: sheetValue(lead, "Website URL"),
+        sourceReportToken: sheetValue(lead, "Report Token"),
+        source: "manual_report_linked_from_sheet_direct_send",
+        sourceOrigin: "manual",
+        sourceRole: "manual_report_linked",
+        keepUnderSheetAudit: false,
         senderId: activeSender.id,
       }),
     });
@@ -3456,8 +3445,6 @@ export default function DashboardPage() {
       sheetLoading={sheetLoading}
       sheetStatus={sheetStatus}
       selectedOutreachSheetRow={selectedOutreachSheetRow}
-      keepUnderSheetAudit={keepUnderSheetAudit}
-      setKeepUnderSheetAudit={setKeepUnderSheetAudit}
       loadSheetLeads={loadEmailDrawerSheetLeads}
       fillOutreachFromSheet={fillOutreachFromSheet}
       handleSenderChange={handleSenderChange}

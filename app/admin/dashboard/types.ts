@@ -71,6 +71,14 @@ export type Lead = {
   retryCount?: number;
   lastFollowupError?: string;
   sentAt?: any;
+  scheduledAt?: any;
+  scheduledProvider?: string;
+  providerScheduleStatus?: string;
+  brevoScheduled?: boolean;
+  brevoScheduledAt?: any;
+  brevoScheduledAtIso?: string;
+  scheduledAcceptedAt?: any;
+  brevoMessageId?: string;
   tracking_history?: TrackingHistory[];
   follow_up_count?: number;
   sent_messages?: SentMessage[];

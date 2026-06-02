@@ -96,8 +96,6 @@ type OutreachPanelProps = {
   sheetLoading: boolean;
   sheetStatus: string;
   selectedOutreachSheetRow: number | null;
-  keepUnderSheetAudit: boolean;
-  setKeepUnderSheetAudit: SetState<boolean>;
   loadSheetLeads: (force?: boolean) => Promise<void>;
   fillOutreachFromSheet: (lead: SheetLead) => void;
   handleSenderChange: (senderId: string) => void;
@@ -156,8 +154,6 @@ export default function OutreachPanel({
   sheetLoading,
   sheetStatus,
   selectedOutreachSheetRow,
-  keepUnderSheetAudit,
-  setKeepUnderSheetAudit,
   loadSheetLeads,
   fillOutreachFromSheet,
   handleSenderChange,
@@ -585,20 +581,12 @@ export default function OutreachPanel({
                     <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase text-blue-700">
                       Loaded from Sheet row {selectedOutreachSheetRow}
                     </p>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 text-xs font-bold text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={keepUnderSheetAudit}
-                        onChange={(event) => setKeepUnderSheetAudit(event.target.checked)}
-                        className="mt-0.5"
-                      />
-                      <span>
-                        <span className="block text-[10px] font-black uppercase text-blue-700">Keep under this Sheet audit/report</span>
-                        <span className="block text-[10px] leading-relaxed text-slate-500">
-                          Checked: changed recipients stay linked to this Sheet/report and are cleaned up with it. Unchecked: this becomes a manual report-linked lead.
-                        </span>
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-3 text-xs font-bold text-slate-700">
+                      <span className="block text-[10px] font-black uppercase text-blue-700">Sheet source only</span>
+                      <span className="block text-[10px] leading-relaxed text-slate-500">
+                        This row only fills the composer. After sending, the email becomes an independent Firestore outreach lead managed from Lead Management.
                       </span>
-                    </label>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -743,7 +731,7 @@ export default function OutreachPanel({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule Later</span>
+                  <span className="text-[10px] font-bold text-blue-500 ml-1 uppercase">Schedule with Brevo</span>
                   <input
                     type="datetime-local"
                     min={minDateTime}
@@ -751,6 +739,9 @@ export default function OutreachPanel({
                     value={scheduledTime}
                     onChange={(e: any) => setScheduledTime(e.target.value)}
                   />
+                  <p className="text-[10px] font-bold text-blue-500 leading-relaxed">
+                    Initial scheduled delivery is handled by Brevo, so emails do not wait for the cron batch.
+                  </p>
                 </div>
 
                 <button
@@ -758,7 +749,7 @@ export default function OutreachPanel({
                   disabled={!canSend}
                   className="w-full py-5 rounded-3xl font-black text-lg bg-black text-white hover:bg-blue-600 transition-all shadow-xl flex justify-center items-center gap-3 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  {sending ? <Loader2 className="animate-spin" /> : <><Send size={20} /> {scheduledTime ? "Schedule Email" : "Send Now"}</>}
+                  {sending ? <Loader2 className="animate-spin" /> : <><Send size={20} /> {scheduledTime ? "Schedule via Brevo" : "Send Now"}</>}
                 </button>
               </div>
 

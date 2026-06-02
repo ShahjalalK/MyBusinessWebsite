@@ -59,7 +59,9 @@ export function shouldStoreRawEmailEvent(event: string): boolean {
     name === "bounced" ||
     name === "failed" ||
     name === "cron_error" ||
-    name === "manual_action"
+    name === "manual_action" ||
+    name === "brevo_open_ignored" ||
+    name === "trackflow_open_ignored"
   );
 }
 

@@ -8,6 +8,38 @@ import { isSecureReportUrl } from "../sheet-readiness";
 
 type SetState<T> = (value: T | ((current: T) => T)) => void;
 
+const SCHEDULED_EMAIL_CACHE_TTL_MS = 30_000;
+const BREVO_SCHEDULED_TAB_GRACE_MS = 10 * 60 * 1000;
+
+function toMillis(value: any): number {
+  if (!value) return 0;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (typeof value?.toMillis === "function") return Number(value.toMillis()) || 0;
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  return 0;
+}
+
+function isVisibleScheduledEmail(lead: Lead): boolean {
+  const status = String(lead.status || "").trim().toLowerCase();
+  if (status && status !== "scheduled") return false;
+  if (lead.sentAt || lead.lastSentAt) return false;
+
+  const providerStatus = String(lead.providerScheduleStatus || "").trim().toLowerCase();
+  if (["sent", "delivered", "opened", "clicked", "processed", "cancelled", "failed"].includes(providerStatus)) return false;
+
+  const provider = String(lead.scheduledProvider || "").trim().toLowerCase();
+  const brevoManaged = lead.brevoScheduled === true || provider === "brevo";
+  const scheduledAtMs = toMillis(lead.scheduledAt || lead.brevoScheduledAt);
+
+  if (brevoManaged && scheduledAtMs > 0 && scheduledAtMs <= Date.now() - BREVO_SCHEDULED_TAB_GRACE_MS) return false;
+
+  return true;
+}
+
 type UseScheduledEmailsParams = {
   scheduledEmails: Lead[];
   scheduledLoadedAt: number | null;
@@ -41,8 +73,12 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
         return;
       }
 
-      if (!force && scheduledLoadedAt && scheduledEmails.length >= 0) {
-        setScheduledStatus(`Cached ${scheduledEmails.length} scheduled email(s). Use refresh if needed.`);
+      if (!force && scheduledLoadedAt && Date.now() - scheduledLoadedAt < SCHEDULED_EMAIL_CACHE_TTL_MS) {
+        const visibleCachedRows = scheduledEmails.filter(isVisibleScheduledEmail);
+        if (visibleCachedRows.length !== scheduledEmails.length) {
+          setScheduledEmails(visibleCachedRows);
+        }
+        setScheduledStatus(`Cached ${visibleCachedRows.length} scheduled email(s). Use refresh if needed.`);
         return;
       }
 
@@ -56,9 +92,10 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.error || "Scheduled email load failed");
-        setScheduledEmails(Array.isArray(data.rows) ? data.rows : []);
+        const rows = Array.isArray(data.rows) ? data.rows.filter(isVisibleScheduledEmail) : [];
+        setScheduledEmails(rows);
         setScheduledLoadedAt(Date.now());
-        setScheduledStatus(`Loaded ${data.count || 0} scheduled email(s).`);
+        setScheduledStatus(`Loaded ${rows.length} scheduled email(s).`);
       } catch (error: any) {
         console.error("Scheduled emails load error:", error);
         setScheduledEmails([]);
@@ -67,7 +104,7 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
         setScheduledLoading(false);
       }
     },
-    [scheduledEmails.length, scheduledLoadedAt, setScheduledEmails, setScheduledLoadedAt, setScheduledLoading, setScheduledStatus],
+    [scheduledEmails, scheduledLoadedAt, setScheduledEmails, setScheduledLoadedAt, setScheduledLoading, setScheduledStatus],
   );
 
   const openScheduledEditor = useCallback(
@@ -139,7 +176,7 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Scheduled email update failed");
       setScheduledEdit(null);
-      setScheduledStatus("Scheduled email updated successfully.");
+      setScheduledStatus(data.message || "Scheduled email updated successfully.");
       await loadScheduledEmails(true);
     } catch (error: any) {
       console.error("Scheduled email update error:", error);
@@ -153,7 +190,7 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
     async (leadId: string) => {
       const currentUser = auth.currentUser;
       if (!currentUser) return window.alert("Please login again.");
-      if (!window.confirm("Cancel this scheduled email? It will not be sent.")) return;
+      if (!window.confirm("Cancel this scheduled email? For Brevo-managed schedules, TrackFlow will cancel the Brevo provider schedule first.")) return;
 
       try {
         setScheduledSaving(true);
@@ -164,7 +201,7 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.error || "Cancel failed");
-        setScheduledStatus("Scheduled email cancelled.");
+        setScheduledStatus(data.message || "Scheduled email cancelled.");
         setScheduledEdit(null);
         await loadScheduledEmails(true);
       } catch (error: any) {
@@ -181,7 +218,7 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
     async (leadId: string) => {
       const currentUser = auth.currentUser;
       if (!currentUser) return window.alert("Please login again.");
-      if (!window.confirm("Move this email to the immediate send queue? It will send on the next scheduled-initials cron run.")) return;
+      if (!window.confirm("Send this scheduled email now? For Brevo-managed schedules, TrackFlow will cancel the Brevo schedule first, then send the email now.")) return;
 
       try {
         setScheduledSaving(true);
@@ -192,11 +229,11 @@ export function useScheduledEmails(params: UseScheduledEmailsParams) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ leadId, action: "send_soon" }),
+          body: JSON.stringify({ leadId, action: "send_now" }),
         });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.error || "Send-soon update failed");
-        setScheduledStatus("Email moved to immediate send queue. Scheduled-initials cron will send it on the next run.");
+        setScheduledStatus(data.message || "Scheduled email sent now or moved to the immediate send queue.");
         setScheduledEdit(null);
         await loadScheduledEmails(true);
       } catch (error: any) {

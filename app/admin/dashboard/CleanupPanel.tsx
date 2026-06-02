@@ -17,7 +17,6 @@ import {
 import type {
   FootprintMemoryRow,
   FootprintMemoryState,
-  ReportAssetCleanupLeadMode,
   ReportAssetCleanupMode,
   ReportAssetCleanupState,
   ReportCleanupStep,
@@ -59,18 +58,13 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
   {
     id: "hard",
     label: "Delete All Data",
-    note: "Deletes the secure report, PDF, preview image, chat history, Google Sheet row, and all email-send/event data linked to this report token. Choose whether to keep only a tiny footprint memory.",
+    note: "Deletes the secure report, PDF, preview image, chat history, Google Sheet row, and report-linked send/event data. No contact footprint memory is kept from this cleanup action.",
   },
   {
     id: "assets_only",
     label: "Remove Files Only",
     note: "Removes only the PDF, preview image, and chat history. Saved report, Sheet row, and contact data stay unchanged.",
   },
-];
-
-const REPORT_LEAD_MODES: Array<{ id: ReportAssetCleanupLeadMode; label: string; note: string }> = [
-  { id: "delete", label: "Delete All Data — Keep Footprint", note: "Best for contacted/no-reply leads. Deletes full report-linked data, including the Google Sheet row, but keeps tiny 45-day safety memory to avoid duplicate outreach." },
-  { id: "delete_no_memory", label: "Delete All Data — No Footprint", note: "Only for test or never-contacted leads. Deletes full report-linked data, including the Google Sheet row. Backend blocks this when outreach history exists." },
 ];
 
 const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = [
@@ -167,7 +161,7 @@ function reportStepMessage(step: ReportCleanupStep): string {
 
 function reportModeActionLabel(mode: ReportAssetCleanupMode): string {
   if (mode === "assets_only") return "Remove Files Only";
-  return "Delete All Data";
+  return "Delete All Data — No Footprint";
 }
 
 function secureReportChannelLabel(channel?: SecureReportRow["channel"]): string {
@@ -351,7 +345,7 @@ export default function CleanupPanel({
     filteredSecureReports.length > 0 && filteredSecureReports.every((report) => selectedReportTokens.includes(report.token));
   const bulkReportActionDisabled = Boolean(secureReports.bulkLoading || selectedReportCount === 0);
   const selectedReportActionLabel =
-    reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected Reports";
+    reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected — No Footprint";
   const footprintRows = footprintMemory.rows.slice(0, 100);
   const selectedFootprintEmails = footprintMemory.selectedEmails || [];
   const visibleFootprintEmails = footprintRows
@@ -657,13 +651,17 @@ export default function CleanupPanel({
             <select
               value={reportAssetCleanup.mode}
               onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                setReportAssetCleanup((prev) => ({
-                  ...prev,
-                  mode: event.target.value as ReportAssetCleanupMode,
-                  confirmText: "",
-                  error: "",
-                  status: "",
-                }))
+                setReportAssetCleanup((prev) => {
+                  const nextMode = event.target.value as ReportAssetCleanupMode;
+                  return {
+                    ...prev,
+                    mode: nextMode,
+                    leadMode: nextMode === "assets_only" ? "none" : "delete_no_memory",
+                    confirmText: "",
+                    error: "",
+                    status: "",
+                  };
+                })
               }
               className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
             >
@@ -676,25 +674,15 @@ export default function CleanupPanel({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Footprint memory</label>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Contact footprint</label>
             {reportAssetCleanup.mode === "assets_only" ? (
               <div className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-500">
                 Contact unchanged
               </div>
             ) : (
-              <select
-                value={reportAssetCleanup.leadMode}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  setReportAssetCleanup((prev) => ({ ...prev, leadMode: event.target.value as ReportAssetCleanupLeadMode, error: "", status: "" }))
-                }
-                className="w-full px-4 py-3 rounded-2xl bg-gray-50 border border-gray-100 text-xs font-black text-gray-700 outline-none"
-              >
-                {REPORT_LEAD_MODES.map((mode) => (
-                  <option key={mode.id} value={mode.id}>
-                    {mode.label}
-                  </option>
-                ))}
-              </select>
+              <div className="w-full px-4 py-3 rounded-2xl bg-red-50 border border-red-100 text-xs font-black text-red-700">
+                No footprint kept
+              </div>
             )}
           </div>
 
@@ -706,9 +694,8 @@ export default function CleanupPanel({
 
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-[12px] text-gray-600 font-semibold leading-relaxed">
           <span className="font-black text-gray-900">Footprint rule:</span>{" "}
-          Choose <span className="font-black">Keep Footprint</span> for contacted leads so they are not emailed again later.
-          The Google Sheet row is still cleaned/deleted during Delete All Data; only the tiny email safety memory remains.
-          Choose <span className="font-black">No Footprint</span> only for test or never-contacted leads; the backend blocks it if outreach history exists.
+          Report cleanup now uses <span className="font-black">No Footprint</span> by default. Delete All Data sends a no-memory cleanup request for report-linked contact data, so unused/test reports do not leave a contact footprint behind.
+          Actual outreach contacts should be managed later from the Lead tab or Contact Control area.
         </div>
 
         {reportAssetCleanup.mode !== "assets_only" && (
@@ -722,7 +709,7 @@ export default function CleanupPanel({
               className="w-full px-4 py-3 rounded-2xl bg-white border border-red-100 text-sm font-black text-red-700 outline-none"
             />
             <p className="text-[11px] font-bold text-red-500">
-              Type DELETE after preview. This removes the report, files, Sheet row, and selected contact data.
+              Type DELETE after preview. This removes the report, files, Sheet row, and report-linked contact footprint data.
             </p>
           </div>
         )}
@@ -900,7 +887,7 @@ export default function CleanupPanel({
         </div>
 
         <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4 text-[11px] font-bold text-blue-700 leading-relaxed">
-          Keep this simple: select one or many rows, then choose Allow selected or Delete selected. Old Footprints removes old contact-memory and old outreach-block records by age. Suppression/Unsubscribe only deletes after a strong confirmation.
+          Keep this simple: select one or many rows, then choose Allow selected or Delete selected. Allow selected removes the send block only. Delete selected removes contact-memory and linked Lead tab rows. Suppression/Unsubscribe only deletes after a strong confirmation.
         </div>
 
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-2xl bg-gray-50 border border-gray-100 p-4">
@@ -958,7 +945,7 @@ export default function CleanupPanel({
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Selected footprint rows</p>
             <p className="text-sm font-black text-gray-900">{selectedFootprintEmails.length} selected</p>
-            <p className="text-[11px] font-bold text-gray-500 mt-1">Allow selected removes the send block. Delete selected removes contact memory and marks old outreach rows as ignored; suppression rows are deleted only when selected and confirmed.</p>
+            <p className="text-[11px] font-bold text-gray-500 mt-1">Allow selected removes the send block. Delete selected removes contact memory and permanently removes linked Lead tab rows; suppression rows are deleted only when selected and confirmed.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -1097,7 +1084,7 @@ export default function CleanupPanel({
                             disabled={footprintMemory.actionLoading}
                             onClick={() => forgetFootprintMemory(row.emailLower || row.email)}
                             className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase disabled:opacity-40"
-                            title="Delete contact-memory footprint and stop this old outreach row from blocking a future send."
+                            title="Delete contact-memory footprint and linked Lead tab row(s) for this email."
                           >
                             Delete footprint
                           </button>

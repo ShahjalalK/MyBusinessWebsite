@@ -95,16 +95,15 @@ type LeadSourceKind = "manual" | "manual_report_linked" | "sheet_primary" | "she
 
 function getLeadSourceKind(lead: Lead): LeadSourceKind {
   const source = String(lead.source || "").toLowerCase();
-  const sourceOrigin = String(lead.sourceOrigin || "").toLowerCase();
   const sourceRole = String(lead.sourceRole || "").toLowerCase();
   const email = String(lead.emailLower || lead.email || "").toLowerCase();
   const keepUnderSheetAudit = lead.keepUnderSheetAudit === true;
 
   if (sourceRole === "test" || source.includes("test") || email.includes("test@")) return "test";
+  if (sourceRole === "manual_report_linked") return "manual_report_linked";
   if (sourceRole === "sheet_primary") return "sheet_primary";
   if (sourceRole === "sheet_additional_recipient" || sourceRole === "sheet_additional") return "sheet_additional";
-  if (sourceRole === "manual_report_linked") return "manual_report_linked";
-  if (keepUnderSheetAudit || sourceOrigin === "sheet") {
+  if (keepUnderSheetAudit) {
     const sheetEmail = String(lead.sheetFinalEmail || lead.parentSheetEmail || "").trim().toLowerCase();
     return sheetEmail && sheetEmail !== email ? "sheet_additional" : "sheet_primary";
   }
@@ -180,7 +179,7 @@ export default function LeadsPanel({
       <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-center">
         <div>
           <h1 className="text-3xl font-black tracking-tighter text-gray-900">Lead Management</h1>
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Simple hide/restore plus manual-vs-sheet cleanup control</p>
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Firestore outreach leads, follow-up control, and manual cleanup</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -255,7 +254,7 @@ export default function LeadsPanel({
           <div>
             <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Bulk actions</p>
             <p className="text-[10px] font-bold text-gray-400 mt-1">
-              {selectedCount} selected. Hide removes leads from Active without deleting history. Restore brings hidden/trash leads back. Manual/test leads can be deleted here; sheet audit leads must use Report Cleanup.
+              {selectedCount} selected. Hide removes leads from Active without deleting history. Restore brings hidden/trash leads back. Leads created from Sheet composer are independent Firestore outreach records and can be managed here. Legacy Sheet-owned audit leads should still use Report Cleanup.
               {selectedSheetCount ? ` ${selectedSheetCount} sheet audit lead(s) selected.` : ""}
               {bulkActionStatus ? ` ${bulkActionStatus}` : ""}
             </p>
@@ -359,7 +358,7 @@ export default function LeadsPanel({
                           <button onClick={(event) => handleRestoreLead(lead.id, event)} className="p-3 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all" title="Show in Active"><RefreshCw size={16} /></button>
                         )}
                         {sheetAuditLead ? (
-                          <span className="rounded-xl bg-violet-50 px-3 py-2 text-[8px] font-black uppercase text-violet-600" title="Sheet audit leads are deleted from Report Cleanup by report token.">Use Cleanup</span>
+                          <span className="rounded-xl bg-violet-50 px-3 py-2 text-[8px] font-black uppercase text-violet-600" title="Legacy Sheet-owned audit leads are deleted from Report Cleanup by report token.">Use Cleanup</span>
                         ) : (
                           <>
                             <button onClick={(event) => handleDelete(lead.id, event)} className="px-3 py-2 rounded-xl bg-amber-50 text-[8px] font-black uppercase text-amber-700 hover:bg-amber-100" title="Delete manual/test lead and keep tiny contact memory">Keep Memory</button>

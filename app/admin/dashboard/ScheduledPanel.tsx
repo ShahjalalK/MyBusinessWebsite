@@ -42,6 +42,10 @@ type ScheduledPanelProps = {
   saveScheduledEdit: () => Promise<void>;
 };
 
+function isBrevoScheduledLead(lead: Lead) {
+  return lead.brevoScheduled === true || String(lead.scheduledProvider || "").toLowerCase() === "brevo";
+}
+
 export default function ScheduledPanel({
   scheduledEmails,
   scheduledStatus,
@@ -63,9 +67,9 @@ export default function ScheduledPanel({
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
             <Clock size={14} /> Scheduled Email Manager
           </p>
-          <h2 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">Edit, Cancel, or Send Scheduled Emails</h2>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tighter mt-1">Edit Scheduled Initial Emails</h2>
           <p className="text-xs font-bold text-gray-400 mt-1 max-w-2xl">
-            Only emails with status <b>scheduled</b> are editable here. Already-sent emails stay protected so follow-up automation remains safe.
+            New initial schedules are delivered by Brevo at the selected time. Future scheduled rows stay editable here; sent rows are hidden from this tab.
           </p>
         </div>
         <button
@@ -97,12 +101,21 @@ export default function ScheduledPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {scheduledEmails.map((lead) => (
-                <tr key={lead.id} className="hover:bg-gray-50/60 transition-colors">
-                  <td className="p-4">
-                    <p className="text-xs font-black text-gray-900">{formatDate(lead.scheduledAt)}</p>
-                    <p className="text-[10px] font-bold text-blue-500 uppercase">{lead.status || "scheduled"}</p>
-                  </td>
+              {scheduledEmails.map((lead) => {
+                const brevoManaged = isBrevoScheduledLead(lead);
+                return (
+                  <tr key={lead.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="p-4">
+                      <p className="text-xs font-black text-gray-900">{formatDate(lead.scheduledAt)}</p>
+                      <p className="text-[10px] font-bold text-blue-500 uppercase">
+                        {brevoManaged ? "Brevo scheduled" : lead.status || "scheduled"}
+                      </p>
+                      {brevoManaged ? (
+                        <p className="text-[9px] font-black text-emerald-600 uppercase">
+                          Provider delivery · not cron batch
+                        </p>
+                      ) : null}
+                    </td>
                   <td className="p-4">
                     <p className="text-xs font-black text-gray-900">{lead.name || lead.company_name || "Unnamed"}</p>
                     <p className="text-[10px] font-bold text-gray-400">{lead.email || lead.emailLower}</p>
@@ -118,40 +131,46 @@ export default function ScheduledPanel({
                     <p className="text-[10px] font-black text-gray-700">{lead.sender_name || "Sender"}</p>
                     <p className="text-[10px] font-bold text-gray-400">{lead.sender_email || "N/A"}</p>
                   </td>
-                  <td className="p-4">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openScheduledEditor(lead)}
-                        className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => sendScheduledSoon(lead.id)}
-                        className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black uppercase"
-                      >
-                        Send Soon
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => cancelScheduledEmail(lead.id)}
-                        className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openScheduledEditor(lead)}
+                          className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => sendScheduledSoon(lead.id)}
+                          className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black uppercase"
+                        >
+                          Send Now
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cancelScheduledEmail(lead.id)}
+                          className="px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {brevoManaged ? (
+                        <p className="mt-2 text-[9px] font-bold leading-relaxed text-emerald-600">
+                          Brevo managed: edit safely cancels the old provider schedule and creates a new one.
+                        </p>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
 
               {scheduledEmails.length === 0 && (
                 <tr>
                   <td colSpan={6} className="p-12 text-center">
                     <Clock size={26} className="mx-auto text-gray-300 mb-3" />
                     <p className="text-sm font-black text-gray-400 uppercase">No scheduled emails found.</p>
-                    <p className="text-[10px] font-bold text-gray-400 mt-1">Schedule one from the Send Email tab and it will appear here.</p>
+                    <p className="text-[10px] font-bold text-gray-400 mt-1">Schedule one from the Send Email tab and it will appear here until it is sent.</p>
                   </td>
                 </tr>
               )}
@@ -219,7 +238,7 @@ export default function ScheduledPanel({
                 </label>
 
                 <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-[11px] font-bold text-amber-700 leading-relaxed">
-                  Save Changes updates only the scheduled draft. Send Soon moves it to the next scheduled-initials cron run. Cancel stops it safely before sending.
+                  For Brevo-managed scheduled emails, Save safely cancels the old Brevo schedule and creates a new updated schedule. Cancel and Send Now also cancel the provider schedule first.
                 </div>
               </div>
 
@@ -228,7 +247,7 @@ export default function ScheduledPanel({
                   Cancel
                 </button>
                 <button type="button" onClick={() => sendScheduledSoon(scheduledEdit.leadId)} disabled={scheduledSaving} className="py-4 rounded-2xl bg-blue-50 text-blue-600 text-xs font-black uppercase disabled:opacity-60">
-                  Send Soon
+                  Send Now
                 </button>
                 <button type="button" onClick={saveScheduledEdit} disabled={scheduledSaving} className="py-4 rounded-2xl bg-black text-white text-xs font-black uppercase disabled:bg-gray-300 flex items-center justify-center gap-2">
                   {scheduledSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save

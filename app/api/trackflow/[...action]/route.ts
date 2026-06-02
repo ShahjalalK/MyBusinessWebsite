@@ -132,6 +132,7 @@ type BrevoSendInput = {
   htmlContent: string;
   tag: string;
   customMessageId: string;
+  scheduledAt?: string;
   headers?: Record<string, string>;
 };
 
@@ -236,6 +237,83 @@ const STALE_LOCK_MINUTES = 30;
 // - When engagement exists, send follow-ups 1 hour before the lead's last engagement time + configured delay.
 const REQUIRE_OPEN_OR_CLICK_FOR_FOLLOWUP = true;
 const FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES = 60;
+
+// Initial scheduled emails are handed to Brevo so they do not wait for a 10-minute cron batch.
+// Keep the window conservative because Brevo transactional scheduled sends support near-future delivery,
+// while longer-term follow-up timing remains Firestore + cron based.
+const BREVO_INITIAL_SCHEDULE_MIN_DELAY_MS = 30_000;
+const BREVO_INITIAL_SCHEDULE_MAX_DELAY_MS = 72 * 60 * 60 * 1000;
+// After this grace window, provider-scheduled initial emails should no longer appear
+// in the Scheduled tab even if Brevo sent/delivered webhook delivery is delayed.
+// This does not change follow-up automation; open/click and delivered/sent events still
+// update the Firestore lead when they arrive.
+const BREVO_INITIAL_SCHEDULE_TAB_GRACE_MS = 10 * 60 * 1000;
+const BREVO_PROVIDER_REQUEST_DELIVERY_GRACE_MS = 5 * 60 * 1000;
+const BREVO_SCHEDULE_ACTION_LOCK_MS = 5 * 60 * 1000;
+
+
+// Open tracking source policy:
+// - TrackFlow's self-hosted pixel is the primary source for automation open_count.
+// - Brevo "opened" webhooks are kept as provider diagnostics by default because
+//   provider/image-proxy opens can arrive immediately after manual sends.
+// - Set BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=true only if you intentionally want
+//   Brevo provider opens to increment open_count and schedule follow-ups.
+function brevoOpenWebhookUpdatesAutomation(): boolean {
+  return envFlag("BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION", false);
+}
+
+function openTrackingDebugWindowMs(): number {
+  return intEnv("OPEN_TRACKING_DEBUG_WINDOW_MINUTES", 10, 1, 60) * 60_000;
+}
+
+function getLeadSentMsForOpenTracking(lead: LeadData = {}): number {
+  return Math.max(
+    toMillis(lead.sentAt),
+    toMillis((lead as AnyRecord).lastSentAt),
+    toMillis((lead as AnyRecord).createdAt),
+    toMillis((lead as AnyRecord).scheduledAcceptedAt),
+  );
+}
+
+function secondsAfterLeadSentForOpenTracking(lead: LeadData = {}, eventMs = Date.now()): number | null {
+  const sentMs = getLeadSentMsForOpenTracking(lead);
+  if (!sentMs || !eventMs) return null;
+  return Math.round((eventMs - sentMs) / 1000);
+}
+
+function shouldForceStoreOpenDebug(lead: LeadData = {}, eventMs = Date.now()): boolean {
+  if (!envFlag("STORE_OPEN_TRACKING_DEBUG", true)) return false;
+  const sentMs = getLeadSentMsForOpenTracking(lead);
+  if (!sentMs) return true;
+  return Math.abs(eventMs - sentMs) <= openTrackingDebugWindowMs();
+}
+
+function envEmailList(name: string): string[] {
+  return String(process.env[name] || "")
+    .split(/[,;\n]/g)
+    .map((value) => normalizeEmail(value))
+    .filter(Boolean);
+}
+
+function internalOpenTestEmails(): Set<string> {
+  return new Set(
+    [
+      MAIN_INBOX_EMAIL,
+      ...ACTIVE_SENDERS.map((sender: any) => sender?.email || ""),
+      ...ACTIVE_SENDERS.map((sender: any) => sender?.replyToEmail || ""),
+      ...envEmailList("TRACKFLOW_TEST_RECIPIENT_EMAILS"),
+      ...envEmailList("OPEN_TRACKING_TEST_RECIPIENTS"),
+    ]
+      .map((value) => normalizeEmail(value))
+      .filter(Boolean),
+  );
+}
+
+function shouldIgnoreInternalTestOpen(emailLower: string): boolean {
+  if (envFlag("COUNT_INTERNAL_TEST_OPENS", false)) return false;
+  const normalized = normalizeEmail(emailLower || "");
+  return Boolean(normalized && internalOpenTestEmails().has(normalized));
+}
 
 
 const SERVICE_IDS = ["Email Signature", "Google Ads", "Server Side Tracking"] as const;
@@ -1605,6 +1683,30 @@ async function sendViaBrevo(input: BrevoSendInput) {
   const emailLower = normalizeEmail(input.toEmail);
   const unsub = unsubscribeUrl(emailLower);
 
+  const payload: Record<string, any> = {
+    sender: { name: input.sender.name, email: input.sender.email },
+    to: [{ email: input.toEmail, name: input.toName || "" }],
+    replyTo: {
+      email: input.sender.replyToEmail || DEFAULT_REPLY_TO_EMAIL,
+      name: input.sender.replyToName || input.sender.name || DEFAULT_REPLY_TO_NAME,
+    },
+    subject: input.subject,
+    tags: [input.tag],
+    htmlContent: input.htmlContent,
+    headers: {
+      "X-Mailin-Tag": input.tag,
+      "Message-ID": input.customMessageId,
+      "X-Entity-Ref-ID": input.tag.split("_step")[0],
+      "List-Unsubscribe": `<${unsub}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      ...(input.headers || {}),
+    },
+  };
+
+  if (input.scheduledAt) {
+    payload.scheduledAt = input.scheduledAt;
+  }
+
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -1612,25 +1714,7 @@ async function sendViaBrevo(input: BrevoSendInput) {
       "api-key": env("BREVO_API_KEY"),
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      sender: { name: input.sender.name, email: input.sender.email },
-      to: [{ email: input.toEmail, name: input.toName || "" }],
-      replyTo: {
-        email: input.sender.replyToEmail || DEFAULT_REPLY_TO_EMAIL,
-        name: input.sender.replyToName || input.sender.name || DEFAULT_REPLY_TO_NAME,
-      },
-      subject: input.subject,
-      tags: [input.tag],
-      htmlContent: input.htmlContent,
-      headers: {
-        "X-Mailin-Tag": input.tag,
-        "Message-ID": input.customMessageId,
-        "X-Entity-Ref-ID": input.tag.split("_step")[0],
-        "List-Unsubscribe": `<${unsub}>`,
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        ...(input.headers || {}),
-      },
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await response.json().catch(() => ({}));
@@ -1639,6 +1723,299 @@ async function sendViaBrevo(input: BrevoSendInput) {
   }
 
   return data;
+}
+
+
+function getBrevoScheduledIdentifier(lead: Record<string, any> = {}): string {
+  const direct = String(lead.brevoMessageId || lead.originalMessageId || lead.providerMessageId || "").trim();
+  if (direct) return direct;
+
+  const messages = Array.isArray(lead.sent_messages) ? [...lead.sent_messages].reverse() : [];
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    const provider = String(message.provider || "").toLowerCase();
+    const kind = String(message.kind || "").toLowerCase();
+    if (provider !== "brevo" && !kind.includes("scheduled")) continue;
+    const messageId = String(message.messageId || message.brevoMessageId || "").trim();
+    if (messageId) return messageId;
+  }
+
+  return "";
+}
+
+function getBrevoScheduledTimeMs(lead: Record<string, any> = {}): number {
+  return toMillis(lead.scheduledAt || lead.brevoScheduledAt);
+}
+
+function assertBrevoScheduledActionIsSafe(lead: Record<string, any> = {}, actionLabel = "change") {
+  const scheduledAtMs = getBrevoScheduledTimeMs(lead);
+  if (scheduledAtMs > 0 && scheduledAtMs <= Date.now() + BREVO_SCHEDULE_ACTION_LOCK_MS) {
+    throw new ApiError(
+      `This Brevo scheduled email is too close to its send time to ${actionLabel} safely. Please refresh the Scheduled tab and check the Lead tab after delivery.`,
+      409,
+    );
+  }
+}
+
+async function deleteBrevoScheduledEmailForLead(lead: Record<string, any> = {}, actionLabel = "change") {
+  assertBrevoScheduledActionIsSafe(lead, actionLabel);
+
+  const identifier = getBrevoScheduledIdentifier(lead);
+  if (!identifier) {
+    throw new ApiError("Brevo scheduled message id is missing, so the provider schedule cannot be changed safely.", 409);
+  }
+
+  const response = await fetch(`https://api.brevo.com/v3/smtp/email/${encodeURIComponent(identifier)}`, {
+    method: "DELETE",
+    headers: {
+      accept: "application/json",
+      "api-key": env("BREVO_API_KEY"),
+    },
+  });
+
+  if (response.status === 204) return { deleted: true, identifier };
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new ApiError(data?.message || data?.error || `Brevo scheduled email ${actionLabel} failed`, response.status || 400);
+  }
+
+  return { deleted: true, identifier, data };
+}
+
+function buildInitialEmailInputFromLead(leadId: string, lead: LeadData, customMessageId?: string) {
+  const emailLower = normalizeEmail(lead.emailLower || lead.email || "");
+  if (!isValidEmail(emailLower)) throw new ApiError("Invalid target email", 400);
+
+  const subject = String(lead.subject || "").trim();
+  const message = String(lead.message || "").trim();
+  if (!subject) throw new ApiError("Subject is required", 400);
+  if (!plainTextFromHtml(message)) throw new ApiError("Message body cannot be empty", 400);
+
+  const sender = getSenderFromLead(lead);
+  const selectedService = SERVICES.has(lead.service || "") ? String(lead.service || "") : "Google Ads";
+  const trackingId = String(lead.trackingId || leadId || randomUUID()).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+  const tag = `${trackingId}_step1`;
+  const nextCustomMessageId = customMessageId || `<${Date.now()}.${trackingId}@mail.trackflowpro.com>`;
+  const includeSignature = lead.include_signature !== false;
+  const reportUrl = sanitizePublicReportUrl(lead.reportUrl || "");
+  const reportButtonText = String(lead.reportButtonText || "View short audit note").trim().slice(0, 80);
+  const reportToken = normalizeReportToken(lead.reportToken || lead.parentReportToken || "");
+
+  const personalizedInitialMessage = personalizeTemplate(message, {
+    name: lead.name || "",
+    company_name: lead.company_name || "",
+    website: lead.website || "",
+    service: selectedService,
+  });
+
+  const htmlContent = buildEmailHtml(personalizedInitialMessage, emailLower, tag, {
+    includeSignature,
+    reportUrl,
+    reportButtonText,
+    sender,
+    signatureMode: normalizeSignatureMode(lead.signatureMode || "full", "full"),
+    includeReportLink: true,
+    leadId,
+    reportToken,
+    messageId: nextCustomMessageId,
+    trackingId,
+  });
+
+  return {
+    emailLower,
+    sender,
+    selectedService,
+    subject,
+    message,
+    trackingId,
+    tag,
+    customMessageId: nextCustomMessageId,
+    includeSignature,
+    reportUrl,
+    reportButtonText,
+    reportToken,
+    htmlContent,
+  };
+}
+
+async function rescheduleBrevoInitialEmail(
+  ref: FirestoreDocRef,
+  leadId: string,
+  current: LeadData,
+  updates: Record<string, any>,
+) {
+  const scheduledAt = timestampFromAny(updates.scheduledAt || current.scheduledAt || current.brevoScheduledAt);
+  if (!scheduledAt) throw new ApiError("Invalid scheduledAt", 400);
+
+  const scheduledAtMs = scheduledAt.toMillis();
+  const nowMs = Date.now();
+  if (scheduledAtMs <= nowMs + BREVO_INITIAL_SCHEDULE_MIN_DELAY_MS) {
+    throw new ApiError("Scheduled time must be at least 30 seconds in the future. Use Send Now for immediate sending.", 400);
+  }
+  if (scheduledAtMs > nowMs + BREVO_INITIAL_SCHEDULE_MAX_DELAY_MS) {
+    throw new ApiError("Brevo initial email scheduling supports up to 72 hours ahead. For longer timing, schedule closer to the send date.", 400);
+  }
+
+  const nextLead = { ...current, ...updates, scheduledAt, brevoScheduledAt: scheduledAt, id: leadId } as LeadData;
+  await deleteBrevoScheduledEmailForLead(current, "update");
+
+  const customMessageId = `<${Date.now()}.${String(nextLead.trackingId || leadId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80)}@mail.trackflowpro.com>`;
+  const input = buildInitialEmailInputFromLead(leadId, nextLead, customMessageId);
+  const scheduledAtIso = new Date(scheduledAtMs).toISOString();
+
+  const data = await sendViaBrevo({
+    sender: input.sender,
+    toEmail: input.emailLower,
+    toName: String(nextLead.name || ""),
+    subject: input.subject,
+    htmlContent: input.htmlContent,
+    tag: input.tag,
+    customMessageId: input.customMessageId,
+    scheduledAt: scheduledAtIso,
+  });
+
+  const scheduledAcceptedAt = admin.firestore.Timestamp.now();
+  await ref.update({
+    ...updates,
+    status: "scheduled",
+    scheduledAt,
+    scheduledProvider: "brevo",
+    providerScheduleStatus: "accepted",
+    brevoScheduled: true,
+    brevoScheduledAt: scheduledAt,
+    brevoScheduledAtIso: scheduledAtIso,
+    scheduledAcceptedAt,
+    customMessageId: input.customMessageId,
+    originalMessageId: data.messageId || "",
+    brevoMessageId: data.messageId || "",
+    nextFollowupStatus: "waiting_for_initial_delivery",
+    nextFollowupReason: "brevo_provider_scheduled_updated",
+    stopAutomation: false,
+    automationLock: admin.firestore.FieldValue.delete(),
+    error: admin.firestore.FieldValue.delete(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    sent_messages: admin.firestore.FieldValue.arrayUnion({
+      step: 1,
+      kind: "initial_rescheduled",
+      provider: "brevo",
+      subject: input.subject,
+      trackingTag: input.tag,
+      messageId: data.messageId || "",
+      customMessageId: input.customMessageId,
+      trackingId: input.trackingId,
+      reportToken: input.reportToken,
+      includeSignature: input.includeSignature,
+      reportUrl: input.reportUrl,
+      scheduledAt,
+      scheduledAtIso,
+      scheduledAcceptedAt,
+    }),
+  });
+
+  await addEmailEvent(leadId, "scheduled", {
+    emailLower: input.emailLower,
+    step: 1,
+    provider: "brevo",
+    action: "rescheduled",
+    scheduledAt,
+    scheduledAtIso,
+    trackingTag: input.tag,
+    messageId: data.messageId || input.customMessageId,
+    customMessageId: input.customMessageId,
+    trackingId: input.trackingId,
+    reportToken: input.reportToken,
+    forceStore: true,
+  });
+
+  const updated = await ref.get();
+  return json({
+    success: true,
+    scheduled: true,
+    provider: "brevo",
+    message: "Brevo scheduled email updated safely.",
+    lead: serializeScheduledLead(updated),
+  });
+}
+
+async function sendBrevoScheduledInitialNow(ref: FirestoreDocRef, leadId: string, current: LeadData) {
+  await deleteBrevoScheduledEmailForLead(current, "send now");
+
+  const emailLower = normalizeEmail(current.emailLower || current.email || "");
+  const suppressed = await isSuppressed(emailLower);
+  if (suppressed) throw new ApiError(`Email is suppressed: ${suppressed.reason || "blocked"}`, 409);
+
+  const input = buildInitialEmailInputFromLead(leadId, current);
+  const quota = await reserveDailySlot(input.sender.dailyLimit, "initial", input.sender.email);
+  if (!quota.ok) {
+    throw new ApiError(`Daily limit reached for ${input.sender.email}: ${quota.used}/${quota.limit}`, 429);
+  }
+
+  const data = await sendViaBrevo({
+    sender: input.sender,
+    toEmail: input.emailLower,
+    toName: String(current.name || ""),
+    subject: input.subject,
+    htmlContent: input.htmlContent,
+    tag: input.tag,
+    customMessageId: input.customMessageId,
+  });
+
+  const sentAt = admin.firestore.Timestamp.now();
+  await ref.update({
+    status: "sent",
+    sentAt,
+    lastSentAt: sentAt,
+    scheduledProvider: "brevo",
+    providerScheduleStatus: "sent",
+    brevoScheduled: false,
+    brevoProviderLastEvent: "manual_send_now",
+    brevoProviderLastEventAt: sentAt,
+    customMessageId: input.customMessageId,
+    originalMessageId: data.messageId || "",
+    brevoMessageId: data.messageId || "",
+    nextFollowupStatus: "waiting_for_first_open_or_click",
+    nextFollowupReason: "initial_sent_waiting_for_engagement",
+    stopAutomation: false,
+    automationLock: admin.firestore.FieldValue.delete(),
+    error: admin.firestore.FieldValue.delete(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    sent_messages: admin.firestore.FieldValue.arrayUnion({
+      step: 1,
+      kind: "initial",
+      provider: "brevo",
+      subject: input.subject,
+      sentAt,
+      trackingTag: input.tag,
+      messageId: data.messageId || "",
+      customMessageId: input.customMessageId,
+      trackingId: input.trackingId,
+      reportToken: input.reportToken,
+      includeSignature: input.includeSignature,
+      reportUrl: input.reportUrl,
+    }),
+  });
+
+  await addEmailEvent(leadId, "sent", {
+    emailLower: input.emailLower,
+    step: 1,
+    provider: "brevo",
+    action: "send_now",
+    trackingTag: input.tag,
+    messageId: data.messageId || input.customMessageId,
+    customMessageId: input.customMessageId,
+    trackingId: input.trackingId,
+    reportToken: input.reportToken,
+    forceStore: true,
+  });
+
+  return json({
+    success: true,
+    sent: true,
+    provider: "brevo",
+    message: "Brevo scheduled email was cancelled and sent now.",
+    leadId,
+  });
 }
 
 function normalizeMessageIdHeader(value: any): string {
@@ -1988,7 +2365,13 @@ async function sendInitialFromBody(rawBody: any) {
   const customMessageId = `<${Date.now()}.${trackingId}@mail.trackflowpro.com>`;
   const scheduledAt = timestampFromAny(body.scheduledAt);
   const nowMs = Date.now();
-  const isFutureSchedule = scheduledAt && scheduledAt.toMillis() > nowMs + 30_000;
+  const scheduledAtMs = scheduledAt ? scheduledAt.toMillis() : 0;
+  const isFutureSchedule = Boolean(scheduledAt && scheduledAtMs > nowMs + BREVO_INITIAL_SCHEDULE_MIN_DELAY_MS);
+  const brevoScheduledAtIso = isFutureSchedule && scheduledAt ? new Date(scheduledAtMs).toISOString() : "";
+
+  if (isFutureSchedule && scheduledAtMs > nowMs + BREVO_INITIAL_SCHEDULE_MAX_DELAY_MS) {
+    throw new ApiError("Brevo initial email scheduling supports up to 72 hours ahead. For longer timing, schedule closer to the send date.", 400);
+  }
 
   const leadRef = adminDb.collection("outreach_leads").doc();
   const baseLead = {
@@ -2033,6 +2416,11 @@ async function sendInitialFromBody(rawBody: any) {
     customMessageId,
     originalMessageId: "",
     status: isFutureSchedule ? "scheduled" : "processing_initial",
+    scheduledProvider: isFutureSchedule ? "brevo" : "",
+    providerScheduleStatus: isFutureSchedule ? "pending" : "",
+    brevoScheduled: isFutureSchedule,
+    brevoScheduledAt: isFutureSchedule ? scheduledAt : null,
+    brevoScheduledAtIso,
     stopAutomation: false,
     open_count: 0,
     click_count: 0,
@@ -2041,21 +2429,115 @@ async function sendInitialFromBody(rawBody: any) {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     tracking_history: [],
     sent_messages: [],
-    nextFollowupStatus: "waiting_for_first_open_or_click",
-    nextFollowupReason: "initial_not_sent_yet",
+    nextFollowupStatus: isFutureSchedule ? "waiting_for_initial_delivery" : "waiting_for_first_open_or_click",
+    nextFollowupReason: isFutureSchedule ? "brevo_provider_schedule_pending" : "initial_not_sent_yet",
     retryCount: 0,
   };
 
   await leadRef.set(baseLead);
 
   if (isFutureSchedule) {
-    return json({
-      success: true,
-      scheduled: true,
-      leadId: leadRef.id,
-      trackingId,
-      message: "Initial email saved in Firestore schedule. Cron will send it when due.",
-    });
+    try {
+      const personalizedInitialMessage = personalizeTemplate(message, {
+        name: baseLead.name,
+        company_name: baseLead.company_name,
+        website: baseLead.website,
+        service: selectedService,
+      });
+
+      const data = await sendViaBrevo({
+        sender,
+        toEmail: emailLower,
+        toName: baseLead.name,
+        subject,
+        htmlContent: buildEmailHtml(personalizedInitialMessage, emailLower, tag, {
+          includeSignature,
+          reportUrl,
+          reportButtonText,
+          sender,
+          signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
+          includeReportLink: true,
+          leadId: leadRef.id,
+          reportToken: baseLead.reportToken,
+          messageId: customMessageId,
+          trackingId,
+        }),
+        tag,
+        customMessageId,
+        scheduledAt: brevoScheduledAtIso,
+      });
+
+      const scheduledAcceptedAt = admin.firestore.Timestamp.now();
+      await leadRef.update({
+        status: "scheduled",
+        scheduledProvider: "brevo",
+        providerScheduleStatus: "accepted",
+        brevoScheduled: true,
+        brevoScheduledAt: scheduledAt,
+        brevoScheduledAtIso,
+        scheduledAcceptedAt,
+        originalMessageId: data.messageId || "",
+        brevoMessageId: data.messageId || "",
+        nextFollowupStatus: "waiting_for_initial_delivery",
+        nextFollowupReason: "brevo_provider_scheduled",
+        error: admin.firestore.FieldValue.delete(),
+        sent_messages: admin.firestore.FieldValue.arrayUnion({
+          step: 1,
+          kind: "initial_scheduled",
+          provider: "brevo",
+          subject,
+          trackingTag: tag,
+          messageId: data.messageId || "",
+          customMessageId,
+          trackingId,
+          reportToken: baseLead.reportToken,
+          includeSignature,
+          reportUrl,
+          scheduledAt,
+          scheduledAtIso: brevoScheduledAtIso,
+          scheduledAcceptedAt,
+        }),
+      });
+
+      await addEmailEvent(leadRef.id, "scheduled", {
+        emailLower,
+        step: 1,
+        provider: "brevo",
+        scheduledAt,
+        scheduledAtIso: brevoScheduledAtIso,
+        trackingTag: tag,
+        messageId: data.messageId || customMessageId,
+        customMessageId,
+        trackingId,
+        reportToken: baseLead.reportToken,
+        forceStore: true,
+      });
+
+      return json({
+        success: true,
+        scheduled: true,
+        provider: "brevo",
+        leadId: leadRef.id,
+        messageId: data.messageId || "",
+        trackingId,
+        scheduledAt: brevoScheduledAtIso,
+        message: "Initial email scheduled with Brevo. It will be delivered by Brevo at the selected time, not by the scheduled-initials cron batch.",
+      });
+    } catch (error: any) {
+      const messageText = String(error?.message || error);
+      await leadRef
+        .update({
+          status: "failed",
+          providerScheduleStatus: "failed",
+          brevoScheduled: false,
+          error: messageText,
+          nextFollowupStatus: "blocked",
+          nextFollowupReason: "brevo_provider_schedule_failed",
+          stopAutomation: true,
+        })
+        .catch(() => {});
+      throw error;
+    }
   }
 
   const quota = await reserveDailySlot(sender.dailyLimit, "initial", sender.email);
@@ -2181,17 +2663,35 @@ async function handleCancelInitial(req: Request) {
   if (!doc.exists) throw new ApiError("Lead not found", 404);
 
   const lead = doc.data() || {};
+  const isBrevoProviderScheduled = lead.brevoScheduled === true || String(lead.scheduledProvider || "").toLowerCase() === "brevo";
+
   if (!["scheduled", "processing_initial"].includes(String(lead.status || ""))) {
     throw new ApiError("Only scheduled or processing initial emails can be cancelled safely", 400);
+  }
+
+  if (isBrevoProviderScheduled) {
+    await deleteBrevoScheduledEmailForLead(lead, "cancel");
   }
 
   await ref.update({
     status: "cancelled",
     stopAutomation: true,
     cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    providerScheduleStatus: isBrevoProviderScheduled ? "cancelled" : lead.providerScheduleStatus || "",
+    brevoScheduled: false,
+    nextFollowupStatus: "blocked",
+    nextFollowupReason: "manual_cancelled_scheduled_initial",
+    automationLock: admin.firestore.FieldValue.delete(),
+    error: admin.firestore.FieldValue.delete(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  return json({ success: true, message: "Scheduled email cancelled safely" });
+  return json({
+    success: true,
+    message: isBrevoProviderScheduled
+      ? "Brevo scheduled email cancelled safely."
+      : "Scheduled email cancelled safely",
+  });
 }
 
 /** GET /api/trackflow/cron/scheduled-initials */
@@ -2243,6 +2743,9 @@ async function handleCronScheduledInitials(req: Request) {
         if (!fresh.exists) return null;
         const lead = fresh.data() as LeadData;
         if (lead.status !== "scheduled" || lead.stopAutomation) return null;
+        if (lead.brevoScheduled === true || String(lead.scheduledProvider || "").toLowerCase() === "brevo") {
+          return { id: fresh.id, ...lead, __skipProviderScheduled: true };
+        }
         tx.update(leadRef, {
           status: "processing_initial",
           automationLock: { runId, lockedAt: admin.firestore.Timestamp.now() },
@@ -2251,6 +2754,14 @@ async function handleCronScheduledInitials(req: Request) {
       });
 
       if (!locked) continue;
+
+      if ((locked as AnyRecord).__skipProviderScheduled) {
+        skipped.push({
+          email: (locked as LeadData).emailLower || normalizeEmail((locked as LeadData).email || ""),
+          reason: "brevo_provider_scheduled",
+        });
+        continue;
+      }
 
       const lead = locked as LeadData;
       const emailLower = lead.emailLower || normalizeEmail(lead.email || "");
@@ -3363,14 +3874,33 @@ async function handleBrevoWebhook(req: Request) {
     time: eventTime,
     step_tag: receivedTag || "unknown",
   };
+  const isBrevoProviderScheduled = leadData.brevoScheduled === true || String(leadData.scheduledProvider || "").toLowerCase() === "brevo";
+  const providerScheduledAtMs = toMillis(leadData.scheduledAt || leadData.brevoScheduledAt);
+  const eventMs = eventTime.toMillis();
+  const isProviderScheduledRequestAtDelivery =
+    isBrevoProviderScheduled &&
+    event === "request" &&
+    providerScheduledAtMs > 0 &&
+    eventMs >= providerScheduledAtMs - BREVO_PROVIDER_REQUEST_DELIVERY_GRACE_MS;
+  const isInitialDeliveryEvent =
+    event === "delivered" ||
+    event === "sent" ||
+    isProviderScheduledRequestAtDelivery ||
+    (event === "request" && !isBrevoProviderScheduled);
 
-  if (event === "request" || event === "delivered") {
+  if (isInitialDeliveryEvent) {
     if (!PROTECTED_STATUSES.has(String(leadData.status || ""))) {
       updatePayload.status = "sent";
     }
 
     if (!leadData.sentAt && (!receivedTag || receivedTag.endsWith("_step1"))) {
       updatePayload.sentAt = eventTime;
+    }
+
+    if (isBrevoProviderScheduled) {
+      updatePayload.providerScheduleStatus = event === "delivered" ? "delivered" : "sent";
+      updatePayload.brevoProviderLastEvent = event;
+      updatePayload.brevoProviderLastEventAt = eventTime;
     }
 
     updatePayload.lastSentAt = eventTime;
@@ -3421,32 +3951,36 @@ async function handleBrevoWebhook(req: Request) {
   }
 
   if (event === "opened") {
-    const lastOpened = toMillis(leadData.lastOpenedAt);
     const currentRequestTime = eventTime.toMillis();
 
-    if (!isDuplicateEngagement(lastOpened, currentRequestTime, webhookOpenDedupeMs())) {
-      openRecorded = true;
-      if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
-        updatePayload.status = "opened";
-      }
+    if (brevoOpenWebhookUpdatesAutomation()) {
+      const lastOpened = toMillis(leadData.lastOpenedAt);
 
-      const engagementMinuteUtc = getEngagementMinuteOfDayUtc(eventTime.toMillis());
-      updatePayload.open_count = admin.firestore.FieldValue.increment(1);
-      if (!toMillis(leadData.firstOpenedAt)) updatePayload.firstOpenedAt = eventTime;
-      updatePayload.lastOpenedAt = eventTime;
-      updatePayload.lastEngagedAt = eventTime;
-      updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
-      updatePayload.preferred_engagement_minute_utc = engagementMinuteUtc;
-      updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
-      updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
-      await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "opened");
-      if (envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false)) {
-        updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
-          event: "opened",
-          ...trackingEntryBase,
-          ip: body.ip || "unknown",
-          device: body["user-agent"] || "unknown",
-        });
+      if (!isDuplicateEngagement(lastOpened, currentRequestTime, webhookOpenDedupeMs())) {
+        openRecorded = true;
+        if (!["replied", "bounced", "spam", "unsubscribed", "cancelled"].includes(String(leadData.status || ""))) {
+          updatePayload.status = "opened";
+        }
+
+        const engagementMinuteUtc = getEngagementMinuteOfDayUtc(currentRequestTime);
+        updatePayload.open_count = admin.firestore.FieldValue.increment(1);
+        if (!toMillis(leadData.firstOpenedAt)) updatePayload.firstOpenedAt = eventTime;
+        updatePayload.lastOpenedAt = eventTime;
+        updatePayload.lastEngagedAt = eventTime;
+        updatePayload.preferred_hour = Math.floor(engagementMinuteUtc / 60);
+        updatePayload.preferred_engagement_minute_utc = engagementMinuteUtc;
+        updatePayload.preferred_followup_minute_utc = shiftMinuteOfDay(engagementMinuteUtc, -FOLLOWUP_SEND_BEFORE_ENGAGEMENT_MINUTES);
+        updatePayload.preferred_followup_rule = "one_hour_before_last_open_or_click";
+        await applyNextFollowupScheduleFromEngagement(updatePayload, leadData, eventTime, "opened");
+        if (envFlag("STORE_LOW_VALUE_TRACKING_HISTORY", false)) {
+          updatePayload.tracking_history = admin.firestore.FieldValue.arrayUnion({
+            event: "opened",
+            ...trackingEntryBase,
+            source: "brevo_webhook_open",
+            ip: body.ip || "unknown",
+            device: body["user-agent"] || "unknown",
+          });
+        }
       }
     }
   }
@@ -3524,7 +4058,11 @@ async function handleBrevoWebhook(req: Request) {
     });
   }
 
-  await addEmailEvent(leadDoc.id, event || "unknown", {
+  const brevoOpenIgnoredForAutomation = event === "opened" && !brevoOpenWebhookUpdatesAutomation();
+  const brevoEventMs = eventTime.toMillis();
+  const brevoSecondsAfterSent = secondsAfterLeadSentForOpenTracking(leadData, brevoEventMs);
+
+  await addEmailEvent(leadDoc.id, brevoOpenIgnoredForAutomation ? "brevo_open_ignored" : event || "unknown", {
     emailLower: dbEmailLower || emailLower,
     trackingTag: receivedTag || "",
     rawMessageId: rawMessageId || "",
@@ -3535,6 +4073,13 @@ async function handleBrevoWebhook(req: Request) {
     eventTime,
     reportToken,
     trackingId: String(leadData.trackingId || ""),
+    source: "brevo_webhook",
+    providerEvent: event || "unknown",
+    openAutomationSource: brevoOpenWebhookUpdatesAutomation() ? "brevo_webhook_enabled" : "trackflow_self_hosted_pixel_primary",
+    ignoredForAutomation: brevoOpenIgnoredForAutomation,
+    ignoredReason: brevoOpenIgnoredForAutomation ? "brevo_open_webhook_is_diagnostic_only" : "",
+    secondsAfterSent: brevoSecondsAfterSent,
+    forceStore: brevoOpenIgnoredForAutomation && shouldForceStoreOpenDebug(leadData, brevoEventMs),
   });
 
   return json({ message: "Webhook processed" });
@@ -3695,6 +4240,9 @@ async function recordSelfHostedEmailEngagement(
   const updatePayload: AnyRecord = {};
   const nowMs = eventTime.toMillis();
   const reportToken = normalizeReportToken(meta.reportToken || leadData.reportToken || (leadData as AnyRecord).report_token || extractReportTokenFromUrl(leadData.reportUrl || (leadData as AnyRecord).report_url || ""));
+  const normalizedRecipientEmail = normalizeEmail(meta.emailLower || leadData.emailLower || leadData.email || "");
+  const secondsAfterSent = secondsAfterLeadSentForOpenTracking(leadData, nowMs);
+  const forceStoreOpenDebug = event === "opened" && shouldForceStoreOpenDebug(leadData, nowMs);
   const trackingEntryBase = {
     time: eventTime,
     step_tag: tag || "self_hosted",
@@ -3705,6 +4253,24 @@ async function recordSelfHostedEmailEngagement(
   };
 
   if (event === "opened") {
+    if (shouldIgnoreInternalTestOpen(normalizedRecipientEmail)) {
+      await addEmailEvent(leadDoc.id, "trackflow_open_ignored", {
+        emailLower: normalizedRecipientEmail,
+        trackingTag: tag || "",
+        url: meta.targetUrl || "",
+        source: "trackflow_self_hosted_tracking",
+        eventTime,
+        reportToken,
+        messageId: meta.messageId || "",
+        trackingId: meta.trackingId || leadData.trackingId || "",
+        ignoredForAutomation: true,
+        ignoredReason: "internal_test_recipient",
+        secondsAfterSent,
+        forceStore: true,
+      });
+      return { recorded: false, reason: "internal_test_recipient_open_ignored" };
+    }
+
     const lastOpened = toMillis(leadData.lastOpenedAt);
     if (isDuplicateEngagement(lastOpened, nowMs, webhookOpenDedupeMs())) {
       return { recorded: false, reason: "duplicate_open" };
@@ -3788,7 +4354,7 @@ async function recordSelfHostedEmailEngagement(
   }
 
   await addEmailEvent(leadDoc.id, event, {
-    emailLower: leadData.emailLower || normalizeEmail(leadData.email || ""),
+    emailLower: normalizedRecipientEmail,
     trackingTag: tag || "",
     url: meta.targetUrl || "",
     source: "trackflow_self_hosted_tracking",
@@ -3796,6 +4362,8 @@ async function recordSelfHostedEmailEngagement(
     reportToken,
     messageId: meta.messageId || "",
     trackingId: meta.trackingId || leadData.trackingId || "",
+    secondsAfterSent,
+    forceStore: forceStoreOpenDebug,
   });
 
   return { recorded: true, reason: event };
@@ -6380,7 +6948,7 @@ function pausedPayload(feature: string) {
 }
 
 function webhookOpenDedupeMs(): number {
-  return intEnv("WEBHOOK_OPEN_DEDUPE_MINUTES", 240, 1, 24 * 60) * 60_000;
+  return intEnv("WEBHOOK_OPEN_DEDUPE_MINUTES", 180, 1, 24 * 60) * 60_000;
 }
 
 function webhookClickDedupeMs(): number {
@@ -7545,6 +8113,15 @@ function serializeScheduledLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSna
     message: data.message || "",
     status: data.status || "",
     scheduledAt: serializeApiMillis(data.scheduledAt),
+    scheduledProvider: data.scheduledProvider || "",
+    providerScheduleStatus: data.providerScheduleStatus || "",
+    brevoScheduled: data.brevoScheduled === true,
+    brevoScheduledAt: serializeApiMillis(data.brevoScheduledAt),
+    brevoScheduledAtIso: data.brevoScheduledAtIso || "",
+    scheduledAcceptedAt: serializeApiMillis(data.scheduledAcceptedAt),
+    brevoMessageId: data.brevoMessageId || "",
+    sentAt: serializeApiMillis(data.sentAt),
+    lastSentAt: serializeApiMillis(data.lastSentAt),
     createdAt: serializeApiMillis(data.createdAt),
     updatedAt: serializeApiMillis(data.updatedAt),
     reportUrl: data.reportUrl || "",
@@ -8815,6 +9392,13 @@ async function handleFootprintMemoryList(req: Request) {
     const data = { id: docSnap.id, ...(docSnap.data() || {}) };
     const emailLower = normalizeEmail(data.emailLower || data.email || "");
     if (!emailLower) return;
+
+    // Only active/blocking outreach rows should appear as footprint rows.
+    // Rows already allowed/ignored by cleanup are historical lead records,
+    // not active send blockers. Keeping them here made deleted footprints
+    // reappear as "Allowed again" forever.
+    if (!isActiveFootprintLead(data)) return;
+
     ensureEntry(emailLower).leads.push(data);
   });
 
@@ -8853,8 +9437,8 @@ async function handleFootprintMemoryList(req: Request) {
   });
 }
 
-async function getOutreachLeadRefsForEmails(emails: string[], limitPerEmail = 50) {
-  const refs: any[] = [];
+async function getOutreachLeadDocsForEmails(emails: string[], limitPerEmail = 50) {
+  const rows: Array<{ id: string; ref: any; data: AnyRecord }> = [];
   const seen = new Set<string>();
 
   for (const emailLower of emails) {
@@ -8862,11 +9446,16 @@ async function getOutreachLeadRefsForEmails(emails: string[], limitPerEmail = 50
     snap.docs.forEach((docSnap: any) => {
       if (seen.has(docSnap.id)) return;
       seen.add(docSnap.id);
-      refs.push(docSnap.ref);
+      rows.push({ id: docSnap.id, ref: docSnap.ref, data: docSnap.data() || {} });
     });
   }
 
-  return refs;
+  return rows;
+}
+
+async function getOutreachLeadRefsForEmails(emails: string[], limitPerEmail = 50) {
+  const rows = await getOutreachLeadDocsForEmails(emails, limitPerEmail);
+  return rows.map((row) => row.ref);
 }
 
 async function markOutreachLeadFootprintsForEmails(
@@ -8911,6 +9500,48 @@ async function markOutreachLeadFootprintsForEmails(
   }
 
   return updated;
+}
+
+async function deleteOutreachLeadDocsForEmails(emails: string[], actor: string, reason = "footprint_selected_delete") {
+  const rows = await getOutreachLeadDocsForEmails(emails);
+  const deletedLeadIds: string[] = [];
+  const emailEventCleanupResults: AnyRecord[] = [];
+
+  for (const row of rows) {
+    const lead = { id: row.id, ...(row.data || {}) } as LeadData;
+    await deleteEmailEventsForReport({
+      reportToken: getLeadReportTokenForCleanup(lead),
+      leadIds: [row.id],
+      matchReportToken: false,
+      maxDocs: 1500,
+    })
+      .then((result: any) => emailEventCleanupResults.push({ leadId: row.id, ok: true, result }))
+      .catch((error: any) =>
+        emailEventCleanupResults.push({
+          leadId: row.id,
+          ok: false,
+          reason: String(error?.message || error || "email_event_cleanup_failed").slice(0, 500),
+        }),
+      );
+  }
+
+  for (let index = 0; index < rows.length; index += 450) {
+    const batch = adminDb.batch();
+    const chunk = rows.slice(index, index + 450);
+    chunk.forEach((row) => {
+      batch.delete(row.ref);
+      deletedLeadIds.push(row.id);
+    });
+    await batch.commit();
+  }
+
+  return {
+    leadDeletedCount: deletedLeadIds.length,
+    deletedLeadIds,
+    emailEventCleanupResults,
+    actor,
+    reason,
+  };
 }
 
 async function deleteFootprintDocsForEmails(emails: string[]) {
@@ -9046,14 +9677,16 @@ async function deleteSuppressionDocsOlderThan(days: number) {
 
 async function deleteSelectedFootprintsForEmails(emails: string[], actor: string, includeSuppression: boolean) {
   const memoryDeletedCount = await deleteFootprintDocsForEmails(emails);
-  const leadUpdatedCount = await markOutreachLeadFootprintsForEmails(emails, actor, "ignore");
+  const leadDeleteResult = await deleteOutreachLeadDocsForEmails(emails, actor, "footprint_selected_delete");
   const suppressionDeletedCount = includeSuppression ? await deleteSuppressionDocsForEmails(emails) : 0;
 
   return {
     memoryDeletedCount,
-    leadUpdatedCount,
+    leadDeletedCount: leadDeleteResult.leadDeletedCount,
+    deletedLeadIds: leadDeleteResult.deletedLeadIds,
+    emailEventCleanupResults: leadDeleteResult.emailEventCleanupResults,
     suppressionDeletedCount,
-    totalChanged: memoryDeletedCount + leadUpdatedCount + suppressionDeletedCount,
+    totalChanged: memoryDeletedCount + leadDeleteResult.leadDeletedCount + suppressionDeletedCount,
   };
 }
 const SUPPRESSION_ALLOWABLE_REASONS = new Set([
@@ -9179,7 +9812,7 @@ async function handleFootprintMemoryAction(req: Request) {
       action,
       count: result.totalChanged,
       ...result,
-      message: `Deleted/ignored ${result.totalChanged} footprint item(s). Suppression records were not deleted by this action.`,
+      message: `Deleted ${result.totalChanged} footprint item(s), including linked outreach lead rows. Suppression records were not deleted by this action.`,
     });
   }
 
@@ -9214,8 +9847,8 @@ async function handleFootprintMemoryAction(req: Request) {
       ...result,
       includeSuppression,
       message: includeSuppression
-        ? `Deleted/ignored ${result.totalChanged} selected footprint item(s), including protected suppression rows.`
-        : `Deleted/ignored ${result.totalChanged} selected footprint item(s). Suppression rows were kept protected.`,
+        ? `Deleted ${result.totalChanged} selected footprint item(s), including linked outreach lead rows and protected suppression rows.`
+        : `Deleted ${result.totalChanged} selected footprint item(s), including linked outreach lead rows. Suppression rows were kept protected.`,
     });
   }
 
@@ -9283,6 +9916,26 @@ async function handleCleanupManualRun(req: Request) {
   return await handleCleanupCandidates(req);
 }
 
+function shouldShowInScheduledTab(row: AnyRecord = {}) {
+  const status = String(row.status || "").trim().toLowerCase();
+  if (status !== "scheduled") return false;
+  if (row.sentAt || row.lastSentAt) return false;
+
+  const providerStatus = String(row.providerScheduleStatus || "").trim().toLowerCase();
+  if (["sent", "delivered", "opened", "clicked", "processed", "cancelled", "failed"].includes(providerStatus)) return false;
+
+  const scheduledProvider = String(row.scheduledProvider || "").trim().toLowerCase();
+  const isBrevoProviderScheduled = row.brevoScheduled === true || scheduledProvider === "brevo";
+  const scheduledAtMs = Number(row.scheduledAt || row.brevoScheduledAt || 0);
+
+  // Brevo owns the actual delivery time. If the provider scheduled time is already
+  // safely in the past, the Scheduled tab should not keep showing the row while
+  // waiting for an open/click webhook to arrive.
+  if (isBrevoProviderScheduled && scheduledAtMs > 0 && scheduledAtMs <= Date.now() - BREVO_INITIAL_SCHEDULE_TAB_GRACE_MS) return false;
+
+  return true;
+}
+
 /** GET /api/trackflow/scheduled-emails */
 async function handleScheduledEmailsGet(req: Request) {
   await requireAdmin(req);
@@ -9296,11 +9949,12 @@ async function handleScheduledEmailsGet(req: Request) {
     .limit(max)
     .get();
 
-  const rows = snap.docs
-    .map(serializeScheduledLead)
+  const serializedRows = snap.docs.map(serializeScheduledLead);
+  const rows = serializedRows
+    .filter(shouldShowInScheduledTab)
     .sort((a: any, b: any) => Number(a.scheduledAt || 0) - Number(b.scheduledAt || 0));
 
-  return json({ success: true, status, count: rows.length, rows });
+  return json({ success: true, status, count: rows.length, rawCount: serializedRows.length, rows });
 }
 
 /** PATCH /api/trackflow/scheduled-emails */
@@ -9321,13 +9975,19 @@ async function handleScheduledEmailsPatch(req: Request) {
     throw new ApiError("Only scheduled emails can be edited or queued for immediate send", 400);
   }
 
+  const isBrevoProviderScheduled = current.brevoScheduled === true || String(current.scheduledProvider || "").toLowerCase() === "brevo";
+
   if (action === "send_soon" || action === "send_now") {
+    if (isBrevoProviderScheduled) {
+      return await sendBrevoScheduledInitialNow(ref, leadId, current);
+    }
+
     await ref.update({
       scheduledAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       error: admin.firestore.FieldValue.delete(),
     });
-    return json({ success: true, message: "Scheduled email moved to the immediate-send queue. The scheduled-initials cron will send it on the next run." });
+    return json({ success: true, message: "Legacy Firestore-scheduled email moved to the immediate-send queue. The scheduled-initials cron will send it on the next run." });
   }
 
   const updates: Record<string, any> = {
@@ -9408,7 +10068,7 @@ async function handleScheduledEmailsPatch(req: Request) {
     const scheduledAt = timestampFromAny(body.scheduledAt);
     if (!scheduledAt) throw new ApiError("Invalid scheduledAt", 400);
     if (scheduledAt.toMillis() <= Date.now() + 30_000) {
-      throw new ApiError("Scheduled time must be at least 30 seconds in the future. Use Send Soon for immediate sending.", 400);
+      throw new ApiError("Scheduled time must be at least 30 seconds in the future. Use Send Now for immediate sending.", 400);
     }
     updates.scheduledAt = scheduledAt;
   }
@@ -9429,6 +10089,10 @@ async function handleScheduledEmailsPatch(req: Request) {
 
   if (Object.prototype.hasOwnProperty.call(body, "reportButtonText")) {
     updates.reportButtonText = String(body.reportButtonText || "View short audit note").trim().slice(0, 80);
+  }
+
+  if (isBrevoProviderScheduled) {
+    return await rescheduleBrevoInitialEmail(ref, leadId, current, updates);
   }
 
   await ref.update(updates);
