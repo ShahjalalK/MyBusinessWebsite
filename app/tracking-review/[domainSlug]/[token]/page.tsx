@@ -162,7 +162,7 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
     provider: "youtube",
     videoId,
     watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
+    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`,
     title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short browser-side evidence walkthrough"),
     description: cleanText(
       report.evidenceVideoDescription || report.evidence_video_description || raw.description,
@@ -1646,43 +1646,36 @@ export default async function ReportPage({ params }: ReportPageProps) {
           {evidenceVideo ? (
             <section
               id="evidence-video"
-              className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-xl shadow-blue-950/5"
+              className="scroll-mt-24 overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-xl shadow-blue-950/5 sm:rounded-[2rem]"
             >
-              <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-6">
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
+              <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-4 sm:p-6">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 sm:text-[11px] sm:tracking-[0.2em]">
                   Short evidence video
                 </p>
-                <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">
+                <h2 className="mt-2 text-xl font-black tracking-[-0.04em] text-slate-950 sm:mt-3 sm:text-2xl">
                   Watch the browser-side walkthrough
                 </h2>
-                <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 sm:mt-3 sm:leading-7">
                   {evidenceVideo.description}
                 </p>
               </div>
 
-              <div className="bg-slate-100 p-3 sm:p-4">
-                <div className="aspect-video overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-950 shadow-inner">
+              <div className="bg-slate-100 p-2 sm:p-4">
+                <div className="relative aspect-video w-full overflow-hidden rounded-[1rem] border border-slate-200 bg-slate-950 shadow-inner sm:rounded-[1.25rem]">
                   <iframe
                     title={evidenceVideo.title}
                     src={evidenceVideo.embedUrl}
                     loading="lazy"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
-                    className="h-full w-full"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    className="absolute inset-0 h-full w-full"
                   />
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 bg-white p-5">
-                <a
-                  href={evidenceVideo.watchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-center text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
-                >
-                  Open video in YouTube
-                </a>
-                <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
+              <div className="border-t border-slate-200 bg-white p-4 sm:p-5">
+                <p className="text-xs font-semibold leading-6 text-slate-500">
                   Video is optional evidence support. The PDF report and account-level verification remain the main source of truth.
                 </p>
               </div>
