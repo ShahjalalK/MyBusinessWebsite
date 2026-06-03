@@ -102,6 +102,122 @@ export function sanitizePublicReportUrl(value: any): string {
   return url;
 }
 
+function normalizeYouTubeVideoId(value: any): string {
+  const raw = cleanCell(value).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+  return /^[a-zA-Z0-9_-]{8,32}$/.test(raw) ? raw : "";
+}
+
+function extractYouTubeVideoId(value: any): string {
+  const raw = cleanCell(value);
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+
+    if (host === "youtu.be") {
+      return normalizeYouTubeVideoId(url.pathname.split("/").filter(Boolean)[0] || "");
+    }
+
+    if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) {
+      const watchId = url.searchParams.get("v");
+      if (watchId) return normalizeYouTubeVideoId(watchId);
+
+      const parts = url.pathname.split("/").filter(Boolean);
+      const markerIndex = parts.findIndex((part) => ["embed", "shorts", "live"].includes(part.toLowerCase()));
+      if (markerIndex >= 0 && parts[markerIndex + 1]) return normalizeYouTubeVideoId(parts[markerIndex + 1]);
+    }
+  } catch {}
+
+  return normalizeYouTubeVideoId(raw);
+}
+
+function normalizeEvidenceVideoPayload(body: AnyRecord = {}, privatePage: AnyRecord = {}): AnyRecord {
+  const raw = getObjectCandidate(
+    body.evidenceVideo,
+    body.evidence_video,
+    body.videoEvidence,
+    body.video_evidence,
+    body.video,
+    privatePage.evidenceVideo,
+    privatePage.evidence_video,
+  );
+
+  const clear = Boolean(
+    body.clearEvidenceVideo ||
+      body.clear_evidence_video ||
+      body.removeEvidenceVideo ||
+      body.remove_evidence_video ||
+      body.deleteEvidenceVideo ||
+      body.delete_evidence_video ||
+      raw.clear === true ||
+      raw.remove === true ||
+      raw.delete === true,
+  );
+
+  if (clear) {
+    return { enabled: false, clear: true, status: "removed" };
+  }
+
+  const incomingUrl = firstCleanString(
+    raw.videoUrl,
+    raw.video_url,
+    raw.youtubeUrl,
+    raw.youtube_url,
+    raw.url,
+    typeof body.evidenceVideo === "string" ? body.evidenceVideo : "",
+    typeof body.evidence_video === "string" ? body.evidence_video : "",
+    typeof body.videoEvidence === "string" ? body.videoEvidence : "",
+    typeof body.video_evidence === "string" ? body.video_evidence : "",
+    typeof body.video === "string" ? body.video : "",
+    body.evidenceVideoUrl,
+    body.evidence_video_url,
+    body.videoUrl,
+    body.video_url,
+    body.youtubeUrl,
+    body.youtube_url,
+    privatePage.evidenceVideoUrl,
+    privatePage.evidence_video_url,
+  );
+  const videoId =
+    extractYouTubeVideoId(incomingUrl) ||
+    normalizeYouTubeVideoId(firstCleanString(raw.youtubeVideoId, raw.youtube_video_id, raw.videoId, raw.video_id, body.youtubeVideoId, body.youtube_video_id));
+
+  if (!videoId) {
+    return { enabled: false, clear: false, status: firstCleanString(raw.status, body.evidenceVideoStatus, body.evidence_video_status, "not_added") };
+  }
+
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`;
+
+  return {
+    enabled: true,
+    provider: "youtube",
+    status: firstCleanString(raw.status, body.evidenceVideoStatus, body.evidence_video_status, "ready"),
+    title: firstCleanString(raw.title, body.evidenceVideoTitle, body.evidence_video_title, "Short browser-side evidence walkthrough"),
+    description: firstCleanString(
+      raw.description,
+      body.evidenceVideoDescription,
+      body.evidence_video_description,
+      "This optional video shows browser-visible evidence only. Final confirmation still requires account-level access.",
+    ),
+    videoId,
+    video_id: videoId,
+    youtubeVideoId: videoId,
+    youtube_video_id: videoId,
+    videoUrl: watchUrl,
+    video_url: watchUrl,
+    youtubeUrl: watchUrl,
+    youtube_url: watchUrl,
+    embedUrl,
+    embed_url: embedUrl,
+    embedProvider: "youtube_nocookie",
+    embed_provider: "youtube_nocookie",
+    addedAt: firstCleanString(raw.addedAt, raw.added_at, body.evidenceVideoAddedAt, body.evidence_video_added_at),
+    optional: true,
+  };
+}
+
 export function sanitizeLocalRedirectTarget(value: any): string {
   const raw = String(value || "").trim();
   if (!raw) return "/contact";
@@ -830,6 +946,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   const privatePage = sanitizePublicReportCopyObject(getObjectCandidate(rawSecurePageCopy, privateReportCopy), 40);
   const alertSignupContext = isAlertSignupReportPayload(body, privatePage);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
+  const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
 
   const headline = firstCleanString(
     body.headline,
@@ -1000,6 +1117,8 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaText,
     manualAdsTransparency,
     manual_ads_transparency: manualAdsTransparency,
+    evidenceVideo: evidenceVideo.enabled ? evidenceVideo : undefined,
+    evidence_video: evidenceVideo.enabled ? evidenceVideo : undefined,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
   };
 
@@ -1112,6 +1231,16 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     pdfStorageKey: firstCleanString(body.pdfStorageKey, body.pdf_storage_key, body.b2Key, body.b2_key, body.blobPathname, body.blob_pathname, body.pdfFileId, body.pdf_file_id),
     pdfStorageEtag: firstCleanString(body.pdfStorageEtag, body.pdf_storage_etag, body.b2Etag, body.b2_etag),
     pdfStorageSize: Number(body.pdfStorageSize || body.pdf_storage_size || body.b2Size || body.b2_size || 0) || undefined,
+    evidenceVideo,
+    evidence_video: evidenceVideo.enabled ? evidenceVideo : undefined,
+    evidenceVideoUrl: evidenceVideo.enabled ? evidenceVideo.videoUrl : "",
+    evidence_video_url: evidenceVideo.enabled ? evidenceVideo.videoUrl : "",
+    evidenceVideoEmbedUrl: evidenceVideo.enabled ? evidenceVideo.embedUrl : "",
+    evidence_video_embed_url: evidenceVideo.enabled ? evidenceVideo.embedUrl : "",
+    evidenceVideoProvider: evidenceVideo.enabled ? evidenceVideo.provider : "",
+    evidence_video_provider: evidenceVideo.enabled ? evidenceVideo.provider : "",
+    evidenceVideoStatus: evidenceVideo.status || "",
+    evidence_video_status: evidenceVideo.status || "",
     contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
     ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
     ctaText,

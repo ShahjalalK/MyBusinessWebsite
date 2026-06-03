@@ -48,6 +48,8 @@ function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
     openGraphImageUrl: String(raw.openGraphImageUrl || raw.open_graph_image_url || ""),
     previewImageUrl: String(raw.previewImageUrl || raw.preview_image_url || ""),
     homepageScreenshotUrl: String(raw.homepageScreenshotUrl || raw.homepage_screenshot_url || ""),
+    evidenceVideoUrl: String(raw.evidenceVideoUrl || raw.evidence_video_url || raw.evidenceVideo?.videoUrl || raw.evidence_video?.video_url || ""),
+    evidenceVideoStatus: String(raw.evidenceVideoStatus || raw.evidence_video_status || raw.evidenceVideo?.status || raw.evidence_video?.status || ""),
     ogImagePathname: String(raw.ogImagePathname || raw.og_image_pathname || raw.previewImagePathname || raw.preview_image_pathname || ""),
     sourceType: String(raw.sourceType || raw.source_type || ""),
     outreachChannel: String(raw.outreachChannel || raw.outreach_channel || ""),
@@ -527,6 +529,33 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       downloadCount: Number(existingData.downloadCount || 0),
       ctaClickCount: Number(existingData.ctaClickCount || 0),
     };
+  
+
+    if (report.evidenceVideo?.clear) {
+    payload.evidenceVideo = deleteField;
+    payload.evidence_video = deleteField;
+    payload.evidenceVideoUrl = deleteField;
+    payload.evidence_video_url = deleteField;
+    payload.evidenceVideoEmbedUrl = deleteField;
+    payload.evidence_video_embed_url = deleteField;
+    payload.evidenceVideoProvider = deleteField;
+    payload.evidence_video_provider = deleteField;
+    payload.evidenceVideoStatus = "removed";
+    payload.evidence_video_status = deleteField;
+    payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+    } else if (report.evidenceVideo?.enabled && report.evidenceVideoEmbedUrl) {
+    payload.evidenceVideo = report.evidenceVideo;
+    payload.evidence_video = deleteField;
+    payload.evidenceVideoUrl = report.evidenceVideoUrl;
+    payload.evidence_video_url = deleteField;
+    payload.evidenceVideoEmbedUrl = report.evidenceVideoEmbedUrl;
+    payload.evidence_video_embed_url = deleteField;
+    payload.evidenceVideoProvider = report.evidenceVideoProvider || "youtube";
+    payload.evidence_video_provider = deleteField;
+    payload.evidenceVideoStatus = report.evidenceVideoStatus || "ready";
+    payload.evidence_video_status = deleteField;
+    payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
   
     if (!existing.exists) {
       payload.createdAt = admin.firestore.FieldValue.serverTimestamp();

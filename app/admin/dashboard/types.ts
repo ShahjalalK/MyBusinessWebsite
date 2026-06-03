@@ -25,6 +25,26 @@ export type TrackingHistory = {
   step_tag?: string;
 };
 
+export type EvidenceVideoInfo = {
+  enabled?: boolean;
+  status?: string;
+  provider?: "youtube" | string;
+  title?: string;
+  description?: string;
+  videoId?: string;
+  video_id?: string;
+  videoUrl?: string;
+  video_url?: string;
+  youtubeUrl?: string;
+  youtube_url?: string;
+  embedUrl?: string;
+  embed_url?: string;
+  optional?: boolean;
+  addedAt?: any;
+  updatedAt?: any;
+  [key: string]: any;
+};
+
 export type SentMessage = {
   step: number;
   subject: string;
@@ -131,6 +151,8 @@ export type SheetLead = {
   "PDF View URL"?: string;
   "PDF Download URL"?: string;
   "PDF Expires At"?: string;
+  "Evidence Video URL"?: string;
+  "Evidence Video Status"?: string;
   "Report Page Viewed"?: string;
   "PDF Downloaded"?: string;
   "CTA Clicked"?: string;

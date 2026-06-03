@@ -38,6 +38,15 @@ type ManualAdsTransparency = {
   checkedAt: string;
 };
 
+type EvidenceVideoDisplay = {
+  title: string;
+  description: string;
+  watchUrl: string;
+  embedUrl: string;
+  videoId: string;
+  provider: "youtube";
+};
+
 const DEFAULT_CHECKS = [
   "GA4 and Google Tag Manager browser-visible signals",
   "Google Ads conversion and remarketing request signals",
@@ -108,6 +117,58 @@ function cleanText(value: unknown, fallback = ""): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text || containsBengali(text)) return fallback;
   return text;
+}
+
+function normalizeYouTubeId(value: unknown): string {
+  const id = String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+  return /^[a-zA-Z0-9_-]{8,32}$/.test(id) ? id : "";
+}
+
+function extractYouTubeId(value: unknown): string {
+  const raw = cleanText(value, "");
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+
+    if (host === "youtu.be") return normalizeYouTubeId(url.pathname.split("/").filter(Boolean)[0]);
+
+    if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) {
+      const watchId = url.searchParams.get("v");
+      if (watchId) return normalizeYouTubeId(watchId);
+
+      const parts = url.pathname.split("/").filter(Boolean);
+      const markerIndex = parts.findIndex((part) => ["embed", "shorts", "live"].includes(part.toLowerCase()));
+      if (markerIndex >= 0) return normalizeYouTubeId(parts[markerIndex + 1]);
+    }
+  } catch {}
+
+  return normalizeYouTubeId(raw);
+}
+
+function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisplay | null {
+  const raw = getObjectCandidate(report.evidenceVideo, report.evidence_video, report.videoEvidence, report.video_evidence, report.video);
+  const status = cleanText(report.evidenceVideoStatus || report.evidence_video_status || raw.status, "").toLowerCase();
+  if (status === "removed" || raw.enabled === false) return null;
+
+  const videoId =
+    extractYouTubeId(report.evidenceVideoUrl || report.evidence_video_url || raw.videoUrl || raw.video_url || raw.youtubeUrl || raw.youtube_url || raw.url) ||
+    normalizeYouTubeId(report.youtubeVideoId || report.youtube_video_id || raw.youtubeVideoId || raw.youtube_video_id || raw.videoId || raw.video_id);
+
+  if (!videoId) return null;
+
+  return {
+    provider: "youtube",
+    videoId,
+    watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
+    title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short browser-side evidence walkthrough"),
+    description: cleanText(
+      report.evidenceVideoDescription || report.evidence_video_description || raw.description,
+      "This optional video shows browser-visible evidence from the review. Final confirmation still requires GA4, GTM, Google Ads, CRM, or server access.",
+    ),
+  };
 }
 
 
@@ -1355,6 +1416,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const primaryConversionFocus = getPrimaryConversionFocus(report, privateReportCopy);
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
+  const evidenceVideo = getEvidenceVideoDisplay(report);
   const heroSummaryCards = [
     {
       label: "Review focus",
@@ -1446,6 +1508,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <a href="#pdf-report" className="rounded-full border border-slate-200 bg-white px-4 py-2 transition hover:border-blue-200 hover:text-blue-700">
                 Full PDF report available
               </a>
+              {evidenceVideo ? (
+                <a href="#evidence-video" className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-blue-700 transition hover:border-blue-200 hover:bg-white">
+                  Short evidence video available
+                </a>
+              ) : null}
               <span className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-emerald-700">
                 Report-aware assistant included
               </span>
@@ -1573,6 +1640,54 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <SectionCard label="Recommended verification plan" tone="amber">
             <NumberedStepList items={recommendations} />
           </SectionCard>
+
+
+
+          {evidenceVideo ? (
+            <section
+              id="evidence-video"
+              className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-xl shadow-blue-950/5"
+            >
+              <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-6">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
+                  Short evidence video
+                </p>
+                <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">
+                  Watch the browser-side walkthrough
+                </h2>
+                <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
+                  {evidenceVideo.description}
+                </p>
+              </div>
+
+              <div className="bg-slate-100 p-3 sm:p-4">
+                <div className="aspect-video overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-950 shadow-inner">
+                  <iframe
+                    title={evidenceVideo.title}
+                    src={evidenceVideo.embedUrl}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="h-full w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 bg-white p-5">
+                <a
+                  href={evidenceVideo.watchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-center text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+                >
+                  Open video in YouTube
+                </a>
+                <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
+                  Video is optional evidence support. The PDF report and account-level verification remain the main source of truth.
+                </p>
+              </div>
+            </section>
+          ) : null}
 
           <SectionCard label={howToReadTitle}>
             <div className="space-y-3 text-sm font-semibold leading-7 text-slate-600">

@@ -1,7 +1,7 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v22.00-chat-insights-secure-pdf-handoff
-Last updated: 2026-05-30
+Version: v23.20-evidence-video-youtube-secure-page-plan
+Last updated: 2026-06-02
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
@@ -21,9 +21,1446 @@ Current system priorities:
 6. Same secure-page visitor should stay as one visitor/session across multiple questions in the same browser.
 7. Different browser/device without login/contact identity may be a different visitor.
 8. Avoid touching the huge catch-all route unless the bug actually belongs there.
+9. Email open/click/reply/follow-up state remains Firestore source-of-truth; Google Sheet is only pipeline/review/routing.
+10. Self-hosted email open pixels are the primary source for open_count; Brevo opened webhooks are diagnostic unless intentionally enabled.
+11. For email tracking bugs, first inspect public tracking URL, lead/message identity, provider image-proxy ignore rules, and dashboard cache separately.
+12. Evidence videos are optional high-value lead assets; they must remain browser-visible, evidence-safe, and stored as YouTube/metadata links rather than video files in Firestore.
 ```
 
 ---
+
+
+## Latest Critical Update — v23.10 Email Open Tracking Stabilization, Brevo Image Proxy, Dashboard Counts
+
+This section documents the most recent email-open tracking debugging and should be read together with the v23.00 token/storage/source-handoff rules below.
+
+### Current open tracking source-of-truth
+
+Email open/click tracking now depends on the Vercel/email automation app and Firestore lead documents.
+
+Correct flow:
+
+```text
+Send Email / scheduled send / Sheet-selected send
+→ email HTML receives TrackFlow self-hosted open pixel
+→ pixel URL points to public app base URL
+→ /api/trackflow/track/open resolves lead/message/tracking identity
+→ Firestore outreach lead updates open_count, firstOpenedAt, lastOpenedAt, lastEngagedAt, nextFollowup*
+→ dashboard reads cached/refreshed Firestore lead state
+```
+
+Important rule:
+
+```text
+Self-hosted TrackFlow pixel is the primary source for open_count.
+Brevo "opened" webhooks are provider diagnostics by default.
+Do not turn Brevo webhook opens into automation counts unless intentionally testing that behavior.
+```
+
+Recommended default:
+
+```env
+BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
+```
+
+Only set this to `true` if you intentionally want provider-level Brevo opens to increment `open_count`, knowing that provider image proxy behavior can be noisy.
+
+### Public app URL rule
+
+The email open pixel is generated from the app base URL. The URL must be public, not localhost.
+
+Required production/stable env:
+
+```env
+NEXT_PUBLIC_APP_URL=https://trackflowpro.com
+TRACKFLOW_APP_URL=https://trackflowpro.com
+```
+
+Localhost warning:
+
+```text
+If NEXT_PUBLIC_APP_URL=http://localhost:3000, Gmail/Brevo/prospect browsers cannot hit the tracking route.
+Old emails keep the old pixel URL already embedded in their HTML.
+After changing env, redeploy and send a new email before testing.
+```
+
+### Brevo image proxy fast-prefetch rule
+
+Recent bug found:
+
+```text
+Email sent successfully.
+Tracking pixel route was hit.
+leadFound=true and internalTestRecipient=false.
+But open_count stayed 0.
+Logs showed:
+ignoredReason = brevo_redirection_image_proxy_fast_prefetch
+userAgent = Brevo/1.0 (redirection-images...)
+secondsAfterSent = 21
+fastOpenWindowSeconds = 30
+```
+
+Cause:
+
+```text
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=30 caused a real first open to be ignored when the email was opened quickly after sending.
+After that, image caching can prevent another useful open request from reaching the route.
+```
+
+Current recommended stable env:
+
+```env
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+```
+
+If a future assistant sees `self_hosted_open_ignored_provider_image_proxy` with `currentOpenCount=0`, `leadFound=true`, and `internalTestRecipient=false`, do not assume the dashboard is broken. First reduce/disable the provider proxy fast-prefetch window.
+
+### Duplicate open / meaningful open rule
+
+The system is not designed to count every image request as a new open.
+
+Correct behavior:
+
+```text
+Same lead/message opened once
+→ open_count increments.
+
+Same lead/message opened again inside the open dedupe window
+→ duplicate open is ignored to protect Firestore writes.
+
+Same recipient receives a new email with a new leadId/messageId/trackingId
+→ should still be able to count a new open if it is not ignored by provider proxy/internal-test rules.
+```
+
+Do not diagnose "same email address was blocked forever" unless the logs prove a suppression/cooldown rule. Same recipient email alone should not prevent a later lead/message from being counted.
+
+Useful log interpretation:
+
+```text
+self_hosted_open_resolved + leadFound=true
+→ route and identity resolution worked.
+
+self_hosted_open_received + internalTestRecipient=true
+→ internal/test recipient rule blocked the count.
+
+self_hosted_open_ignored_provider_image_proxy
+→ provider proxy fast-prefetch rule blocked the count.
+
+self_hosted_open_before_increment
+→ open is about to update Firestore.
+
+self_hosted_engagement_after_firestore_update + incrementedOpen=true
+→ Firestore update worked; if dashboard does not show it, check dashboard cache/refresh/display.
+
+No self_hosted_open_resolved log at all
+→ pixel route was not hit; check NEXT_PUBLIC_APP_URL, old sent email HTML, image blocking, or deployment.
+```
+
+### Debug env policy
+
+Production/stable defaults:
+
+```env
+TRACKFLOW_DEBUG_EMAIL_FLOW=false
+STORE_LOW_VALUE_EMAIL_EVENTS=false
+STORE_OPEN_TRACKING_DEBUG=true
+BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+```
+
+Temporary debug only:
+
+```env
+TRACKFLOW_DEBUG_EMAIL_FLOW=true
+STORE_LOW_VALUE_EMAIL_EVENTS=true
+COUNT_INTERNAL_TEST_OPENS=true
+WEBHOOK_OPEN_DEDUPE_MINUTES=1
+```
+
+Important decisions:
+
+```text
+TRACKFLOW_DEBUG_EMAIL_FLOW=false only disables server console debug logs. It does not stop open_count/click_count.
+STORE_LOW_VALUE_EMAIL_EVENTS=false reduces Firestore writes/storage. It should not stop lead-level open_count/click_count updates.
+COUNT_INTERNAL_TEST_OPENS=true is only for testing; do not leave it enabled in production if sender/main inbox opens should not count.
+```
+
+### Files recently inspected/connected for email open tracking
+
+Primary files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-email/email-events.ts
+lib/firebase-admin.ts
+app/admin/dashboard/page.tsx
+app/admin/dashboard/OverviewPanel.tsx
+app/admin/dashboard/LeadsPanel.tsx
+app/admin/dashboard/types.ts
+app/stores/useLeadStore.ts
+```
+
+If tracking pixel injection, composer send payload, or sheet-selected send context is suspected, also ask for:
+
+```text
+app/admin/dashboard/OutreachPanel.tsx
+app/admin/dashboard/utils.ts
+app/admin/dashboard/SheetQueuePanel.tsx
+app/admin/dashboard/sheet-readiness.ts
+lib/senders.ts
+```
+
+Use these files for:
+
+```text
+email open count not increasing
+same recipient receives another email but open_count stays 0
+self_hosted_open_resolved appears but open_count does not increment
+Brevo redirection-images user-agent is seen in open logs
+dashboard open count does not update after Firestore increment
+manual send works but Sheet-selected send does not
+trackingId / leadId / messageId mapping looks wrong
+```
+
+---
+
+
+---
+
+
+## Latest Planned Update — v23.20 Evidence Video Walkthrough, YouTube Unlisted Hosting, Secure Page Preview
+
+This section documents the next planned premium feature: optional browser-side evidence videos for high-quality/problem-heavy prospects.
+
+### Product goal
+
+Evidence video is a visual trust layer on top of the existing PDF and secure report page.
+
+Correct positioning:
+
+```text
+PDF report
+→ written browser-visible tracking review
+
+Secure page
+→ premium client experience, PDF preview/download, chatbot, CTA, and tracking analytics
+
+Evidence video
+→ short visual browser-side walkthrough showing what was reviewed and what may need verification
+```
+
+Important rule:
+
+```text
+The evidence video is NOT 100% account-level proof.
+It follows the same evidence-safety rule as the PDF:
+browser-visible evidence can show tags, requests, screenshots, CTA/form/phone/booking paths, and visible tracking signals.
+Final confirmation still requires GA4/GTM/Google Ads/CRM/server/call-tracking account access.
+```
+
+Do not say in video or page copy:
+
+```text
+Your tracking is broken.
+Your ads are wasting money.
+Your conversions are not working.
+This proves Google Ads is not recording leads.
+```
+
+Safe wording:
+
+```text
+This short browser-side walkthrough shows what was visible from the outside during the review.
+Some signals were visible, and some paths may be worth verifying inside GA4, GTM, Google Ads, or the relevant platform.
+Final confirmation requires account/server access.
+```
+
+### When to create evidence videos
+
+Do NOT generate a video for every audit by default.
+
+Recommended workflow:
+
+```text
+Python search
+→ Google Ads Transparency check
+→ normal Python audit
+→ Gemini-polished PDF/email/report
+→ secure page created
+→ operator selects only high-quality/problem-heavy leads
+→ Create/Add Evidence Video
+→ YouTube Unlisted URL saved to Firestore report metadata
+→ secure page shows a premium video preview card
+```
+
+Use video only when:
+
+```text
+Ads appear to be running
+Business looks legitimate and high-value
+Audit/report quality is strong
+There is a clear browser-visible verification opportunity
+The secure page and PDF are already professional
+Decision maker/contact path exists
+```
+
+Avoid video when:
+
+```text
+Audit evidence is weak or generic
+Screenshot/path quality is poor
+Report copy feels too uncertain
+Prospect is low value
+Video would require risky form submission or sensitive user data
+```
+
+### Recommended video format
+
+First version should be simple and fast:
+
+```text
+Duration: 30–60 seconds
+Best target: 30–45 seconds
+Resolution: 1280×720
+FPS: 15–24 fps
+Target size if locally created: under 15 MB before YouTube upload
+Voice: optional; first version can be no-voice with clear on-screen labels
+Style: browser view + clean evidence panel + safe final disclaimer
+```
+
+Suggested sequence:
+
+```text
+1. Open the prospect website.
+2. Show the main conversion path: phone, form, booking, quote, cart/checkout, or contact CTA.
+3. Show a clean custom evidence panel, not necessarily real Chrome DevTools.
+4. Highlight visible signals:
+   ✅ GTM container visible
+   ✅ GA4 request visible
+   ✅ Meta Pixel pageview visible
+   ⚠️ Google Ads conversion request not clearly observed from this browser-side review
+   ⚠️ Final confirmation requires account access
+5. End with a safe verification next step.
+```
+
+Recommended video page title/label:
+
+```text
+Short browser-side evidence walkthrough
+```
+
+Recommended secure page helper copy:
+
+```text
+This short video shows what was visible from the outside during the tracking review. It is not an account-level audit, but it can help you quickly understand what may need verification inside GA4, GTM, Google Ads, or the relevant tracking platform.
+```
+
+### YouTube hosting decision
+
+Use YouTube to avoid storing/streaming video files from TrackFlow.
+
+Important privacy rule:
+
+```text
+Use YouTube Unlisted, not YouTube Private.
+Private videos usually cannot be embedded for normal prospects unless they are invited.
+Unlisted videos are not public on the channel/search in the normal way, but anyone with the link can view them.
+```
+
+Recommended YouTube settings:
+
+```text
+Visibility: Unlisted
+Embedding: Allowed
+Comments: Disabled if possible
+Title: Browser-side tracking review walkthrough for {Company}
+Description: Keep short and evidence-safe
+Do not include sensitive claims, credentials, private client data, or raw account screenshots
+```
+
+Secure page should embed with privacy-enhanced domain when possible:
+
+```text
+https://www.youtube-nocookie.com/embed/{VIDEO_ID}
+```
+
+Do not send the raw YouTube link as the primary outreach link. Send the secure report page link and mention that a short evidence walkthrough is included inside the page.
+
+### Firestore storage rule
+
+Do not store video files in Firestore.
+
+Save only small metadata on:
+
+```text
+audit_reports/{reportToken}
+```
+
+Recommended fields:
+
+```ts
+evidenceVideoProvider: "youtube"
+evidenceVideoUrl: "https://youtu.be/VIDEO_ID"
+evidenceVideoId: "VIDEO_ID"
+evidenceVideoEmbedUrl: "https://www.youtube-nocookie.com/embed/VIDEO_ID"
+evidenceVideoVisibility: "unlisted"
+evidenceVideoTitle: "Short browser-side evidence walkthrough"
+evidenceVideoStatus: "active"
+evidenceVideoAddedAt: serverTimestamp()
+evidenceVideoUpdatedAt: serverTimestamp()
+```
+
+Optional fields:
+
+```ts
+evidenceVideoThumbnailUrl
+evidenceVideoDurationSeconds
+evidenceVideoNotes
+evidenceVideoAddedBy
+evidenceVideoSource: "manual_youtube_url" | "python_generated" | "external"
+```
+
+Remove/disable behavior:
+
+```text
+Remove Evidence Video
+→ do not delete the YouTube video automatically
+→ remove or mark inactive in Firestore:
+   evidenceVideoStatus = "removed"
+   evidenceVideoRemovedAt = serverTimestamp()
+```
+
+### Secure page UX
+
+If a report has an active evidence video, show a premium card on the secure report page.
+
+Preferred placement:
+
+```text
+Hero / review summary
+→ Evidence video card
+→ PDF preview/download
+→ findings/recommendations
+→ chatbot
+→ booking/contact CTA
+```
+
+Do not make video replace the PDF. Video is a visual helper; PDF remains the detailed report.
+
+Suggested UI elements:
+
+```text
+Card title: Watch a short browser-side evidence walkthrough
+Subtext: This video shows what was visible from the outside during the review. Final confirmation requires account access.
+Button/fallback: Open video
+Embed: YouTube iframe using youtube-nocookie.com
+Mobile: show a responsive embed or a lightweight preview/open button
+```
+
+### Engagement tracking rule
+
+First version only needs simple TrackFlow events:
+
+```text
+video_card_viewed
+video_open_clicked
+video_embed_visible
+```
+
+Do not over-engineer YouTube watch-time tracking in the first version.
+
+If advanced tracking is needed later, use the YouTube IFrame Player API to detect play/pause/progress, but keep it optional because third-party iframe behavior can be blocked by browsers.
+
+### Implementation approach
+
+There are two separate possible implementation paths.
+
+#### Path A — Manual YouTube link first, fastest
+
+Operator creates video manually or using a separate tool, uploads to YouTube Unlisted, then adds the URL in TrackFlow dashboard.
+
+Dashboard flow:
+
+```text
+Open report/lead/secure page record
+→ Add Evidence Video
+→ paste YouTube URL
+→ validate/extract video ID
+→ save metadata to Firestore audit_reports/{token}
+→ secure page refresh shows the video card
+```
+
+This is the recommended first implementation.
+
+#### Path B — Python-generated video later
+
+Python/Playwright can generate a browser-side evidence video later, but it should be optional and only for selected leads.
+
+Recommended architecture:
+
+```text
+python-backend/trackflow_modules/video_evidence.py
+→ optional selected-lead video generation
+→ uses existing audit/evidence data
+→ records browser walkthrough or builds report-based evidence video
+→ operator uploads final video to YouTube Unlisted manually first
+```
+
+Do not make Python generate videos for every audit by default. It will slow audits, increase CPU/storage usage, and create operational pressure.
+
+### File request matrix for evidence video feature
+
+#### Manual YouTube URL add/update/remove
+
+Ask for:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-api/reports.ts
+lib/trackflow-api/report-normalizers.ts
+lib/firebase-admin.ts
+app/admin/dashboard/page.tsx
+app/admin/dashboard/types.ts
+```
+
+Ask additionally depending on where the button is placed:
+
+```text
+app/admin/dashboard/LeadsPanel.tsx
+app/admin/dashboard/SheetQueuePanel.tsx
+app/admin/dashboard/CleanupPanel.tsx
+app/stores/useLeadStore.ts
+```
+
+Use this for:
+
+```text
+Add Evidence Video button
+Save YouTube URL to report
+Remove Evidence Video
+Validate/extract YouTube video ID
+Dashboard preview/open video link
+```
+
+#### Secure page video preview/embed
+
+Ask for:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+lib/trackflow-api/reports.ts
+lib/trackflow-api/report-normalizers.ts
+```
+
+Ask for route only if report metadata is not loading:
+
+```text
+app/api/trackflow/[...action]/route.ts
+```
+
+Use this for:
+
+```text
+secure page does not show video
+YouTube embed not responsive
+Open video fallback missing
+video copy is not evidence-safe
+mobile layout problem
+```
+
+#### Python-generated video later
+
+Ask for Python/local audit files:
+
+```text
+python-backend/audit.py
+python-backend/trackflow_modules/evidence_capture.py
+python-backend/trackflow_modules/reports.py
+python-backend/trackflow_modules/gemini_client.py
+python-backend/trackflow_modules/video_evidence.py
+```
+
+If local dashboard starts the video job, also ask for:
+
+```text
+app/components/LeadList.tsx
+app/components/LeadList/reportHelpers.ts
+app/types/audit.ts
+app/api/export/blob-reports/route.ts
+```
+
+Use this for:
+
+```text
+Create Evidence Video from audit data
+browser walkthrough recording
+custom evidence panel generation
+video job status
+attach generated video to secure report
+```
+
+### Future assistant rules for this feature
+
+```text
+1. Do not use YouTube Private for secure page preview; use Unlisted.
+2. Do not store video bytes in Firestore.
+3. Do not replace PDF with video; video is an additional trust layer.
+4. Do not claim account-level proof from the video.
+5. Do not create videos for every audit by default.
+6. Start with manual YouTube URL input before building Python video generation.
+7. Secure page should use the report URL as the primary outreach link, not the raw YouTube URL.
+8. Keep all client-facing video labels and copy professional, English-only, evidence-safe, and non-accusatory.
+```
+
+---
+
+## Latest Critical Update — v23.00 Token-Based Cleanup, B2 PDF Re-upload, Sheet Source Management
+
+This section is the current highest-priority handoff. It overrides older notes below where they conflict.
+
+### Current architecture split: Localhost project vs Vercel project
+
+TrackFlow Pro now has two connected Next.js environments that must not be mixed:
+
+```text
+A) Localhost / Python audit dashboard project
+→ runs beside the Python FastAPI audit backend
+→ creates audits, polishes with Gemini, fetches reviewed PDFs from Python
+→ uploads PDFs to private Backblaze B2
+→ uploads OG/LinkedIn preview images to Vercel Blob
+→ registers secure reports on the Vercel report-hosting app
+→ updates Google Sheet pipeline rows
+
+B) Vercel / email automation + report hosting project
+→ hosts /tracking-review/{domainSlug}/{token}
+→ streams PDF preview/download from private B2 through internal routes
+→ tracks report views, PDF downloads, CTA clicks
+→ manages email outreach, follow-up, cleanup, contact memory, suppression
+→ uses Firestore as source-of-truth for tracking/follow-up state
+```
+
+Important rule:
+
+```text
+Do not blindly replace the same-named b2.ts file in both projects.
+Localhost b2.ts and Vercel b2.ts may be different.
+Localhost b2.ts focuses on upload/re-upload from the audit dashboard.
+Vercel b2.ts may include stronger read/retry logic for secure-page PDF preview/download.
+```
+
+When asking for files, always ask first:
+
+```text
+Is this issue happening in:
+1. Localhost audit dashboard / Python export flow?
+2. Vercel email automation / secure report hosting flow?
+3. Both?
+```
+
+### Token model: reportToken is the master key
+
+The system should be token-based, not email-based.
+
+Intended behavior:
+
+```text
+Same website/domain audited again
+→ reuse the same report token if possible
+→ update/re-register the secure report
+→ upload the latest PDF under the same token path
+→ update the Google Sheet row if Sheet sync is enabled
+
+If no prior token/domain index is found
+→ create a new stable token from the normalized domain when possible
+→ random token only as last fallback
+```
+
+Token priority:
+
+```text
+1. Explicit reportToken from request/body/lead/audit
+2. Existing report token saved on lead/audit/report metadata
+3. Vercel Firestore domain index / audit_report_domains
+4. Domain-stable token generated from normalized domain + secret
+5. Random token only when domain is missing or unsafe
+```
+
+Stable token warning:
+
+```text
+Do not change BLOB_REPORT_TOKEN_SECRET / REPORT_REGISTER_SECRET after production use.
+Changing the secret can make the same domain generate a different stable token.
+```
+
+### Hybrid storage rule
+
+Current storage is:
+
+```text
+PDF report files
+→ private Backblaze B2
+
+OG / LinkedIn preview image
+→ public Vercel Blob
+
+Secure report metadata
+→ Firestore audit_reports/{token}
+
+Domain lookup index
+→ Firestore audit_report_domains/{normalizedDomain or domainSlug}
+
+Google Sheet
+→ pipeline/review/source routing only
+
+Email open/click/reply/follow-up state
+→ Firestore outreach leads/events
+
+Secure-page chat history
+→ Supabase when configured
+```
+
+Client-facing links must use internal routes:
+
+```text
+Preview:
+ /api/trackflow/reports/preview?token=...
+
+Download:
+ /api/trackflow/reports/download?token=...
+
+Secure page:
+ /tracking-review/{domainSlug}/{token}
+```
+
+Never expose private B2 object URLs to prospects.
+
+### B2 PDF re-upload and file-size rule
+
+Recent issue fixed:
+
+```text
+Local PDF download was around 800 KB
+B2 showed around 4.9 MB and audit-report.pdf (7)
+```
+
+Important understanding:
+
+```text
+Backblaze UI showing audit-report.pdf (7) usually means multiple versions of the same object key.
+It does not necessarily mean B2 merged 7 PDFs into one file.
+If B2 upload size is large, first check the source PDF bytes fetched from Python.
+```
+
+Current intended local Create Secure Page flow:
+
+```text
+Create Secure Page
+→ fetch fresh reviewed PDF from Python
+→ use regenerate/fresh parameters
+→ log source_pdf_fetched with sourcePdfBytes
+→ purge previous B2 versions for the same key when enabled
+→ upload one fresh PDF to B2
+→ log b2_pdf_uploaded with uploaded size/key
+→ upload OG card to Vercel Blob
+→ register secure report on Vercel
+→ optionally sync Google Sheet
+```
+
+Fresh PDF URL rule:
+
+```text
+Create Secure Page should fetch:
+ /audit/pdf/{auditId}?regenerate=true&fresh=1&secure_page_upload=1&ai=1
+```
+
+Debug log rule:
+
+```text
+Look for:
+source_pdf_fetched
+b2_pdf_uploaded
+preview_blob_uploaded
+register_response
+sheet_sync_result or sheetUpdated
+```
+
+If `source_pdf_fetched` already shows a large PDF, the issue is Python PDF generation/cache/assets, not B2.
+
+Relevant ENV:
+
+```env
+B2_PURGE_PDF_VERSIONS_BEFORE_UPLOAD=true
+B2_REQUIRE_VERSION_PURGE_BEFORE_UPLOAD=false
+```
+
+If `B2_REQUIRE_VERSION_PURGE_BEFORE_UPLOAD=true`, the B2 application key must be allowed to list/delete file versions.
+
+### Cleanup rule: best-effort, token-first, no persistent cleanup_jobs by default
+
+Cleanup must be token-first and best-effort.
+
+Correct behavior:
+
+```text
+Google Sheet row missing
+→ continue B2/Blob/Supabase/Firestore/email/lead cleanup
+
+B2 PDF missing
+→ treat as already removed and continue other cleanup
+
+Vercel Blob preview missing
+→ treat as already removed and continue other cleanup
+
+Firestore audit_reports document missing
+→ use token/domain/sheet/url hints where possible and continue cleanup
+
+Everything missing
+→ return already-cleaned / nothing-found response, not a crash
+```
+
+Current cleanup services:
+
+```text
+Backblaze B2 PDF
+Vercel Blob OG/preview image
+Supabase report chat rows
+Firestore audit_reports/{token}
+Firestore audit_report_domains index
+Firestore report-linked email events
+Google Sheet row by Report Token
+Linked outreach leads depending on leadMode
+Contact memory / footprint only when intentionally kept
+```
+
+Google Sheet cleanup rule:
+
+```text
+Delete All Data
+→ Sheet row should be deleted/cleaned too
+→ Keep Footprint does not mean keep the Google Sheet row
+→ Keep Footprint only means keep a tiny contact-safety memory if requested
+```
+
+`cleanup_jobs` rule:
+
+```text
+By default, do NOT write cleanup_jobs documents to Firestore.
+Firebase limits are small, and the operator can manually inspect cleanup responses/logs.
+```
+
+Persistent cleanup logs can be enabled only intentionally:
+
+```env
+TRACKFLOW_WRITE_CLEANUP_JOBS=true
+# or
+ENABLE_CLEANUP_JOBS=true
+```
+
+If these ENV values are not set, cleanup should run and return steps to the dashboard/API response, but should not create a `cleanup_jobs` collection.
+
+If an old README section says `cleanup_jobs/{jobId}` always records real cleanup runs, that is outdated. Current default is disabled.
+
+### Google Sheet source management
+
+Google Sheet is not the automation source-of-truth. It is a pipeline/review/routing layer.
+
+Explicit source columns now matter:
+
+```text
+Source Type
+Outreach Channel
+Lead Source
+Audit Source
+Source Context
+Email Outreach Allowed
+LinkedIn Outreach Allowed
+```
+
+Routing examples:
+
+```text
+Source Type = search
+Outreach Channel = email
+Lead Source = python_search
+→ Email workflow
+
+Source Type = linkedin
+Outreach Channel = linkedin
+Lead Source = linkedin_audit
+→ LinkedIn workflow
+```
+
+Do not classify a row as manual just because:
+
+```text
+Email Source = Manual / verified by user
+```
+
+That means the email address was manually verified, not that the audit source is manual.
+
+### Sheet → Send Email relation model
+
+A Sheet audit/report can be used to send to multiple recipients.
+
+Composer rule:
+
+```text
+When opening from Sheet row:
+☑ Keep under this Sheet audit/report should be auto-checked.
+```
+
+If checked:
+
+```text
+Original Sheet email
+→ Sheet Primary
+
+Changed recipient email
+→ Sheet Additional
+```
+
+If unchecked:
+
+```text
+Manual + Report
+→ can use the same report URL/token
+→ should not be deleted automatically by Sheet/report cleanup
+```
+
+Lead tab source roles:
+
+```text
+Manual
+Manual + Report
+Sheet Primary
+Sheet Additional
+Test
+```
+
+Delete rule:
+
+```text
+Sheet Primary / Sheet Additional
+→ manage/delete through Cleanup/report token flow
+
+Manual / Manual + Report
+→ can be managed from Lead tab
+```
+
+### Email copy source-of-truth
+
+For audit outreach email copy:
+
+```text
+Python/Gemini polished email = source of truth
+Next.js fallback email = should not be exported/sent by default
+```
+
+Sheet export should prefer Python fields such as:
+
+```text
+audit.emailCopy
+audit.email_copy
+audit.emailDraft
+audit.email_draft
+audit.outreachCopy.emailCopy
+audit.private_report_copy.emailCopy
+audit.privateReportCopy.emailCopy
+audit.report_overrides.emailCopy
+```
+
+Avoid using old/fallback sources as primary:
+
+```text
+lead.subject
+lead.emailSubject
+lead.message
+audit.nextjs_payload.email_brief
+old Next.js generated fallback body
+```
+
+Emergency fallback should only be enabled intentionally:
+
+```env
+ALLOW_LEGACY_NEXTJS_EMAIL_FALLBACK_FOR_SHEET=true
+```
+
+### Known local Sheet route bug
+
+If secure page registration succeeds but final export fails with:
+
+```text
+ReferenceError: lowerSheetText is not defined
+at getSourceMetadata (app/api/export/sheet/route.ts)
+```
+
+Then update local:
+
+```text
+app/api/export/sheet/route.ts
+```
+
+It must include helper functions used by source metadata logic:
+
+```text
+lowerSheetText(...)
+isValidEmailAddress(...)
+sourceBooleanCell(...)
+```
+
+After replacing this route, restart Next.js dev server:
+
+```powershell
+Ctrl + C
+Remove-Item -Recurse -Force .next
+npm run dev
+```
+
+### Future assistant operating rules
+
+When a future assistant receives this README:
+
+```text
+1. First identify whether the issue is Localhost/Python dashboard, Vercel/report hosting, or both.
+2. Ask for only the connected files listed in the file request matrix.
+3. Do not ask for the entire project unless the issue crosses multiple systems.
+4. Do not replace Vercel b2.ts with localhost b2.ts unless explicitly proven they are the same target file.
+5. Do not save full email copy, LinkedIn copy, or raw Gemini output to Firestore.
+6. Do not re-enable cleanup_jobs unless the user explicitly wants persistent cleanup logs.
+7. Always preserve evidence-safe client language.
+8. Always avoid TypeScript errors; if patching TS/TSX, check imports, missing helpers, and type aliases.
+```
+
+---
+
+## Updated File Request Matrix — v23.00
+
+### A) Localhost Create Secure Page / B2 upload / Sheet sync issue
+
+Ask for:
+
+```text
+app/api/export/blob-reports/route.ts
+app/api/export/sheet/route.ts
+app/components/LeadList.tsx
+app/components/LeadList/reportHelpers.ts
+app/components/LeadList/types.ts
+app/types/audit.ts
+lib/trackflow-storage/b2.ts
+```
+
+If PDF source size, regeneration, or PDF content is wrong, also ask for Python files:
+
+```text
+python-backend/audit.py
+python-backend/trackflow_modules/reports.py
+python-backend/trackflow_modules/evidence_capture.py
+python-backend/trackflow_modules/gemini_client.py
+python-backend/trackflow_modules/email_copy.py
+```
+
+Use this for:
+
+```text
+Create Secure Page fails
+B2 PDF not uploaded
+B2 PDF size is too large
+audit-report.pdf has many versions
+Google Sheet sync fails after secure page register
+lowerSheetText error
+Python-polished email not saved to Sheet
+same website creates a new token unexpectedly
+```
+
+### B) Vercel secure report preview/download issue
+
+Ask for:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-storage/b2.ts
+lib/trackflow-api/reports.ts
+lib/trackflow-api/report-normalizers.ts
+```
+
+Use this for:
+
+```text
+secure page loads but PDF preview/download fails
+B2 read timeout
+502 from preview/download
+report metadata exists but PDF does not stream
+PDF download route shows JSON or error
+```
+
+### C) Cleanup issue
+
+Ask for Vercel/email automation files:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-cleanup/report-cleanup.ts
+lib/trackflow-cleanup/sheet-cleanup.ts
+lib/trackflow-storage/b2.ts
+lib/supabase-admin.ts
+lib/firebase-admin.ts
+lib/trackflow-email/email-events.ts
+lib/trackflow-email/contact-memory.ts
+```
+
+Ask for dashboard files if UI/payload is involved:
+
+```text
+app/admin/dashboard/page.tsx
+app/admin/dashboard/CleanupPanel.tsx
+app/admin/dashboard/types.ts
+```
+
+Use this for:
+
+```text
+cleanup does not delete Google Sheet row
+cleanup deletes Firestore but leaves B2/Blob
+cleanup fails when one storage object is missing
+cleanup creates cleanup_jobs unexpectedly
+keep footprint/no footprint behavior is wrong
+report cleanup deletes manual+report leads incorrectly
+```
+
+
+### D) Email send / open tracking / dashboard open-count issue
+
+Ask for Vercel/email automation files first:
+
+```text
+app/api/trackflow/[...action]/route.ts
+lib/trackflow-email/email-events.ts
+lib/firebase-admin.ts
+app/admin/dashboard/page.tsx
+app/admin/dashboard/OverviewPanel.tsx
+app/admin/dashboard/LeadsPanel.tsx
+app/admin/dashboard/types.ts
+app/stores/useLeadStore.ts
+```
+
+Ask additionally if the issue starts from the Send Email composer, Sheet-selected send, or tracking-pixel injection:
+
+```text
+app/admin/dashboard/OutreachPanel.tsx
+app/admin/dashboard/utils.ts
+app/admin/dashboard/SheetQueuePanel.tsx
+app/admin/dashboard/sheet-readiness.ts
+lib/senders.ts
+```
+
+Use this for:
+
+```text
+email open count does not increase
+click count does not increase
+manual send open count works but Sheet-selected send does not
+same recipient gets a new email but the new open does not count
+self_hosted_open_resolved appears in logs but open_count stays 0
+self_hosted_open_ignored_provider_image_proxy appears
+ignoredReason = brevo_redirection_image_proxy_fast_prefetch
+dashboard does not refresh after incrementedOpen=true
+leadFound=false or trackingId/messageId/leadId mismatch
+```
+
+First checks:
+
+```text
+1. Confirm NEXT_PUBLIC_APP_URL / TRACKFLOW_APP_URL is the public Vercel/custom domain, not localhost.
+2. Confirm this is a newly sent email after env changes.
+3. Confirm self_hosted_open_resolved appears in logs.
+4. If leadFound=true and internalTestRecipient=false but ignoredReason=brevo_redirection_image_proxy_fast_prefetch, set IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0 and redeploy.
+5. If incrementedOpen=true but dashboard still shows 0, refresh lead cache and inspect LeadsPanel/OverviewPanel/useLeadStore.
+6. If no open log appears, inspect pixel injection, email HTML, appBaseUrl, deployment, and image blocking.
+```
+
+Recommended stable env:
+
+```env
+NEXT_PUBLIC_APP_URL=https://trackflowpro.com
+TRACKFLOW_APP_URL=https://trackflowpro.com
+BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+STORE_OPEN_TRACKING_DEBUG=true
+TRACKFLOW_DEBUG_EMAIL_FLOW=false
+STORE_LOW_VALUE_EMAIL_EVENTS=false
+```
+
+Temporary debug env:
+
+```env
+TRACKFLOW_DEBUG_EMAIL_FLOW=true
+STORE_LOW_VALUE_EMAIL_EVENTS=true
+COUNT_INTERNAL_TEST_OPENS=true
+WEBHOOK_OPEN_DEDUPE_MINUTES=1
+```
+
+Important interpretation:
+
+```text
+The system should not block future opens only because the same email address received a previous email.
+Each new send should have its own lead/message/tracking identity.
+The most recent confirmed cause of "new email opened but count stayed 0" was the 30-second Brevo image proxy ignore rule.
+```
+
+
+### E) Sheet tab / Send Email / lead source relation issue
+
+Ask for dashboard/email automation files:
+
+```text
+app/admin/dashboard/page.tsx
+app/admin/dashboard/SheetQueuePanel.tsx
+app/admin/dashboard/sheet-readiness.ts
+app/admin/dashboard/OutreachPanel.tsx
+app/admin/dashboard/LeadsPanel.tsx
+app/admin/dashboard/types.ts
+app/stores/useLeadStore.ts
+```
+
+Ask for local sheet/export files if source fields are missing in Google Sheet:
+
+```text
+app/api/export/sheet/route.ts
+app/api/export/blob-reports/route.ts
+app/components/LeadList.tsx
+app/components/LeadList/types.ts
+```
+
+Use this for:
+
+```text
+Python Search vs LinkedIn Audit classification wrong
+Source Unknown appears for new rows
+same report sent to changed email is classified wrong
+Sheet Primary / Sheet Additional / Manual + Report behavior wrong
+Send Email composer checkbox behavior wrong
+```
+
+### F) Python/Gemini email/report copy issue
+
+Ask for:
+
+```text
+python-backend/trackflow_modules/email_copy.py
+python-backend/trackflow_modules/gemini_client.py
+python-backend/trackflow_modules/reports.py
+python-backend/audit.py
+app/components/LeadDetailsModal/emailHelpers.ts
+app/components/LeadList/reportHelpers.ts
+app/api/export/sheet/route.ts
+app/api/export/blob-reports/route.ts
+```
+
+Use this for:
+
+```text
+email copy is old Next.js fallback
+generated email is too aggressive
+email copy is not saved to Sheet
+PDF wording is wrong
+secure page wording mismatches PDF
+Gemini invents evidence
+```
+
+### G) Manual/LinkedIn audit UI issue
+
+Ask for:
+
+```text
+app/components/LeadList.tsx
+app/components/LeadList/LinkedInAuditPanel.tsx
+app/components/LeadList/LeadRow.tsx
+app/components/LeadList/linkedinAuditOptions.ts
+app/components/LeadList/leadHelpers.ts
+app/components/LeadList/types.ts
+```
+
+Use this for:
+
+```text
+manual audit panel broken
+primary goal / suggested focus wrong
+LinkedIn audit source metadata missing
+Create Secure Page button missing after manual audit
+```
+
+---
+
+## Quick Debug Commands / Checks
+
+### Localhost dashboard
+
+```powershell
+Remove-Item -Recurse -Force .next
+npm run dev
+```
+
+### Build checks
+
+```powershell
+npm run lint
+npm run build
+```
+
+### Python backend
+
+```powershell
+python audit.py
+```
+
+
+### Email open tracking logs to check
+
+```text
+self_hosted_open_resolved
+self_hosted_open_received
+self_hosted_open_ignored_provider_image_proxy
+self_hosted_open_before_increment
+self_hosted_engagement_before_firestore_update
+self_hosted_engagement_after_firestore_update
+```
+
+### Email open tracking env expectation
+
+```env
+NEXT_PUBLIC_APP_URL=https://trackflowpro.com
+TRACKFLOW_APP_URL=https://trackflowpro.com
+BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+STORE_OPEN_TRACKING_DEBUG=true
+TRACKFLOW_DEBUG_EMAIL_FLOW=false
+STORE_LOW_VALUE_EMAIL_EVENTS=false
+```
+
+Debug only:
+
+```env
+TRACKFLOW_DEBUG_EMAIL_FLOW=true
+STORE_LOW_VALUE_EMAIL_EVENTS=true
+COUNT_INTERNAL_TEST_OPENS=true
+WEBHOOK_OPEN_DEDUPE_MINUTES=1
+```
+
+### Email open tracking decision tree
+
+```text
+No self_hosted_open_resolved log
+→ pixel did not hit the public Vercel route
+→ check NEXT_PUBLIC_APP_URL, appBaseUrl, deployment, old email HTML, image blocking
+
+self_hosted_open_resolved but leadFound=false
+→ route was hit but tracking identity did not resolve
+→ check lid/trackingId/messageId/reportToken mapping and lead cleanup state
+
+internalTestRecipient=true
+→ sender/main inbox/test recipient was ignored
+→ use a real external recipient or temporarily set COUNT_INTERNAL_TEST_OPENS=true
+
+ignoredReason=brevo_redirection_image_proxy_fast_prefetch
+→ Brevo image proxy fast-prefetch window ignored the open
+→ set IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0 and redeploy
+
+incrementedOpen=true
+→ Firestore updated successfully
+→ if dashboard still shows 0, refresh lead cache or inspect dashboard display/cache files
+```
+
+
+
+
+### Evidence video / YouTube secure page checks
+
+```text
+Manual first-version expectation:
+→ Evidence video is uploaded to YouTube as Unlisted
+→ TrackFlow stores only YouTube metadata in Firestore
+→ Secure report page embeds youtube-nocookie.com iframe when active
+→ Email/LinkedIn outreach sends the secure report link, not the raw YouTube link
+```
+
+Recommended Firestore report fields:
+
+```text
+evidenceVideoProvider
+evidenceVideoUrl
+evidenceVideoId
+evidenceVideoEmbedUrl
+evidenceVideoVisibility
+evidenceVideoTitle
+evidenceVideoStatus
+evidenceVideoAddedAt
+evidenceVideoUpdatedAt
+```
+
+Debug decision tree:
+
+```text
+Video does not show on secure page
+→ check audit_reports/{token} evidenceVideoStatus="active" and evidenceVideoId exists
+
+YouTube iframe fails
+→ check video is Unlisted, not Private, and embedding is allowed
+
+Dashboard saves URL but page does not update
+→ check report normalizer passes evidenceVideo* fields to the secure page
+
+Client cannot access video
+→ check it is not Private and do not require Google account permission
+
+Firestore size concern
+→ confirm only metadata is stored, not video bytes
+```
+
+
+### Create Secure Page logs to check
+
+```text
+source_pdf_fetched
+b2_pdf_uploaded
+preview_blob_uploaded
+register_outgoing_payload
+register_response
+sheetUpdated
+sheetError
+```
+
+### B2 path pattern
+
+```text
+reports/{domainSlug}/{reportToken}/pdf/audit-report.pdf
+```
+
+### Vercel Blob OG image path pattern
+
+```text
+reports/{domainSlug}/{reportToken}/preview/og-card.jpg
+```
+
+### Google Sheet row delete expectation
+
+```text
+Cleanup with Delete All Data
+→ Sheet row matching Report Token should be deleted
+→ Preview/response should show google_sheet step
+```
+
+### cleanup_jobs expectation
+
+```text
+Default:
+→ cleanup_jobs should NOT be created
+
+Only when explicitly enabled:
+TRACKFLOW_WRITE_CLEANUP_JOBS=true
+or
+ENABLE_CLEANUP_JOBS=true
+```
+
 
 ## Latest Update — v22.00 Secure Report PDF Download Feedback + Chat Insights Stability
 
@@ -1280,7 +2717,7 @@ The Vercel production app needs the same B2 env values to preview/download PDFs 
 Future cleanup rule:
 
 ```text
-Cron cleanup is intentionally separate and should be added later.
+Cron cleanup is intentionally separate and should not be required for normal manual testing.
 A future cron should delete expired B2 PDFs, optionally delete Vercel Blob preview images, optionally delete Supabase chat logs, and then mark cleanup status in Firestore.
 ```
 
@@ -1622,7 +3059,7 @@ Current stage-11 structure:
 
 ```text
 lib/trackflow-cleanup/report-cleanup.ts
-→ report cleanup manifest builder, dry-run preview, manual confirmed cleanup, cleanup_jobs logging, B2/Blob/Supabase/Firestore/Sheet/lead cleanup orchestration
+→ report cleanup manifest builder, dry-run preview, manual confirmed cleanup, optional cleanup_jobs logging only when enabled, B2/Blob/Supabase/Firestore/Sheet/lead cleanup orchestration
 
 lib/trackflow-storage/b2.ts
 → existing Backblaze B2 read/upload helpers plus deletePdfFromB2/deleteB2Object
@@ -1646,7 +3083,7 @@ Real cleanup requires an explicit confirmation string:
 - hard cleanup: DELETE_REPORT_ASSETS
 
 Firestore audit_reports/{token} is read first and not deleted until B2/Blob/Supabase references are collected.
-cleanup_jobs/{jobId} records real cleanup runs and step-by-step results.
+cleanup_jobs/{jobId} is disabled by default to protect Firebase limits. Only enable persistent cleanup logs with TRACKFLOW_WRITE_CLEANUP_JOBS=true or ENABLE_CLEANUP_JOBS=true.
 B2 and Blob cleanup is idempotent: missing objects are treated as already cleaned when possible.
 Supabase chat cleanup is optional and skipped when Supabase server env is not configured.
 Sheet cleanup can mark or clear report-related fields.
