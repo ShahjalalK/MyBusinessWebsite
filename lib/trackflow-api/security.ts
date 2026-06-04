@@ -71,8 +71,56 @@ export function requireCronSecret(req: Request) {
   }
 }
 
+function basicAuthSecret(authHeader: string): string {
+  const raw = String(authHeader || "").trim();
+  if (!raw.toLowerCase().startsWith("basic ")) return "";
+
+  try {
+    const decoded = Buffer.from(raw.slice(6).trim(), "base64").toString("utf8");
+    const separatorIndex = decoded.indexOf(":");
+    if (separatorIndex < 0) return decoded.trim();
+    return decoded.slice(separatorIndex + 1).trim();
+  } catch {
+    return "";
+  }
+}
+
+function authorizationToken(authHeader: string): string {
+  const raw = String(authHeader || "").trim();
+  if (!raw) return "";
+
+  const lower = raw.toLowerCase();
+  if (lower.startsWith("bearer ")) return raw.slice(7).trim();
+  if (lower.startsWith("token ")) return raw.slice(6).trim();
+  if (lower.startsWith("basic ")) return basicAuthSecret(raw);
+
+  // Some webhook providers label the method as "Token" but send the token
+  // as the full Authorization header value without a Bearer/Token prefix.
+  return raw;
+}
+
 export function requireWebhookSecret(req: Request, envName: "BREVO_WEBHOOK_SECRET" | "REPLY_WEBHOOK_SECRET") {
-  const secret = req.headers.get("x-webhook-secret") || "";
   const expected = env(envName);
-  if (!secret || !safeEqual(secret, expected)) throw new ApiError("Unauthorized webhook request", 401);
+  const url = new URL(req.url);
+  const authHeader = req.headers.get("authorization") || "";
+
+  const candidates = [
+    req.headers.get("x-webhook-secret"),
+    req.headers.get("x-brevo-webhook-secret"),
+    req.headers.get("x-sendinblue-webhook-secret"),
+    req.headers.get("x-webhook-token"),
+    req.headers.get("x-auth-token"),
+    req.headers.get("x-api-key"),
+    req.headers.get("token"),
+    authorizationToken(authHeader),
+    url.searchParams.get("secret"),
+    url.searchParams.get("webhook_secret"),
+    url.searchParams.get("token"),
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (!candidates.some((secret) => safeEqual(secret, expected))) {
+    throw new ApiError("Unauthorized webhook request", 401);
+  }
 }
