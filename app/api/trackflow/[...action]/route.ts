@@ -2298,7 +2298,28 @@ function getLeadMessageIdChain(lead: LeadData): string[] {
   return output;
 }
 
+function followupThreadingMode(): "legacy_subject_grouping" | "provider_headers" {
+  const raw = String(process.env.FOLLOWUP_THREADING_MODE || "legacy_subject_grouping")
+    .trim()
+    .toLowerCase();
+
+  // provider_headers is intentionally opt-in only.
+  // Brevo rewrites the final SMTP Message-Id, so using TrackFlow's custom
+  // mail.trackflowpro.com id inside In-Reply-To/References can stop Gmail from
+  // grouping follow-ups with the original message. The default restores the
+  // older working behavior: same sender + Re: same subject, without reply headers.
+  if (["provider_headers", "smtp_headers", "message_id_headers", "headers"].includes(raw)) {
+    return "provider_headers";
+  }
+
+  return "legacy_subject_grouping";
+}
+
 function buildThreadHeadersForFollowup(lead: LeadData): Record<string, string> {
+  if (followupThreadingMode() !== "provider_headers") {
+    return {};
+  }
+
   const chain = getLeadMessageIdChain(lead);
   if (!chain.length) return {};
 
@@ -3988,6 +4009,19 @@ async function handleCronFollowups(req: Request) {
       const subject = `Re: ${baseSubject}`;
       const customMessageId = `<${Date.now()}.${lockedLead.trackingId || lockedLead.id}.${lockedDecision.configStepKey}@mail.trackflowpro.com>`;
       const threadHeaders = buildThreadHeadersForFollowup(lockedLead);
+
+      trackflowEmailDebugLog("followup_threading_mode_selected", {
+        leadId: String(lockedLead.id || docSnap.id || ""),
+        emailLower,
+        baseSubject,
+        subject,
+        threadingMode: followupThreadingMode(),
+        sendsInReplyToHeader: Boolean(threadHeaders["In-Reply-To"]),
+        sendsReferencesHeader: Boolean(threadHeaders.References),
+        inReplyTo: threadHeaders["In-Reply-To"] || "",
+        referencesCount: threadHeaders.References ? threadHeaders.References.split(" ").filter(Boolean).length : 0,
+      });
+
       const htmlContent = buildEmailHtml(personalizeTemplate(selectedVariant.content, lockedLead), emailLower, tag, {
         includeSignature: lockedLead.include_signature !== false,
         reportUrl: "",
