@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
-  Clock,
   Database,
   FileSearch,
   LineChart,
@@ -13,10 +12,10 @@ import {
   SearchCheck,
   ShieldCheck,
   Target,
-  Zap,
 } from "lucide-react";
 import Navbar from "../components/navbar";
 import Footer from "../components/footer";
+import FreeAuditRequestForm from "./FreeAuditRequestForm";
 
 export const metadata: Metadata = {
   title: "Free Google Ads Tracking Audit | GA4, GTM & Conversion Tracking Review",
@@ -230,48 +229,69 @@ export default function FreeTrackingAuditPage() {
 }
 
 function HeroSection() {
-  return (
-    <section className="relative isolate overflow-hidden px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.14),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.22),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)]" />
-      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
+  const trustPoints = [
+    "No login required for the first review",
+    "Optional screenshot or PDF under 2 MB",
+    "Browser-visible evidence before assumptions",
+  ];
 
-      <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.02fr_0.98fr]">
-        <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
-            <SearchCheck className="h-4 w-4" /> Free Google Ads Audit
+  const heroStats = [
+    { label: "Request time", value: "2 min" },
+    { label: "First review", value: "Free" },
+    { label: "File handling", value: "Email only" },
+  ];
+
+  return (
+    <section className="relative isolate overflow-hidden px-4 pb-10 pt-24 sm:px-6 sm:pb-16 sm:pt-24 lg:px-8 lg:pb-20 lg:pt-24">
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_34%),radial-gradient(circle_at_85%_20%,rgba(14,165,233,0.12),transparent_28%),linear-gradient(to_bottom,#ffffff,#f8fafc)] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.28),transparent_34%),radial-gradient(circle_at_85%_18%,rgba(14,165,233,0.18),transparent_30%),linear-gradient(to_bottom,#020617,#0f172a)]" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
+      <div className="absolute -left-28 top-24 -z-10 h-72 w-72 rounded-full bg-blue-100/70 blur-3xl dark:bg-blue-900/20" />
+      <div className="absolute -right-24 bottom-12 -z-10 h-80 w-80 rounded-full bg-cyan-100/60 blur-3xl dark:bg-cyan-900/10" />
+
+      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(410px,0.72fr)] lg:items-start lg:gap-10 xl:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.72fr)]">
+        <div className="mx-auto w-full max-w-3xl text-center lg:mx-0 lg:pt-6 lg:text-left">
+          <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-white/85 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 shadow-sm shadow-blue-950/5 backdrop-blur dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-5 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
+            <SearchCheck className="h-4 w-4 shrink-0" />
+            <span className="truncate">Free Google Ads Audit</span>
           </div>
 
-          <h1 className="max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
-            Free Google Ads Tracking Audit for <span className="text-blue-600 dark:text-blue-400">GA4, GTM & Conversion Tracking</span>
+          <h1 className="text-balance text-[2.05rem] font-black leading-[1.05] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02] md:text-6xl xl:text-[4.55rem]">
+            <span className="sm:hidden">Free Google Ads Tracking Audit</span>
+            <span className="hidden sm:inline">Free Google Ads tracking audit for clearer conversion data.</span>
           </h1>
 
-          <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
-            Get an evidence-based Google Ads audit for broken conversion tracking, GA4/GTM event issues, Meta CAPI signal gaps, enhanced conversions, and server-side tracking risks.
+          <p className="mx-auto mt-4 max-w-2xl text-[15px] font-semibold leading-7 text-slate-600 dark:text-slate-300 sm:mt-6 sm:text-lg sm:leading-8 lg:mx-0">
+            Send your website and main tracking concern. I will review public browser-visible evidence before asking for account access.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 flex flex-col gap-3 sm:mt-7 sm:flex-row sm:justify-center lg:justify-start">
             <a
               href="#audit-request"
               className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
-              Get My Free Tracking Audit
+              Request Free Audit
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </a>
             <a
               href="#audit-scope"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/90 px-7 py-4 text-sm font-black text-slate-950 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900/80 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
             >
-              See What Is Included
+              See What Is Checked
             </a>
           </div>
 
-          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
-            {[
-              "No login required for first review",
-              "Public browser-visible evidence first",
-              "GA4, GTM, Google Ads & Meta CAPI",
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
+          <div className="mt-7 hidden gap-3 sm:grid sm:grid-cols-3 lg:mt-8">
+            {heroStats.map((item) => (
+              <div key={item.label} className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-left shadow-sm shadow-slate-950/5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+                <div className="text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">{item.value}</div>
+                <div className="mt-1 text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{item.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 hidden gap-3 text-left sm:grid sm:grid-cols-3 lg:mt-7">
+            {trustPoints.map((item) => (
+              <div key={item} className="flex items-start gap-2 rounded-2xl bg-white/65 p-3 text-sm font-bold leading-6 text-slate-600 shadow-sm shadow-slate-950/5 ring-1 ring-slate-200/70 backdrop-blur dark:bg-slate-900/45 dark:text-slate-300 dark:ring-slate-800">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
                 <span>{item}</span>
               </div>
@@ -279,114 +299,16 @@ function HeroSection() {
           </div>
         </div>
 
-        <AuditRequestCard />
+        <div className="mx-auto w-full max-w-xl lg:mx-0 lg:justify-self-end">
+          <AuditRequestCard />
+        </div>
       </div>
     </section>
   );
 }
 
 function AuditRequestCard() {
-  return (
-    <div id="audit-request" className="relative mx-auto w-full max-w-xl scroll-mt-28">
-      <div className="absolute -inset-4 rounded-[2.5rem] bg-blue-600/10 blur-2xl" />
-      <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900">
-        <div className="border-b border-slate-100 bg-slate-50 px-6 py-5 dark:border-slate-800 dark:bg-slate-950/50">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Audit request</p>
-              <h2 className="mt-1 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">
-                Request your free tracking review
-              </h2>
-              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">
-                Share your website and the main tracking issue. The first review starts without login access.
-              </p>
-            </div>
-            <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300 sm:inline-flex">
-              Free
-            </span>
-          </div>
-        </div>
-
-        <form action="/contact" method="get" className="space-y-4 p-6">
-          <input type="hidden" name="source" value="free-tracking-audit" />
-
-          <Field label="Website URL" htmlFor="website" required>
-            <input
-              id="website"
-              name="website"
-              type="url"
-              placeholder="https://example.com"
-              required
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
-            />
-          </Field>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Your name" htmlFor="name">
-              <input
-                id="name"
-                name="name"
-                type="text"
-                placeholder="Your name"
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
-              />
-            </Field>
-            <Field label="Email" htmlFor="email" required>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@example.com"
-                required
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
-              />
-            </Field>
-          </div>
-
-          <Field label="Main tracking concern" htmlFor="issue">
-            <select
-              id="issue"
-              name="issue"
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Select an issue
-              </option>
-              <option value="Google Ads conversion tracking not working">Google Ads conversion tracking not working</option>
-              <option value="GA4 and Google Ads mismatch">GA4 and Google Ads mismatch</option>
-              <option value="GTM tags or triggers issue">GTM tags or triggers issue</option>
-              <option value="Enhanced conversions review">Enhanced conversions review</option>
-              <option value="Meta CAPI or Pixel issue">Meta CAPI or Pixel issue</option>
-              <option value="Server-side tracking validation">Server-side tracking validation</option>
-            </select>
-          </Field>
-
-          <Field label="Short note" htmlFor="message">
-            <textarea
-              id="message"
-              name="message"
-              rows={4}
-              placeholder="Example: Google Ads shows fewer conversions than GA4, or form submissions are not counted."
-              className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
-            />
-          </Field>
-
-          <button
-            type="submit"
-            className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 py-4 text-sm font-black text-white shadow-xl shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-blue-600 hover:shadow-blue-600/20 focus:outline-none focus:ring-4 focus:ring-blue-500/20 dark:bg-blue-600 dark:hover:bg-blue-500"
-          >
-            Request Free Tracking Review
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </button>
-
-          <p className="text-center text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">
-            No login required for the first review. Final validation may require approved access to GA4, GTM, Google Ads, Meta, CRM, or server logs.
-          </p>
-        </form>
-      </div>
-    </div>
-  );
+  return <FreeAuditRequestForm />;
 }
 
 function TrustStrip() {
@@ -604,27 +526,6 @@ function FinalCtaSection() {
         </div>
       </div>
     </section>
-  );
-}
-
-function Field({
-  label,
-  htmlFor,
-  required,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label htmlFor={htmlFor} className="block">
-      <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-        {label} {required && <span className="text-blue-600 dark:text-blue-300">*</span>}
-      </span>
-      {children}
-    </label>
   );
 }
 
