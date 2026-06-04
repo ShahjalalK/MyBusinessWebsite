@@ -380,8 +380,19 @@ function isBrevoImageProxyOpenRequest(req?: Request): boolean {
   );
 }
 
+const DEFAULT_PROVIDER_IMAGE_PROXY_FAST_OPEN_WINDOW_SECONDS = 3;
+
 function providerImageProxyFastOpenWindowSeconds(): number {
-  return intEnv("IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS", 30, 0, 300);
+  // Keep this window very short. A 30-second window can hide genuine fast opens,
+  // while the 3-second window only catches provider-side Brevo image prefetches
+  // that arrive almost immediately after send. Set env to 0 only when you
+  // intentionally want to disable this protection for debugging.
+  return intEnv(
+    "IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS",
+    DEFAULT_PROVIDER_IMAGE_PROXY_FAST_OPEN_WINDOW_SECONDS,
+    0,
+    300,
+  );
 }
 
 function shouldIgnoreProviderImageProxyOpen(
@@ -395,9 +406,9 @@ function shouldIgnoreProviderImageProxyOpen(
   }
 
   // Brevo may fetch/proxy the tracking pixel very quickly after send.
-  // Ignore only that early provider-image fetch, not every Brevo image proxy hit.
+  // Ignore only the configured very-early provider-image fetch window.
   // Real Gmail/recipient opens can also arrive through Brevo's image proxy, so
-  // after the short safety window we allow the normal 4-hour dedupe logic to run.
+  // after this short window we allow the normal 4-hour dedupe logic to run.
   if (typeof secondsAfterSent !== "number" || !Number.isFinite(secondsAfterSent)) {
     return { ignore: true, reason: "brevo_redirection_image_proxy_missing_sent_time", windowSeconds };
   }
