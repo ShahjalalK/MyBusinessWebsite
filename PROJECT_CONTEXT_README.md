@@ -1,7 +1,7 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v23.20-evidence-video-youtube-secure-page-plan
-Last updated: 2026-06-02
+Version: v23.21-open-prefetch-fix-and-zip-handoff
+Last updated: 2026-06-04
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
 
 ---
@@ -25,6 +25,154 @@ Current system priorities:
 10. Self-hosted email open pixels are the primary source for open_count; Brevo opened webhooks are diagnostic unless intentionally enabled.
 11. For email tracking bugs, first inspect public tracking URL, lead/message identity, provider image-proxy ignore rules, and dashboard cache separately.
 12. Evidence videos are optional high-value lead assets; they must remain browser-visible, evidence-safe, and stored as YouTube/metadata links rather than video files in Firestore.
+```
+
+---
+
+
+## Latest Critical Update — v23.21 Email Open Tracking 3-Second Brevo Prefetch Fix + ZIP Handoff Rule
+
+This update documents the confirmed fix for false instant open counts caused by Brevo image-proxy prefetch shortly after manual email sends. It also records the required file-packaging style for future assistants.
+
+### Confirmed open-tracking behavior after testing
+
+Observed logs showed this false-open pattern:
+
+```text
+/api/trackflow/track/open
+userAgent = Brevo/1.0 (redirection-images...)
+leadFound = true
+internalTestRecipient = false
+secondsAfterSent = 3
+currentOpenCount = 0
+incrementedOpen = true
+```
+
+The email had not been opened by the operator, so this was treated as a fast Brevo image-proxy prefetch, not a meaningful recipient open. A separate Gmail test showed correct behavior: no open count immediately after send, then a later open was counted when the email was actually opened around 268 seconds after send.
+
+Final intended rule:
+
+```text
+Brevo redirection-images hit at 0–3 seconds after send
+→ ignore as fast provider prefetch and do not increment open_count.
+
+Brevo redirection-images hit after 3 seconds
+→ allow normal open counting, because real Gmail opens may also arrive through Brevo image proxy.
+
+After one open is counted for the lead/message
+→ keep the existing 4-hour dedupe window so repeat opens do not increase open_count repeatedly.
+```
+
+The existing dedupe value seen in logs is:
+
+```text
+dedupeWindowMs = 14400000
+14400000 ms = 4 hours
+```
+
+### Stable env after this fix
+
+Use this stable value:
+
+```env
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
+```
+
+Do not use `30` as the stable value because it can hide real early recipient opens. Do not use `0` if fast Brevo prefetch is causing instant false opens.
+
+Recommended stable email tracking env:
+
+```env
+NEXT_PUBLIC_APP_URL=https://trackflowpro.com
+TRACKFLOW_APP_URL=https://trackflowpro.com
+BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
+STORE_OPEN_TRACKING_DEBUG=true
+TRACKFLOW_DEBUG_EMAIL_FLOW=false
+STORE_LOW_VALUE_EMAIL_EVENTS=false
+```
+
+Temporary debug only:
+
+```env
+TRACKFLOW_DEBUG_EMAIL_FLOW=true
+STORE_LOW_VALUE_EMAIL_EVENTS=true
+COUNT_INTERNAL_TEST_OPENS=true
+WEBHOOK_OPEN_DEDUPE_MINUTES=1
+```
+
+Do not leave `COUNT_INTERNAL_TEST_OPENS=true` enabled in production.
+
+### Implementation notes for future assistants
+
+The preferred implementation is in the Vercel/email automation catch-all route where the self-hosted open pixel is handled:
+
+```text
+app/api/trackflow/[...action]/route.ts
+```
+
+The helper behavior should be:
+
+```text
+isBrevoImageProxyOpenRequest(req)
+→ true only when user-agent contains Brevo/1.0 and redirection-images/image.
+
+providerImageProxyFastOpenWindowSeconds()
+→ default 3 seconds, configurable with IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS.
+
+shouldIgnoreProviderImageProxyOpen(req, secondsAfterSent)
+→ ignore only when Brevo image proxy hit occurs inside the configured 0–3 second fast-prefetch window.
+```
+
+Do not modify the 4-hour open dedupe logic unless a separate bug proves it is wrong.
+
+### Required ZIP handoff format for future code patches
+
+When a future assistant/developer returns patched files, they must package the ZIP using exact project-relative paths so the user can extract/copy the folders into the project root and automatically replace the intended files.
+
+Correct ZIP layout example:
+
+```text
+trackflow-some-fix.zip
+└── app/
+    └── api/
+        └── trackflow/
+            └── [...action]/
+                └── route.ts
+```
+
+For multiple files, preserve every exact path:
+
+```text
+trackflow-some-fix.zip
+├── app/api/trackflow/[...action]/route.ts
+├── lib/trackflow-email/email-events.ts
+└── app/admin/dashboard/LeadsPanel.tsx
+```
+
+Rules:
+
+```text
+1. Do not put replacement files only at ZIP root as route.updated.ts, LeadsPanel.updated.tsx, etc.
+2. Use the real project filename, for example route.ts, not route.updated.ts.
+3. Preserve dynamic route folder names exactly, including brackets: [...action].
+4. Include only files that are intentionally changed.
+5. Add a small README_FIX.txt in the ZIP listing changed files, env changes, and test steps.
+6. Mention whether the patch targets Localhost/Python dashboard, Vercel/email automation, or both.
+7. After copy/replace, run npm run lint and npm run build where possible.
+```
+
+For this v23.21 fix, the replacement ZIP should contain:
+
+```text
+app/api/trackflow/[...action]/route.ts
+README_FIX.txt
+```
+
+If the README itself is updated, include it at the project root:
+
+```text
+PROJECT_CONTEXT_README.md
 ```
 
 ---
@@ -110,10 +258,23 @@ After that, image caching can prevent another useful open request from reaching 
 Current recommended stable env:
 
 ```env
-IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
 ```
 
-If a future assistant sees `self_hosted_open_ignored_provider_image_proxy` with `currentOpenCount=0`, `leadFound=true`, and `internalTestRecipient=false`, do not assume the dashboard is broken. First reduce/disable the provider proxy fast-prefetch window.
+Confirmed refined behavior after June 4, 2026 testing:
+
+```text
+Brevo/1.0 redirection-images hit within 0–3 seconds after send
+→ treat as fast provider image prefetch and do not increment open_count.
+
+Brevo/1.0 redirection-images hit after 3 seconds
+→ allow normal open handling, because real Gmail/recipient opens can also pass through Brevo image proxy.
+
+After one meaningful open is counted
+→ the existing 4-hour open dedupe window prevents repeat open_count increments for the same lead/message.
+```
+
+Important: do not ignore all Brevo image-proxy requests. Only ignore the first 0–3 second fast-prefetch hit when `currentOpenCount=0`. A later Brevo image-proxy request can be a real recipient open.
 
 ### Duplicate open / meaningful open rule
 
@@ -165,7 +326,7 @@ TRACKFLOW_DEBUG_EMAIL_FLOW=false
 STORE_LOW_VALUE_EMAIL_EVENTS=false
 STORE_OPEN_TRACKING_DEBUG=true
 BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
-IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
 ```
 
 Temporary debug only:
@@ -1173,7 +1334,7 @@ First checks:
 1. Confirm NEXT_PUBLIC_APP_URL / TRACKFLOW_APP_URL is the public Vercel/custom domain, not localhost.
 2. Confirm this is a newly sent email after env changes.
 3. Confirm self_hosted_open_resolved appears in logs.
-4. If leadFound=true and internalTestRecipient=false but ignoredReason=brevo_redirection_image_proxy_fast_prefetch, set IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0 and redeploy.
+4. If leadFound=true and internalTestRecipient=false but ignoredReason=brevo_redirection_image_proxy_fast_prefetch, confirm the hit happened within the 0–3 second Brevo prefetch window. Keep IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3 unless testing proves a smaller window is safer.
 5. If incrementedOpen=true but dashboard still shows 0, refresh lead cache and inspect LeadsPanel/OverviewPanel/useLeadStore.
 6. If no open log appears, inspect pixel injection, email HTML, appBaseUrl, deployment, and image blocking.
 ```
@@ -1184,7 +1345,7 @@ Recommended stable env:
 NEXT_PUBLIC_APP_URL=https://trackflowpro.com
 TRACKFLOW_APP_URL=https://trackflowpro.com
 BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
-IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
 STORE_OPEN_TRACKING_DEBUG=true
 TRACKFLOW_DEBUG_EMAIL_FLOW=false
 STORE_LOW_VALUE_EMAIL_EVENTS=false
@@ -1204,7 +1365,7 @@ Important interpretation:
 ```text
 The system should not block future opens only because the same email address received a previous email.
 Each new send should have its own lead/message/tracking identity.
-The most recent confirmed cause of "new email opened but count stayed 0" was the 30-second Brevo image proxy ignore rule.
+The most recent confirmed false-open cause was a Brevo redirection-images hit within 0–3 seconds after send. The most recent missed-open cause was the old 30-second Brevo image proxy ignore rule.
 ```
 
 
@@ -1331,7 +1492,7 @@ self_hosted_engagement_after_firestore_update
 NEXT_PUBLIC_APP_URL=https://trackflowpro.com
 TRACKFLOW_APP_URL=https://trackflowpro.com
 BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
-IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
 STORE_OPEN_TRACKING_DEBUG=true
 TRACKFLOW_DEBUG_EMAIL_FLOW=false
 STORE_LOW_VALUE_EMAIL_EVENTS=false
@@ -1363,7 +1524,7 @@ internalTestRecipient=true
 
 ignoredReason=brevo_redirection_image_proxy_fast_prefetch
 → Brevo image proxy fast-prefetch window ignored the open
-→ set IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=0 and redeploy
+→ keep IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3 and confirm it is only ignoring 0–3 second Brevo image-proxy hits
 
 incrementedOpen=true
 → Firestore updated successfully
