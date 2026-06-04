@@ -2120,8 +2120,6 @@ async function rescheduleBrevoInitialEmail(
     brevoScheduledAtIso: scheduledAtIso,
     scheduledAcceptedAt,
     customMessageId: input.customMessageId,
-    originalSubject: input.subject,
-    threadRootMessageId: input.customMessageId,
     originalMessageId: data.messageId || "",
     brevoMessageId: data.messageId || "",
     nextFollowupStatus: "waiting_for_initial_delivery",
@@ -2135,9 +2133,6 @@ async function rescheduleBrevoInitialEmail(
       kind: "initial_rescheduled",
       provider: "brevo",
       subject: input.subject,
-      originalSubject: input.subject,
-      threadSubject: input.subject,
-      threadRootMessageId: input.customMessageId,
       trackingTag: input.tag,
       messageId: data.messageId || "",
       customMessageId: input.customMessageId,
@@ -2210,8 +2205,6 @@ async function sendBrevoScheduledInitialNow(ref: FirestoreDocRef, leadId: string
     brevoProviderLastEvent: "manual_send_now",
     brevoProviderLastEventAt: sentAt,
     customMessageId: input.customMessageId,
-    originalSubject: input.subject,
-    threadRootMessageId: input.customMessageId,
     originalMessageId: data.messageId || "",
     brevoMessageId: data.messageId || "",
     nextFollowupStatus: "waiting_for_first_open_or_click",
@@ -2225,9 +2218,6 @@ async function sendBrevoScheduledInitialNow(ref: FirestoreDocRef, leadId: string
       kind: "initial",
       provider: "brevo",
       subject: input.subject,
-      originalSubject: input.subject,
-      threadSubject: input.subject,
-      threadRootMessageId: input.customMessageId,
       sentAt,
       trackingTag: input.tag,
       messageId: data.messageId || "",
@@ -2277,130 +2267,32 @@ function normalizeMessageIdHeader(value: any): string {
   return `<${cleaned}>`;
 }
 
-function normalizeThreadSubject(value: any): string {
-  let subject = String(value || "")
-    .replace(/[\r\n\t]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 180);
+function getLeadMessageIdChain(lead: LeadData): string[] {
+  const candidates: any[] = [];
 
-  // Gmail/Outlook threading works best when every follow-up keeps the original
-  // subject text and only one Re: prefix is added. Strip nested reply/forward
-  // prefixes from stored subjects before composing the next follow-up.
-  while (/^(re|fw|fwd)\s*:\s*/i.test(subject)) {
-    subject = subject.replace(/^(re|fw|fwd)\s*:\s*/i, "").trim();
-  }
+  candidates.push(lead.customMessageId, lead.originalMessageId, lead.brevoMessageId);
 
-  return subject;
-}
-
-function getInitialThreadMessage(lead: LeadData): AnyRecord {
-  const messages = Array.isArray(lead.sent_messages) ? lead.sent_messages : [];
-  const initialMessages = messages.filter((message: any) => {
-    if (!message || typeof message !== "object") return false;
-    const kind = String(message.kind || "").toLowerCase();
-    const step = Number(message.step || 0);
-    const followupNumber = Number(message.followupNumber || 0);
-    return kind.includes("initial") || (step === 1 && !followupNumber);
-  });
-
-  return (initialMessages[0] && typeof initialMessages[0] === "object" ? initialMessages[0] : {}) as AnyRecord;
-}
-
-function getLeadThreadSubject(lead: LeadData): string {
-  const initialMessage = getInitialThreadMessage(lead);
-  return (
-    normalizeThreadSubject(
-      initialMessage.originalSubject ||
-        initialMessage.threadSubject ||
-        initialMessage.subject ||
-        (lead as AnyRecord).originalSubject ||
-        lead.subject ||
-        "",
-    ) || "Our Discussion"
-  );
-}
-
-function appendNormalizedMessageIds(output: string[], seen: Set<string>, ...values: any[]) {
-  for (const value of values) {
-    const raw = String(value || "").trim();
-    if (!raw) continue;
-
-    const matches = raw.match(/<[^<>\s]+@[^<>\s]+>/g);
-    const candidates = matches && matches.length ? matches : [raw];
-
-    for (const candidate of candidates) {
-      const messageId = normalizeMessageIdHeader(candidate);
-      if (!messageId || seen.has(messageId)) continue;
-      seen.add(messageId);
-      output.push(messageId);
+  if (Array.isArray(lead.sent_messages)) {
+    for (const message of lead.sent_messages) {
+      if (!message || typeof message !== "object") continue;
+      candidates.push(
+        message.customMessageId,
+        message.messageId,
+        message.brevoMessageId,
+        message.threadMessageId,
+        message.inReplyTo,
+      );
     }
   }
-}
 
-function isInitialSentMessage(message: any): boolean {
-  if (!message || typeof message !== "object") return false;
-  const kind = String(message.kind || "").toLowerCase();
-  const step = Number(message.step || 0);
-  const followupNumber = Number(message.followupNumber || 0);
-  return kind.includes("initial") || (step === 1 && !followupNumber);
-}
-
-function isFollowupSentMessage(message: any): boolean {
-  if (!message || typeof message !== "object") return false;
-  const kind = String(message.kind || "").toLowerCase();
-  const step = Number(message.step || 0);
-  const followupNumber = Number(message.followupNumber || 0);
-  return kind.includes("followup") || followupNumber > 0 || step > 1;
-}
-
-function getLeadMessageIdChain(lead: LeadData): string[] {
-  const messages = Array.isArray(lead.sent_messages) ? lead.sent_messages.filter(Boolean) : [];
-  const initialMessages = messages.filter(isInitialSentMessage);
-  const followupMessages = messages.filter(isFollowupSentMessage);
   const seen = new Set<string>();
   const output: string[] = [];
 
-  // Prefer the first delivered initial email as the thread root.
-  // The custom Message-ID is the one we ask Brevo to send, while provider IDs are
-  // retained as fallback because older leads may only have provider response IDs.
-  for (const message of initialMessages) {
-    appendNormalizedMessageIds(
-      output,
-      seen,
-      message.threadRootMessageId,
-      message.customMessageId,
-      message.messageId,
-      message.brevoMessageId,
-      message.threadMessageId,
-    );
-  }
-
-  appendNormalizedMessageIds(
-    output,
-    seen,
-    (lead as AnyRecord).threadRootMessageId,
-    lead.customMessageId,
-    lead.originalMessageId,
-    lead.brevoMessageId,
-  );
-
-  // Add already-sent follow-ups after the initial root so new follow-ups can
-  // reply to the previous message while References keeps the full chain.
-  for (const message of followupMessages) {
-    appendNormalizedMessageIds(
-      output,
-      seen,
-      message.customMessageId,
-      message.messageId,
-      message.brevoMessageId,
-      message.threadMessageId,
-    );
-  }
-
-  // Last-resort compatibility for old records that only stored inReplyTo/references.
-  for (const message of messages) {
-    appendNormalizedMessageIds(output, seen, message.inReplyTo, message.references);
+  for (const value of candidates) {
+    const messageId = normalizeMessageIdHeader(value);
+    if (!messageId || seen.has(messageId)) continue;
+    seen.add(messageId);
+    output.push(messageId);
   }
 
   return output;
@@ -2795,8 +2687,6 @@ async function sendInitialFromBody(rawBody: any) {
     cooldownOverride: allowCooldownOverride === true,
     cooldownOverrideAt: allowCooldownOverride === true ? admin.firestore.FieldValue.serverTimestamp() : null,
     subject,
-    originalSubject: subject,
-    threadRootMessageId: customMessageId,
     message: stripDangerousHtml(message),
     trackingId,
     customMessageId,
@@ -2920,9 +2810,6 @@ async function sendInitialFromBody(rawBody: any) {
           kind: "initial_scheduled",
           provider: "brevo",
           subject,
-          originalSubject: subject,
-          threadSubject: subject,
-          threadRootMessageId: customMessageId,
           trackingTag: tag,
           messageId: data.messageId || "",
           customMessageId,
@@ -3064,9 +2951,6 @@ async function sendInitialFromBody(rawBody: any) {
         step: 1,
         kind: "initial",
         subject,
-        originalSubject: subject,
-        threadSubject: subject,
-        threadRootMessageId: customMessageId,
         trackingTag: tag,
         messageId: data.messageId || "",
         customMessageId,
@@ -3334,9 +3218,6 @@ async function handleCronScheduledInitials(req: Request) {
             step: 1,
             kind: "initial",
             subject: legacySubject,
-            originalSubject: legacySubject,
-            threadSubject: legacySubject,
-            threadRootMessageId: customMessageId,
             trackingTag: tag,
             messageId: data.messageId || "",
             customMessageId,
@@ -4103,21 +3984,10 @@ async function handleCronFollowups(req: Request) {
       if (!selectedVariant?.content) throw new ApiError("No safe follow-up variant available", 400);
 
       const tag = `${lockedLead.trackingId || lockedLead.id}_step${lockedDecision.trackingStepNumber}`;
-      const baseSubject = getLeadThreadSubject(lockedLead);
+      const baseSubject = String(lockedLead.subject || "Our Discussion").replace(/^\s*re:\s*/i, "").trim() || "Our Discussion";
       const subject = `Re: ${baseSubject}`;
       const customMessageId = `<${Date.now()}.${lockedLead.trackingId || lockedLead.id}.${lockedDecision.configStepKey}@mail.trackflowpro.com>`;
       const threadHeaders = buildThreadHeadersForFollowup(lockedLead);
-
-      trackflowEmailDebugLog("followup_thread_headers_prepared", {
-        leadId: String(lockedLead.id || docSnap.id || ""),
-        emailLower,
-        baseSubject,
-        subject,
-        inReplyTo: threadHeaders["In-Reply-To"] || "",
-        referencesCount: threadHeaders.References ? threadHeaders.References.split(" ").filter(Boolean).length : 0,
-        threadRootMessageId: threadHeaders["X-TFP-Thread-Root"] || "",
-      });
-
       const htmlContent = buildEmailHtml(personalizeTemplate(selectedVariant.content, lockedLead), emailLower, tag, {
         includeSignature: lockedLead.include_signature !== false,
         reportUrl: "",
@@ -4169,15 +4039,11 @@ async function handleCronFollowups(req: Request) {
         lastFollowupCustomMessageId: customMessageId,
         lastFollowupInReplyTo: threadHeaders["In-Reply-To"] || "",
         lastFollowupReferences: threadHeaders.References || "",
-        threadRootMessageId: threadHeaders["X-TFP-Thread-Root"] || (lockedLead as AnyRecord).threadRootMessageId || "",
-        originalSubject: baseSubject,
         sent_messages: admin.firestore.FieldValue.arrayUnion({
           step: lockedDecision.trackingStepNumber,
           followupNumber: nextFollowupNumber,
           configStepKey: lockedDecision.configStepKey,
           subject,
-          threadSubject: baseSubject,
-          originalSubject: baseSubject,
           trackingTag: tag,
           variantId: selectedVariant.id || "",
           messageId: data.messageId || "",
@@ -4315,6 +4181,68 @@ async function applyNextFollowupScheduleFromEngagement(
   }
 }
 
+function normalizeBrevoWebhookTagList(body: AnyRecord = {}): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+
+  const pushTag = (value: any) => {
+    if (value === undefined || value === null) return;
+
+    if (Array.isArray(value)) {
+      for (const item of value) pushTag(item);
+      return;
+    }
+
+    const raw = String(value || "").trim();
+    if (!raw) return;
+
+    // Brevo can send `tag` as a JSON-stringified array, for example:
+    // tag: "[\"tracking-id_step1\"]". Normalize it before lookup.
+    if ((raw.startsWith("[") && raw.endsWith("]")) || (raw.startsWith('"') && raw.endsWith('"'))) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed !== raw) {
+          pushTag(parsed);
+          return;
+        }
+      } catch {
+        // Fall through to character cleanup below.
+      }
+    }
+
+    const clean = cleanTrackingIdentifier(raw, 180);
+    if (!clean || seen.has(clean)) return;
+    seen.add(clean);
+    output.push(clean);
+  };
+
+  pushTag(body.tag);
+  pushTag(body["X-Mailin-Tag"]);
+  pushTag(body["x-mailin-tag"]);
+  pushTag(body["mailin-tag"]);
+  pushTag(body.tags);
+
+  return output.slice(0, 10);
+}
+
+function brevoMessageIdLookupCandidates(value: any): string[] {
+  const raw = String(value || "")
+    .trim()
+    .replace(/[\r\n]/g, "")
+    .slice(0, 300);
+
+  const withoutBrackets = raw.replace(/[<>]/g, "").trim();
+  const candidates = [
+    withoutBrackets,
+    withoutBrackets ? `<${withoutBrackets}>` : "",
+    normalizeMessageIdHeader(raw),
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(candidates));
+}
+
 async function handleBrevoWebhook(req: Request) {
   requireWebhookSecret(req, "BREVO_WEBHOOK_SECRET");
   const body = await readJson(req);
@@ -4322,18 +4250,9 @@ async function handleBrevoWebhook(req: Request) {
   const event = String(body.event || "");
   const emailLower = normalizeEmail(body.email || "");
   const rawMessageId = String(body["message-id"] || body.messageId || body.message_id || "").replace(/[<>]/g, "");
-  const tags = Array.isArray(body.tags)
-    ? body.tags
-    : typeof body.tags === "string"
-      ? [body.tags]
-      : [];
-  const receivedTag = firstCleanString(
-    body.tag,
-    body["X-Mailin-Tag"],
-    body["x-mailin-tag"],
-    body["mailin-tag"],
-    tags[0],
-  );
+  const messageIdCandidates = brevoMessageIdLookupCandidates(body["message-id"] || body.messageId || body.message_id || "");
+  const tags = normalizeBrevoWebhookTagList(body);
+  let receivedTag = tags[0] || "";
   const timestamp = Number(body.ts_event || body.ts || Math.floor(Date.now() / 1000));
   const eventTime = admin.firestore.Timestamp.fromMillis(timestamp * 1000);
 
@@ -4352,19 +4271,27 @@ async function handleBrevoWebhook(req: Request) {
   const outreachRef = adminDb.collection("outreach_leads");
   let leadDoc: FirestoreQueryDocSnap | null = null;
 
-  if (receivedTag) {
-    const originalTrackingId = receivedTag.split("_step")[0];
+  for (const tagCandidate of tags) {
+    if (leadDoc) break;
+    const originalTrackingId = cleanTrackingIdentifier(String(tagCandidate || "").split("_step")[0] || "", 120);
+    if (!originalTrackingId) continue;
+
     const tagSnapshot = await outreachRef.where("trackingId", "==", originalTrackingId).limit(1).get();
-    if (!tagSnapshot.empty) leadDoc = tagSnapshot.docs[0];
+    if (!tagSnapshot.empty) {
+      leadDoc = tagSnapshot.docs[0];
+      receivedTag = tagCandidate;
+    }
   }
 
-  if (!leadDoc && rawMessageId) {
-    const idSnapshot = await outreachRef.where("originalMessageId", "==", rawMessageId).limit(1).get();
+  for (const messageIdCandidate of messageIdCandidates) {
+    if (leadDoc) break;
+    const idSnapshot = await outreachRef.where("originalMessageId", "==", messageIdCandidate).limit(1).get();
     if (!idSnapshot.empty) leadDoc = idSnapshot.docs[0];
   }
 
-  if (!leadDoc && rawMessageId) {
-    const idSnapshot = await outreachRef.where("brevoMessageId", "==", rawMessageId).limit(1).get();
+  for (const messageIdCandidate of messageIdCandidates) {
+    if (leadDoc) break;
+    const idSnapshot = await outreachRef.where("brevoMessageId", "==", messageIdCandidate).limit(1).get();
     if (!idSnapshot.empty) leadDoc = idSnapshot.docs[0];
   }
 
