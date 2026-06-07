@@ -4686,6 +4686,11 @@ async function resolveLeadForSelfHostedTracking(req: Request): Promise<{
   return { url, leadDoc, leadData, tag, emailLower, reportToken, messageId, trackingId };
 }
 
+function shouldStoreReportEmailEngagementOnAuditReport(): boolean {
+  const raw = String(process.env.TRACKFLOW_STORE_REPORT_EMAIL_ENGAGEMENT || "").trim().toLowerCase();
+  return ["1", "true", "yes", "y", "on"].includes(raw);
+}
+
 async function recordReportEmailEngagement(
   reportToken: string,
   event: "opened" | "clicked",
@@ -4693,35 +4698,26 @@ async function recordReportEmailEngagement(
   meta: { targetUrl?: string; messageId?: string; trackingId?: string; tag?: string; leadId?: string; emailLower?: string } = {},
 ) {
   const token = normalizeReportToken(reportToken);
-  if (!token) return;
+  if (!token || !shouldStoreReportEmailEngagementOnAuditReport()) return;
 
   const updatePayload: AnyRecord = {
     lastEmailEngagedAt: eventTime,
-    last_email_engaged_at: eventTime,
     lastEngagedAt: eventTime,
     engagementSource: "email",
-    engagement_source: "email",
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
   if (event === "opened") {
     updatePayload.emailOpenCount = admin.firestore.FieldValue.increment(1);
-    updatePayload.email_open_count = admin.firestore.FieldValue.increment(1);
     updatePayload.lastEmailOpenedAt = eventTime;
-    updatePayload.last_email_opened_at = eventTime;
     updatePayload.reportEmailStatus = "email_opened";
-    updatePayload.report_email_status = "email_opened";
   }
 
   if (event === "clicked") {
     updatePayload.emailClickCount = admin.firestore.FieldValue.increment(1);
-    updatePayload.email_click_count = admin.firestore.FieldValue.increment(1);
     updatePayload.lastEmailClickedAt = eventTime;
-    updatePayload.last_email_clicked_at = eventTime;
     updatePayload.lastEmailClickedUrl = meta.targetUrl || "";
-    updatePayload.last_email_clicked_url = meta.targetUrl || "";
     updatePayload.reportEmailStatus = "email_clicked";
-    updatePayload.report_email_status = "email_clicked";
   }
 
   if (meta.messageId) updatePayload.lastEmailMessageId = meta.messageId;
@@ -7177,31 +7173,138 @@ async function handleReportRegister(req: Request) {
   const deleteField = admin.firestore.FieldValue.delete();
   const normalizedDomain = normalizeDomainKeyForReports(report.domain, report.websiteUrl);
 
+  const previewImageUrl = report.previewImageUrl || report.ogImageUrl || report.openGraphImageUrl || report.homepageScreenshotUrl || "";
+  const pdfStorageKey = report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId;
+  const legacyReportFieldsToDelete = [
+    "domain_slug",
+    "normalized_domain",
+    "email",
+    "ogImageUrl",
+    "og_image_url",
+    "openGraphImageUrl",
+    "open_graph_image_url",
+    "homepageScreenshotUrl",
+    "homepage_screenshot_url",
+    "preview_image_url",
+    "previewImagePathname",
+    "preview_image_pathname",
+    "recommendations",
+    "businessProblems",
+    "business_problems",
+    "verification_plan",
+    "websiteSpeed",
+    "website_speed",
+    "ctaInteractionTest",
+    "cta_interaction_test",
+    "what_checked",
+    "proof_points",
+    "privateReportCopy",
+    "private_report_copy",
+    "securePageCopy",
+    "secure_page_copy",
+    "manualAdsTransparency",
+    "manual_ads_transparency",
+    "manual_ads_checked",
+    "manual_ads_found",
+    "manual_ads_source",
+    "manual_ads_note",
+    "manual_ads_checked_at",
+    "pdfFileId",
+    "pdf_file_id",
+    "blobUrl",
+    "blob_url",
+    "blobDownloadUrl",
+    "blob_download_url",
+    "blobPathname",
+    "blob_pathname",
+    "b2Key",
+    "b2_key",
+    "b2Bucket",
+    "b2_bucket",
+    "pdf_storage_key",
+    "pdf_storage_etag",
+    "pdf_storage_size",
+    "sourceType",
+    "source_type",
+    "outreachChannel",
+    "outreach_channel",
+    "leadSource",
+    "lead_source",
+    "emailValid",
+    "email_valid",
+    "emailOutreachAllowed",
+    "email_outreach_allowed",
+    "linkedinOutreachAllowed",
+    "linkedin_outreach_allowed",
+    "auditSource",
+    "audit_source",
+    "sourceContext",
+    "source_context",
+    "linkedinProfileUrl",
+    "linkedin_profile_url",
+    "linkedinCompanyUrl",
+    "linkedin_company_url",
+    "linkedinContactName",
+    "linkedin_contact_name",
+    "emailCopy",
+    "email_copy",
+    "emailDraft",
+    "email_draft",
+    "emailSubject",
+    "email_subject",
+    "emailBody",
+    "email_body",
+    "linkedinMessageCopy",
+    "linkedin_message_copy",
+    "linkedinMessage",
+    "linkedin_message",
+    "outreachCopy",
+    "outreach_copy",
+    "outreachMessage",
+    "outreach_message",
+    "clientCopyContext",
+    "client_copy_context",
+    "rawGeminiResponse",
+    "raw_gemini_response",
+    "emailOpenCount",
+    "email_open_count",
+    "emailClickCount",
+    "email_click_count",
+    "lastEmailOpenedAt",
+    "last_email_opened_at",
+    "lastEmailClickedAt",
+    "last_email_clicked_at",
+    "lastEmailClickedUrl",
+    "last_email_clicked_url",
+    "lastEmailEngagedAt",
+    "last_email_engaged_at",
+    "lastEngagedAt",
+    "engagementSource",
+    "engagement_source",
+    "lastEmailRecipient",
+    "lastEmailLeadId",
+    "lastEmailMessageId",
+    "lastEmailTrackingId",
+    "lastEmailTrackingTag",
+    "reportEmailStatus",
+    "report_email_status",
+  ];
+
   const payload: AnyRecord = {
     token: report.token,
     domainSlug: report.domainSlug,
-    domain_slug: report.domainSlug,
     reportUrl: report.reportUrl,
-    ogImageUrl: report.ogImageUrl,
-    openGraphImageUrl: report.openGraphImageUrl || report.ogImageUrl,
-    previewImageUrl: report.previewImageUrl || report.ogImageUrl,
-    homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl,
-    ogImagePathname: report.ogImagePathname,
     domain: normalizedDomain || report.domain,
     normalizedDomain,
-    normalized_domain: normalizedDomain,
     websiteUrl: report.websiteUrl,
     companyName: report.companyName,
-    email: report.email,
     headline: report.headline,
     subheadline: report.subheadline,
     mainFinding: report.mainFinding,
     businessImpact: report.businessImpact,
     proofPoints: report.proofPoints,
-    recommendations: report.recommendations,
     problemCards: report.problemCards,
     verificationPlan: report.verificationPlan,
-    websiteSpeed: report.websiteSpeed,
     whatChecked: report.whatChecked,
     auditSnapshotTitle: report.auditSnapshotTitle,
     auditSnapshotQuestions: report.auditSnapshotQuestions,
@@ -7209,17 +7312,11 @@ async function handleReportRegister(req: Request) {
     howToReadTitle: report.howToReadTitle,
     howToReadParagraphs: report.howToReadParagraphs,
     ctaHeadline: report.ctaHeadline,
-    privateReportVersion: report.privateReportVersion,
-    manualAdsTransparency: report.manualAdsTransparency,
-    pdfFileId: report.pdfFileId,
+    previewImageUrl,
+    ogImagePathname: report.ogImagePathname,
     pdfViewUrl: report.pdfViewUrl,
     pdfDownloadUrl: report.pdfDownloadUrl,
-    blobUrl: report.blobUrl,
-    blobDownloadUrl: report.blobDownloadUrl,
-    blobPathname: report.blobPathname,
-    b2Key: report.b2Key,
-    b2Bucket: report.b2Bucket,
-    pdfStorageKey: report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId,
+    pdfStorageKey,
     pdfStorageEtag: report.pdfStorageEtag,
     pdfStorageSize: report.pdfStorageSize,
     pdfExpiresAt: report.pdfExpiresAt,
@@ -7238,52 +7335,11 @@ async function handleReportRegister(req: Request) {
     viewCount: Number(existingData.viewCount || 0),
     downloadCount: Number(existingData.downloadCount || 0),
     ctaClickCount: Number(existingData.ctaClickCount || 0),
-
-    // Remove old heavy/duplicated Firestore fields from previous versions.
-    privateReportCopy: deleteField,
-    private_report_copy: deleteField,
-    // Remove generated outreach/copy artifacts from Firestore. The database keeps
-    // only secure-page/PDF/preview fields; email/LinkedIn copy stays transient in the dashboard.
-    emailCopy: deleteField,
-    email_copy: deleteField,
-    emailDraft: deleteField,
-    email_draft: deleteField,
-    emailSubject: deleteField,
-    email_subject: deleteField,
-    emailBody: deleteField,
-    email_body: deleteField,
-    linkedinMessageCopy: deleteField,
-    linkedin_message_copy: deleteField,
-    linkedinMessage: deleteField,
-    linkedin_message: deleteField,
-    outreachCopy: deleteField,
-    outreach_copy: deleteField,
-    outreachMessage: deleteField,
-    outreach_message: deleteField,
-    clientCopyContext: deleteField,
-    client_copy_context: deleteField,
-    rawGeminiResponse: deleteField,
-    raw_gemini_response: deleteField,
-    businessProblems: deleteField,
-    business_problems: deleteField,
-    verification_plan: deleteField,
-    website_speed: deleteField,
-    ctaInteractionTest: deleteField,
-    cta_interaction_test: deleteField,
-    what_checked: deleteField,
-    proof_points: deleteField,
-    manual_ads_transparency: deleteField,
-    manual_ads_checked: deleteField,
-    manual_ads_found: deleteField,
-    manual_ads_source: deleteField,
-    manual_ads_note: deleteField,
-    manual_ads_checked_at: deleteField,
-    og_image_url: deleteField,
-    open_graph_image_url: deleteField,
-    preview_image_url: deleteField,
-    homepage_screenshot_url: deleteField,
-    og_image_pathname: deleteField,
   };
+
+  for (const field of legacyReportFieldsToDelete) {
+    payload[field] = deleteField;
+  }
 
 
   if (report.evidenceVideo?.clear) {
@@ -7341,22 +7397,18 @@ async function handleReportRegister(req: Request) {
         token: report.token,
         reportToken: report.token,
         reportUrl: report.reportUrl,
-        ogImageUrl: report.ogImageUrl || "",
-        openGraphImageUrl: report.openGraphImageUrl || report.ogImageUrl || "",
-        previewImageUrl: report.previewImageUrl || report.ogImageUrl || "",
-        homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
-        ogImagePathname: report.ogImagePathname || "",
         domain: normalizedDomain,
         normalizedDomain,
-        normalized_domain: normalizedDomain,
         domainSlug: report.domainSlug,
-        domain_slug: report.domainSlug,
-        pdfFileId: report.pdfFileId,
+        previewImageUrl,
+        ogImagePathname: report.ogImagePathname || "",
         pdfViewUrl: report.pdfViewUrl,
         pdfDownloadUrl: report.pdfDownloadUrl,
-        blobPathname: report.blobPathname,
+        pdfStorageKey,
+        storageProvider: report.storageProvider,
         source: "catch_all_route_register",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastRegisteredAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
@@ -7366,9 +7418,9 @@ async function handleReportRegister(req: Request) {
       index: {
         token: report.token,
         reportUrl: report.reportUrl,
-        ogImageUrl: report.ogImageUrl || "",
-        homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
+        previewImageUrl,
         ogImagePathname: report.ogImagePathname || "",
+        pdfStorageKey,
       },
     });
   }

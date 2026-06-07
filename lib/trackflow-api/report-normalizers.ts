@@ -660,13 +660,10 @@ export function normalizeReportCards(value: any, fallbackEvidence: string[] = []
     seen.add(key);
 
     output.push({
-      ...sanitizePlainObject(record, 24),
       title: title || "Tracking item to verify",
       finding: finding || "Browser-visible evidence suggests this area is worth checking.",
       businessMeaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
-      business_meaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
       nextCheck: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
-      next_check: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
       evidence,
     });
 
@@ -679,9 +676,7 @@ export function normalizeReportCards(value: any, fallbackEvidence: string[] = []
     title: index === 0 ? "Tracking evidence to verify" : `Evidence item ${index + 1}`,
     finding: item,
     businessMeaning: "This point should be confirmed before making budget or reporting decisions.",
-    business_meaning: "This point should be confirmed before making budget or reporting decisions.",
     nextCheck: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
-    next_check: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
     evidence: [],
   }));
 }
@@ -703,12 +698,10 @@ export function normalizeVerificationPlan(value: any, fallback: AnyRecord[] | st
       if ((title || description) && !seen.has(key)) {
         seen.add(key);
         output.push({
-          ...sanitizePlainObject(record, 20),
           priority,
           title: title || description,
           description,
           estimatedEffort,
-          estimated_effort: estimatedEffort,
         });
       }
     } else {
@@ -721,7 +714,6 @@ export function normalizeVerificationPlan(value: any, fallback: AnyRecord[] | st
           title,
           description: "",
           estimatedEffort: "Short review",
-          estimated_effort: "Short review",
         });
       }
     }

@@ -1351,7 +1351,19 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
   let whatChecked = cleanList(privateReportCopy.whatChecked || report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
   let proofPoints = cleanList(privateReportCopy.proofPoints || report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
-  let recommendations = cleanList(privateReportCopy.recommendations || report.recommendations || report.nextSteps, DEFAULT_RECOMMENDATIONS, 6);
+  let recommendations = cleanList(
+    privateReportCopy.verificationPlan ||
+      privateReportCopy.verification_plan ||
+      privateReportCopy.recommendedFixPlan ||
+      privateReportCopy.recommended_fix_plan ||
+      report.verificationPlan ||
+      report.verification_plan ||
+      privateReportCopy.recommendations ||
+      report.recommendations ||
+      report.nextSteps,
+    DEFAULT_RECOMMENDATIONS,
+    6,
+  );
   let auditSnapshotTitle = cleanText(
     privateReportCopy.auditSnapshotTitle || report.auditSnapshotTitle || report.audit_snapshot_title,
     "What this review is designed to clarify",
