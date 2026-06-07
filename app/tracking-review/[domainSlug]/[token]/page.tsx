@@ -641,6 +641,41 @@ function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): strin
   return output.length ? output : fallback.slice(0, maxItems);
 }
 
+function cleanSignalCards(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const item of items) {
+    const label = cleanListItemText(item);
+    if (!label || seen.has(label.toLowerCase())) continue;
+    seen.add(label.toLowerCase());
+    output.push(label);
+    if (output.length >= 8) break;
+  }
+  return output;
+}
+
+function cleanReviewedPageLabels(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : [];
+  const output: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, any>;
+    const url = cleanText(record.url || record.pageUrl || record.page_url, "");
+    if (!url) continue;
+    const label = cleanText(record.label || record.pageLabel || record.page_label || record.role, "Reviewed page");
+    const action = cleanText(record.actionLabel || record.action_label, "");
+    const text = action ? `${label}: ${url} (${action})` : `${label}: ${url}`;
+    if (seen.has(text.toLowerCase())) continue;
+    seen.add(text.toLowerCase());
+    output.push(text);
+    if (output.length >= 4) break;
+  }
+  return output;
+}
+
+
 function normalizeAdsFound(value: unknown): "yes" | "no" | "unknown" {
   const text = cleanText(value, "").toLowerCase();
   if (["yes", "true", "1", "found", "ads_found", "active", "running"].includes(text)) return "yes";
@@ -1349,7 +1384,17 @@ export default async function ReportPage({ params }: ReportPageProps) {
     "If important lead actions are not measured clearly, it can be harder to know which marketing channels are creating enquiries.",
   ));
 
-  let whatChecked = cleanList(privateReportCopy.whatChecked || report.whatChecked || report.auditScope, DEFAULT_CHECKS, 6);
+  const trackingSignalItems = cleanSignalCards(privateReportCopy.trackingSignalCards || report.trackingSignalCards || report.tracking_signal_cards);
+  const reviewedPageItems = cleanReviewedPageLabels(privateReportCopy.reviewedPageUrls || report.reviewedPageUrls || report.reviewed_page_urls);
+  let whatChecked = cleanList(
+    [
+      ...reviewedPageItems,
+      ...cleanList(privateReportCopy.whatChecked || report.whatChecked || report.auditScope, [], 8),
+      ...trackingSignalItems,
+    ],
+    DEFAULT_CHECKS,
+    8,
+  );
   let proofPoints = cleanList(privateReportCopy.proofPoints || report.proofPoints || report.evidencePoints, DEFAULT_PROOF_POINTS, 6);
   let recommendations = cleanList(
     privateReportCopy.verificationPlan ||
@@ -1425,7 +1470,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     formatDate(report.createdAt || report.registeredAt || report.uploadedAt) ||
     formatDate(new Date().toISOString());
 
-  const primaryConversionFocus = getPrimaryConversionFocus(report, privateReportCopy);
+  const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
   const evidenceVideo = getEvidenceVideoDisplay(report);

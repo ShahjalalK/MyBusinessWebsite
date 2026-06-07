@@ -202,17 +202,10 @@ function normalizeEvidenceVideoPayload(body: AnyRecord = {}, privatePage: AnyRec
       "This optional video shows browser-visible evidence only. Final confirmation still requires account-level access.",
     ),
     videoId,
-    video_id: videoId,
-    youtubeVideoId: videoId,
-    youtube_video_id: videoId,
     videoUrl: watchUrl,
-    video_url: watchUrl,
     youtubeUrl: watchUrl,
-    youtube_url: watchUrl,
     embedUrl,
-    embed_url: embedUrl,
     embedProvider: "youtube_nocookie",
-    embed_provider: "youtube_nocookie",
     addedAt: firstCleanString(raw.addedAt, raw.added_at, body.evidenceVideoAddedAt, body.evidence_video_added_at),
     optional: true,
   };
@@ -238,6 +231,336 @@ export function firstCleanString(...values: any[]): string {
     if (text) return text;
   }
   return "";
+}
+
+
+function normalizeDisplaySentence(value: any, fallback = ""): string {
+  return cleanCell(value || fallback)
+    .replace(/\s+/g, " ")
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .trim();
+}
+
+function isGenericReportText(value: any): boolean {
+  const text = normalizeDisplaySentence(value).toLowerCase();
+  if (!text) return true;
+  return (
+    /lead form, phone, email, booking/.test(text) ||
+    /lead form, contact, and enquiry/.test(text) ||
+    /form\s*\/\s*phone\s*\/\s*booking/.test(text) ||
+    /ga4\s*\/\s*gtm\s*\/\s*google ads/.test(text) ||
+    /google ads, ga4, gtm, meta pixel, and first-party\/server-side tracking/.test(text) ||
+    /what needs confirmation inside ga4, gtm, google ads, crm, call-tracking, booking-platform, or server logs/.test(text) ||
+    /what this review is designed to clarify/.test(text)
+  );
+}
+
+function titleCaseClientLabel(value: string): string {
+  return normalizeDisplaySentence(value)
+    .split(/\s+/g)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      const upper = new Set(["ga4", "gtm", "crm", "ads", "cta", "url", "pdf"]);
+      if (upper.has(lower)) return lower.toUpperCase();
+      if (["and", "or", "the", "on", "in", "for", "of", "to", "a", "an"].includes(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ")
+    .replace(/^./, (letter) => letter.toUpperCase())
+    .trim();
+}
+
+function cleanActionLabel(value: any): string {
+  const text = normalizeDisplaySentence(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b(not sure|auto|unknown|key conversion actions|lead, form, and key cta actions|lead form and key cta actions)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text || isGenericReportText(text)) return "";
+  if (text.length > 96) return text.slice(0, 96).replace(/\s+\S*$/, "").trim();
+  return text;
+}
+
+function inferActionLabelFromText(...values: any[]): string {
+  const blob = values.map((value) => normalizeDisplaySentence(value)).filter(Boolean).join("\n");
+  const patterns = [
+    /Primary conversion focus:\s*([^\n.]+?)(?:\s+on\s+the\s+[^\n.]+?\s+page|\s+should|\s+needs|[.\n]|$)/i,
+    /focused on\s+(?:the\s+)?([^\n.]+?)(?:\s+journey|\s+on\s+the\s+[^\n.]+?\s+page|[.\n]|$)/i,
+    /for\s+([^\n.]+?)\s+journey/i,
+    /controlled\s+([^\n.]+?)\s+test/i,
+  ];
+  for (const pattern of patterns) {
+    const match = blob.match(pattern);
+    const candidate = cleanActionLabel(match?.[1] || "");
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function inferPageLabelFromText(...values: any[]): string {
+  const blob = values.map((value) => normalizeDisplaySentence(value)).filter(Boolean).join("\n");
+  const patterns = [
+    /on\s+the\s+([^\n.]+?)\s+page/i,
+    /reviewed page:\s*([^\n.]+)/i,
+    /page reviewed:\s*([^\n.]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = blob.match(pattern);
+    const candidate = normalizeDisplaySentence(match?.[1] || "");
+    if (candidate && !candidate.includes("http") && candidate.length <= 60) return titleCaseClientLabel(candidate.replace(/\bpage$/i, "").trim()) + " page";
+  }
+  return "";
+}
+
+function normalizeReportUrlLabel(url: string): string {
+  const cleanUrl = sanitizeOptionalUrl(url || "");
+  if (!cleanUrl) return "";
+  try {
+    const parsed = new URL(cleanUrl);
+    return `${parsed.protocol}//${parsed.hostname}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+  } catch {
+    return cleanUrl;
+  }
+}
+
+function normalizeReviewedPages(value: any, fallbackWebsiteUrl = "", primaryPageUrl = "", primaryPageLabel = "", primaryActionLabel = ""): AnyRecord[] {
+  const rawItems = Array.isArray(value) ? value : [];
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  const push = (item: AnyRecord) => {
+    const url = normalizeReportUrlLabel(firstCleanString(item.url, item.pageUrl, item.page_url, item.href));
+    if (!url) return;
+    const key = url.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push({
+      role: firstCleanString(item.role, item.type, output.length === 0 ? "homepage" : "primary"),
+      label: firstCleanString(item.label, item.pageLabel, item.page_label, output.length === 0 ? "Homepage" : primaryPageLabel || "Reviewed page"),
+      url,
+      ...(firstCleanString(item.actionLabel, item.action_label, primaryActionLabel) ? { actionLabel: firstCleanString(item.actionLabel, item.action_label, primaryActionLabel) } : {}),
+    });
+  };
+
+  for (const item of rawItems) {
+    if (item && typeof item === "object" && !Array.isArray(item)) push(item as AnyRecord);
+    else if (typeof item === "string") push({ url: item });
+  }
+
+  if (fallbackWebsiteUrl) push({ role: "homepage", label: "Homepage", url: fallbackWebsiteUrl });
+  if (primaryPageUrl) push({ role: "primary", label: primaryPageLabel || "Reviewed page", url: primaryPageUrl, actionLabel: primaryActionLabel });
+
+  return output.slice(0, 4);
+}
+
+type TrackingSignalStatus = "found" | "observed" | "needs_verification" | "not_confirmed";
+
+function normalizeTrackingSignalCard(label: string, status: TrackingSignalStatus = "observed", detail = ""): AnyRecord {
+  return {
+    label: normalizeDisplaySentence(label),
+    status,
+    ...(detail ? { detail: normalizeDisplaySentence(detail) } : {}),
+  };
+}
+
+function hasSignalCard(cards: AnyRecord[], contains: RegExp): boolean {
+  return cards.some((card) => contains.test(String(card.label || "")));
+}
+
+function buildTrackingSignalCardsFromText(rawCards: any, ...values: any[]): AnyRecord[] {
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+  const add = (label: string, status: TrackingSignalStatus = "observed", detail = "") => {
+    const cleanLabel = normalizeDisplaySentence(label);
+    if (!cleanLabel) return;
+    const key = cleanLabel.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push(normalizeTrackingSignalCard(cleanLabel, status, detail));
+  };
+
+  if (Array.isArray(rawCards)) {
+    for (const item of rawCards) {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const label = firstCleanString(item.label, item.title, item.name, item.text, item.finding);
+        const status = firstCleanString(item.status, item.state, item.type, "observed") as TrackingSignalStatus;
+        const detail = firstCleanString(item.detail, item.description, item.summary);
+        add(label, ["found", "observed", "needs_verification", "not_confirmed"].includes(status) ? status : "observed", detail);
+      } else {
+        add(firstCleanString(item), "observed");
+      }
+    }
+  }
+
+  const blob = values
+    .map((value) => {
+      if (Array.isArray(value)) return value.map((item) => (typeof item === "string" ? item : JSON.stringify(item))).join("\n");
+      if (value && typeof value === "object") return JSON.stringify(value);
+      return String(value || "");
+    })
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+
+  if (/\b(gtm|google tag manager)\b[^.\n]*(found|loaded|observed|visible)|tag manager[^.\n]*(found|loaded|observed|visible)/i.test(blob)) add("GTM tag found", "found");
+  if (/\bga4\b[^.\n]*(request|event|collect)[^.\n]*(observed|visible|found)|analytics[^.\n]*request[^.\n]*(observed|visible|found)/i.test(blob)) add("GA4 request observed", "observed");
+  if (/google ads[^.\n]*(conversion|remarketing)?[^.\n]*request[^.\n]*(observed|visible|found)|google ads[^.\n]*conversion[^.\n]*(observed|visible|found)/i.test(blob)) add("Google Ads conversion request observed", "observed");
+  if (/meta pixel[^.\n]*(found|observed|visible)|meta event[^.\n]*(observed|visible|found)/i.test(blob)) add("Meta Pixel found", "found");
+  if (/first-party[^.\n]*(tracking-like|tracking|collection)?[^.\n]*request[^.\n]*(observed|visible|found)/i.test(blob)) add("First-party tracking-like request observed", "observed");
+  if (/click id[^.\n]*(test)?[^.\n]*(performed|observed|captured)|\bgclid\b|\bgbraid\b|\bwbraid\b/i.test(blob)) add("Click ID persistence test performed", "observed");
+  if (/lead-related\s+ga4\s+event[^.\n]*(not clearly|needs|still)|no lead-related ga4 event/i.test(blob)) add("Lead-related GA4 event still needs account-level verification", "needs_verification");
+  if (/server-side[^.\n]*(not confirmed|not detected|cannot be proven|needs verification)|server forwarding cannot be proven/i.test(blob)) add("Server-side tracking not confirmed from browser evidence", "not_confirmed");
+
+  const idMatches = Array.from(blob.matchAll(/(?:conversion\/(\d{6,})|conversion id[^\d]{0,24}(\d{6,})|aw-(\d{6,}))/gi));
+  const firstId = idMatches.map((match) => match[1] || match[2] || match[3]).find(Boolean);
+  if (firstId && hasSignalCard(output, /google ads conversion request/i)) add(`Google Ads conversion ID observed: ${firstId}`, "observed");
+
+  return output.slice(0, 8);
+}
+
+function buildActionAwareVerificationPlan(actionLabel: string, pageLabel: string, cards: AnyRecord[]): AnyRecord[] {
+  const action = actionLabel || "selected customer action";
+  const page = pageLabel ? ` on the ${pageLabel}` : "";
+  const hasGoogleAds = hasSignalCard(cards, /google ads/i);
+  const hasGa4 = hasSignalCard(cards, /ga4/i);
+  const hasGtm = hasSignalCard(cards, /gtm/i);
+  const plan = [
+    `Run one controlled ${action} test${page}.`,
+  ];
+  if (hasGtm) plan.push("Confirm the same test in GTM Preview.");
+  if (hasGa4) plan.push("Check GA4 DebugView for the expected lead-related event.");
+  if (hasGoogleAds) plan.push("Review Google Ads conversion diagnostics for the same action.");
+  plan.push("Match the test with CRM, email notification, call-tracking, or server records where relevant.");
+  return normalizeVerificationPlan(plan, [], 4);
+}
+
+function buildActionAwareWhatChecked(actionLabel: string, pageLabel: string, cards: AnyRecord[], existing: string[]): string[] {
+  const action = actionLabel || "selected customer action";
+  const page = pageLabel || "reviewed page";
+  const items = [
+    `The ${page} ${action} journey.`,
+    ...cards.map((card) => String(card.label || "")).filter(Boolean),
+    ...existing.filter((item) => item && !isGenericReportText(item)),
+    "Browser-visible request evidence and conversion-path context.",
+    "Account-level confirmation still needed for final recording.",
+  ];
+  return normalizeStringArray(items, 8);
+}
+
+function buildActionAwareSnapshotQuestions(actionLabel: string, pageLabel: string): string[] {
+  const action = actionLabel || "selected customer action";
+  const page = pageLabel || "reviewed page";
+  return [
+    `Was the ${action} journey reviewed safely on the ${page}?`,
+    "Which tracking signals were visible during the browser-side review?",
+    "What should be confirmed inside the actual tracking accounts?",
+  ];
+}
+
+function buildReportAwareSecureFields(params: {
+  body: AnyRecord;
+  privatePage: AnyRecord;
+  websiteUrl: string;
+  mainFinding: string;
+  businessImpact: string;
+  proofPoints: string[];
+  whatChecked: string[];
+  auditSnapshotQuestions: string[];
+  verificationPlan: AnyRecord[];
+  problemCards: AnyRecord[];
+}): AnyRecord {
+  const { body, privatePage } = params;
+  const sourceBlob = [
+    params.mainFinding,
+    params.businessImpact,
+    ...(params.proofPoints || []),
+    ...(params.whatChecked || []),
+    ...(params.auditSnapshotQuestions || []),
+    ...(params.verificationPlan || []).map((item) => JSON.stringify(item)),
+    ...(params.problemCards || []).map((item) => JSON.stringify(item)),
+  ];
+  const actionLabel = cleanActionLabel(firstCleanString(
+    body.primaryActionLabel,
+    body.primary_action_label,
+    body.customConversionLabel,
+    body.custom_conversion_label,
+    body.conversionActionLabel,
+    body.conversion_action_label,
+    body.primaryConversionLabel,
+    body.primary_conversion_label,
+    body.primaryConversionAction,
+    body.primary_conversion_action,
+    body.conversionActionContext,
+    body.conversion_action_context,
+    privatePage.primaryActionLabel,
+    privatePage.primary_action_label,
+    privatePage.primaryConversionLabel,
+    privatePage.primary_conversion_label,
+    privatePage.primaryConversion,
+    privatePage.primary_conversion,
+  )) || inferActionLabelFromText(...sourceBlob);
+
+  const pageLabel = firstCleanString(
+    body.primaryPageLabel,
+    body.primary_page_label,
+    body.targetPageLabel,
+    body.target_page_label,
+    privatePage.primaryPageLabel,
+    privatePage.primary_page_label,
+    privatePage.selectedPageLabel,
+    privatePage.selected_page_label,
+    inferPageLabelFromText(...sourceBlob),
+  );
+
+  const primaryPageUrl = normalizeReportUrlLabel(firstCleanString(
+    body.primaryPageUrl,
+    body.primary_page_url,
+    body.priorityPageUrl,
+    body.priority_page_url,
+    body.selectedPageUrl,
+    body.selected_page_url,
+    privatePage.primaryPageUrl,
+    privatePage.primary_page_url,
+    privatePage.selectedPageUrl,
+    privatePage.selected_page_url,
+  ));
+
+  const trackingSignalCards = buildTrackingSignalCardsFromText(
+    body.trackingSignalCards || body.tracking_signal_cards || privatePage.trackingSignalCards || privatePage.tracking_signal_cards,
+    ...sourceBlob,
+  );
+
+  const reviewedPageUrls = normalizeReviewedPages(
+    body.reviewedPageUrls || body.reviewed_page_urls || privatePage.reviewedPageUrls || privatePage.reviewed_page_urls,
+    params.websiteUrl,
+    primaryPageUrl,
+    pageLabel,
+    actionLabel,
+  );
+
+  const cleanedWhatChecked = buildActionAwareWhatChecked(actionLabel, pageLabel, trackingSignalCards, params.whatChecked || []);
+  const cleanedQuestions = (params.auditSnapshotQuestions || []).filter((item) => !isGenericReportText(item));
+  const auditSnapshotQuestions = cleanedQuestions.length >= 2 ? cleanedQuestions.slice(0, 3) : buildActionAwareSnapshotQuestions(actionLabel, pageLabel);
+  const needsPlan = !(params.verificationPlan || []).length || (params.verificationPlan || []).every((item) => isGenericReportText(item?.title || item?.description || item));
+  const verificationPlan = needsPlan ? buildActionAwareVerificationPlan(actionLabel, pageLabel, trackingSignalCards) : params.verificationPlan;
+  const auditSnapshotTitle = firstCleanString(
+    privatePage.auditSnapshotTitle && !isGenericReportText(privatePage.auditSnapshotTitle) ? privatePage.auditSnapshotTitle : "",
+    body.auditSnapshotTitle && !isGenericReportText(body.auditSnapshotTitle) ? body.auditSnapshotTitle : "",
+    actionLabel ? `${titleCaseClientLabel(actionLabel)} tracking snapshot` : "Tracking review snapshot",
+  );
+
+  return {
+    primaryActionLabel: actionLabel,
+    primaryPageLabel: pageLabel,
+    primaryPageUrl,
+    reviewedPageUrls,
+    trackingSignalCards,
+    whatChecked: cleanedWhatChecked,
+    auditSnapshotTitle,
+    auditSnapshotQuestions,
+    verificationPlan,
+  };
 }
 
 
@@ -663,7 +986,7 @@ export function normalizeReportCards(value: any, fallbackEvidence: string[] = []
       title: title || "Tracking item to verify",
       finding: finding || "Browser-visible evidence suggests this area is worth checking.",
       businessMeaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
-      nextCheck: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
+      nextCheck: nextCheck || "Confirm this item inside the relevant tracking account, CRM, or server records.",
       evidence,
     });
 
@@ -676,7 +999,7 @@ export function normalizeReportCards(value: any, fallbackEvidence: string[] = []
     title: index === 0 ? "Tracking evidence to verify" : `Evidence item ${index + 1}`,
     finding: item,
     businessMeaning: "This point should be confirmed before making budget or reporting decisions.",
-    nextCheck: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
+    nextCheck: "Confirm this item inside the relevant tracking account, CRM, or server records.",
     evidence: [],
   }));
 }
@@ -1061,6 +1384,25 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     "Book a tracking review",
   );
 
+  const websiteUrl = firstCleanString(body.websiteUrl, body.website_url, body.website, domain ? `https://${domain}` : "");
+
+  let reportAwareFields = buildReportAwareSecureFields({
+    body,
+    privatePage,
+    websiteUrl,
+    mainFinding,
+    businessImpact,
+    proofPoints,
+    whatChecked,
+    auditSnapshotQuestions,
+    verificationPlan,
+    problemCards,
+  });
+
+  whatChecked = reportAwareFields.whatChecked;
+  auditSnapshotQuestions = reportAwareFields.auditSnapshotQuestions;
+  verificationPlan = reportAwareFields.verificationPlan;
+
   if (alertSignupContext) {
     recommendations = normalizeRecommendationArray(
       [
@@ -1084,6 +1426,16 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ];
   }
 
+  if (alertSignupContext) {
+    reportAwareFields = {
+      ...reportAwareFields,
+      whatChecked,
+      auditSnapshotTitle: "Alert Signup Form tracking snapshot",
+      auditSnapshotQuestions,
+      verificationPlan,
+    };
+  }
+
   const normalizedPrivateReportCopy = {
     headline,
     subheadline,
@@ -1100,7 +1452,12 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaInteractionTest,
     cta_interaction_test: ctaInteractionTest,
     whatChecked,
-    auditSnapshotTitle: alertSignupContext ? "Alert Signup Form tracking snapshot" : firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title, "What this review is designed to clarify"),
+    primaryActionLabel: reportAwareFields.primaryActionLabel,
+    primaryPageLabel: reportAwareFields.primaryPageLabel,
+    primaryPageUrl: reportAwareFields.primaryPageUrl,
+    reviewedPageUrls: reportAwareFields.reviewedPageUrls,
+    trackingSignalCards: reportAwareFields.trackingSignalCards,
+    auditSnapshotTitle: reportAwareFields.auditSnapshotTitle,
     auditSnapshotQuestions,
     trustNotes,
     howToReadTitle: firstCleanString(privatePage.howToReadTitle, privatePage.how_to_read_title, body.howToReadTitle, body.how_to_read_title, "How to read this review"),
@@ -1108,9 +1465,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaHeadline: firstCleanString(privatePage.ctaHeadline, privatePage.cta_headline, body.ctaHeadline, body.cta_headline, "Want this verified inside your actual accounts?"),
     ctaText,
     manualAdsTransparency,
-    manual_ads_transparency: manualAdsTransparency,
     evidenceVideo: evidenceVideo.enabled ? evidenceVideo : undefined,
-    evidence_video: evidenceVideo.enabled ? evidenceVideo : undefined,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
   };
 
@@ -1130,7 +1485,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ogImagePathname,
     og_image_pathname: ogImagePathname,
     domain,
-    websiteUrl: firstCleanString(body.websiteUrl, body.website_url, body.website, domain ? `https://${domain}` : ""),
+    websiteUrl,
     companyName,
     email,
     headline,
@@ -1148,6 +1503,11 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaInteractionTest,
     cta_interaction_test: ctaInteractionTest,
     whatChecked,
+    primaryActionLabel: reportAwareFields.primaryActionLabel,
+    primaryPageLabel: reportAwareFields.primaryPageLabel,
+    primaryPageUrl: reportAwareFields.primaryPageUrl,
+    reviewedPageUrls: reportAwareFields.reviewedPageUrls,
+    trackingSignalCards: reportAwareFields.trackingSignalCards,
     auditSnapshotTitle: normalizedPrivateReportCopy.auditSnapshotTitle,
     auditSnapshotQuestions,
     trustNotes,
@@ -1159,7 +1519,6 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     secure_page_copy: normalizedPrivateReportCopy,
     privateReportVersion: normalizedPrivateReportCopy.privateReportVersion,
     manualAdsTransparency,
-    manual_ads_transparency: manualAdsTransparency,
     manual_ads_checked: manualAdsTransparency.checked,
     manual_ads_found: manualAdsTransparency.adsFound,
     manual_ads_source: manualAdsTransparency.source,
@@ -1224,15 +1583,10 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     pdfStorageEtag: firstCleanString(body.pdfStorageEtag, body.pdf_storage_etag, body.b2Etag, body.b2_etag),
     pdfStorageSize: Number(body.pdfStorageSize || body.pdf_storage_size || body.b2Size || body.b2_size || 0) || undefined,
     evidenceVideo,
-    evidence_video: evidenceVideo.enabled ? evidenceVideo : undefined,
     evidenceVideoUrl: evidenceVideo.enabled ? evidenceVideo.videoUrl : "",
-    evidence_video_url: evidenceVideo.enabled ? evidenceVideo.videoUrl : "",
     evidenceVideoEmbedUrl: evidenceVideo.enabled ? evidenceVideo.embedUrl : "",
-    evidence_video_embed_url: evidenceVideo.enabled ? evidenceVideo.embedUrl : "",
     evidenceVideoProvider: evidenceVideo.enabled ? evidenceVideo.provider : "",
-    evidence_video_provider: evidenceVideo.enabled ? evidenceVideo.provider : "",
     evidenceVideoStatus: evidenceVideo.status || "",
-    evidence_video_status: evidenceVideo.status || "",
     contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
     ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
     ctaText,
