@@ -46,20 +46,30 @@ const serverTrackSchema = z.object({
   clickHref: z.string().trim().max(1200).optional().default(""),
   clickLocation: z.string().trim().max(200).optional().default(""),
 
-  report_id: z.string().trim().max(120).optional().default(""),
-  report_type: z.string().trim().max(80).optional().default(""),
-  domain_slug: z.string().trim().max(160).optional().default(""),
-  primary_action_label: z.string().trim().max(180).optional().default(""),
-  primary_page_label: z.string().trim().max(160).optional().default(""),
-  primary_page_url: z.string().trim().max(700).optional().default(""),
-  event_section: z.string().trim().max(120).optional().default(""),
-  button_label: z.string().trim().max(180).optional().default(""),
-  video_id: z.string().trim().max(120).optional().default(""),
-  video_progress: z.union([z.string(), z.number()]).optional().default(""),
-  scroll_percent: z.union([z.string(), z.number()]).optional().default(""),
-  assistant_question_key: z.string().trim().max(180).optional().default(""),
-  assistant_question_length: z.union([z.string(), z.number()]).optional().default(""),
-  device_type: z.string().trim().max(40).optional().default(""),
+  reportId: z.string().trim().max(80).optional().default(""),
+  domainSlug: z.string().trim().max(120).optional().default(""),
+  companyName: z.string().trim().max(180).optional().default(""),
+  primaryActionLabel: z.string().trim().max(180).optional().default(""),
+  primaryPageLabel: z.string().trim().max(180).optional().default(""),
+  eventSection: z.string().trim().max(120).optional().default(""),
+  buttonLabel: z.string().trim().max(180).optional().default(""),
+  videoId: z.string().trim().max(80).optional().default(""),
+  videoProgress: z.coerce.number().min(0).max(100).optional(),
+  scrollPercent: z.coerce.number().min(0).max(100).optional(),
+  deviceType: z.string().trim().max(80).optional().default(""),
+  question_key: z.string().trim().max(180).optional().default(""),
+  question_source: z.string().trim().max(80).optional().default(""),
+  message_length: z.coerce.number().min(0).max(5000).optional(),
+
+  visitorId: z.string().trim().max(80).optional().default(""),
+  reportVisitorId: z.string().trim().max(100).optional().default(""),
+  reportSessionId: z.string().trim().max(100).optional().default(""),
+  visitStage: z.string().trim().max(80).optional().default(""),
+  journeyStep: z.string().trim().max(80).optional().default(""),
+  intentLevel: z.string().trim().max(40).optional().default(""),
+  intentScore: z.coerce.number().min(0).max(100).optional(),
+  isCoreEvent: z.union([z.boolean(), z.string()]).optional().default(""),
+  transport: z.string().trim().max(80).optional().default(""),
 });
 
 function firstHeader(request: NextRequest, names: string[]) {
@@ -83,6 +93,25 @@ function firstIp(value: string) {
 function cleanText(value: unknown, fallback = "") {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text || fallback;
+}
+
+function sanitizeEventName(value: string) {
+  return cleanText(value, "secure_report_event")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80) || "secure_report_event";
+}
+
+function cleanParams<T extends Record<string, unknown>>(params: T) {
+  const output: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    output[key] = value;
+  }
+
+  return output;
 }
 
 function sha256(value: string) {
@@ -123,7 +152,7 @@ function mapMetaEventName(eventName: string) {
   if (eventName === "generate_lead") return "Lead";
   if (eventName === "secure_report_booking_click") return "Lead";
   if (eventName === "secure_report_email_click") return "Contact";
-  if (eventName === "secure_report_linkedin_click") return "Contact";
+  if (eventName === "secure_report_assistant_message_sent") return "Contact";
 
   return "ViewContent";
 }
@@ -150,7 +179,7 @@ async function sendGa4Event(
     events: [
       {
         name: payload.eventName,
-        params: {
+        params: cleanParams({
           event_id: payload.eventId,
           engagement_time_msec: 1,
 
@@ -169,33 +198,43 @@ async function sendGa4Event(
           fbclid: payload.fbclid,
           msclkid: payload.msclkid,
 
-          click_text: payload.clickText,
+          click_text: payload.clickText || payload.buttonLabel,
           click_href: payload.clickHref,
-          click_location: payload.clickLocation,
+          click_location: payload.clickLocation || payload.eventSection,
 
-          report_id: payload.report_id,
-          report_type: payload.report_type,
-          domain_slug: payload.domain_slug,
-          primary_action_label: payload.primary_action_label,
-          primary_page_label: payload.primary_page_label,
-          primary_page_url: payload.primary_page_url,
-          event_section: payload.event_section,
-          button_label: payload.button_label,
-          video_id: payload.video_id,
-          video_progress: payload.video_progress,
-          scroll_percent: payload.scroll_percent,
-          assistant_question_key: payload.assistant_question_key,
-          assistant_question_length: payload.assistant_question_length,
-          device_type: payload.device_type,
+          report_id: payload.reportId,
+          domain_slug: payload.domainSlug,
+          company_name: payload.companyName,
+          primary_action_label: payload.primaryActionLabel,
+          primary_page_label: payload.primaryPageLabel,
+          event_section: payload.eventSection,
+          button_label: payload.buttonLabel,
+          video_id: payload.videoId,
+          video_progress: payload.videoProgress,
+          scroll_percent: payload.scrollPercent,
+          device_type: payload.deviceType,
+          question_key: payload.question_key,
+          question_source: payload.question_source,
+          message_length: payload.message_length,
+          visitor_id: payload.visitorId,
+          report_visitor_id: payload.reportVisitorId,
+          report_session_id: payload.reportSessionId,
+          visit_stage: payload.visitStage,
+          journey_step: payload.journeyStep,
+          intent_level: payload.intentLevel,
+          intent_score: payload.intentScore,
+          is_core_event: payload.isCoreEvent,
+          transport: payload.transport,
 
           country: meta.country,
           region: meta.region,
           city: meta.city,
           client_timezone: payload.timezone,
           server_timezone: meta.timezone,
+          debug_mode: process.env.GA4_DEBUG_MODE === "true" ? true : undefined,
 
           traffic_type: process.env.NODE_ENV === "production" ? undefined : "internal_test",
-        },
+        }),
       },
     ],
   };
@@ -253,7 +292,7 @@ async function sendMetaEvent(
         event_source_url:
           payload.pageLocation || process.env.NEXT_PUBLIC_SITE_URL || "https://trackflowpro.com",
         user_data: userData,
-        custom_data: {
+        custom_data: cleanParams({
           page_title: payload.pageTitle,
           page_path: payload.pagePath,
           referrer: payload.referrer,
@@ -263,19 +302,25 @@ async function sendMetaEvent(
           utm_campaign: payload.utm_campaign,
           utm_term: payload.utm_term,
           utm_content: payload.utm_content,
-          click_text: payload.clickText,
-          click_location: payload.clickLocation,
-          report_id: payload.report_id,
-          report_type: payload.report_type,
-          domain_slug: payload.domain_slug,
-          primary_action_label: payload.primary_action_label,
-          primary_page_label: payload.primary_page_label,
-          event_section: payload.event_section,
-          button_label: payload.button_label,
-          video_progress: payload.video_progress,
-          scroll_percent: payload.scroll_percent,
-          device_type: payload.device_type,
-        },
+          click_text: payload.clickText || payload.buttonLabel,
+          click_location: payload.clickLocation || payload.eventSection,
+          report_id: payload.reportId,
+          domain_slug: payload.domainSlug,
+          event_section: payload.eventSection,
+          button_label: payload.buttonLabel,
+          video_id: payload.videoId,
+          video_progress: payload.videoProgress,
+          scroll_percent: payload.scrollPercent,
+          device_type: payload.deviceType,
+          visitor_id: payload.visitorId,
+          report_visitor_id: payload.reportVisitorId,
+          visit_stage: payload.visitStage,
+          journey_step: payload.journeyStep,
+          intent_level: payload.intentLevel,
+          intent_score: payload.intentScore,
+          is_core_event: payload.isCoreEvent,
+          transport: payload.transport,
+        }),
       },
     ],
   };
@@ -324,7 +369,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const payload = parsed.data;
+    const payload = {
+      ...parsed.data,
+      eventName: sanitizeEventName(parsed.data.eventName),
+    };
     const meta = getRequestMeta(request);
 
     const results = await Promise.allSettled([

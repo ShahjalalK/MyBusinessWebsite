@@ -6,6 +6,7 @@
 // ============================================================
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -293,25 +294,6 @@ function compactHistory(messages: ChatMessage[]) {
 function getMessagesStorageKey(token: string, sessionId: string): string {
   return `trackflow_report_chat_messages_${token || "unknown"}_${sessionId || "unknown"}`;
 }
-
-function emitSecureReportAnalytics(eventName: string, detail: Record<string, unknown> = {}) {
-  if (!isBrowserAvailable()) return;
-
-  try {
-    window.dispatchEvent(
-      new CustomEvent("trackflow:secure-report-event", {
-        detail: {
-          eventName,
-          event_section: "assistant",
-          ...detail,
-        },
-      }),
-    );
-  } catch {
-    // Analytics should never affect the chat experience.
-  }
-}
-
 
 function cleanDisplayLine(value: string): string {
   return String(value || "")
@@ -615,6 +597,25 @@ function UserMessageText({ content }: { content: string }) {
   return <p className="whitespace-pre-wrap text-sm font-semibold leading-6">{content}</p>;
 }
 
+type SecureReportAnalyticsDetail = {
+  eventName: string;
+  buttonLabel?: string;
+  question?: string;
+  questionKey?: string;
+  questionSource?: string;
+  messageLength?: number;
+};
+
+function dispatchSecureReportAnalyticsEvent(detail: SecureReportAnalyticsDetail) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent("trackflow:secure-report-event", {
+      detail,
+    }),
+  );
+}
+
 export default function ReportChatAssistant({
   token,
   domainSlug,
@@ -637,7 +638,23 @@ export default function ReportChatAssistant({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const sessionIdRef = useRef("");
   const sessionTokenRef = useRef("");
-  const assistantOpenTrackedRef = useRef(false);
+
+  const emitAnalyticsEvent = useCallback((detail: SecureReportAnalyticsDetail) => {
+    dispatchSecureReportAnalyticsEvent(detail);
+  }, []);
+
+  const openAssistantChat = useCallback((source = "button") => {
+    emitAnalyticsEvent({
+      eventName: "secure_report_assistant_open",
+      buttonLabel: source,
+    });
+
+    setIsOpen(true);
+
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 180);
+  }, [emitAnalyticsEvent]);
 
   const storageKey = useMemo(
     () => (token && sessionId ? getMessagesStorageKey(token, sessionId) : ""),
@@ -827,28 +844,8 @@ export default function ReportChatAssistant({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || assistantOpenTrackedRef.current) return;
-
-    assistantOpenTrackedRef.current = true;
-    emitSecureReportAnalytics("assistant_open", {
-      button_label: "Ask about this review",
-    });
-  }, [isOpen]);
-
-  useEffect(() => {
-    const openChat = () => {
-      emitSecureReportAnalytics("assistant_open_click", {
-        button_label: "Ask about this review",
-      });
-      setIsOpen(true);
-      window.setTimeout(() => {
-        inputRef.current?.focus();
-        resizeInput();
-      }, 180);
-    };
-
     const openFromHash = () => {
-      if (window.location.hash === "#ask-this-review") openChat();
+      if (window.location.hash === "#ask-this-review") openAssistantChat("hash_or_anchor");
     };
 
     const onDocumentClick = (event: MouseEvent) => {
@@ -859,7 +856,7 @@ export default function ReportChatAssistant({
       if (!trigger) return;
 
       event.preventDefault();
-      openChat();
+      openAssistantChat("anchor_click");
     };
 
     openFromHash();
@@ -870,7 +867,7 @@ export default function ReportChatAssistant({
       document.removeEventListener("click", onDocumentClick);
       window.removeEventListener("hashchange", openFromHash);
     };
-  }, []);
+  }, [openAssistantChat]);
 
   const helperBadge = isDisabled
     ? "Manual review"
@@ -891,13 +888,30 @@ export default function ReportChatAssistant({
       window.setTimeout(resolve, ms);
     });
 
-  async function submitQuestion(nextQuestion?: string) {
+  async function submitQuestion(nextQuestion?: string, source: "manual" | "starter" | "follow_up" = "manual") {
     const cleanQuestion = String(nextQuestion ?? question).trim();
     if (!cleanQuestion || isSending || isDisabled) return;
 
-    emitSecureReportAnalytics("assistant_message_sent", {
-      assistant_question_key: normalizeReportChatQuestionKey(cleanQuestion),
-      assistant_question_length: cleanQuestion.length,
+    const questionKey = normalizeReportChatQuestionKey(cleanQuestion);
+
+    if (nextQuestion) {
+      emitAnalyticsEvent({
+        eventName: "secure_report_assistant_question_click",
+        buttonLabel: cleanQuestion.slice(0, 120),
+        question: cleanQuestion.slice(0, 300),
+        questionKey,
+        questionSource: source,
+        messageLength: cleanQuestion.length,
+      });
+    }
+
+    emitAnalyticsEvent({
+      eventName: "secure_report_assistant_message_sent",
+      buttonLabel: source === "manual" ? "Manual question sent" : "Suggested question sent",
+      question: cleanQuestion.slice(0, 300),
+      questionKey,
+      questionSource: source,
+      messageLength: cleanQuestion.length,
     });
 
     const tokenKey = normalizeSessionToken(token);
@@ -1145,15 +1159,7 @@ export default function ReportChatAssistant({
                               <button
                                 key={item}
                                 type="button"
-                                onClick={() => {
-                                  emitSecureReportAnalytics("assistant_question_click", {
-                                    assistant_question_key: normalizeReportChatQuestionKey(item),
-                                    assistant_question_length: item.length,
-                                    button_label: item,
-                                    question_source: "follow_up",
-                                  });
-                                  void submitQuestion(item);
-                                }}
+                                onClick={() => void submitQuestion(item, "follow_up")}
                                 disabled={isSending || isDisabled}
                                 className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-left text-[11px] font-bold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
@@ -1194,15 +1200,7 @@ export default function ReportChatAssistant({
                       <button
                         key={item}
                         type="button"
-                        onClick={() => {
-                          emitSecureReportAnalytics("assistant_question_click", {
-                            assistant_question_key: normalizeReportChatQuestionKey(item),
-                            assistant_question_length: item.length,
-                            button_label: item,
-                            question_source: "starter",
-                          });
-                          void submitQuestion(item);
-                        }}
+                        onClick={() => void submitQuestion(item, "starter")}
                         disabled={isSending || isDisabled}
                         className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-left text-[11px] font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1267,12 +1265,7 @@ export default function ReportChatAssistant({
           <>
             <button
               type="button"
-              onClick={() => {
-                emitSecureReportAnalytics("assistant_open_click", {
-                  button_label: "Ask about this review",
-                });
-                setIsOpen(true);
-              }}
+              onClick={() => openAssistantChat("sticky_button")}
               className="group flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full bg-blue-600 px-4 py-3.5 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:px-5 sm:py-4"
               aria-label="Open tracking review chat"
               aria-expanded={isOpen}

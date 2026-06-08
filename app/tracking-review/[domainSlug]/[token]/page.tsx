@@ -29,6 +29,9 @@ type LinkButtonProps = {
   variant?: "primary" | "secondary" | "dark";
   target?: string;
   rel?: string;
+  analyticsEvent?: string;
+  analyticsSection?: string;
+  analyticsLabel?: string;
 };
 
 type ManualAdsTransparency = {
@@ -163,7 +166,7 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
     provider: "youtube",
     videoId,
     watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&enablejsapi=1`,
+    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`,
     title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short browser-side evidence walkthrough"),
     description: cleanText(
       report.evidenceVideoDescription || report.evidence_video_description || raw.description,
@@ -829,6 +832,70 @@ function getBookingUrl(report: Record<string, any>, privateReportCopy: Record<st
   );
 }
 
+function buildReportRedirectHref({
+  token,
+  domainSlug,
+  kind,
+  destinationUrl,
+  label,
+  eventSection,
+  primaryActionLabel,
+}: {
+  token: string;
+  domainSlug: string;
+  kind: "booking" | "email" | "linkedin" | "cta";
+  destinationUrl: string;
+  label: string;
+  eventSection?: string;
+  primaryActionLabel?: string;
+}) {
+  const params = new URLSearchParams({
+    token,
+    domainSlug,
+    kind,
+    url: destinationUrl,
+    label,
+    eventSection: eventSection || kind,
+    primaryActionLabel: primaryActionLabel || label,
+    primaryPageLabel: "Secure tracking review",
+  });
+
+  return `/api/report-redirect?${params.toString()}`;
+}
+
+function ReportServedPixel({
+  token,
+  domainSlug,
+  primaryActionLabel,
+}: {
+  token: string;
+  domainSlug: string;
+  primaryActionLabel: string;
+}) {
+  const params = new URLSearchParams({
+    eventName: "secure_report_served",
+    token,
+    domainSlug,
+    eventSection: "server_pixel",
+    buttonLabel: "Report HTML served",
+    primaryActionLabel,
+    primaryPageLabel: "Secure tracking review",
+    transport: "server_pixel",
+  });
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/api/report-event?${params.toString()}`}
+      alt=""
+      aria-hidden="true"
+      width={1}
+      height={1}
+      style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+    />
+  );
+}
+
 function ReportViewBeacon({ token }: { token: string }) {
   const script = `
 (function () {
@@ -1148,6 +1215,9 @@ function LinkButton({
   variant = "primary",
   target,
   rel,
+  analyticsEvent,
+  analyticsSection,
+  analyticsLabel,
 }: LinkButtonProps) {
   const styles = {
     primary:
@@ -1331,6 +1401,9 @@ function ReportFooter() {
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <a
                 href={`mailto:${CONTACT_EMAIL}?subject=Tracking%20Review%20Request`}
+                data-trackflow-analytics-event="secure_report_email_click"
+                data-trackflow-analytics-section="footer"
+                data-trackflow-analytics-label="Email TrackFlow Pro"
                 className="inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
               >
                 Email TrackFlow Pro
@@ -1340,6 +1413,9 @@ function ReportFooter() {
                 href={LINKEDIN_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                data-trackflow-analytics-event="secure_report_linkedin_click"
+                data-trackflow-analytics-section="footer"
+                data-trackflow-analytics-label="LinkedIn Profile"
                 className="inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
               >
                 LinkedIn Profile
@@ -1572,13 +1648,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
   const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
-  const primaryReviewedPageText = reviewedPageItems.find((item) => /(?:primary|apply|contact|booking|book|checkout|form|lead)/i.test(item)) || reviewedPageItems[0] || "";
-  const primaryPageLabel =
-    cleanText(privateReportCopy.primaryPageLabel || privateReportCopy.primary_page_label || report.primaryPageLabel || report.primary_page_label, "") ||
-    cleanText(primaryReviewedPageText.split(":")[0], "");
-  const primaryPageUrl =
-    cleanText(privateReportCopy.primaryPageUrl || privateReportCopy.primary_page_url || report.primaryPageUrl || report.primary_page_url, "") ||
-    cleanText(primaryReviewedPageText.match(/https?:\/\/[^\s)]+/)?.[0], "");
   const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
     .join(" ")
     .toLowerCase()
@@ -1606,6 +1675,25 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const ctaHref = `/api/trackflow/reports/cta?token=${encodeURIComponent(token)}&target=${encodeURIComponent(ctaTarget)}`;
   const bookingUrl = getBookingUrl(report, privateReportCopy);
   const bookingHref = bookingUrl || ctaHref;
+  const bookingTrackingHref = buildReportRedirectHref({
+    token,
+    domainSlug,
+    kind: bookingUrl ? "booking" : "cta",
+    destinationUrl: bookingHref,
+    label: "Book a verification call",
+    eventSection: "booking",
+    primaryActionLabel: ctaText,
+  });
+  const emailReplyDestination = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`;
+  const emailReplyTrackingHref = buildReportRedirectHref({
+    token,
+    domainSlug,
+    kind: "email",
+    destinationUrl: emailReplyDestination,
+    label: "Reply by Email",
+    eventSection: "booking",
+    primaryActionLabel: ctaText,
+  });
   const bookingHeadline = cleanText(
     privateReportCopy.bookingHeadline || report.bookingHeadline || report.booking_headline,
     "Ready to verify this tracking setup live?",
@@ -1677,16 +1765,18 @@ export default async function ReportPage({ params }: ReportPageProps) {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <ReportViewBeacon token={token} />
-      <PdfDownloadExperienceScript />
-      <AssistantVisibilityScript />
+      <ReportServedPixel token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
       <SecureReportAnalytics
         token={token}
         domainSlug={domainSlug}
-        primaryActionLabel={primaryConversionFocus}
-        primaryPageLabel={primaryPageLabel}
-        primaryPageUrl={primaryPageUrl}
-        videoId={evidenceVideo?.videoId || ""}
+        companyName={companyName}
+        headline={headline}
+        primaryActionLabel={ctaText}
+        primaryPageLabel="Secure tracking review"
+        evidenceVideoId={evidenceVideo?.videoId || ""}
       />
+      <PdfDownloadExperienceScript />
+      <AssistantVisibilityScript />
       <ReportNavbar />
 
       <section data-trackflow-hero className="relative overflow-hidden border-b border-slate-200 bg-white pt-20 sm:pt-24">
@@ -1725,25 +1815,56 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
 
             <div className="mt-6 grid gap-3 sm:mt-7 sm:flex sm:flex-wrap">
-              <LinkButton href="#findings" variant="dark">
+              <LinkButton
+                href="#findings"
+                variant="dark"
+                analyticsEvent="secure_report_findings_click"
+                analyticsSection="hero"
+                analyticsLabel="View findings"
+              >
                 View findings
               </LinkButton>
 
-              <LinkButton href="#ask-this-review" variant="primary">
+              <LinkButton
+                href="#ask-this-review"
+                variant="primary"
+                analyticsEvent="secure_report_assistant_open"
+                analyticsSection="hero"
+                analyticsLabel="Ask the assistant"
+              >
                 Ask the assistant
               </LinkButton>
 
-              <LinkButton href="#book-verification" variant="secondary">
+              <LinkButton
+                href="#book-verification"
+                variant="secondary"
+                analyticsEvent="secure_report_booking_click"
+                analyticsSection="hero"
+                analyticsLabel="Book verification"
+              >
                 Book verification
               </LinkButton>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
-              <a href="#pdf-report" className="rounded-full border border-slate-200 bg-white px-4 py-2 transition hover:border-blue-200 hover:text-blue-700">
+              <a
+                href="#pdf-report"
+                data-trackflow-analytics-event="secure_report_pdf_anchor_click"
+                data-trackflow-analytics-section="hero"
+                data-trackflow-analytics-label="Full PDF report available"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 transition hover:border-blue-200 hover:text-blue-700"
+              >
                 Full PDF report available
               </a>
               {evidenceVideo ? (
-                <a href="#evidence-video" className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-blue-700 transition hover:border-blue-200 hover:bg-white">
+                <a
+                  href="#evidence-video"
+                  data-trackflow-analytics-event="secure_report_evidence_video_anchor_click"
+                  data-trackflow-analytics-section="hero"
+                  data-trackflow-analytics-label="Short evidence video available"
+                  data-trackflow-video-id={evidenceVideo.videoId}
+                  className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-blue-700 transition hover:border-blue-200 hover:bg-white"
+                >
                   Short evidence video available
                 </a>
               ) : null}
@@ -1849,15 +1970,20 @@ export default async function ReportPage({ params }: ReportPageProps) {
       </section>
 
       {evidenceVideo ? (
-        <section id="evidence-video" data-secure-report-visible-section="evidence_video" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8">
+        <section
+          id="evidence-video"
+          data-trackflow-observe-event="secure_report_evidence_video_visible"
+          data-trackflow-analytics-section="evidence_video"
+          data-trackflow-analytics-label="Evidence video visible"
+          data-trackflow-video-id={evidenceVideo.videoId}
+          className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8"
+        >
           <div className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10">
             <div className="grid items-start gap-0 lg:grid-cols-[1.18fr_0.82fr]">
               <div className="bg-slate-950 p-2 sm:p-4 lg:self-start lg:p-5">
                 <div className="relative aspect-video w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20">
                   <iframe
-                    id="trackflow-evidence-video-player"
-                    data-trackflow-evidence-video
-                    data-video-id={evidenceVideo.videoId}
+                    data-trackflow-youtube-iframe="true"
                     title={evidenceVideo.title}
                     src={evidenceVideo.embedUrl}
                     loading="lazy"
@@ -1976,7 +2102,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </SectionCard>
 
-          <section id="pdf-report" data-secure-report-visible-section="pdf_preview" className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
+          <section
+            id="pdf-report"
+            data-trackflow-observe-event="secure_report_pdf_preview_visible"
+            data-trackflow-analytics-section="pdf"
+            data-trackflow-analytics-label="PDF preview visible"
+            className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5"
+          >
             <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -2029,6 +2161,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     href={previewHref}
                     target="_blank"
                     rel="noopener noreferrer"
+                    data-trackflow-analytics-event="secure_report_pdf_open_click"
+                    data-trackflow-analytics-section="pdf"
+                    data-trackflow-analytics-label="Open full screen"
                     className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-blue-600"
                   >
                     Open full screen
@@ -2043,6 +2178,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </div>
 
                 <iframe
+                  data-trackflow-pdf-preview="true"
                   title="TrackFlow Pro audit PDF preview"
                   src={previewHref}
                   loading="lazy"
@@ -2069,7 +2205,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <LinkButton href={previewHref} variant="dark" target="_blank" rel="noopener noreferrer">
+                <LinkButton
+                  href={previewHref}
+                  variant="dark"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  analyticsEvent="secure_report_pdf_open_click"
+                  analyticsSection="pdf"
+                  analyticsLabel="Open PDF"
+                >
                   Open PDF
                 </LinkButton>
 
@@ -2077,6 +2221,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   href={downloadHref}
                   download
                   data-trackflow-pdf-download="true"
+                  data-trackflow-analytics-event="secure_report_pdf_download_click"
+                  data-trackflow-analytics-section="pdf"
+                  data-trackflow-analytics-label="Download PDF"
                   data-download-state="idle"
                   data-default-label="Download PDF"
                   className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/15 sm:w-auto"
@@ -2156,12 +2303,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
               <div className="mt-5 flex flex-col gap-3">
                 <a
-                  href={bookingHref}
-                  data-secure-report-event="booking_click"
-                  data-secure-report-section="booking_cta"
-                  data-secure-report-label="Book a verification call"
+                  href={bookingTrackingHref}
                   target={bookingUrl ? "_blank" : undefined}
                   rel={bookingUrl ? "noopener noreferrer" : undefined}
+                  data-trackflow-analytics-event="secure_report_booking_click"
+                  data-trackflow-analytics-section="booking"
+                  data-trackflow-analytics-label="Book a verification call"
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
                 >
                   Book a verification call
@@ -2169,16 +2316,19 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
                 <a
                   href="#ask-this-review"
+                  data-trackflow-analytics-event="secure_report_assistant_open"
+                  data-trackflow-analytics-section="booking"
+                  data-trackflow-analytics-label="Ask the assistant first"
                   className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
                 >
                   Ask the assistant first
                 </a>
 
                 <a
-                  href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`}
-                  data-secure-report-event="email_click"
-                  data-secure-report-section="booking_cta"
-                  data-secure-report-label="Reply by Email"
+                  href={emailReplyTrackingHref}
+                  data-trackflow-analytics-event="secure_report_email_click"
+                  data-trackflow-analytics-section="booking"
+                  data-trackflow-analytics-label="Reply by Email"
                   className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
                 >
                   Reply by Email
