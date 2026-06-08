@@ -1474,6 +1474,26 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
   const evidenceVideo = getEvidenceVideoDisplay(report);
+  const heroHeadline = companyName === "this website" ? "Private tracking review" : `Private tracking review for ${companyName}`;
+  const heroContextLine = primaryConversionFocus
+    ? `${primaryConversionFocus} reviewed on the selected conversion path.`
+    : pageSubheadline;
+  const evidenceSignalBadges = cleanList(
+    [
+      ...trackingSignalItems,
+      ...whatChecked.filter((item) => /(?:tag found|request observed|pixel found|tracking-like|needs|not confirmed|conversion id)/i.test(item)),
+    ],
+    [],
+    6,
+  );
+  const reviewedPageBadges = cleanList(
+    reviewedPageItems.length
+      ? reviewedPageItems
+      : whatChecked.filter((item) => /^.+:\s*https?:\/\//i.test(item)),
+    [],
+    3,
+  );
+  const verificationPreviewItems = recommendations.slice(0, 3);
   const heroSummaryCards = [
     {
       label: "Review focus",
@@ -1485,7 +1505,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     },
     {
       label: "Best next action",
-      value: "Ask the assistant, then book verification",
+      value: "Controlled test + account check",
     },
   ];
 
@@ -1525,12 +1545,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
 
             <h1 className="mt-6 max-w-4xl break-words text-4xl font-black leading-[0.98] tracking-[-0.05em] text-slate-950 sm:text-5xl lg:text-6xl">
-              {headline}
+              {heroHeadline}
             </h1>
 
             <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-600 sm:mt-6 sm:text-lg sm:leading-8">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
-              {domain ? <span> · {domain}</span> : null}. {pageSubheadline}
+              {domain ? <span> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
             </p>
 
             <div className="mt-7 grid gap-3 sm:grid-cols-3">
@@ -1553,7 +1573,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </LinkButton>
 
               <LinkButton href="#ask-this-review" variant="primary">
-                Ask about this review
+                Ask the assistant about this review
               </LinkButton>
 
               <LinkButton href="#book-verification" variant="secondary">
@@ -1601,7 +1621,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/10 lg:p-6">
             <div className="rounded-[1.5rem] border border-slate-200 bg-slate-950 p-6 text-white">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
-                Questions this review can answer
+                Private review snapshot
               </p>
 
               <p className="mt-4 text-2xl font-black tracking-[-0.04em]">
@@ -1623,6 +1643,21 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 ))}
               </div>
 
+              {verificationPreviewItems.length ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">
+                    What usually happens next
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {verificationPreviewItems.map((item, index) => (
+                      <p key={`${item}-${index}`} className="text-xs font-bold leading-5 text-slate-300">
+                        {index + 1}. {item}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <a
                 href="#ask-this-review"
                 className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-400/30"
@@ -1636,7 +1671,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 Evidence-safe assistant
               </p>
               <p className="mt-3 text-sm font-bold leading-7 text-blue-950">
-                The assistant explains this review using the saved report context. Final confirmation still requires approved access to GA4, Google Ads, GTM, CRM, or server-side tools.
+                The assistant explains the saved review context in plain English. Final confirmation still requires approved access to the actual tracking accounts and lead records.
               </p>
             </div>
           </div>
@@ -1655,6 +1690,79 @@ export default async function ReportPage({ params }: ReportPageProps) {
           ))}
         </div>
       </section>
+
+      {evidenceVideo ? (
+        <section id="evidence-video" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 lg:px-8">
+          <div className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10">
+            <div className="grid gap-0 lg:grid-cols-[1.25fr_0.75fr]">
+              <div className="bg-slate-950 p-3 sm:p-4 lg:p-5">
+                <div className="relative aspect-video w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20">
+                  <iframe
+                    title={evidenceVideo.title}
+                    src={evidenceVideo.embedUrl}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    className="absolute inset-0 h-full w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 lg:border-l lg:border-t-0 lg:p-8">
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
+                  Browser-side evidence walkthrough
+                </p>
+                <h2 className="mt-4 text-3xl font-black tracking-[-0.05em] text-slate-950 sm:text-4xl">
+                  Watch what was reviewed before the PDF.
+                </h2>
+                <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">
+                  {evidenceVideo.description} This helps the visitor see the reviewed page context before asking questions or booking a verification call.
+                </p>
+
+                {reviewedPageBadges.length ? (
+                  <div className="mt-6">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                      Reviewed page context
+                    </p>
+                    <div className="mt-3 grid gap-2">
+                      {reviewedPageBadges.map((item) => (
+                        <div key={item} className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-xs font-black leading-5 text-slate-700 shadow-sm">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {evidenceSignalBadges.length ? (
+                  <div className="mt-6">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                      Visible signals in this review
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {evidenceSignalBadges.map((item) => (
+                        <span key={item} className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <LinkButton href="#ask-this-review" variant="primary">
+                    Ask about this video
+                  </LinkButton>
+                  <LinkButton href="#book-verification" variant="secondary">
+                    Verify the setup
+                  </LinkButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section
         id="findings"
@@ -1699,45 +1807,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </SectionCard>
 
 
-
-          {evidenceVideo ? (
-            <section
-              id="evidence-video"
-              className="scroll-mt-24 overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-xl shadow-blue-950/5 sm:rounded-[2rem]"
-            >
-              <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-4 sm:p-6">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 sm:text-[11px] sm:tracking-[0.2em]">
-                  Short evidence video
-                </p>
-                <h2 className="mt-2 text-xl font-black tracking-[-0.04em] text-slate-950 sm:mt-3 sm:text-2xl">
-                  Watch the browser-side walkthrough
-                </h2>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 sm:mt-3 sm:leading-7">
-                  {evidenceVideo.description}
-                </p>
-              </div>
-
-              <div className="bg-slate-100 p-2 sm:p-4">
-                <div className="relative aspect-video w-full overflow-hidden rounded-[1rem] border border-slate-200 bg-slate-950 shadow-inner sm:rounded-[1.25rem]">
-                  <iframe
-                    title={evidenceVideo.title}
-                    src={evidenceVideo.embedUrl}
-                    loading="lazy"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    className="absolute inset-0 h-full w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="border-t border-slate-200 bg-white p-4 sm:p-5">
-                <p className="text-xs font-semibold leading-6 text-slate-500">
-                  Video is optional evidence support. The PDF report and account-level verification remain the main source of truth.
-                </p>
-              </div>
-            </section>
-          ) : null}
 
           <SectionCard label={howToReadTitle}>
             <div className="space-y-3 text-sm font-semibold leading-7 text-slate-600">
@@ -1919,7 +1988,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   Best after reading the review
                 </p>
                 <p className="mt-3 text-sm font-semibold leading-7 text-slate-300">
-                  Use the assistant first if you want a plain-English explanation. Then book a call when you are ready to verify the conversion path inside the actual tools.
+                  Use the assistant first for a plain-English explanation. Then book a call when you are ready to confirm whether this conversion action is recorded correctly inside the approved tools.
                 </p>
               </div>
 
