@@ -876,17 +876,26 @@ function AssistantVisibilityScript() {
 [data-trackflow-sticky-assistant-shell] {
   opacity: 0;
   pointer-events: none;
+  transition: opacity 220ms ease;
+}
+[data-trackflow-sticky-assistant-shell] > div.fixed {
   transform: translateY(18px) scale(0.98);
-  transition: opacity 220ms ease, transform 220ms ease;
+  transform-origin: bottom right;
+  transition: transform 220ms ease;
 }
 html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-shell] {
   opacity: 1;
   pointer-events: auto;
+}
+html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-shell] > div.fixed {
   transform: translateY(0) scale(1);
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-trackflow-sticky-assistant-shell] {
+  [data-trackflow-sticky-assistant-shell],
+  [data-trackflow-sticky-assistant-shell] > div.fixed {
     transition: none;
+  }
+  [data-trackflow-sticky-assistant-shell] > div.fixed {
     transform: none;
   }
 }
@@ -900,28 +909,39 @@ html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-s
 
     var ticking = false;
 
-    function getHeroThreshold() {
-      var hero = document.querySelector('[data-trackflow-hero]');
+    function getAssistantScrollThreshold() {
       var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-      if (!hero || !hero.getBoundingClientRect) return 520;
-      var rect = hero.getBoundingClientRect();
-      return Math.max(420, rect.bottom + scrollY - 80);
+      var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
+      var hero = document.querySelector('[data-trackflow-hero]');
+      var heroThreshold = viewportHeight * 0.55;
+
+      if (hero && hero.getBoundingClientRect) {
+        var rect = hero.getBoundingClientRect();
+        var heroBottom = rect.bottom + scrollY;
+        heroThreshold = Math.min(heroBottom - 140, viewportHeight * 0.72);
+      }
+
+      return Math.max(260, heroThreshold);
+    }
+
+    function showAssistantButton() {
+      document.documentElement.setAttribute('data-trackflow-assistant-visible', 'true');
+    }
+
+    function hideAssistantButton() {
+      document.documentElement.removeAttribute('data-trackflow-assistant-visible');
     }
 
     function updateAssistantVisibility() {
       ticking = false;
       var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-      var isMobile = false;
-      try {
-        isMobile = window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
-      } catch (error) {}
-      var threshold = isMobile ? 360 : getHeroThreshold();
+      var threshold = getAssistantScrollThreshold();
       var show = scrollY > threshold;
 
       if (show) {
-        document.documentElement.setAttribute('data-trackflow-assistant-visible', 'true');
+        showAssistantButton();
       } else {
-        document.documentElement.removeAttribute('data-trackflow-assistant-visible');
+        hideAssistantButton();
       }
     }
 
@@ -930,6 +950,23 @@ html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-s
       ticking = true;
       window.requestAnimationFrame(updateAssistantVisibility);
     }
+
+    document.addEventListener('click', function (event) {
+      try {
+        var target = event.target && event.target.closest ? event.target.closest('a[href="#ask-this-review"]') : null;
+        if (!target) return;
+
+        if (event.preventDefault) event.preventDefault();
+        showAssistantButton();
+
+        window.setTimeout(function () {
+          try {
+            var openButton = document.querySelector('[data-trackflow-sticky-assistant-shell] button[aria-label="Open tracking review chat"]');
+            if (openButton && typeof openButton.click === 'function') openButton.click();
+          } catch (clickError) {}
+        }, 80);
+      } catch (clickHandlerError) {}
+    });
 
     window.addEventListener('scroll', requestUpdate, { passive: true });
     window.addEventListener('resize', requestUpdate);
@@ -1990,7 +2027,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   title="TrackFlow Pro audit PDF preview"
                   src={previewHref}
                   loading="lazy"
-                  className="hidden h-[640px] w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[720px]"
+                  className="hidden h-[430px] w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[500px] xl:h-[540px]"
                 />
               </div>
             </div>
