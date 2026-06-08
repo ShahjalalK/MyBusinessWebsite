@@ -1533,6 +1533,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const manualAds = getManualAdsTransparency(report);
   const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
+  const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
   const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
     .join(" ")
     .toLowerCase()
@@ -1573,7 +1574,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
     formatDate(report.createdAt || report.registeredAt || report.uploadedAt) ||
     formatDate(new Date().toISOString());
 
-  const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
   const evidenceVideo = getEvidenceVideoDisplay(report);
