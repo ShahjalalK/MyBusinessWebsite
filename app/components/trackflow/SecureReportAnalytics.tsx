@@ -70,8 +70,11 @@ type PrivacyNavigator = Navigator & {
 };
 
 const ANONYMOUS_ID_KEY = "tfp_first_party_analytics_id";
+const LEGACY_ANONYMOUS_ID_KEY = "tfp_anon_id";
 const ANONYMOUS_ID_COOKIE = "tfp_aid";
 const REPORT_SESSION_PREFIX = "tfp_report_session_";
+const GA_SESSION_KEY = "tfp_ga_session";
+const GA_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const CONSENT_SKIP_KEY = "tfp_analytics_disabled";
 const EVENT_SESSION_PREFIX = "tfp_event_once_";
 const DEFAULT_ENDPOINT = "/api/report-event";
@@ -79,16 +82,20 @@ const FALLBACK_ENDPOINT = "/api/server-track";
 const YOUTUBE_PROGRESS_MARKS = [25, 50, 75] as const;
 
 function cleanText(value: unknown, fallback = "") {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  const text = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   return text || fallback;
 }
 
 function sanitizeEventName(value: string) {
-  return cleanText(value, "secure_report_event")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 80) || "secure_report_event";
+  return (
+    cleanText(value, "secure_report_event")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "secure_report_event"
+  );
 }
 
 function sanitizeParam(value: unknown, max = 120) {
@@ -98,9 +105,11 @@ function sanitizeParam(value: unknown, max = 120) {
 }
 
 function normalizeToken(value: string) {
-  return cleanText(value, "unknown")
-    .replace(/[^a-zA-Z0-9_-]/g, "")
-    .slice(0, 96) || "unknown";
+  return (
+    cleanText(value, "unknown")
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 96) || "unknown"
+  );
 }
 
 function simpleHash(input: string) {
@@ -116,7 +125,9 @@ function simpleHash(input: string) {
 }
 
 function shortHash(input: string, length = 12) {
-  return simpleHash(input).padStart(8, "0").slice(0, Math.max(8, Math.min(16, length)));
+  return simpleHash(input)
+    .padStart(8, "0")
+    .slice(0, Math.max(8, Math.min(16, length)));
 }
 
 function visitorLabelFromAnonymousId(anonymousId: string) {
@@ -125,7 +136,10 @@ function visitorLabelFromAnonymousId(anonymousId: string) {
 
 function reportVisitorLabel(reportId: string, anonymousId: string) {
   if (!reportId || !anonymousId) return "";
-  return `${reportId}_v_${shortHash(`${reportId}:${anonymousId}`, 12)}`.slice(0, 80);
+  return `${reportId}_v_${shortHash(`${reportId}:${anonymousId}`, 12)}`.slice(
+    0,
+    80,
+  );
 }
 
 function getReportSessionId(token: string) {
@@ -157,46 +171,119 @@ function getEventJourneyMeta(eventName: string): EventJourneyMeta {
   const name = sanitizeEventName(eventName);
 
   if (name.includes("booking")) {
-    return { visitStage: "booking", journeyStep: "08_booking_clicked", intentLevel: "hot", intentScore: 95, isCoreEvent: true };
+    return {
+      visitStage: "booking",
+      journeyStep: "08_booking_clicked",
+      intentLevel: "hot",
+      intentScore: 95,
+      isCoreEvent: true,
+    };
   }
 
   if (name.includes("email") || name.includes("linkedin")) {
-    return { visitStage: "contact", journeyStep: "07_contact_clicked", intentLevel: "high", intentScore: 85, isCoreEvent: true };
+    return {
+      visitStage: "contact",
+      journeyStep: "07_contact_clicked",
+      intentLevel: "high",
+      intentScore: 85,
+      isCoreEvent: true,
+    };
   }
 
   if (name.includes("assistant_message_sent")) {
-    return { visitStage: "chat", journeyStep: "06_chat_message_sent", intentLevel: "high", intentScore: 80, isCoreEvent: true };
+    return {
+      visitStage: "chat",
+      journeyStep: "06_chat_message_sent",
+      intentLevel: "high",
+      intentScore: 80,
+      isCoreEvent: true,
+    };
   }
 
-  if (name.includes("assistant_question_click") || name.includes("assistant_open")) {
-    return { visitStage: "chat", journeyStep: "05_chat_engaged", intentLevel: "medium", intentScore: 55, isCoreEvent: false };
+  if (
+    name.includes("assistant_question_click") ||
+    name.includes("assistant_open")
+  ) {
+    return {
+      visitStage: "chat",
+      journeyStep: "05_chat_engaged",
+      intentLevel: "medium",
+      intentScore: 55,
+      isCoreEvent: false,
+    };
   }
 
   if (name.includes("pdf_download")) {
-    return { visitStage: "pdf", journeyStep: "04_pdf_downloaded", intentLevel: "high", intentScore: 75, isCoreEvent: true };
+    return {
+      visitStage: "pdf",
+      journeyStep: "04_pdf_downloaded",
+      intentLevel: "high",
+      intentScore: 75,
+      isCoreEvent: true,
+    };
   }
 
   if (name.includes("pdf_open") || name.includes("pdf_preview")) {
-    return { visitStage: "pdf", journeyStep: "03_pdf_viewed", intentLevel: "medium", intentScore: 45, isCoreEvent: true };
+    return {
+      visitStage: "pdf",
+      journeyStep: "03_pdf_viewed",
+      intentLevel: "medium",
+      intentScore: 45,
+      isCoreEvent: true,
+    };
   }
 
   if (name.includes("video_progress_75") || name.includes("video_complete")) {
-    return { visitStage: "video", journeyStep: "04_video_deep_watch", intentLevel: "high", intentScore: 70, isCoreEvent: false };
+    return {
+      visitStage: "video",
+      journeyStep: "04_video_deep_watch",
+      intentLevel: "high",
+      intentScore: 70,
+      isCoreEvent: false,
+    };
   }
 
-  if (name.includes("video_start") || name.includes("video_progress") || name.includes("video_visible")) {
-    return { visitStage: "video", journeyStep: "03_video_engaged", intentLevel: "medium", intentScore: 50, isCoreEvent: false };
+  if (
+    name.includes("video_start") ||
+    name.includes("video_progress") ||
+    name.includes("video_visible")
+  ) {
+    return {
+      visitStage: "video",
+      journeyStep: "03_video_engaged",
+      intentLevel: "medium",
+      intentScore: 50,
+      isCoreEvent: false,
+    };
   }
 
   if (name.includes("scroll_90")) {
-    return { visitStage: "reading", journeyStep: "03_deep_scroll", intentLevel: "medium", intentScore: 40, isCoreEvent: false };
+    return {
+      visitStage: "reading",
+      journeyStep: "03_deep_scroll",
+      intentLevel: "medium",
+      intentScore: 40,
+      isCoreEvent: false,
+    };
   }
 
   if (name.includes("scroll_50")) {
-    return { visitStage: "reading", journeyStep: "02_mid_scroll", intentLevel: "low", intentScore: 25, isCoreEvent: false };
+    return {
+      visitStage: "reading",
+      journeyStep: "02_mid_scroll",
+      intentLevel: "low",
+      intentScore: 25,
+      isCoreEvent: false,
+    };
   }
 
-  return { visitStage: "view", journeyStep: "01_report_viewed", intentLevel: "low", intentScore: 10, isCoreEvent: true };
+  return {
+    visitStage: "view",
+    journeyStep: "01_report_viewed",
+    intentLevel: "low",
+    intentScore: 10,
+    isCoreEvent: true,
+  };
 }
 
 async function hashReportId(token: string) {
@@ -220,7 +307,8 @@ async function hashReportId(token: string) {
 }
 
 function createUuidLike() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto)
+    return crypto.randomUUID();
 
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
     const random = Math.floor(Math.random() * 16);
@@ -237,7 +325,8 @@ function readCookie(name: string) {
 
   for (const part of parts) {
     const item = part.trim();
-    if (item.startsWith(prefix)) return decodeURIComponent(item.slice(prefix.length));
+    if (item.startsWith(prefix))
+      return decodeURIComponent(item.slice(prefix.length));
   }
 
   return "";
@@ -266,36 +355,106 @@ function hasPrivacyOptOut() {
   }
 }
 
+function cleanClientId(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\u0000-\u001F\u007F\s]+/g, "")
+    .slice(0, 200);
+}
+
+function readLocalStorage(key: string) {
+  if (typeof window === "undefined") return "";
+
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLocalStorage(key: string, value: string) {
+  if (typeof window === "undefined" || !value) return;
+
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage can be blocked.
+  }
+}
+
+function persistAnonymousId(value: string) {
+  const id = cleanClientId(value);
+  if (!id) return "";
+
+  writeLocalStorage(ANONYMOUS_ID_KEY, id);
+  writeLocalStorage(LEGACY_ANONYMOUS_ID_KEY, id);
+  writeCookie(ANONYMOUS_ID_COOKIE, id);
+
+  return id;
+}
+
+function parseStoredSession(
+  value: string,
+): { id?: string; updatedAt?: number } | null {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as { id?: string; updatedAt?: number };
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function getOrCreateGaSessionId() {
+  if (typeof window === "undefined" || hasPrivacyOptOut()) return "";
+
+  const now = Date.now();
+
+  try {
+    const stored = parseStoredSession(
+      window.sessionStorage.getItem(GA_SESSION_KEY) || "",
+    );
+    const existingId = cleanClientId(stored?.id || "");
+    const updatedAt = Number(stored?.updatedAt || 0);
+
+    if (existingId && now - updatedAt < GA_SESSION_TIMEOUT_MS) {
+      window.sessionStorage.setItem(
+        GA_SESSION_KEY,
+        JSON.stringify({ id: existingId, updatedAt: now }),
+      );
+      return existingId;
+    }
+
+    const nextId = String(Math.floor(now / 1000));
+    window.sessionStorage.setItem(
+      GA_SESSION_KEY,
+      JSON.stringify({ id: nextId, updatedAt: now }),
+    );
+    return nextId;
+  } catch {
+    return "";
+  }
+}
+
 function getAnonymousId() {
   if (typeof window === "undefined") return "";
   if (hasPrivacyOptOut()) return "";
 
-  try {
-    const existing = window.localStorage.getItem(ANONYMOUS_ID_KEY);
-    if (existing) {
-      writeCookie(ANONYMOUS_ID_COOKIE, existing);
-      return existing;
-    }
-  } catch {
-    // Storage can be blocked.
-  }
+  const existing = cleanClientId(
+    readLocalStorage(ANONYMOUS_ID_KEY) ||
+      readLocalStorage(LEGACY_ANONYMOUS_ID_KEY) ||
+      readCookie(ANONYMOUS_ID_COOKIE),
+  );
 
-  const cookieValue = readCookie(ANONYMOUS_ID_COOKIE);
-  if (cookieValue) return cookieValue;
+  if (existing) return persistAnonymousId(existing);
 
-  const next = createUuidLike();
-  try {
-    window.localStorage.setItem(ANONYMOUS_ID_KEY, next);
-  } catch {
-    // Cookie fallback below.
-  }
-  writeCookie(ANONYMOUS_ID_COOKIE, next);
-
-  return next;
+  return persistAnonymousId(createUuidLike());
 }
 
 function getDeviceType() {
-  if (typeof navigator === "undefined" || typeof window === "undefined") return "unknown";
+  if (typeof navigator === "undefined" || typeof window === "undefined")
+    return "unknown";
 
   const ua = navigator.userAgent || "";
   const width = window.innerWidth || 0;
@@ -353,7 +512,10 @@ async function postWithBeacon(url: string, payload: Record<string, unknown>) {
 
   try {
     if (navigator.sendBeacon) {
-      const sent = navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+      const sent = navigator.sendBeacon(
+        url,
+        new Blob([body], { type: "application/json" }),
+      );
       if (sent) return { ok: true, transport: "beacon" };
     }
   } catch {
@@ -377,11 +539,14 @@ export default function SecureReportAnalytics({
   const reportIdRef = useRef("");
   const anonymousIdRef = useRef("");
   const reportSessionIdRef = useRef("");
+  const gaSessionIdRef = useRef("");
   const sentEventIdsRef = useRef(new Set<string>());
   const youtubeProgressRef = useRef(new Set<number>());
   const endpointList = useMemo(() => {
     const cleanEndpoint = endpoint || DEFAULT_ENDPOINT;
-    return cleanEndpoint === FALLBACK_ENDPOINT ? [cleanEndpoint] : [cleanEndpoint, FALLBACK_ENDPOINT];
+    return cleanEndpoint === FALLBACK_ENDPOINT
+      ? [cleanEndpoint]
+      : [cleanEndpoint, FALLBACK_ENDPOINT];
   }, [endpoint]);
 
   useEffect(() => {
@@ -402,6 +567,7 @@ export default function SecureReportAnalytics({
     if (typeof window === "undefined") return;
     anonymousIdRef.current = getAnonymousId();
     reportSessionIdRef.current = getReportSessionId(token);
+    gaSessionIdRef.current = getOrCreateGaSessionId();
   }, [token]);
 
   const sendEvent = useMemo(() => {
@@ -428,7 +594,10 @@ export default function SecureReportAnalytics({
       const url = new URL(window.location.href);
       const journeyMeta = getEventJourneyMeta(name);
       const visitorId = visitorLabelFromAnonymousId(anonymousIdRef.current);
-      const reportVisitorId = reportVisitorLabel(reportIdRef.current, anonymousIdRef.current);
+      const reportVisitorId = reportVisitorLabel(
+        reportIdRef.current,
+        anonymousIdRef.current,
+      );
 
       const payload = {
         eventName: name,
@@ -451,14 +620,20 @@ export default function SecureReportAnalytics({
 
         gaClientId: getGaClientId(),
         anonymousId: anonymousIdRef.current,
+        gaSessionId: gaSessionIdRef.current || getOrCreateGaSessionId(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
         language: navigator.language || "",
-        languages: Array.isArray(navigator.languages) ? navigator.languages.join(",") : "",
+        languages: Array.isArray(navigator.languages)
+          ? navigator.languages.join(",")
+          : "",
         platform: navigator.platform || "",
         viewport: `${window.innerWidth || 0}x${window.innerHeight || 0}`,
         screen: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
         devicePixelRatio: String(window.devicePixelRatio || ""),
-        colorScheme: window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light",
+        colorScheme: window.matchMedia?.("(prefers-color-scheme: dark)")
+          ?.matches
+          ? "dark"
+          : "light",
         cookieEnabled: String(navigator.cookieEnabled),
         doNotTrack: String(navigator.doNotTrack || ""),
 
@@ -470,8 +645,10 @@ export default function SecureReportAnalytics({
         eventSection: sanitizeParam(eventSection, 120),
         buttonLabel: sanitizeParam(buttonLabel, 160),
         videoId: sanitizeParam(videoId || evidenceVideoId, 64),
-        videoProgress: typeof videoProgress === "number" ? videoProgress : undefined,
-        scrollPercent: typeof scrollPercent === "number" ? scrollPercent : undefined,
+        videoProgress:
+          typeof videoProgress === "number" ? videoProgress : undefined,
+        scrollPercent:
+          typeof scrollPercent === "number" ? scrollPercent : undefined,
         deviceType: getDeviceType(),
         visitorId,
         reportVisitorId,
@@ -498,7 +675,15 @@ export default function SecureReportAnalytics({
         }
       }
     };
-  }, [companyName, domainSlug, endpointList, evidenceVideoId, headline, primaryActionLabel, primaryPageLabel]);
+  }, [
+    companyName,
+    domainSlug,
+    endpointList,
+    evidenceVideoId,
+    headline,
+    primaryActionLabel,
+    primaryPageLabel,
+  ]);
 
   useEffect(() => {
     if (!reportId) return;
@@ -518,16 +703,21 @@ export default function SecureReportAnalytics({
     let ticking = false;
 
     function calculateScrollPercent() {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+      const scrollTop =
+        window.scrollY || document.documentElement.scrollTop || 0;
       const documentHeight = Math.max(
         document.body.scrollHeight,
         document.documentElement.scrollHeight,
         document.body.offsetHeight,
         document.documentElement.offsetHeight,
       );
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+      const viewportHeight =
+        window.innerHeight || document.documentElement.clientHeight || 1;
       const maxScroll = Math.max(1, documentHeight - viewportHeight);
-      return Math.min(100, Math.max(0, Math.round((scrollTop / maxScroll) * 100)));
+      return Math.min(
+        100,
+        Math.max(0, Math.round((scrollTop / maxScroll) * 100)),
+      );
     }
 
     function checkScroll() {
@@ -580,8 +770,10 @@ export default function SecureReportAnalytics({
 
           void sendEvent({
             eventName,
-            eventSection: element.dataset.trackflowAnalyticsSection || "section_visible",
-            buttonLabel: element.dataset.trackflowAnalyticsLabel || "Section visible",
+            eventSection:
+              element.dataset.trackflowAnalyticsSection || "section_visible",
+            buttonLabel:
+              element.dataset.trackflowAnalyticsLabel || "Section visible",
             videoId: element.dataset.trackflowVideoId || evidenceVideoId,
           });
 
@@ -591,9 +783,11 @@ export default function SecureReportAnalytics({
       { threshold: [0.35, 0.6] },
     );
 
-    document.querySelectorAll<HTMLElement>("[data-trackflow-observe-event]").forEach((element) => {
-      observer.observe(element);
-    });
+    document
+      .querySelectorAll<HTMLElement>("[data-trackflow-observe-event]")
+      .forEach((element) => {
+        observer.observe(element);
+      });
 
     return () => observer.disconnect();
   }, [evidenceVideoId, reportId, sendEvent]);
@@ -605,15 +799,24 @@ export default function SecureReportAnalytics({
       const target = event.target;
       if (!(target instanceof Element)) return;
 
-      const element = target.closest<HTMLElement>("[data-trackflow-analytics-event]");
+      const element = target.closest<HTMLElement>(
+        "[data-trackflow-analytics-event]",
+      );
       if (!element) return;
 
-      const eventName = element.dataset.trackflowAnalyticsEvent || "secure_report_click";
+      const eventName =
+        element.dataset.trackflowAnalyticsEvent || "secure_report_click";
       const label =
         element.dataset.trackflowAnalyticsLabel ||
-        cleanText(element.textContent || element.getAttribute("aria-label") || "Click", "Click");
+        cleanText(
+          element.textContent || element.getAttribute("aria-label") || "Click",
+          "Click",
+        );
       const section = element.dataset.trackflowAnalyticsSection || "click";
-      const href = element instanceof HTMLAnchorElement ? element.href : element.getAttribute("href") || "";
+      const href =
+        element instanceof HTMLAnchorElement
+          ? element.href
+          : element.getAttribute("href") || "";
 
       void sendEvent({
         eventName,
@@ -632,29 +835,44 @@ export default function SecureReportAnalytics({
     if (!reportId) return;
 
     function onAssistantEvent(event: Event) {
-      const detail = (event as CustomEvent<Record<string, unknown>>).detail || {};
-      const eventName = sanitizeEventName(String(detail.eventName || "secure_report_assistant_event"));
+      const detail =
+        (event as CustomEvent<Record<string, unknown>>).detail || {};
+      const eventName = sanitizeEventName(
+        String(detail.eventName || "secure_report_assistant_event"),
+      );
 
       void sendEvent({
         eventName,
         eventSection: "assistant",
-        buttonLabel: sanitizeParam(detail.buttonLabel || detail.question || "Assistant interaction", 160),
+        buttonLabel: sanitizeParam(
+          detail.buttonLabel || detail.question || "Assistant interaction",
+          160,
+        ),
         extra: {
           question_key: sanitizeParam(detail.questionKey || "", 160),
           question_source: sanitizeParam(detail.questionSource || "", 80),
-          message_length: typeof detail.messageLength === "number" ? detail.messageLength : undefined,
+          message_length:
+            typeof detail.messageLength === "number"
+              ? detail.messageLength
+              : undefined,
         },
       });
     }
 
     window.addEventListener("trackflow:secure-report-event", onAssistantEvent);
-    return () => window.removeEventListener("trackflow:secure-report-event", onAssistantEvent);
+    return () =>
+      window.removeEventListener(
+        "trackflow:secure-report-event",
+        onAssistantEvent,
+      );
   }, [reportId, sendEvent]);
 
   useEffect(() => {
     if (!reportId || !evidenceVideoId) return;
 
-    const iframe = document.querySelector<HTMLIFrameElement>("[data-trackflow-youtube-iframe]");
+    const iframe = document.querySelector<HTMLIFrameElement>(
+      "[data-trackflow-youtube-iframe]",
+    );
     if (!iframe) return;
 
     // Keep a non-null local reference for callbacks below.
@@ -674,14 +892,20 @@ export default function SecureReportAnalytics({
     let intervalId = 0;
     let disposed = false;
 
-    function trackProgress(player?: { getDuration?: () => number; getCurrentTime?: () => number }) {
+    function trackProgress(player?: {
+      getDuration?: () => number;
+      getCurrentTime?: () => number;
+    }) {
       if (!player?.getDuration || !player?.getCurrentTime) return;
 
       const duration = Number(player.getDuration() || 0);
       const current = Number(player.getCurrentTime() || 0);
       if (!duration || !current) return;
 
-      const percent = Math.max(0, Math.min(100, Math.round((current / duration) * 100)));
+      const percent = Math.max(
+        0,
+        Math.min(100, Math.round((current / duration) * 100)),
+      );
       YOUTUBE_PROGRESS_MARKS.forEach((mark) => {
         if (percent >= mark && !youtubeProgressRef.current.has(mark)) {
           youtubeProgressRef.current.add(mark);
@@ -706,7 +930,9 @@ export default function SecureReportAnalytics({
             const states = win.YT?.PlayerState || {};
 
             if (state === states.PLAYING) {
-              if (!onePerSession(`${reportId}_video_start_${evidenceVideoId}`)) {
+              if (
+                !onePerSession(`${reportId}_video_start_${evidenceVideoId}`)
+              ) {
                 return;
               }
 
@@ -718,7 +944,10 @@ export default function SecureReportAnalytics({
               });
 
               window.clearInterval(intervalId);
-              intervalId = window.setInterval(() => trackProgress(event.target), 2500);
+              intervalId = window.setInterval(
+                () => trackProgress(event.target),
+                2500,
+              );
               return;
             }
 
@@ -748,7 +977,11 @@ export default function SecureReportAnalytics({
         initPlayer();
       };
 
-      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      if (
+        !document.querySelector(
+          'script[src="https://www.youtube.com/iframe_api"]',
+        )
+      ) {
         const script = document.createElement("script");
         script.src = "https://www.youtube.com/iframe_api";
         script.async = true;

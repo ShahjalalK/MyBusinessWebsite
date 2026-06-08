@@ -28,6 +28,7 @@ const serverTrackSchema = z.object({
 
   gaClientId: z.string().trim().max(200).optional().default(""),
   anonymousId: z.string().trim().max(200).optional().default(""),
+  gaSessionId: z.union([z.string(), z.number()]).optional().default(""),
   fbp: z.string().trim().max(300).optional().default(""),
   fbc: z.string().trim().max(500).optional().default(""),
 
@@ -91,16 +92,20 @@ function firstIp(value: string) {
 }
 
 function cleanText(value: unknown, fallback = "") {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  const text = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   return text || fallback;
 }
 
 function sanitizeEventName(value: string) {
-  return cleanText(value, "secure_report_event")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 80) || "secure_report_event";
+  return (
+    cleanText(value, "secure_report_event")
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 80) || "secure_report_event"
+  );
 }
 
 function cleanParams<T extends Record<string, unknown>>(params: T) {
@@ -114,8 +119,32 @@ function cleanParams<T extends Record<string, unknown>>(params: T) {
   return output;
 }
 
+function cleanClientId(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\u0000-\u001F\u007F\s]+/g, "")
+    .slice(0, 200);
+}
+
+function resolveGa4ClientId(payload: z.infer<typeof serverTrackSchema>) {
+  return cleanClientId(payload.gaClientId || payload.anonymousId);
+}
+
+function normalizeGaSessionId(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+
+  const text = String(value).trim();
+  if (!text) return undefined;
+
+  const numeric = Number(text.replace(/[^0-9]/g, ""));
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
 function sha256(value: string) {
-  return crypto.createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(value.trim().toLowerCase())
+    .digest("hex");
 }
 
 function getRequestMeta(request: NextRequest) {
@@ -159,7 +188,7 @@ function mapMetaEventName(eventName: string) {
 
 async function sendGa4Event(
   payload: z.infer<typeof serverTrackSchema>,
-  meta: ReturnType<typeof getRequestMeta>
+  meta: ReturnType<typeof getRequestMeta>,
 ) {
   const measurementId = process.env.GA4_MEASUREMENT_ID;
   const apiSecret = process.env.GA4_API_SECRET;
@@ -168,10 +197,14 @@ async function sendGa4Event(
     return { skipped: true, reason: "missing_ga4_env" };
   }
 
-  const clientId = payload.gaClientId || payload.anonymousId || crypto.randomUUID();
+  const clientId = resolveGa4ClientId(payload);
+
+  if (!clientId) {
+    return { skipped: true, reason: "missing_stable_client_id" };
+  }
 
   const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(
-    measurementId
+    measurementId,
   )}&api_secret=${encodeURIComponent(apiSecret)}`;
 
   const body = {
@@ -182,6 +215,7 @@ async function sendGa4Event(
         params: cleanParams({
           event_id: payload.eventId,
           engagement_time_msec: 1,
+          session_id: normalizeGaSessionId(payload.gaSessionId),
 
           page_title: payload.pageTitle,
           page_location: payload.pageLocation,
@@ -233,7 +267,8 @@ async function sendGa4Event(
           server_timezone: meta.timezone,
           debug_mode: process.env.GA4_DEBUG_MODE === "true" ? true : undefined,
 
-          traffic_type: process.env.NODE_ENV === "production" ? undefined : "internal_test",
+          traffic_type:
+            process.env.NODE_ENV === "production" ? undefined : "internal_test",
         }),
       },
     ],
@@ -256,10 +291,11 @@ async function sendGa4Event(
 
 async function sendMetaEvent(
   payload: z.infer<typeof serverTrackSchema>,
-  meta: ReturnType<typeof getRequestMeta>
+  meta: ReturnType<typeof getRequestMeta>,
 ) {
   const pixelId = process.env.FB_PIXEL_ID || process.env.META_PIXEL_ID;
-  const accessToken = process.env.FB_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
+  const accessToken =
+    process.env.FB_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
 
   if (!pixelId || !accessToken) {
     return { skipped: true, reason: "missing_meta_env" };
@@ -290,7 +326,9 @@ async function sendMetaEvent(
         event_id: payload.eventId || `${eventName}_${Date.now()}`,
         action_source: "website",
         event_source_url:
-          payload.pageLocation || process.env.NEXT_PUBLIC_SITE_URL || "https://trackflowpro.com",
+          payload.pageLocation ||
+          process.env.NEXT_PUBLIC_SITE_URL ||
+          "https://trackflowpro.com",
         user_data: userData,
         custom_data: cleanParams({
           page_title: payload.pageTitle,
@@ -327,7 +365,7 @@ async function sendMetaEvent(
 
   const response = await fetch(
     `https://graph.facebook.com/${graphVersion}/${encodeURIComponent(
-      pixelId
+      pixelId,
     )}/events?access_token=${encodeURIComponent(accessToken)}`,
     {
       method: "POST",
@@ -336,7 +374,7 @@ async function sendMetaEvent(
       },
       body: JSON.stringify(body),
       cache: "no-store",
-    }
+    },
   );
 
   let result: unknown = null;
@@ -368,6 +406,7 @@ function normalizeTrackingInput(json: Record<string, unknown>) {
     videoProgress: json.videoProgress ?? json.video_progress,
     scrollPercent: json.scrollPercent ?? json.scroll_percent,
     deviceType: json.deviceType ?? json.device_type,
+    gaSessionId: json.gaSessionId ?? json.ga_session_id ?? json.session_id,
     visitorId: json.visitorId ?? json.visitor_id,
     reportVisitorId: json.reportVisitorId ?? json.report_visitor_id,
     reportSessionId: json.reportSessionId ?? json.report_session_id,
@@ -385,23 +424,30 @@ function normalizeTrackingInput(json: Record<string, unknown>) {
 export async function POST(request: NextRequest) {
   try {
     const rawJson = await request.json();
-    const json = rawJson && typeof rawJson === "object" && !Array.isArray(rawJson)
-      ? normalizeTrackingInput(rawJson as Record<string, unknown>)
-      : rawJson;
+    const json =
+      rawJson && typeof rawJson === "object" && !Array.isArray(rawJson)
+        ? normalizeTrackingInput(rawJson as Record<string, unknown>)
+        : rawJson;
     const parsed = serverTrackSchema.safeParse(json);
 
     if (!parsed.success) {
       if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
-        console.warn("[trackflow-analytics] invalid_payload", parsed.error.flatten());
+        console.warn(
+          "[trackflow-analytics] invalid_payload",
+          parsed.error.flatten(),
+        );
       }
 
       return NextResponse.json(
         {
           success: false,
           message: "Invalid tracking payload.",
-          issues: process.env.TRACKFLOW_ANALYTICS_DEBUG === "true" ? parsed.error.flatten() : undefined,
+          issues:
+            process.env.TRACKFLOW_ANALYTICS_DEBUG === "true"
+              ? parsed.error.flatten()
+              : undefined,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -419,7 +465,7 @@ export async function POST(request: NextRequest) {
     const tracking = results.map((result) =>
       result.status === "fulfilled"
         ? result.value
-        : { ok: false, error: "tracking_failed" }
+        : { ok: false, error: "tracking_failed" },
     );
 
     if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
@@ -447,7 +493,7 @@ export async function POST(request: NextRequest) {
         success: false,
         message: "Tracking request failed.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
