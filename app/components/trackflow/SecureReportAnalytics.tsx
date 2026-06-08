@@ -645,11 +645,15 @@ export default function SecureReportAnalytics({
     const iframe = document.querySelector<HTMLIFrameElement>("[data-trackflow-youtube-iframe]");
     if (!iframe) return;
 
+    // Keep a non-null local reference for callbacks below.
+    // TypeScript does not preserve querySelector null-narrowing across nested functions.
+    const youtubeIframe: HTMLIFrameElement = iframe;
+
     try {
-      const iframeUrl = new URL(iframe.src);
+      const iframeUrl = new URL(youtubeIframe.src);
       iframeUrl.searchParams.set("enablejsapi", "1");
       iframeUrl.searchParams.set("origin", window.location.origin);
-      iframe.src = iframeUrl.toString();
+      youtubeIframe.src = iframeUrl.toString();
     } catch {
       // Keep the existing iframe if URL parsing fails.
     }
@@ -683,7 +687,7 @@ export default function SecureReportAnalytics({
     function initPlayer() {
       if (disposed || !win.YT?.Player) return;
 
-      const player = new win.YT.Player(iframe, {
+      const player = new win.YT.Player(youtubeIframe, {
         events: {
           onStateChange: (event) => {
             const state = event.data;
