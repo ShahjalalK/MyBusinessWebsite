@@ -1134,6 +1134,7 @@ function isBadReportCompanyName(value: string, domain = ""): boolean {
   if (/https?:\/\//i.test(text) || /www\./i.test(text) || /\bhttps?\b/i.test(text)) return true;
   if (/\.(com|net|org|co|io|us|uk|ca|au)(\/|$|\s)/i.test(text)) return true;
   if (/\b(event catering https|event catering|restaurant food service|food service|local service|lead generation|professional service)\b/i.test(text) && !/\balsies\b/i.test(text)) return true;
+  if (/^(home|homepage|official site|menu|shop|store|cart|checkout|about|contact|services?|privacy|terms|book|books)$/i.test(text)) return true;
   if (text.length > 72) return true;
   const root = firstCleanString(domain).replace(/^https?:\/\//i, "").replace(/^www\./i, "").split(".")[0].toLowerCase();
   if (root && text.includes(root)) return false;

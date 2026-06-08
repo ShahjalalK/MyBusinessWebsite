@@ -67,6 +67,122 @@ function logModularReportDebug(stage: string, details: AnyRecord = {}) {
   }
 }
 
+function reportCleanString(value: any, fallback = ""): string {
+  if (value === null || value === undefined || value === "") return fallback;
+  return String(value).replace(/\s+/g, " ").trim() || fallback;
+}
+
+function normalizeProblemCardsForFirestore(value: any, maxItems = 4): AnyRecord[] {
+  const rawItems = Array.isArray(value) ? value : [];
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const item of rawItems) {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? (item as AnyRecord) : {};
+    const title = reportCleanString(record.title || record.problem || record.name || record.label || "Tracking item to verify");
+    const finding = reportCleanString(record.finding || record.summary || record.description || record.text || "");
+    const businessMeaning = reportCleanString(
+      record.businessMeaning || record.business_meaning || record.businessImpact || record.business_impact || record.whyItMatters || record.why_it_matters || record.impact || "",
+      "This point should be confirmed before making budget or reporting decisions.",
+    );
+    const nextCheck = reportCleanString(
+      record.nextCheck || record.next_check || record.manualCheck || record.manual_check || record.recommendation || record.nextStep || record.next_step || "",
+      "Confirm this item inside the relevant tracking account, CRM, or server records.",
+    );
+    const evidence = Array.isArray(record.evidence || record.evidencePoints || record.evidence_points)
+      ? (record.evidence || record.evidencePoints || record.evidence_points)
+          .map((entry: any) => reportCleanString(entry))
+          .filter(Boolean)
+          .slice(0, 4)
+      : [];
+    const key = `${title}|${finding}`.toLowerCase();
+    if ((!title && !finding) || seen.has(key)) continue;
+    seen.add(key);
+    output.push({ title, finding, businessMeaning, nextCheck, evidence });
+    if (output.length >= maxItems) break;
+  }
+
+  return output;
+}
+
+function normalizeVerificationPlanForFirestore(value: any, maxItems = 5): AnyRecord[] {
+  const rawItems = Array.isArray(value) ? value : [];
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const item of rawItems) {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? (item as AnyRecord) : {};
+    const title = reportCleanString(record.title || record.step || record.name || record.description || (typeof item === "string" ? item : ""));
+    const description = reportCleanString(record.description || record.detail || record.summary || "");
+    const priority = reportCleanString(record.priority || `Priority ${output.length + 1}`);
+    const estimatedEffort = reportCleanString(record.estimatedEffort || record.estimated_effort || record.effort || "Short review");
+    const key = `${title}|${description}`.toLowerCase();
+    if ((!title && !description) || seen.has(key)) continue;
+    seen.add(key);
+    output.push({
+      priority,
+      title: title || description,
+      description,
+      estimatedEffort,
+    });
+    if (output.length >= maxItems) break;
+  }
+
+  return output;
+}
+
+function normalizeTrackingSignalCardsForFirestore(value: any, maxItems = 8): AnyRecord[] {
+  const rawItems = Array.isArray(value) ? value : [];
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const item of rawItems) {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? (item as AnyRecord) : {};
+    const label = reportCleanString(record.label || record.title || record.name || record.text || (typeof item === "string" ? item : ""));
+    const status = reportCleanString(record.status || record.state || record.type || "observed");
+    const detail = reportCleanString(record.detail || record.description || record.summary || "");
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push({
+      label,
+      status,
+      ...(detail ? { detail } : {}),
+    });
+    if (output.length >= maxItems) break;
+  }
+
+  return output;
+}
+
+function normalizeEvidenceVideoForFirestore(value: any, report: AnyRecord = {}): AnyRecord | null {
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : {};
+  const enabled = raw.enabled !== false && Boolean(raw.videoId || raw.video_id || raw.youtubeVideoId || raw.youtube_video_id || raw.videoUrl || raw.video_url || report.evidenceVideoUrl);
+  if (!enabled) return null;
+
+  const videoId = reportCleanString(raw.videoId || raw.video_id || raw.youtubeVideoId || raw.youtube_video_id || report.evidenceVideoId || "");
+  const videoUrl = reportCleanString(raw.videoUrl || raw.video_url || raw.youtubeUrl || raw.youtube_url || report.evidenceVideoUrl || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : ""));
+  const embedUrl = reportCleanString(raw.embedUrl || raw.embed_url || report.evidenceVideoEmbedUrl || (videoId ? `https://www.youtube-nocookie.com/embed/${videoId}` : ""));
+  const provider = reportCleanString(raw.provider || report.evidenceVideoProvider || "youtube");
+  const status = reportCleanString(raw.status || report.evidenceVideoStatus || "ready");
+
+  return {
+    enabled: true,
+    provider,
+    status,
+    title: reportCleanString(raw.title || report.evidenceVideoTitle || "Short browser-side evidence walkthrough"),
+    description: reportCleanString(raw.description || report.evidenceVideoDescription || "This optional video shows browser-visible evidence only. Final confirmation still requires account-level access."),
+    videoId,
+    videoUrl,
+    youtubeUrl: videoUrl,
+    embedUrl,
+    embedProvider: reportCleanString(raw.embedProvider || raw.embed_provider || "youtube_nocookie"),
+    addedAt: reportCleanString(raw.addedAt || raw.added_at || ""),
+    optional: raw.optional !== false,
+  };
+}
+
 
 export function createReportHandlers(deps: ReportHandlerDeps) {
   const {
@@ -496,7 +612,19 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       "primary_page_url",
       "reviewed_page_urls",
       "tracking_signal_cards",
+      "evidence_video",
+      "evidence_video_url",
+      "evidence_video_embed_url",
+      "evidence_video_provider",
+      "evidence_video_status",
+      "evidence_video_id",
+      "evidence_video_title",
+      "evidence_video_description",
     ];
+
+    const cleanProblemCards = normalizeProblemCardsForFirestore(report.problemCards);
+    const cleanVerificationPlan = normalizeVerificationPlanForFirestore(report.verificationPlan);
+    const cleanTrackingSignalCards = normalizeTrackingSignalCardsForFirestore(report.trackingSignalCards);
 
     const payload: AnyRecord = {
       token: report.token,
@@ -511,14 +639,14 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       mainFinding: report.mainFinding,
       businessImpact: report.businessImpact,
       proofPoints: report.proofPoints,
-      problemCards: report.problemCards,
-      verificationPlan: report.verificationPlan,
+      problemCards: cleanProblemCards,
+      verificationPlan: cleanVerificationPlan,
       whatChecked: report.whatChecked,
       primaryActionLabel: report.primaryActionLabel || "",
       primaryPageLabel: report.primaryPageLabel || "",
       primaryPageUrl: report.primaryPageUrl || "",
       reviewedPageUrls: Array.isArray(report.reviewedPageUrls) ? report.reviewedPageUrls : [],
-      trackingSignalCards: Array.isArray(report.trackingSignalCards) ? report.trackingSignalCards : [],
+      trackingSignalCards: cleanTrackingSignalCards,
       auditSnapshotTitle: report.auditSnapshotTitle,
       auditSnapshotQuestions: report.auditSnapshotQuestions,
       trustNotes: report.trustNotes,
@@ -579,17 +707,20 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     payload.evidence_video_status = deleteField;
     payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
     } else if (report.evidenceVideo?.enabled && report.evidenceVideoEmbedUrl) {
-    payload.evidenceVideo = report.evidenceVideo;
-    payload.evidence_video = deleteField;
-    payload.evidenceVideoUrl = report.evidenceVideoUrl;
-    payload.evidence_video_url = deleteField;
-    payload.evidenceVideoEmbedUrl = report.evidenceVideoEmbedUrl;
-    payload.evidence_video_embed_url = deleteField;
-    payload.evidenceVideoProvider = report.evidenceVideoProvider || "youtube";
-    payload.evidence_video_provider = deleteField;
-    payload.evidenceVideoStatus = report.evidenceVideoStatus || "ready";
-    payload.evidence_video_status = deleteField;
-    payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+    const cleanEvidenceVideo = normalizeEvidenceVideoForFirestore(report.evidenceVideo, report);
+    if (cleanEvidenceVideo) {
+      payload.evidenceVideo = cleanEvidenceVideo;
+      payload.evidence_video = deleteField;
+      payload.evidenceVideoUrl = cleanEvidenceVideo.videoUrl;
+      payload.evidence_video_url = deleteField;
+      payload.evidenceVideoEmbedUrl = cleanEvidenceVideo.embedUrl;
+      payload.evidence_video_embed_url = deleteField;
+      payload.evidenceVideoProvider = cleanEvidenceVideo.provider || "youtube";
+      payload.evidence_video_provider = deleteField;
+      payload.evidenceVideoStatus = cleanEvidenceVideo.status || "ready";
+      payload.evidence_video_status = deleteField;
+      payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
     }
   
     if (!existing.exists) {
