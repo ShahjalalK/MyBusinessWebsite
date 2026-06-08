@@ -4,9 +4,17 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type RedirectKind = "booking" | "email" | "linkedin" | "cta";
+
 function cleanText(value: unknown, fallback = "") {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text || fallback;
+}
+
+function sanitizeParam(value: unknown, max = 160) {
+  return cleanText(value, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .slice(0, max);
 }
 
 function normalizeToken(value: unknown) {
@@ -15,113 +23,148 @@ function normalizeToken(value: unknown) {
     .slice(0, 96) || "unknown";
 }
 
-function hashReportId(token: string) {
-  const digest = crypto.createHash("sha256").update(`trackflow-report:${normalizeToken(token)}`).digest("hex");
-  return `rpt_${digest.slice(0, 12)}`;
+function hashReportId(token: unknown) {
+  const normalized = normalizeToken(token);
+  const hex = crypto.createHash("sha256").update(`trackflow-report:${normalized}`).digest("hex").slice(0, 12);
+  return `rpt_${hex}`;
 }
 
-function sanitizeKind(value: unknown) {
-  const kind = cleanText(value, "cta").toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 40);
-  if (["booking", "email", "linkedin", "cta"].includes(kind)) return kind;
+function getCookie(request: NextRequest, name: string) {
+  return request.cookies.get(name)?.value || "";
+}
+
+function getGaClientId(request: NextRequest) {
+  const ga = getCookie(request, "_ga");
+  const parts = ga.split(".");
+  if (parts.length >= 4) return `${parts[2]}.${parts[3]}`;
+  return ga;
+}
+
+function visitorLabelFromAnonymousId(anonymousId: string) {
+  if (!anonymousId) return "";
+  const short = crypto.createHash("sha256").update(anonymousId).digest("hex").slice(0, 12);
+  return `vis_${short}`;
+}
+
+function reportVisitorLabel(reportId: string, anonymousId: string) {
+  if (!reportId || !anonymousId) return "";
+  const short = crypto.createHash("sha256").update(`${reportId}:${anonymousId}`).digest("hex").slice(0, 12);
+  return `${reportId}_v_${short}`.slice(0, 80);
+}
+
+function sanitizeKind(value: unknown): RedirectKind {
+  const text = cleanText(value, "cta").toLowerCase();
+  if (text === "booking" || text === "email" || text === "linkedin" || text === "cta") return text;
   return "cta";
 }
 
-function eventNameForKind(kind: string) {
+function eventNameForKind(kind: RedirectKind) {
   if (kind === "booking") return "secure_report_booking_click";
   if (kind === "email") return "secure_report_email_click";
   if (kind === "linkedin") return "secure_report_linkedin_click";
   return "secure_report_cta_click";
 }
 
-function journeyForKind(kind: string) {
+function metaForKind(kind: RedirectKind) {
   if (kind === "booking") {
     return { visitStage: "booking", journeyStep: "08_booking_clicked", intentLevel: "hot", intentScore: 95, isCoreEvent: true };
   }
-  if (kind === "email" || kind === "linkedin") {
-    return { visitStage: "contact", journeyStep: "07_contact_clicked", intentLevel: "high", intentScore: 85, isCoreEvent: true };
-  }
-  return { visitStage: "cta", journeyStep: "07_cta_clicked", intentLevel: "high", intentScore: 80, isCoreEvent: true };
+  return { visitStage: "contact", journeyStep: "07_contact_clicked", intentLevel: "high", intentScore: 85, isCoreEvent: true };
 }
 
-function getDeviceType(userAgent: string) {
-  if (/ipad|tablet/i.test(userAgent)) return "tablet";
-  if (/mobi|iphone|android.*mobile/i.test(userAgent)) return "mobile";
-  if (!userAgent) return "unknown";
-  return "desktop";
-}
+function safeDestination(value: string, request: NextRequest) {
+  const raw = cleanText(value, "");
+  if (!raw) return "/";
 
-function cleanDestination(rawValue: string, request: NextRequest) {
-  const raw = cleanText(rawValue, "/").slice(0, 1400);
-
-  if (raw.startsWith("/") && !raw.startsWith("//")) {
-    return new URL(raw, request.url).toString();
-  }
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  if (/^mailto:/i.test(raw)) return raw;
 
   try {
     const url = new URL(raw);
-    if (["http:", "https:", "mailto:"].includes(url.protocol)) return url.toString();
+    if (url.protocol === "http:" || url.protocol === "https:") return url.toString();
   } catch {
-    // Fall through to safe default.
+    try {
+      const relative = new URL(raw, request.nextUrl.origin);
+      if (relative.origin === request.nextUrl.origin) return `${relative.pathname}${relative.search}${relative.hash}`;
+    } catch {}
   }
 
-  return new URL("/contact", request.url).toString();
+  return "/";
 }
 
-async function forwardToServerTrack(request: NextRequest, payload: Record<string, unknown>) {
-  const endpoint = new URL("/api/server-track", request.url);
+async function forwardClickEvent(request: NextRequest, destination: string) {
+  const params = request.nextUrl.searchParams;
+  const token = params.get("token") || "";
+  const kind = sanitizeKind(params.get("kind"));
+  const eventName = eventNameForKind(kind);
+  const reportId = hashReportId(token);
+  const anonymousId = sanitizeParam(getCookie(request, "tfp_aid"), 200);
+  const meta = metaForKind(kind);
+  const label = sanitizeParam(params.get("label") || eventName, 180);
+  const eventSection = sanitizeParam(params.get("eventSection") || kind, 120);
+  const domainSlug = sanitizeParam(params.get("domainSlug") || params.get("domain_slug") || "", 120);
 
-  try {
-    await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      cache: "no-store",
+  const payload = {
+    eventName,
+    eventId: `${reportId}_${eventName}_${Date.now()}`,
+    pageTitle: "Private Tracking Review",
+    pageLocation: sanitizeParam(request.headers.get("referer") || request.nextUrl.href, 1200),
+    pagePath: request.nextUrl.pathname,
+    referrer: request.headers.get("referer") || "",
+    gaClientId: getGaClientId(request),
+    anonymousId,
+    reportId,
+    domainSlug,
+    primaryActionLabel: sanitizeParam(params.get("primaryActionLabel") || label, 180),
+    primaryPageLabel: sanitizeParam(params.get("primaryPageLabel") || "Secure tracking review", 180),
+    eventSection,
+    buttonLabel: label,
+    visitorId: visitorLabelFromAnonymousId(anonymousId),
+    reportVisitorId: reportVisitorLabel(reportId, anonymousId),
+    visitStage: meta.visitStage,
+    journeyStep: meta.journeyStep,
+    intentLevel: meta.intentLevel,
+    intentScore: meta.intentScore,
+    isCoreEvent: meta.isCoreEvent,
+    transport: "server_redirect",
+    clickText: label,
+    clickHref: sanitizeParam(destination, 1200),
+    clickLocation: eventSection,
+  };
+
+  const url = new URL("/api/server-track", request.nextUrl.origin);
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
+    console.info("[trackflow-analytics] report_redirect", {
+      eventName,
+      reportId,
+      domainSlug,
+      destination,
+      forwarded: { ok: response.ok, status: response.status },
     });
-  } catch (error) {
-    console.warn("Report redirect tracking failed:", error);
   }
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const token = normalizeToken(searchParams.get("token"));
-  const reportId = hashReportId(token);
-  const kind = sanitizeKind(searchParams.get("kind"));
-  const destination = cleanDestination(searchParams.get("url") || "", request);
-  const eventName = eventNameForKind(kind);
-  const journey = journeyForKind(kind);
-  const userAgent = request.headers.get("user-agent") || "";
-  const referer = request.headers.get("referer") || "";
+  const destination = safeDestination(request.nextUrl.searchParams.get("url") || "", request);
 
-  await forwardToServerTrack(request, {
-    eventName,
-    eventId: `${reportId}_${eventName}_${Date.now()}`,
-    pageTitle: cleanText(searchParams.get("pageTitle"), "Secure tracking review"),
-    pageLocation: referer,
-    referrer: referer,
-    reportId,
-    domainSlug: cleanText(searchParams.get("domainSlug"), "").slice(0, 120),
-    primaryActionLabel: cleanText(searchParams.get("primaryActionLabel"), "Secure report engagement").slice(0, 180),
-    primaryPageLabel: cleanText(searchParams.get("primaryPageLabel"), "Secure tracking review").slice(0, 180),
-    eventSection: cleanText(searchParams.get("eventSection"), kind).slice(0, 120),
-    buttonLabel: cleanText(searchParams.get("label"), kind).slice(0, 180),
-    clickText: cleanText(searchParams.get("label"), kind).slice(0, 300),
-    clickHref: destination.slice(0, 1200),
-    clickLocation: cleanText(searchParams.get("eventSection"), kind).slice(0, 200),
-    deviceType: getDeviceType(userAgent),
-    visitStage: journey.visitStage,
-    journeyStep: journey.journeyStep,
-    intentLevel: journey.intentLevel,
-    intentScore: journey.intentScore,
-    isCoreEvent: journey.isCoreEvent,
-    transport: "server_redirect",
-  });
+  try {
+    await forwardClickEvent(request, destination);
+  } catch (error) {
+    console.error("Report redirect tracking failed:", error);
+  }
 
   return new NextResponse(null, {
     status: 302,
     headers: {
       Location: destination,
-      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      "cache-control": "no-store, max-age=0",
     },
   });
 }

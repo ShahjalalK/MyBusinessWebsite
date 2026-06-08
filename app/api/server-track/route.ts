@@ -354,16 +354,52 @@ async function sendMetaEvent(
   };
 }
 
+function normalizeTrackingInput(json: Record<string, unknown>) {
+  return {
+    ...json,
+    reportId: json.reportId ?? json.report_id,
+    domainSlug: json.domainSlug ?? json.domain_slug,
+    companyName: json.companyName ?? json.company_name,
+    primaryActionLabel: json.primaryActionLabel ?? json.primary_action_label,
+    primaryPageLabel: json.primaryPageLabel ?? json.primary_page_label,
+    eventSection: json.eventSection ?? json.event_section,
+    buttonLabel: json.buttonLabel ?? json.button_label,
+    videoId: json.videoId ?? json.video_id,
+    videoProgress: json.videoProgress ?? json.video_progress,
+    scrollPercent: json.scrollPercent ?? json.scroll_percent,
+    deviceType: json.deviceType ?? json.device_type,
+    visitorId: json.visitorId ?? json.visitor_id,
+    reportVisitorId: json.reportVisitorId ?? json.report_visitor_id,
+    reportSessionId: json.reportSessionId ?? json.report_session_id,
+    visitStage: json.visitStage ?? json.visit_stage,
+    journeyStep: json.journeyStep ?? json.journey_step,
+    intentLevel: json.intentLevel ?? json.intent_level,
+    intentScore: json.intentScore ?? json.intent_score,
+    isCoreEvent: json.isCoreEvent ?? json.is_core_event,
+    question_key: json.question_key ?? json.questionKey,
+    question_source: json.question_source ?? json.questionSource,
+    message_length: json.message_length ?? json.messageLength,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const json = await request.json();
+    const rawJson = await request.json();
+    const json = rawJson && typeof rawJson === "object" && !Array.isArray(rawJson)
+      ? normalizeTrackingInput(rawJson as Record<string, unknown>)
+      : rawJson;
     const parsed = serverTrackSchema.safeParse(json);
 
     if (!parsed.success) {
+      if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
+        console.warn("[trackflow-analytics] invalid_payload", parsed.error.flatten());
+      }
+
       return NextResponse.json(
         {
           success: false,
           message: "Invalid tracking payload.",
+          issues: process.env.TRACKFLOW_ANALYTICS_DEBUG === "true" ? parsed.error.flatten() : undefined,
         },
         { status: 400 }
       );
@@ -380,15 +416,28 @@ export async function POST(request: NextRequest) {
       sendMetaEvent(payload, meta),
     ]);
 
+    const tracking = results.map((result) =>
+      result.status === "fulfilled"
+        ? result.value
+        : { ok: false, error: "tracking_failed" }
+    );
+
+    if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
+      console.info("[trackflow-analytics] server_track", {
+        eventName: payload.eventName,
+        reportId: payload.reportId,
+        domainSlug: payload.domainSlug,
+        journeyStep: payload.journeyStep,
+        intentLevel: payload.intentLevel,
+        tracking,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       eventName: payload.eventName,
       eventId: payload.eventId,
-      tracking: results.map((result) =>
-        result.status === "fulfilled"
-          ? result.value
-          : { ok: false, error: "tracking_failed" }
-      ),
+      tracking,
     });
   } catch (error) {
     console.error("Server tracking error:", error);

@@ -329,26 +329,38 @@ function onePerSession(key: string) {
   }
 }
 
-function postWithBeacon(url: string, payload: Record<string, unknown>) {
+async function postWithBeacon(url: string, payload: Record<string, unknown>) {
   const body = JSON.stringify(payload);
+
+  // Use fetch first so a missing/broken primary endpoint can fail over to the
+  // fallback endpoint. sendBeacon only returns "queued", not the HTTP status.
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      keepalive: true,
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+    if (response.ok) {
+      return { ok: true, status: response.status, transport: "fetch" };
+    }
+  } catch {
+    // Fallback to sendBeacon below.
+  }
 
   try {
     if (navigator.sendBeacon) {
       const sent = navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
-      if (sent) return Promise.resolve({ ok: true, transport: "beacon" });
+      if (sent) return { ok: true, transport: "beacon" };
     }
   } catch {
-    // Fallback to fetch below.
+    // Let the caller try the next endpoint.
   }
 
-  return fetch(url, {
-    method: "POST",
-    keepalive: true,
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { "content-type": "application/json" },
-    body,
-  });
+  return { ok: false, transport: "failed" };
 }
 
 export default function SecureReportAnalytics({

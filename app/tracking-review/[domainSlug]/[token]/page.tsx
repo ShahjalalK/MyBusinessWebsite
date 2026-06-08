@@ -1233,6 +1233,9 @@ function LinkButton({
       href={href}
       target={target}
       rel={rel}
+      data-trackflow-analytics-event={analyticsEvent}
+      data-trackflow-analytics-section={analyticsSection}
+      data-trackflow-analytics-label={analyticsLabel}
       className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-center text-sm font-black transition focus:outline-none focus:ring-4 sm:w-auto ${styles}`}
     >
       {children}
