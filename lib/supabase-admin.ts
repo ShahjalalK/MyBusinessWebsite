@@ -7,7 +7,7 @@
 // - Never expose SUPABASE_SERVICE_ROLE_KEY to client components.
 // ============================================================
 
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 type AnyRecord = Record<string, any>;
 
@@ -132,6 +132,19 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || "").trim(),
   );
+}
+
+function uuidFromHash(input: string): string {
+  const hex = createHash("sha256").update(input).digest("hex").slice(0, 32);
+  const variantNibble = ((parseInt(hex[16] || "8", 16) & 0x3) | 0x8).toString(16);
+
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    `4${hex.slice(13, 16)}`,
+    `${variantNibble}${hex.slice(17, 20)}`,
+    hex.slice(20, 32),
+  ].join("-");
 }
 
 function safeTableName(value: string): string {
@@ -972,7 +985,7 @@ export async function markReportPdfDownloaded(input: {
       }, [])
     : [
         {
-          id: `pdf_${reportToken}`.slice(0, 96),
+          id: uuidFromHash(`trackflow_pdf_download:${reportToken}`),
           report_token: reportToken,
           domain_slug: cleanText(input.domainSlug, 180),
           domain: cleanText(input.domain, 180),

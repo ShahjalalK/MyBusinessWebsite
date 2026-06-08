@@ -143,13 +143,112 @@ function normalizePayload(input: Record<string, unknown>, request: NextRequest) 
   };
 }
 
-async function forwardToServerTrack(request: NextRequest, payload: Record<string, unknown>) {
-  const url = new URL("/api/server-track", request.nextUrl.origin);
+function cleanParams(params: Record<string, unknown>) {
+  const output: Record<string, unknown> = {};
 
-  const response = await fetch(url.toString(), {
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    output[key] = value;
+  }
+
+  return output;
+}
+
+function toNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function toGa4Boolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return undefined;
+  if (["1", "true", "yes", "y"].includes(text)) return true;
+  if (["0", "false", "no", "n"].includes(text)) return false;
+  return undefined;
+}
+
+function isAnalyticsDebugEnabled() {
+  return isAnalyticsDebugEnabled() || process.env.TRACKFLOW_ANALYTICS_DEBUG === "1";
+}
+
+async function sendGa4SecureReportEvent(payload: Record<string, unknown>) {
+  const measurementId = process.env.GA4_MEASUREMENT_ID;
+  const apiSecret = process.env.GA4_API_SECRET;
+
+  if (!measurementId || !apiSecret) {
+    return { skipped: true, reason: "missing_ga4_env" };
+  }
+
+  const eventName = sanitizeEventName(payload.eventName);
+  const clientId =
+    sanitizeParam(payload.gaClientId || payload.ga_client_id || payload.anonymousId || payload.anonymous_id, 200) ||
+    crypto.randomUUID();
+
+  const params = cleanParams({
+    event_id: sanitizeParam(payload.eventId || payload.event_id, 200),
+    engagement_time_msec: 1,
+    debug_mode: process.env.GA4_DEBUG_MODE === "true" || process.env.GA4_DEBUG_MODE === "1" ? true : undefined,
+
+    page_title: sanitizeParam(payload.pageTitle || payload.page_title, 300),
+    page_location: sanitizeParam(payload.pageLocation || payload.page_location, 1200),
+    page_path: sanitizeParam(payload.pagePath || payload.page_path, 500),
+    page_referrer: sanitizeParam(payload.referrer || payload.page_referrer, 1200),
+
+    utm_source: sanitizeParam(payload.utm_source, 200),
+    utm_medium: sanitizeParam(payload.utm_medium, 200),
+    utm_campaign: sanitizeParam(payload.utm_campaign, 300),
+    utm_term: sanitizeParam(payload.utm_term, 300),
+    utm_content: sanitizeParam(payload.utm_content, 300),
+    gclid: sanitizeParam(payload.gclid, 300),
+    fbclid: sanitizeParam(payload.fbclid, 500),
+    msclkid: sanitizeParam(payload.msclkid, 300),
+
+    report_id: sanitizeParam(payload.reportId || payload.report_id, 80),
+    domain_slug: sanitizeParam(payload.domainSlug || payload.domain_slug, 120),
+    company_name: sanitizeParam(payload.companyName || payload.company_name, 180),
+    primary_action_label: sanitizeParam(payload.primaryActionLabel || payload.primary_action_label, 180),
+    primary_page_label: sanitizeParam(payload.primaryPageLabel || payload.primary_page_label, 180),
+    event_section: sanitizeParam(payload.eventSection || payload.event_section, 120),
+    button_label: sanitizeParam(payload.buttonLabel || payload.button_label, 180),
+    video_id: sanitizeParam(payload.videoId || payload.video_id, 80),
+    video_progress: toNumber(payload.videoProgress ?? payload.video_progress),
+    scroll_percent: toNumber(payload.scrollPercent ?? payload.scroll_percent),
+    device_type: sanitizeParam(payload.deviceType || payload.device_type, 80),
+
+    visitor_id: sanitizeParam(payload.visitorId || payload.visitor_id, 80),
+    report_visitor_id: sanitizeParam(payload.reportVisitorId || payload.report_visitor_id, 100),
+    report_session_id: sanitizeParam(payload.reportSessionId || payload.report_session_id, 100),
+    visit_stage: sanitizeParam(payload.visitStage || payload.visit_stage, 80),
+    journey_step: sanitizeParam(payload.journeyStep || payload.journey_step, 80),
+    intent_level: sanitizeParam(payload.intentLevel || payload.intent_level, 40),
+    intent_score: toNumber(payload.intentScore ?? payload.intent_score),
+    is_core_event: toGa4Boolean(payload.isCoreEvent ?? payload.is_core_event),
+    transport: sanitizeParam(payload.transport || "report_event_route", 80),
+
+    question_key: sanitizeParam(payload.question_key || payload.questionKey, 180),
+    question_source: sanitizeParam(payload.question_source || payload.questionSource, 80),
+    message_length: toNumber(payload.message_length ?? payload.messageLength),
+
+    click_text: sanitizeParam(payload.clickText || payload.click_text || payload.buttonLabel || payload.button_label, 300),
+    click_href: sanitizeParam(payload.clickHref || payload.click_href, 1200),
+    click_location: sanitizeParam(payload.clickLocation || payload.click_location || payload.eventSection || payload.event_section, 200),
+
+    traffic_type: process.env.NODE_ENV === "production" ? undefined : "internal_test",
+  });
+
+  const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(
+    measurementId,
+  )}&api_secret=${encodeURIComponent(apiSecret)}`;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      client_id: clientId,
+      events: [{ name: eventName, params }],
+    }),
     cache: "no-store",
   });
 
@@ -164,18 +263,18 @@ export async function POST(request: NextRequest) {
     const raw = await request.json();
     const input = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
     const payload = normalizePayload(input, request);
-    const forwarded = await forwardToServerTrack(request, payload);
+    const ga4 = await sendGa4SecureReportEvent(payload);
 
-    if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
+    if (isAnalyticsDebugEnabled()) {
       console.info("[trackflow-analytics] report_event_post", {
         eventName: payload.eventName,
         reportId: payload.reportId,
         domainSlug: payload.domainSlug,
-        forwarded,
+        ga4,
       });
     }
 
-    return NextResponse.json({ success: true, forwarded });
+    return NextResponse.json({ success: true, ga4 });
   } catch (error) {
     console.error("Report event forward failed:", error);
     return NextResponse.json({ success: false, message: "Report event failed." }, { status: 500 });
@@ -190,14 +289,14 @@ export async function GET(request: NextRequest) {
     });
 
     const payload = normalizePayload(queryPayload, request);
-    const forwarded = await forwardToServerTrack(request, payload);
+    const ga4 = await sendGa4SecureReportEvent(payload);
 
-    if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
+    if (isAnalyticsDebugEnabled()) {
       console.info("[trackflow-analytics] report_event_get", {
         eventName: payload.eventName,
         reportId: payload.reportId,
         domainSlug: payload.domainSlug,
-        forwarded,
+        ga4,
       });
     }
 

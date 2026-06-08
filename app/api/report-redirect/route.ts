@@ -92,6 +92,92 @@ function safeDestination(value: string, request: NextRequest) {
   return "/";
 }
 
+function cleanParams(params: Record<string, unknown>) {
+  const output: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    output[key] = value;
+  }
+
+  return output;
+}
+
+function isAnalyticsDebugEnabled() {
+  return process.env.TRACKFLOW_ANALYTICS_DEBUG === "true" || process.env.TRACKFLOW_ANALYTICS_DEBUG === "1";
+}
+
+async function sendGa4RedirectEvent(payload: Record<string, unknown>) {
+  const measurementId = process.env.GA4_MEASUREMENT_ID;
+  const apiSecret = process.env.GA4_API_SECRET;
+
+  if (!measurementId || !apiSecret) {
+    return { skipped: true, reason: "missing_ga4_env" };
+  }
+
+  const eventName = cleanText(payload.eventName, "secure_report_cta_click")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80) || "secure_report_cta_click";
+
+  const clientId =
+    sanitizeParam(payload.gaClientId || payload.anonymousId, 200) ||
+    crypto.randomUUID();
+
+  const params = cleanParams({
+    event_id: sanitizeParam(payload.eventId, 200),
+    engagement_time_msec: 1,
+    debug_mode: process.env.GA4_DEBUG_MODE === "true" || process.env.GA4_DEBUG_MODE === "1" ? true : undefined,
+
+    page_title: sanitizeParam(payload.pageTitle, 300),
+    page_location: sanitizeParam(payload.pageLocation, 1200),
+    page_path: sanitizeParam(payload.pagePath, 500),
+    page_referrer: sanitizeParam(payload.referrer, 1200),
+
+    report_id: sanitizeParam(payload.reportId, 80),
+    domain_slug: sanitizeParam(payload.domainSlug, 120),
+    primary_action_label: sanitizeParam(payload.primaryActionLabel, 180),
+    primary_page_label: sanitizeParam(payload.primaryPageLabel, 180),
+    event_section: sanitizeParam(payload.eventSection, 120),
+    button_label: sanitizeParam(payload.buttonLabel, 180),
+
+    visitor_id: sanitizeParam(payload.visitorId, 80),
+    report_visitor_id: sanitizeParam(payload.reportVisitorId, 100),
+    visit_stage: sanitizeParam(payload.visitStage, 80),
+    journey_step: sanitizeParam(payload.journeyStep, 80),
+    intent_level: sanitizeParam(payload.intentLevel, 40),
+    intent_score: Number(payload.intentScore),
+    is_core_event: Boolean(payload.isCoreEvent),
+    transport: sanitizeParam(payload.transport || "server_redirect", 80),
+
+    click_text: sanitizeParam(payload.clickText, 300),
+    click_href: sanitizeParam(payload.clickHref, 1200),
+    click_location: sanitizeParam(payload.clickLocation, 200),
+
+    traffic_type: process.env.NODE_ENV === "production" ? undefined : "internal_test",
+  });
+
+  const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(
+    measurementId,
+  )}&api_secret=${encodeURIComponent(apiSecret)}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_id: clientId,
+      events: [{ name: eventName, params }],
+    }),
+    cache: "no-store",
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+  };
+}
+
 async function forwardClickEvent(request: NextRequest, destination: string) {
   const params = request.nextUrl.searchParams;
   const token = params.get("token") || "";
@@ -132,21 +218,15 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
     clickLocation: eventSection,
   };
 
-  const url = new URL("/api/server-track", request.nextUrl.origin);
-  const response = await fetch(url.toString(), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
+  const ga4 = await sendGa4RedirectEvent(payload);
 
-  if (process.env.TRACKFLOW_ANALYTICS_DEBUG === "true") {
+  if (isAnalyticsDebugEnabled()) {
     console.info("[trackflow-analytics] report_redirect", {
       eventName,
       reportId,
       domainSlug,
       destination,
-      forwarded: { ok: response.ok, status: response.status },
+      ga4,
     });
   }
 }
