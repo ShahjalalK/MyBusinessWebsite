@@ -247,6 +247,7 @@ function isGenericReportText(value: any): boolean {
   return (
     /lead form, phone, email, booking/.test(text) ||
     /lead form, contact, and enquiry/.test(text) ||
+    /lead form tracking snapshot/.test(text) ||
     /form\s*\/\s*phone\s*\/\s*booking/.test(text) ||
     /ga4\s*\/\s*gtm\s*\/\s*google ads/.test(text) ||
     /google ads, ga4, gtm, meta pixel, and first-party\/server-side tracking/.test(text) ||
