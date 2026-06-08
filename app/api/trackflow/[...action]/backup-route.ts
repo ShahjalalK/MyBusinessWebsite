@@ -896,11 +896,17 @@ function normalizeEvidenceVideoPayload(body: AnyRecord = {}, privatePage: AnyRec
       "This optional video shows browser-visible evidence only. Final confirmation still requires account-level access.",
     ),
     videoId,
+    video_id: videoId,
     youtubeVideoId: videoId,
+    youtube_video_id: videoId,
     videoUrl: watchUrl,
+    video_url: watchUrl,
     youtubeUrl: watchUrl,
+    youtube_url: watchUrl,
     embedUrl,
+    embed_url: embedUrl,
     embedProvider: "youtube_nocookie",
+    embed_provider: "youtube_nocookie",
     addedAt: firstCleanString(raw.addedAt, raw.added_at, body.evidenceVideoAddedAt, body.evidence_video_added_at),
     optional: true,
   };
@@ -1226,10 +1232,13 @@ function normalizeReportCards(value: any, fallbackEvidence: string[] = [], maxIt
     seen.add(key);
 
     output.push({
+      ...sanitizePlainObject(record, 24),
       title: title || "Tracking item to verify",
       finding: finding || "Browser-visible evidence suggests this area is worth checking.",
       businessMeaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
-      nextCheck: nextCheck || "Confirm this item inside the relevant tracking account, CRM, or server records.",
+      business_meaning: businessMeaning || "This can affect how confidently marketing enquiries are measured and attributed.",
+      nextCheck: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
+      next_check: nextCheck || "Confirm inside GA4, GTM, Google Ads, CRM, or server logs.",
       evidence,
     });
 
@@ -1242,7 +1251,9 @@ function normalizeReportCards(value: any, fallbackEvidence: string[] = [], maxIt
     title: index === 0 ? "Tracking evidence to verify" : `Evidence item ${index + 1}`,
     finding: item,
     businessMeaning: "This point should be confirmed before making budget or reporting decisions.",
-    nextCheck: "Confirm this item inside the relevant tracking account, CRM, or server records.",
+    business_meaning: "This point should be confirmed before making budget or reporting decisions.",
+    nextCheck: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
+    next_check: "Review inside the relevant ad, analytics, tag manager, CRM, or server-side system.",
     evidence: [],
   }));
 }
@@ -1264,10 +1275,12 @@ function normalizeVerificationPlan(value: any, fallback: AnyRecord[] | string[] 
       if ((title || description) && !seen.has(key)) {
         seen.add(key);
         output.push({
+          ...sanitizePlainObject(record, 20),
           priority,
           title: title || description,
           description,
           estimatedEffort,
+          estimated_effort: estimatedEffort,
         });
       }
     } else {
@@ -1280,6 +1293,7 @@ function normalizeVerificationPlan(value: any, fallback: AnyRecord[] | string[] 
           title,
           description: "",
           estimatedEffort: "Short review",
+          estimated_effort: "Short review",
         });
       }
     }
