@@ -641,6 +641,23 @@ function cleanList(value: unknown, fallback: string[] = [], maxItems = 8): strin
   return output.length ? output : fallback.slice(0, maxItems);
 }
 
+
+function polishClientFacingEvidenceText(value: string, hasCallTrackingContext = false): string {
+  let text = normalizeDisplayText(value);
+  if (!text) return "";
+
+  if (!hasCallTrackingContext) {
+    text = text
+      .replace(/,?\s*call-tracking,?\s*or\s+server logs\s+where relevant/gi, " and lead records")
+      .replace(/,?\s*call-tracking,?\s*or\s+server records\s+where relevant/gi, " and lead records")
+      .replace(/,?\s*call-tracking\s+where relevant/gi, "")
+      .replace(/\bCRM,\s*call-tracking,\s*or\s*server logs\s*where relevant\b/gi, "CRM or lead notification records")
+      .replace(/\bCRM,\s*call-tracking,\s*or\s*server records\s*where relevant\b/gi, "CRM or lead notification records");
+  }
+
+  return text.replace(/\s+/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
+}
+
 function cleanSignalCards(value: unknown): string[] {
   const items = Array.isArray(value) ? value : [];
   const seen = new Set<string>();
@@ -852,6 +869,83 @@ function ReportViewBeacon({ token }: { token: string }) {
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
+
+
+function AssistantVisibilityScript() {
+  const styles = `
+[data-trackflow-sticky-assistant-shell] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px) scale(0.98);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-shell] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-trackflow-sticky-assistant-shell] {
+    transition: none;
+    transform: none;
+  }
+}
+`;
+
+  const script = `
+(function () {
+  try {
+    if (window.__trackflowAssistantVisibilityReady) return;
+    window.__trackflowAssistantVisibilityReady = true;
+
+    var ticking = false;
+
+    function getHeroThreshold() {
+      var hero = document.querySelector('[data-trackflow-hero]');
+      var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      if (!hero || !hero.getBoundingClientRect) return 520;
+      var rect = hero.getBoundingClientRect();
+      return Math.max(420, rect.bottom + scrollY - 80);
+    }
+
+    function updateAssistantVisibility() {
+      ticking = false;
+      var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      var isMobile = false;
+      try {
+        isMobile = window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
+      } catch (error) {}
+      var threshold = isMobile ? 360 : getHeroThreshold();
+      var show = scrollY > threshold;
+
+      if (show) {
+        document.documentElement.setAttribute('data-trackflow-assistant-visible', 'true');
+      } else {
+        document.documentElement.removeAttribute('data-trackflow-assistant-visible');
+      }
+    }
+
+    function requestUpdate() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(updateAssistantVisibility);
+    }
+
+    window.addEventListener('scroll', requestUpdate, { passive: true });
+    window.addEventListener('resize', requestUpdate);
+    window.addEventListener('orientationchange', requestUpdate);
+    window.setTimeout(updateAssistantVisibility, 150);
+    window.setTimeout(updateAssistantVisibility, 900);
+  } catch (error) {}
+})();`;
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <script dangerouslySetInnerHTML={{ __html: script }} />
+    </>
+  );
+}
 
 function PdfDownloadExperienceScript() {
   const script = `
@@ -1439,7 +1533,16 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const manualAds = getManualAdsTransparency(report);
   const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
+  const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
+    .join(" ")
+    .toLowerCase()
+    .includes("call");
   const enhancedProofPoints = manualAdsSummary ? cleanList([manualAdsSummary, ...proofPoints], DEFAULT_PROOF_POINTS, 6) : proofPoints;
+  const clientFacingProofPoints = cleanList(
+    enhancedProofPoints.map((item) => polishClientFacingEvidenceText(item, hasCallTrackingContext)),
+    DEFAULT_PROOF_POINTS,
+    6,
+  );
   const howToReadTitle = cleanText(privateReportCopy.howToReadTitle || report.howToReadTitle || report.how_to_read_title, "How to read this review");
   const howToReadParagraphs = cleanList(
     privateReportCopy.howToReadParagraphs || report.howToReadParagraphs || report.how_to_read_paragraphs || report.howToReadThisReview,
@@ -1520,7 +1623,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     primaryConversionFocus,
     businessType: businessTypeLabel,
     whatChecked,
-    proofPoints: enhancedProofPoints,
+    proofPoints: clientFacingProofPoints,
     recommendations,
     auditSnapshotQuestions,
     manualAdsSummary,
@@ -1530,30 +1633,31 @@ export default async function ReportPage({ params }: ReportPageProps) {
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <ReportViewBeacon token={token} />
       <PdfDownloadExperienceScript />
+      <AssistantVisibilityScript />
       <ReportNavbar />
 
-      <section className="relative overflow-hidden border-b border-slate-200 bg-white pt-24">
+      <section data-trackflow-hero className="relative overflow-hidden border-b border-slate-200 bg-white pt-20 sm:pt-24">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute right-[-12rem] top-[-12rem] h-96 w-96 rounded-full bg-blue-100 blur-3xl" />
           <div className="absolute bottom-[-10rem] left-[-8rem] h-80 w-80 rounded-full bg-slate-100 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-8 sm:px-6 sm:pb-14 sm:pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-20 lg:pt-16">
+        <div className="relative mx-auto grid max-w-7xl gap-6 px-4 pb-9 pt-6 sm:gap-8 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-16 lg:pt-12">
           <div>
             <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
               Private tracking review
             </div>
 
-            <h1 className="mt-6 max-w-4xl break-words text-4xl font-black leading-[0.98] tracking-[-0.05em] text-slate-950 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-4 max-w-3xl break-words text-3xl font-black leading-[0.98] tracking-[-0.05em] text-slate-950 sm:mt-6 sm:text-5xl lg:text-6xl">
               {heroHeadline}
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-600 sm:mt-6 sm:text-lg sm:leading-8">
+            <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
               {domain ? <span> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
             </p>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+            <div className="mt-5 grid gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
               {heroSummaryCards.map((item) => (
                 <div
                   key={item.label}
@@ -1567,17 +1671,17 @@ export default async function ReportPage({ params }: ReportPageProps) {
               ))}
             </div>
 
-            <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap">
+            <div className="mt-6 grid gap-3 sm:mt-7 sm:flex sm:flex-wrap">
               <LinkButton href="#findings" variant="dark">
                 View findings
               </LinkButton>
 
               <LinkButton href="#ask-this-review" variant="primary">
-                Ask the assistant about this review
+                Ask the assistant
               </LinkButton>
 
               <LinkButton href="#book-verification" variant="secondary">
-                Book a verification call
+                Book verification
               </LinkButton>
             </div>
 
@@ -1595,7 +1699,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </span>
             </div>
 
-            <div className="mt-8 flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+            <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 sm:mt-8 sm:gap-3 sm:text-[11px] sm:tracking-[0.18em]">
               <span className="rounded-full border border-slate-200 bg-white px-4 py-2">
                 Prepared by TrackFlow Pro
               </span>
@@ -1618,8 +1722,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/10 lg:p-6">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-950 p-6 text-white">
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-950/10 sm:rounded-[2rem] lg:p-5">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-950 p-5 text-white sm:p-6">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 Private review snapshot
               </p>
@@ -1633,7 +1737,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   <a
                     key={item}
                     href="#ask-this-review"
-                    className="group rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-sm font-bold leading-6 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white"
+                    className="group rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-xs font-bold leading-5 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white sm:p-4 sm:text-sm sm:leading-6"
                   >
                     <span>{item}</span>
                     <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
@@ -1644,7 +1748,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </div>
 
               {verificationPreviewItems.length ? (
-                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <div className="mt-5 hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:block">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">
                     What usually happens next
                   </p>
@@ -1666,7 +1770,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </a>
             </div>
 
-            <div className="mt-4 rounded-[1.5rem] border border-blue-100 bg-blue-50 p-5">
+            <div className="mt-4 hidden rounded-[1.5rem] border border-blue-100 bg-blue-50 p-5 sm:block">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
                 Evidence-safe assistant
               </p>
@@ -1678,7 +1782,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <div className="grid gap-3 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3 lg:p-5">
           {trustSignals.map((item, index) => (
             <div key={item} className="flex items-start gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50 p-4">
@@ -1692,10 +1796,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
       </section>
 
       {evidenceVideo ? (
-        <section id="evidence-video" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 lg:px-8">
+        <section id="evidence-video" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8">
           <div className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10">
-            <div className="grid gap-0 lg:grid-cols-[1.25fr_0.75fr]">
-              <div className="bg-slate-950 p-3 sm:p-4 lg:p-5">
+            <div className="grid items-start gap-0 lg:grid-cols-[1.18fr_0.82fr]">
+              <div className="bg-slate-950 p-2 sm:p-4 lg:self-start lg:p-5">
                 <div className="relative aspect-video w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20">
                   <iframe
                     title={evidenceVideo.title}
@@ -1709,15 +1813,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </div>
               </div>
 
-              <div className="border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 lg:border-l lg:border-t-0 lg:p-8">
+              <div className="border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
                   Browser-side evidence walkthrough
                 </p>
-                <h2 className="mt-4 text-3xl font-black tracking-[-0.05em] text-slate-950 sm:text-4xl">
-                  Watch what was reviewed before the PDF.
+                <h2 className="mt-3 text-2xl font-black tracking-[-0.05em] text-slate-950 sm:mt-4 sm:text-4xl">
+                  Watch the evidence before reading the PDF.
                 </h2>
                 <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">
-                  {evidenceVideo.description} This helps the visitor see the reviewed page context before asking questions or booking a verification call.
+                  {evidenceVideo.description} The walkthrough shows the reviewed page context and visible signals before the PDF details.
                 </p>
 
                 {reviewedPageBadges.length ? (
@@ -1727,7 +1831,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     </p>
                     <div className="mt-3 grid gap-2">
                       {reviewedPageBadges.map((item) => (
-                        <div key={item} className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-xs font-black leading-5 text-slate-700 shadow-sm">
+                        <div key={item} className="break-words rounded-2xl border border-blue-100 bg-white px-4 py-3 text-xs font-black leading-5 text-slate-700 shadow-sm">
                           {item}
                         </div>
                       ))}
@@ -1797,7 +1901,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </SectionCard>
 
           <SectionCard label="Supporting evidence">
-            <BulletList items={enhancedProofPoints} marker="slate" />
+            <BulletList items={clientFacingProofPoints} marker="slate" />
           </SectionCard>
         </div>
 
@@ -1940,17 +2044,19 @@ export default async function ReportPage({ params }: ReportPageProps) {
       </section>
 
 
-      <ReportChatAssistant
-        token={token}
-        domainSlug={domainSlug}
-        companyName={companyName}
-        headline={headline}
-        ctaHref={ctaHref}
-        ctaText={ctaText}
-        chatContext={chatQuestionContext}
-      />
+      <div id="ask-this-review" className="scroll-mt-24" data-trackflow-sticky-assistant-shell>
+        <ReportChatAssistant
+          token={token}
+          domainSlug={domainSlug}
+          companyName={companyName}
+          headline={headline}
+          ctaHref={ctaHref}
+          ctaText={ctaText}
+          chatContext={chatQuestionContext}
+        />
+      </div>
 
-      <section id="book-verification" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-16 sm:px-6 lg:px-8">
+      <section id="book-verification" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-28 sm:px-6 sm:pb-16 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl shadow-slate-950/15">
           <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
             <div className="p-8 lg:p-10">
@@ -1966,7 +2072,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 {bookingDescription}
               </p>
 
-              <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              <div className="mt-5 grid gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
                 {[
                   "Review the finding",
                   "Check account-side evidence",
