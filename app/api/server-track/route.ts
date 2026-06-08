@@ -45,6 +45,21 @@ const serverTrackSchema = z.object({
   clickText: z.string().trim().max(300).optional().default(""),
   clickHref: z.string().trim().max(1200).optional().default(""),
   clickLocation: z.string().trim().max(200).optional().default(""),
+
+  report_id: z.string().trim().max(120).optional().default(""),
+  report_type: z.string().trim().max(80).optional().default(""),
+  domain_slug: z.string().trim().max(160).optional().default(""),
+  primary_action_label: z.string().trim().max(180).optional().default(""),
+  primary_page_label: z.string().trim().max(160).optional().default(""),
+  primary_page_url: z.string().trim().max(700).optional().default(""),
+  event_section: z.string().trim().max(120).optional().default(""),
+  button_label: z.string().trim().max(180).optional().default(""),
+  video_id: z.string().trim().max(120).optional().default(""),
+  video_progress: z.union([z.string(), z.number()]).optional().default(""),
+  scroll_percent: z.union([z.string(), z.number()]).optional().default(""),
+  assistant_question_key: z.string().trim().max(180).optional().default(""),
+  assistant_question_length: z.union([z.string(), z.number()]).optional().default(""),
+  device_type: z.string().trim().max(40).optional().default(""),
 });
 
 function firstHeader(request: NextRequest, names: string[]) {
@@ -106,6 +121,9 @@ function mapMetaEventName(eventName: string) {
   if (eventName === "free_audit_click") return "ViewContent";
   if (eventName === "contact_click") return "Contact";
   if (eventName === "generate_lead") return "Lead";
+  if (eventName === "secure_report_booking_click") return "Lead";
+  if (eventName === "secure_report_email_click") return "Contact";
+  if (eventName === "secure_report_linkedin_click") return "Contact";
 
   return "ViewContent";
 }
@@ -154,6 +172,21 @@ async function sendGa4Event(
           click_text: payload.clickText,
           click_href: payload.clickHref,
           click_location: payload.clickLocation,
+
+          report_id: payload.report_id,
+          report_type: payload.report_type,
+          domain_slug: payload.domain_slug,
+          primary_action_label: payload.primary_action_label,
+          primary_page_label: payload.primary_page_label,
+          primary_page_url: payload.primary_page_url,
+          event_section: payload.event_section,
+          button_label: payload.button_label,
+          video_id: payload.video_id,
+          video_progress: payload.video_progress,
+          scroll_percent: payload.scroll_percent,
+          assistant_question_key: payload.assistant_question_key,
+          assistant_question_length: payload.assistant_question_length,
+          device_type: payload.device_type,
 
           country: meta.country,
           region: meta.region,
@@ -232,6 +265,16 @@ async function sendMetaEvent(
           utm_content: payload.utm_content,
           click_text: payload.clickText,
           click_location: payload.clickLocation,
+          report_id: payload.report_id,
+          report_type: payload.report_type,
+          domain_slug: payload.domain_slug,
+          primary_action_label: payload.primary_action_label,
+          primary_page_label: payload.primary_page_label,
+          event_section: payload.event_section,
+          button_label: payload.button_label,
+          video_progress: payload.video_progress,
+          scroll_percent: payload.scroll_percent,
+          device_type: payload.device_type,
         },
       },
     ],

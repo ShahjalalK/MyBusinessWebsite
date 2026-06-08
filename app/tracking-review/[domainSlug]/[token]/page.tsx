@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
 import ReportChatAssistant from "@/app/components/trackflow/ReportChatAssistant";
+import SecureReportAnalytics from "@/app/components/trackflow/SecureReportAnalytics";
 import type { ReportChatQuestionContext } from "@/app/components/trackflow/reportChatQuestions";
 
 export const dynamic = "force-dynamic";
@@ -162,7 +163,7 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
     provider: "youtube",
     videoId,
     watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`,
+    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&enablejsapi=1`,
     title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short browser-side evidence walkthrough"),
     description: cleanText(
       report.evidenceVideoDescription || report.evidence_video_description || raw.description,
@@ -1571,6 +1572,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
   const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
+  const primaryReviewedPageText = reviewedPageItems.find((item) => /(?:primary|apply|contact|booking|book|checkout|form|lead)/i.test(item)) || reviewedPageItems[0] || "";
+  const primaryPageLabel =
+    cleanText(privateReportCopy.primaryPageLabel || privateReportCopy.primary_page_label || report.primaryPageLabel || report.primary_page_label, "") ||
+    cleanText(primaryReviewedPageText.split(":")[0], "");
+  const primaryPageUrl =
+    cleanText(privateReportCopy.primaryPageUrl || privateReportCopy.primary_page_url || report.primaryPageUrl || report.primary_page_url, "") ||
+    cleanText(primaryReviewedPageText.match(/https?:\/\/[^\s)]+/)?.[0], "");
   const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
     .join(" ")
     .toLowerCase()
@@ -1671,6 +1679,14 @@ export default async function ReportPage({ params }: ReportPageProps) {
       <ReportViewBeacon token={token} />
       <PdfDownloadExperienceScript />
       <AssistantVisibilityScript />
+      <SecureReportAnalytics
+        token={token}
+        domainSlug={domainSlug}
+        primaryActionLabel={primaryConversionFocus}
+        primaryPageLabel={primaryPageLabel}
+        primaryPageUrl={primaryPageUrl}
+        videoId={evidenceVideo?.videoId || ""}
+      />
       <ReportNavbar />
 
       <section data-trackflow-hero className="relative overflow-hidden border-b border-slate-200 bg-white pt-20 sm:pt-24">
@@ -1833,12 +1849,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
       </section>
 
       {evidenceVideo ? (
-        <section id="evidence-video" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8">
+        <section id="evidence-video" data-secure-report-visible-section="evidence_video" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8">
           <div className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10">
             <div className="grid items-start gap-0 lg:grid-cols-[1.18fr_0.82fr]">
               <div className="bg-slate-950 p-2 sm:p-4 lg:self-start lg:p-5">
                 <div className="relative aspect-video w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20">
                   <iframe
+                    id="trackflow-evidence-video-player"
+                    data-trackflow-evidence-video
+                    data-video-id={evidenceVideo.videoId}
                     title={evidenceVideo.title}
                     src={evidenceVideo.embedUrl}
                     loading="lazy"
@@ -1957,7 +1976,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </SectionCard>
 
-          <section id="pdf-report" className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
+          <section id="pdf-report" data-secure-report-visible-section="pdf_preview" className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
             <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -2138,6 +2157,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <div className="mt-5 flex flex-col gap-3">
                 <a
                   href={bookingHref}
+                  data-secure-report-event="booking_click"
+                  data-secure-report-section="booking_cta"
+                  data-secure-report-label="Book a verification call"
                   target={bookingUrl ? "_blank" : undefined}
                   rel={bookingUrl ? "noopener noreferrer" : undefined}
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
@@ -2154,6 +2176,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
                 <a
                   href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Tracking Review Request - ${companyName === "this website" ? "Website" : companyName}`)}`}
+                  data-secure-report-event="email_click"
+                  data-secure-report-section="booking_cta"
+                  data-secure-report-label="Reply by Email"
                   className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
                 >
                   Reply by Email

@@ -294,6 +294,25 @@ function getMessagesStorageKey(token: string, sessionId: string): string {
   return `trackflow_report_chat_messages_${token || "unknown"}_${sessionId || "unknown"}`;
 }
 
+function emitSecureReportAnalytics(eventName: string, detail: Record<string, unknown> = {}) {
+  if (!isBrowserAvailable()) return;
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent("trackflow:secure-report-event", {
+        detail: {
+          eventName,
+          event_section: "assistant",
+          ...detail,
+        },
+      }),
+    );
+  } catch {
+    // Analytics should never affect the chat experience.
+  }
+}
+
+
 function cleanDisplayLine(value: string): string {
   return String(value || "")
     .replace(/\*\*/g, "")
@@ -618,6 +637,7 @@ export default function ReportChatAssistant({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const sessionIdRef = useRef("");
   const sessionTokenRef = useRef("");
+  const assistantOpenTrackedRef = useRef(false);
 
   const storageKey = useMemo(
     () => (token && sessionId ? getMessagesStorageKey(token, sessionId) : ""),
@@ -807,7 +827,19 @@ export default function ReportChatAssistant({
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen || assistantOpenTrackedRef.current) return;
+
+    assistantOpenTrackedRef.current = true;
+    emitSecureReportAnalytics("assistant_open", {
+      button_label: "Ask about this review",
+    });
+  }, [isOpen]);
+
+  useEffect(() => {
     const openChat = () => {
+      emitSecureReportAnalytics("assistant_open_click", {
+        button_label: "Ask about this review",
+      });
       setIsOpen(true);
       window.setTimeout(() => {
         inputRef.current?.focus();
@@ -862,6 +894,11 @@ export default function ReportChatAssistant({
   async function submitQuestion(nextQuestion?: string) {
     const cleanQuestion = String(nextQuestion ?? question).trim();
     if (!cleanQuestion || isSending || isDisabled) return;
+
+    emitSecureReportAnalytics("assistant_message_sent", {
+      assistant_question_key: normalizeReportChatQuestionKey(cleanQuestion),
+      assistant_question_length: cleanQuestion.length,
+    });
 
     const tokenKey = normalizeSessionToken(token);
     const activeSessionId = getOrCreateSessionId(
@@ -1108,7 +1145,15 @@ export default function ReportChatAssistant({
                               <button
                                 key={item}
                                 type="button"
-                                onClick={() => void submitQuestion(item)}
+                                onClick={() => {
+                                  emitSecureReportAnalytics("assistant_question_click", {
+                                    assistant_question_key: normalizeReportChatQuestionKey(item),
+                                    assistant_question_length: item.length,
+                                    button_label: item,
+                                    question_source: "follow_up",
+                                  });
+                                  void submitQuestion(item);
+                                }}
                                 disabled={isSending || isDisabled}
                                 className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-left text-[11px] font-bold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
@@ -1149,7 +1194,15 @@ export default function ReportChatAssistant({
                       <button
                         key={item}
                         type="button"
-                        onClick={() => void submitQuestion(item)}
+                        onClick={() => {
+                          emitSecureReportAnalytics("assistant_question_click", {
+                            assistant_question_key: normalizeReportChatQuestionKey(item),
+                            assistant_question_length: item.length,
+                            button_label: item,
+                            question_source: "starter",
+                          });
+                          void submitQuestion(item);
+                        }}
                         disabled={isSending || isDisabled}
                         className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-left text-[11px] font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1214,7 +1267,12 @@ export default function ReportChatAssistant({
           <>
             <button
               type="button"
-              onClick={() => setIsOpen(true)}
+              onClick={() => {
+                emitSecureReportAnalytics("assistant_open_click", {
+                  button_label: "Ask about this review",
+                });
+                setIsOpen(true);
+              }}
               className="group flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full bg-blue-600 px-4 py-3.5 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:px-5 sm:py-4"
               aria-label="Open tracking review chat"
               aria-expanded={isOpen}
