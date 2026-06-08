@@ -169,8 +169,8 @@ function toGa4Boolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function isAnalyticsDebugEnabled() {
-  return isAnalyticsDebugEnabled() || process.env.TRACKFLOW_ANALYTICS_DEBUG === "1";
+function isAnalyticsDebugEnabled(): boolean {
+  return process.env.TRACKFLOW_ANALYTICS_DEBUG === "true" || process.env.TRACKFLOW_ANALYTICS_DEBUG === "1";
 }
 
 async function sendGa4SecureReportEvent(payload: Record<string, unknown>) {
