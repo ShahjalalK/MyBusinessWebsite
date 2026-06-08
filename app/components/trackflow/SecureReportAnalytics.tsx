@@ -146,16 +146,39 @@ function getReportSessionId(token: string) {
   if (typeof window === "undefined" || hasPrivacyOptOut()) return "";
 
   const key = `${REPORT_SESSION_PREFIX}${normalizeToken(token)}`;
+  const now = Date.now();
 
   try {
-    const existing = window.sessionStorage.getItem(key);
-    if (existing) return existing;
+    const localRaw = window.localStorage.getItem(key) || "";
+    const sessionRaw = window.sessionStorage.getItem(key) || "";
+    const stored = parseStoredSession(localRaw) || parseStoredSession(sessionRaw);
+    const legacyRaw =
+      !stored && (localRaw || sessionRaw).startsWith("ses_")
+        ? localRaw || sessionRaw
+        : "";
+    const existingId = cleanClientId(stored?.id || legacyRaw);
+    const updatedAt = Number(stored?.updatedAt || (legacyRaw ? now : 0));
 
-    const next = `ses_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 10)}`;
-    window.sessionStorage.setItem(key, next);
-    return next;
+    if (existingId && now - updatedAt < GA_SESSION_TIMEOUT_MS) {
+      const value = JSON.stringify({ id: existingId, updatedAt: now });
+      window.localStorage.setItem(key, value);
+      window.sessionStorage.setItem(key, value);
+      return existingId;
+    }
+
+    const nextId = `ses_${Math.floor(now / 1000)}_${shortHash(
+      `${normalizeToken(token)}:${now}:${Math.random()}`,
+      8,
+    )}`;
+    const value = JSON.stringify({ id: nextId, updatedAt: now });
+    window.localStorage.setItem(key, value);
+    window.sessionStorage.setItem(key, value);
+    return nextId;
   } catch {
-    return `ses_${shortHash(`${normalizeToken(token)}:${Date.now()}:${Math.random()}`, 12)}`;
+    return `ses_${shortHash(
+      `${normalizeToken(token)}:${Date.now()}:${Math.random()}`,
+      12,
+    )}`;
   }
 }
 
@@ -169,6 +192,16 @@ type EventJourneyMeta = {
 
 function getEventJourneyMeta(eventName: string): EventJourneyMeta {
   const name = sanitizeEventName(eventName);
+
+  if (name.includes("booking_section")) {
+    return {
+      visitStage: "interest",
+      journeyStep: "07_booking_section_clicked",
+      intentLevel: "high",
+      intentScore: 65,
+      isCoreEvent: false,
+    };
+  }
 
   if (name.includes("booking")) {
     return {
@@ -806,6 +839,7 @@ export default function SecureReportAnalytics({
 
       const eventName =
         element.dataset.trackflowAnalyticsEvent || "secure_report_click";
+      const normalizedEventName = sanitizeEventName(eventName);
       const label =
         element.dataset.trackflowAnalyticsLabel ||
         cleanText(
@@ -817,9 +851,19 @@ export default function SecureReportAnalytics({
         element instanceof HTMLAnchorElement
           ? element.href
           : element.getAttribute("href") || "";
+      const isServerRedirectTrackedClick =
+        href.includes("/api/report-redirect") &&
+        [
+          "secure_report_booking_click",
+          "secure_report_email_click",
+          "secure_report_linkedin_click",
+          "secure_report_cta_click",
+        ].includes(normalizedEventName);
+
+      if (isServerRedirectTrackedClick) return;
 
       void sendEvent({
-        eventName,
+        eventName: normalizedEventName,
         eventSection: section,
         buttonLabel: label,
         clickHref: href,

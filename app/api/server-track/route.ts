@@ -127,7 +127,7 @@ function cleanClientId(value: unknown) {
 }
 
 function resolveGa4ClientId(payload: z.infer<typeof serverTrackSchema>) {
-  return cleanClientId(payload.gaClientId || payload.anonymousId);
+  return cleanClientId(payload.anonymousId || payload.gaClientId);
 }
 
 function normalizeGaSessionId(value: unknown): number | undefined {

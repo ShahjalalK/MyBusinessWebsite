@@ -121,9 +121,14 @@ async function sendGa4RedirectEvent(payload: Record<string, unknown>) {
     .replace(/^_+|_+$/g, "")
     .slice(0, 80) || "secure_report_cta_click";
 
-  const clientId =
-    sanitizeParam(payload.gaClientId || payload.anonymousId, 200) ||
-    crypto.randomUUID();
+  const clientId = sanitizeParam(
+    payload.anonymousId || payload.gaClientId,
+    200,
+  );
+
+  if (!clientId) {
+    return { skipped: true, reason: "missing_stable_client_id" };
+  }
 
   const params = cleanParams({
     event_id: sanitizeParam(payload.eventId, 200),

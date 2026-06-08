@@ -1841,7 +1841,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <LinkButton
                 href="#book-verification"
                 variant="secondary"
-                analyticsEvent="secure_report_booking_click"
+                analyticsEvent="secure_report_booking_section_click"
                 analyticsSection="hero"
                 analyticsLabel="Book verification"
               >

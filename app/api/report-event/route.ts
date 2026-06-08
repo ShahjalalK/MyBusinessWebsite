@@ -101,6 +101,16 @@ function reportVisitorLabel(reportId: string, anonymousId: string) {
 function journeyMeta(eventName: string) {
   const name = sanitizeEventName(eventName);
 
+  if (name.includes("booking_section")) {
+    return {
+      visitStage: "interest",
+      journeyStep: "07_booking_section_clicked",
+      intentLevel: "high",
+      intentScore: 65,
+      isCoreEvent: false,
+    };
+  }
+
   if (name.includes("booking")) {
     return {
       visitStage: "booking",
@@ -378,10 +388,10 @@ async function sendGa4SecureReportEvent(payload: Record<string, unknown>) {
 
   const eventName = sanitizeEventName(payload.eventName);
   const clientId = cleanClientId(
-    payload.gaClientId ||
-      payload.ga_client_id ||
-      payload.anonymousId ||
-      payload.anonymous_id,
+    payload.anonymousId ||
+      payload.anonymous_id ||
+      payload.gaClientId ||
+      payload.ga_client_id,
   );
 
   if (!clientId) {
