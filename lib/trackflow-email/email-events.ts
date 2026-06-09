@@ -95,13 +95,20 @@ export async function addEmailEvent(leadId: string, event: string, payload: AnyR
   });
 }
 
-async function collectEmailEventDocIds(query: any, limitCount = 500): Promise<string[]> {
+async function collectEmailEventDocIds(
+  query: any,
+  limitCount = 500,
+  includeDoc?: (data: AnyRecord) => boolean,
+): Promise<string[]> {
   const ids: string[] = [];
   try {
     const snap = await query.limit(limitCount).get();
-    for (const docSnap of (snap.docs || []) as Array<{ id: string }>) {
-    if (docSnap?.id) ids.push(docSnap.id);
-  }
+    for (const docSnap of (snap.docs || []) as Array<{ id: string; data?: () => AnyRecord }>) {
+      if (!docSnap?.id) continue;
+      const data = typeof docSnap.data === "function" ? docSnap.data() || {} : {};
+      if (includeDoc && !includeDoc(data)) continue;
+      ids.push(docSnap.id);
+    }
   } catch {
     // Best-effort cleanup only. A missing index or field should not break report cleanup.
   }
@@ -128,6 +135,10 @@ async function deleteEmailEventIds(ids: string[]): Promise<number> {
 export async function deleteEmailEventsForReport(input: {
   reportToken?: string;
   leadIds?: string[];
+  messageIds?: string[];
+  trackingIds?: string[];
+  emailLower?: string;
+  emailLowers?: string[];
   dryRun?: boolean;
   maxDocs?: number;
   /**
@@ -136,23 +147,59 @@ export async function deleteEmailEventsForReport(input: {
    * the same report token but are not under the Sheet audit/report.
    */
   matchReportToken?: boolean;
+  /**
+   * Safe fallback for lead deletion: when true, report-token matches are only
+   * deleted if the event also belongs to one of the supplied emailLower values.
+   * This removes orphaned report-only events without deleting other recipients
+   * that share the same audit/report token.
+   */
+  matchReportTokenWithEmail?: boolean;
 }) {
   const reportToken = cleanToken(input.reportToken || "");
   const leadIds = uniqueStrings((input.leadIds || []).map((value) => cleanToken(value)).filter(Boolean), 100);
+  const messageIds = uniqueStrings((input.messageIds || []).map((value) => cleanId(value)).filter(Boolean), 100);
+  const trackingIds = uniqueStrings((input.trackingIds || []).map((value) => cleanId(value)).filter(Boolean), 100);
+  const emailLowers = uniqueStrings([input.emailLower, ...(input.emailLowers || [])].map((value) => cleanEmail(value)).filter(Boolean), 100)
+    .map((value) => value.toLowerCase());
+  const emailLowerSet = new Set(emailLowers);
   const maxDocs = Math.max(1, Math.min(Number(input.maxDocs || 1000), 2000));
   const matchReportToken = input.matchReportToken !== false;
+  const matchReportTokenWithEmail = input.matchReportTokenWithEmail === true && Boolean(reportToken && emailLowerSet.size);
   const docIds: string[] = [];
   const eventsRef = adminDb.collection("email_events");
+  const matchesKnownEmail = (data: AnyRecord = {}) => {
+    const eventEmail = cleanEmail(data.emailLower || data.email_lower || data.email || "").toLowerCase();
+    return Boolean(eventEmail && emailLowerSet.has(eventEmail));
+  };
 
   if (reportToken && matchReportToken) {
     docIds.push(...(await collectEmailEventDocIds(eventsRef.where("reportToken", "==", reportToken), maxDocs)));
     docIds.push(...(await collectEmailEventDocIds(eventsRef.where("report_token", "==", reportToken), maxDocs)));
+  } else if (matchReportTokenWithEmail) {
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("reportToken", "==", reportToken), maxDocs, matchesKnownEmail)));
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("report_token", "==", reportToken), maxDocs, matchesKnownEmail)));
   }
 
   for (let index = 0; index < leadIds.length; index += 10) {
     const chunk = leadIds.slice(index, index + 10);
     if (!chunk.length) continue;
     docIds.push(...(await collectEmailEventDocIds(eventsRef.where("leadId", "in", chunk), maxDocs)));
+  }
+
+  for (let index = 0; index < messageIds.length; index += 10) {
+    const chunk = messageIds.slice(index, index + 10);
+    if (!chunk.length) continue;
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("messageId", "in", chunk), maxDocs)));
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("message_id", "in", chunk), maxDocs)));
+  }
+
+  for (let index = 0; index < trackingIds.length; index += 10) {
+    const chunk = trackingIds.slice(index, index + 10);
+    if (!chunk.length) continue;
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("trackingId", "in", chunk), maxDocs)));
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("tracking_id", "in", chunk), maxDocs)));
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("trackingTag", "in", chunk), maxDocs)));
+    docIds.push(...(await collectEmailEventDocIds(eventsRef.where("tracking_tag", "in", chunk), maxDocs)));
   }
 
   const uniqueIds = uniqueStrings(docIds, maxDocs);
@@ -163,8 +210,13 @@ export async function deleteEmailEventsForReport(input: {
       dryRun: true,
       reportToken,
       leadIds,
+      messageIds,
+      trackingIds,
+      emailLowers,
       matchReportToken,
+      matchReportTokenWithEmail,
       matchedByReportToken: Boolean(reportToken && matchReportToken),
+      matchedByReportTokenWithEmail: matchReportTokenWithEmail,
       matchedCount: uniqueIds.length,
       deletedCount: 0,
       capped: uniqueIds.length >= maxDocs,
@@ -177,8 +229,13 @@ export async function deleteEmailEventsForReport(input: {
     dryRun: false,
     reportToken,
     leadIds,
+    messageIds,
+    trackingIds,
+    emailLowers,
     matchReportToken,
+    matchReportTokenWithEmail,
     matchedByReportToken: Boolean(reportToken && matchReportToken),
+    matchedByReportTokenWithEmail: matchReportTokenWithEmail,
     matchedCount: uniqueIds.length,
     deletedCount,
     capped: uniqueIds.length >= maxDocs,

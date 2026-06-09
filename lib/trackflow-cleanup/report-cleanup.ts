@@ -35,6 +35,7 @@ type CleanupManifest = {
   leadId: string;
   leadFound: boolean;
   linkedLeadIds: string[];
+  linkedLeadEmails: string[];
   linkedLeadCount: number;
   emailLower: string;
   sheetRowNumber: number | null;
@@ -545,6 +546,15 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
   const leadFound = leadResults.length > 0;
   const lead: AnyRecord = leadFound ? { ...asRecord(leadResults[0].data), id: leadResults[0].id } : {};
   const linkedLeadIds = uniqueStrings(leadResults.map((item) => item.id), 80);
+  const linkedLeadEmails = uniqueStrings(
+    leadResults
+      .map((item) => {
+        const data = asRecord(item.data);
+        return cleanEmail(data.emailLower || data.email_lower || data.email);
+      })
+      .filter(Boolean),
+    80,
+  );
   const contactHistories = leadResults.map((item) => detectLeadContactHistory({ ...asRecord(item.data), id: item.id }));
   const contactedHistory = contactHistories.find((item) => item.contacted) || { contacted: false, reason: "" };
 
@@ -562,6 +572,7 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     leadId: firstCleanString(lead.id, leadId),
     leadFound,
     linkedLeadIds,
+    linkedLeadEmails,
     linkedLeadCount: linkedLeadIds.length,
     emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || report.emailLower || report.email_lower || report.email),
     sheetRowNumber,
@@ -763,6 +774,7 @@ async function cleanupReportEmailEventsStep(manifest: CleanupManifest): Promise<
       details: {
         reportToken: manifest.reportToken,
         linkedLeadIds,
+        linkedLeadEmails: manifest.linkedLeadEmails || [],
         manualReportLinkedProtected: true,
       },
     };
@@ -772,7 +784,9 @@ async function cleanupReportEmailEventsStep(manifest: CleanupManifest): Promise<
     const result = await deleteEmailEventsForReport({
       reportToken: manifest.reportToken,
       leadIds: linkedLeadIds,
+      emailLowers: manifest.linkedLeadEmails || [],
       matchReportToken: false,
+      matchReportTokenWithEmail: Boolean((manifest.linkedLeadEmails || []).length),
       dryRun: false,
     });
 
@@ -949,7 +963,7 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
         continue;
       }
 
-      const leadData = { ...asRecord(snap.data()), id: leadId };
+      const leadData: AnyRecord = { ...asRecord(snap.data()), id: leadId };
 
       if (leadMode === "delete_no_memory") {
         await deleteContactMemoryForLead(leadData, manifest);
@@ -958,8 +972,22 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
       }
 
       if (leadMode === "delete" || leadMode === "delete_no_memory") {
+        const emailEventCleanup = await deleteEmailEventsForReport({
+          reportToken: manifest.reportToken,
+          leadIds: [leadId],
+          emailLowers: uniqueStrings(
+            [
+              cleanEmail(leadData.emailLower || leadData.email_lower || leadData.email),
+              ...(manifest.linkedLeadEmails || []),
+            ].filter(Boolean),
+            20,
+          ),
+          matchReportToken: false,
+          matchReportTokenWithEmail: true,
+          maxDocs: 2000,
+        }).catch((error: any) => ({ ok: false, reason: safeError(error) }));
         await ref.delete();
-        results.push({ leadId, ok: true, status: "deleted" });
+        results.push({ leadId, ok: true, status: "deleted", emailEventCleanup });
         continue;
       }
 
@@ -1218,6 +1246,7 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
         : "No Sheet-linked outreach leads were found, so Manual + Report email history would be preserved.",
       {
         linkedLeadIds: manifest.linkedLeadIds || [],
+        linkedLeadEmails: manifest.linkedLeadEmails || [],
         linkedLeadCount: manifest.linkedLeadCount || 0,
         manualReportLinkedProtected: true,
       },

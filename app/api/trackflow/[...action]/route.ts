@@ -7695,6 +7695,120 @@ function getLeadReportTokenForCleanup(lead: LeadData): string {
   );
 }
 
+function uniqueCleanStringsForCleanup(values: any[], max = 100): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values || []) {
+    const text = String(value || "").trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(text);
+    if (output.length >= max) break;
+  }
+
+  return output;
+}
+
+function getLeadEmailEventMessageIdsForCleanup(lead: LeadData): string[] {
+  const candidates: any[] = [
+    ...getLeadMessageIdChain(lead),
+    lead.customMessageId,
+    lead.originalMessageId,
+    lead.brevoMessageId,
+    (lead as AnyRecord).messageId,
+    (lead as AnyRecord).message_id,
+    (lead as AnyRecord).lastFollowupMessageId,
+    (lead as AnyRecord).lastFollowupCustomMessageId,
+  ];
+
+  if (Array.isArray(lead.sent_messages)) {
+    for (const message of lead.sent_messages) {
+      if (!message || typeof message !== "object") continue;
+      candidates.push(
+        message.customMessageId,
+        message.custom_message_id,
+        message.messageId,
+        message.message_id,
+        message.brevoMessageId,
+        message.brevo_message_id,
+        message.inReplyTo,
+        message.references,
+      );
+    }
+  }
+
+  return uniqueCleanStringsForCleanup(candidates, 100);
+}
+
+function cleanEmailTrackingIdForCleanup(value: any): string {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 100);
+}
+
+function getLeadEmailEventTrackingIdsForCleanup(lead: LeadData): string[] {
+  const candidates: any[] = [
+    lead.trackingId,
+    (lead as AnyRecord).tracking_id,
+    (lead as AnyRecord).lastEmailTrackingId,
+  ];
+
+  if (Array.isArray(lead.sent_messages)) {
+    for (const message of lead.sent_messages) {
+      if (!message || typeof message !== "object") continue;
+      candidates.push(
+        message.trackingId,
+        message.tracking_id,
+        message.trackingTag,
+        message.tracking_tag,
+      );
+    }
+  }
+
+  const expanded: string[] = [];
+  for (const value of candidates) {
+    const cleanValue = cleanEmailTrackingIdForCleanup(value);
+    if (!cleanValue) continue;
+    expanded.push(cleanValue);
+    const stepPrefix = cleanValue.match(/^(.+)_step\d+$/i)?.[1];
+    if (stepPrefix) expanded.push(stepPrefix);
+  }
+
+  return uniqueCleanStringsForCleanup(expanded, 100);
+}
+
+function getLeadEmailLowersForEventCleanup(lead: LeadData): string[] {
+  return uniqueCleanStringsForCleanup(
+    [
+      lead.emailLower,
+      (lead as AnyRecord).email_lower,
+      lead.email,
+      lead.sheetFinalEmail,
+      lead.parentSheetEmail,
+    ]
+      .map((value) => normalizeEmail(value || ""))
+      .filter(Boolean),
+    20,
+  );
+}
+
+async function cleanupEmailEventsForLeadBeforeDelete(leadId: string, lead: LeadData, maxDocs = 2000) {
+  return deleteEmailEventsForReport({
+    reportToken: getLeadReportTokenForCleanup(lead),
+    leadIds: [leadId],
+    messageIds: getLeadEmailEventMessageIdsForCleanup(lead),
+    trackingIds: getLeadEmailEventTrackingIdsForCleanup(lead),
+    emailLowers: getLeadEmailLowersForEventCleanup(lead),
+    matchReportToken: false,
+    matchReportTokenWithEmail: true,
+    maxDocs,
+  });
+}
+
 function getLeadDrivePdfFileIdForCleanup(lead: LeadData): string {
   return String(
     lead.pdfFileId ||
@@ -9059,12 +9173,10 @@ async function deleteManualLeadRecord(leadId: string, lead: LeadData, options: {
     await adminDb.collection("contact_memory").doc(emailDocId(emailLower)).delete().catch(() => undefined);
   }
 
-  await deleteEmailEventsForReport({
-    reportToken: getLeadReportTokenForCleanup(lead),
-    leadIds: [leadId],
-    matchReportToken: false,
-    maxDocs: 1500,
-  }).catch(() => ({ ok: false, reason: "email_event_cleanup_best_effort_failed" }));
+  const emailEventCleanup = await cleanupEmailEventsForLeadBeforeDelete(leadId, lead, 2000).catch((error: any) => ({
+    ok: false,
+    reason: String(error?.message || error || "email_event_cleanup_best_effort_failed").slice(0, 500),
+  }));
 
   await adminDb.collection("outreach_leads").doc(leadId).delete();
 
@@ -9075,6 +9187,7 @@ async function deleteManualLeadRecord(leadId: string, lead: LeadData, options: {
     email: emailLower,
     keptMemory: options.keepMemory,
     reason: options.reason,
+    emailEventCleanup,
   };
 }
 
@@ -9166,6 +9279,10 @@ async function handleLeadsBulkAction(req: Request) {
           allowAssetCleanupFailure,
         });
         const sheet = await deleteOrMarkSheetRowForLead(lead, { mode: sheetMode, actor });
+        const emailEventCleanup = await cleanupEmailEventsForLeadBeforeDelete(leadId, lead, 2000).catch((error: any) => ({
+          ok: false,
+          reason: String(error?.message || error || "email_event_cleanup_best_effort_failed").slice(0, 500),
+        }));
         await ref.delete();
 
         results.push({
@@ -9174,6 +9291,7 @@ async function handleLeadsBulkAction(req: Request) {
           ok: true,
           sheet,
           assets: assetCleanup,
+          emailEventCleanup,
         });
       } catch (error: any) {
         results.push({ leadId, email: lead.emailLower || lead.email || "", ok: false, reason: error?.message || String(error) });
@@ -10191,12 +10309,7 @@ async function deleteOutreachLeadDocsForEmails(emails: string[], actor: string, 
 
   for (const row of rows) {
     const lead = { id: row.id, ...(row.data || {}) } as LeadData;
-    await deleteEmailEventsForReport({
-      reportToken: getLeadReportTokenForCleanup(lead),
-      leadIds: [row.id],
-      matchReportToken: false,
-      maxDocs: 1500,
-    })
+    await cleanupEmailEventsForLeadBeforeDelete(row.id, lead, 2000)
       .then((result: any) => emailEventCleanupResults.push({ leadId: row.id, ok: true, result }))
       .catch((error: any) =>
         emailEventCleanupResults.push({
