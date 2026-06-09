@@ -78,6 +78,44 @@ function getGaClientId(request: NextRequest) {
   return ga;
 }
 
+
+function firstHeader(request: NextRequest, names: string[]) {
+  for (const name of names) {
+    const value = request.headers.get(name);
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function decodeHeaderValue(value: string) {
+  const cleaned = cleanText(value, "");
+  if (!cleaned) return "";
+
+  try {
+    return decodeURIComponent(cleaned.replace(/\+/g, " "));
+  } catch {
+    return cleaned;
+  }
+}
+
+function getRequestGeo(request: NextRequest) {
+  return {
+    visitorCountry: sanitizeParam(
+      firstHeader(request, ["x-vercel-ip-country", "cf-ipcountry"]),
+      16,
+    ),
+    visitorRegion: sanitizeParam(
+      firstHeader(request, ["x-vercel-ip-country-region"]),
+      80,
+    ),
+    visitorCity: sanitizeParam(
+      decodeHeaderValue(firstHeader(request, ["x-vercel-ip-city"])),
+      120,
+    ),
+  };
+}
+
 function visitorLabelFromAnonymousId(anonymousId: string) {
   if (!anonymousId) return "";
   const short = crypto
@@ -233,6 +271,7 @@ function normalizePayload(
     200,
   );
   const meta = journeyMeta(eventName);
+  const geo = getRequestGeo(request);
 
   return {
     ...input,
@@ -328,6 +367,18 @@ function normalizePayload(
     intentScore: input.intentScore ?? input.intent_score ?? meta.intentScore,
     isCoreEvent: input.isCoreEvent ?? input.is_core_event ?? meta.isCoreEvent,
     transport: sanitizeParam(input.transport || "report_event_route", 80),
+    visitorCountry: sanitizeParam(
+      input.visitorCountry || input.visitor_country || geo.visitorCountry,
+      16,
+    ),
+    visitorRegion: sanitizeParam(
+      input.visitorRegion || input.visitor_region || geo.visitorRegion,
+      80,
+    ),
+    visitorCity: sanitizeParam(
+      input.visitorCity || input.visitor_city || geo.visitorCity,
+      120,
+    ),
     clickText: sanitizeParam(
       input.clickText || input.buttonLabel || input.button_label,
       300,
@@ -478,6 +529,15 @@ async function sendGa4SecureReportEvent(payload: Record<string, unknown>) {
     intent_score: toNumber(payload.intentScore ?? payload.intent_score),
     is_core_event: toGa4Boolean(payload.isCoreEvent ?? payload.is_core_event),
     transport: sanitizeParam(payload.transport || "report_event_route", 80),
+    visitor_country: sanitizeParam(
+      payload.visitorCountry || payload.visitor_country,
+      16,
+    ),
+    visitor_region: sanitizeParam(
+      payload.visitorRegion || payload.visitor_region,
+      80,
+    ),
+    visitor_city: sanitizeParam(payload.visitorCity || payload.visitor_city, 120),
 
     question_key: sanitizeParam(
       payload.question_key || payload.questionKey,

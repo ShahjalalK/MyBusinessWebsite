@@ -40,6 +40,44 @@ function getGaClientId(request: NextRequest) {
   return ga;
 }
 
+
+function firstHeader(request: NextRequest, names: string[]) {
+  for (const name of names) {
+    const value = request.headers.get(name);
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function decodeHeaderValue(value: string) {
+  const cleaned = cleanText(value, "");
+  if (!cleaned) return "";
+
+  try {
+    return decodeURIComponent(cleaned.replace(/\+/g, " "));
+  } catch {
+    return cleaned;
+  }
+}
+
+function getRequestGeo(request: NextRequest) {
+  return {
+    visitorCountry: sanitizeParam(
+      firstHeader(request, ["x-vercel-ip-country", "cf-ipcountry"]),
+      16,
+    ),
+    visitorRegion: sanitizeParam(
+      firstHeader(request, ["x-vercel-ip-country-region"]),
+      80,
+    ),
+    visitorCity: sanitizeParam(
+      decodeHeaderValue(firstHeader(request, ["x-vercel-ip-city"])),
+      120,
+    ),
+  };
+}
+
 function visitorLabelFromAnonymousId(anonymousId: string) {
   if (!anonymousId) return "";
   const short = crypto.createHash("sha256").update(anonymousId).digest("hex").slice(0, 12);
@@ -155,6 +193,9 @@ async function sendGa4RedirectEvent(payload: Record<string, unknown>) {
     intent_score: Number(payload.intentScore),
     is_core_event: Boolean(payload.isCoreEvent),
     transport: sanitizeParam(payload.transport || "server_redirect", 80),
+    visitor_country: sanitizeParam(payload.visitorCountry, 16),
+    visitor_region: sanitizeParam(payload.visitorRegion, 80),
+    visitor_city: sanitizeParam(payload.visitorCity, 120),
 
     click_text: sanitizeParam(payload.clickText, 300),
     click_href: sanitizeParam(payload.clickHref, 1200),
@@ -194,6 +235,7 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
   const label = sanitizeParam(params.get("label") || eventName, 180);
   const eventSection = sanitizeParam(params.get("eventSection") || kind, 120);
   const domainSlug = sanitizeParam(params.get("domainSlug") || params.get("domain_slug") || "", 120);
+  const geo = getRequestGeo(request);
 
   const payload = {
     eventName,
@@ -218,6 +260,9 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
     intentScore: meta.intentScore,
     isCoreEvent: meta.isCoreEvent,
     transport: "server_redirect",
+    visitorCountry: geo.visitorCountry,
+    visitorRegion: geo.visitorRegion,
+    visitorCity: geo.visitorCity,
     clickText: label,
     clickHref: sanitizeParam(destination, 1200),
     clickLocation: eventSection,
