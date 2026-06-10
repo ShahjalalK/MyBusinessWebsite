@@ -266,7 +266,7 @@ export default function ServicesPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+      <main className="overflow-x-hidden bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
         <HeroSection />
         <SignalStrip />
@@ -284,39 +284,39 @@ export default function ServicesPage() {
 
 function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-14 pt-24 sm:py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
-      <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-8 lg:gap-12 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
             <Layers className="h-4 w-4" /> Tracking services overview
           </div>
 
-          <h1 className="max-w-5xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="max-w-5xl text-[2.05rem] font-black leading-[1.04] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02] sm:tracking-[-0.05em] md:text-6xl lg:text-7xl lg:leading-[0.98] lg:tracking-[-0.055em]">
             Tracking services for cleaner <span className="text-blue-600 dark:text-blue-400">conversion data</span> and better ad decisions.
           </h1>
 
-          <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
+          <p className="mt-7 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg sm:leading-8 dark:text-slate-300">
             TrackFlow Pro helps businesses diagnose and improve Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, and server-side tracking so paid traffic decisions are based on cleaner measurement.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 flex sm:mt-9 flex-col gap-3 sm:flex-row">
             <Link
               href="/free-tracking-audit"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
               Request Free Tracking Review
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="/contact"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
             >
               Contact Specialist
             </Link>
           </div>
 
-          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div className="mt-6 grid max-w-2xl sm:mt-8 gap-3 sm:grid-cols-3">
             {[
               "No login required for first review",
               "Public browser-visible evidence first",
@@ -338,14 +338,14 @@ function HeroSection() {
 
 function ServiceOverviewCard() {
   return (
-    <div className="relative mx-auto w-full max-w-xl">
+    <div className="relative mx-auto w-full max-w-[min(100%,36rem)] min-w-0">
       <div className="absolute -inset-4 rounded-[2.5rem] bg-blue-600/10 blur-2xl" />
       <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900">
         <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/50">
           <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Measurement stack</p>
           <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">Tracking Service Map</h2>
         </div>
-        <div className="space-y-4 p-6">
+        <div className="space-y-4 p-5 sm:p-6">
           {coreServices.map((service) => (
             <Link
               key={service.href}
@@ -373,7 +373,7 @@ function ServiceOverviewCard() {
 function SignalStrip() {
   return (
     <section className="border-y border-slate-200 bg-white px-4 py-8 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mx-auto grid w-full max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {signals.map((signal) => (
           <div key={signal.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
             <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-950 dark:text-blue-300">
@@ -390,16 +390,16 @@ function SignalStrip() {
 
 function ProblemsSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Why tracking services matter"
           title="When tracking is unclear, paid traffic decisions become risky."
           description="Most campaign problems are harder to diagnose when conversion data is incomplete, duplicated, delayed, or split across too many tools."
         />
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 lg:grid-cols-3">
           {problems.map((problem) => (
-            <div key={problem.title} className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70">
+            <div key={problem.title} className="max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70">
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300">
                 {problem.icon}
               </div>
@@ -415,19 +415,19 @@ function ProblemsSection() {
 
 function ServicesGridSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Core tracking services"
           title="Choose the measurement problem you need to solve first."
           description="Each service is designed to connect evidence, diagnosis, implementation, and validation so your tracking setup becomes easier to trust."
         />
-        <div className="mt-12 grid gap-6 lg:grid-cols-2">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 lg:grid-cols-2">
           {coreServices.map((service) => (
             <Link
               key={service.href}
               href={service.href}
-              className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-blue-900/70"
+              className="group min-w-0 max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-blue-900/70"
             >
               <div className="flex flex-col gap-5 sm:flex-row">
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-950/40 dark:text-blue-300">
@@ -463,18 +463,18 @@ function ServicesGridSection() {
 
 function ProcessSection() {
   return (
-    <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="bg-slate-950 px-4 py-14 text-white sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Evidence → diagnosis → validation"
           title="A tracking-first process across every service."
           description="The service changes depending on the problem, but the method stays the same: review evidence, identify risk, prioritize fixes, and validate the result."
           dark
         />
-        <div className="mt-12 grid gap-6 lg:grid-cols-4">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 lg:grid-cols-4">
           {process.map((step) => (
-            <div key={step.number} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
-              <div className="mb-8 text-5xl font-black tracking-[-0.06em] text-blue-400">{step.number}</div>
+            <div key={step.number} className="max-w-full rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+              <div className="mb-5 text-4xl font-black tracking-[-0.05em] text-blue-400 sm:text-5xl sm:tracking-[-0.06em]">{step.number}</div>
               <h3 className="text-lg font-black text-white">{step.title}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-400">{step.description}</p>
             </div>
@@ -487,9 +487,9 @@ function ProcessSection() {
 
 function AuditRouteSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 lg:grid-cols-[0.95fr_1.05fr] lg:p-10">
-        <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900/50">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-12 rounded-[2.5rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 lg:grid-cols-[0.95fr_1.05fr] lg:p-10">
+        <div className="max-w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/50">
           <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
             <Gauge className="h-7 w-7" />
           </div>
@@ -511,15 +511,15 @@ function AuditRouteSection() {
           <h3 className="text-4xl font-black tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl">
             Audit first, then fix the highest-impact tracking gap.
           </h3>
-          <p className="mt-6 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+          <p className="mt-6 text-[15px] font-medium leading-7 text-slate-600 sm:text-base sm:leading-8 dark:text-slate-400">
             The best service depends on the evidence. A Google Ads conversion tracking issue may come from GTM triggers, GA4 key events, consent behavior, Meta CAPI duplication, or missing server-side validation.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/free-tracking-audit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500">
+            <Link href="/free-tracking-audit" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500">
               Request Free Tracking Review
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/contact" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/40">
+            <Link href="/contact" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/40">
               Contact Directly
             </Link>
           </div>
@@ -531,17 +531,17 @@ function AuditRouteSection() {
 
 function FaqSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-4xl">
+    <section className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-4xl">
         <SectionHeader
           eyebrow="Services FAQ"
           title="Questions before choosing a tracking service."
           description="Start with the tracking problem you can see. The audit process helps uncover where the real issue sits."
           centered
         />
-        <div className="mt-12 space-y-4">
+        <div className="mt-8 space-y sm:mt-10 lg:mt-12-4">
           {faqs.map((faq) => (
-            <div key={faq.question} className="rounded-[1.5rem] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950/70">
+            <div key={faq.question} className="max-w-full rounded-[1.5rem] border border-slate-200 bg-white p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-950/70">
               <h3 className="text-lg font-black text-slate-950 dark:text-white">{faq.question}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">{faq.answer}</p>
             </div>
@@ -554,22 +554,22 @@ function FaqSection() {
 
 function FinalCtaSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.45fr] lg:items-center">
           <div>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">Tracking-first measurement support</p>
-            <h2 className="max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-5xl">Find the service that matches your tracking problem.</h2>
-            <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
+            <h2 className="max-w-3xl text-[2rem] font-black leading-[1.08] tracking-[-0.04em] sm:text-5xl sm:leading-[1] sm:tracking-[-0.05em]">Find the service that matches your tracking problem.</h2>
+            <p className="mt-5 max-w-2xl text-[15px] font-medium leading-7 text-slate-400 sm:text-base sm:leading-8">
               Start with a free review if you are not sure whether the issue is Google Ads, GA4, GTM, Meta CAPI, enhanced conversions, or server-side tracking.
             </p>
           </div>
           <div className="flex flex-col gap-3">
-            <Link href="/free-tracking-audit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
+            <Link href="/free-tracking-audit" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
               Request Free Tracking Review
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/contact" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:bg-white/[0.08]">
+            <Link href="/contact" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:bg-white/[0.08]">
               Contact Specialist
             </Link>
           </div>
@@ -595,7 +595,7 @@ function SectionHeader({
   return (
     <div className={centered ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
       <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">{eyebrow}</p>
-      <h2 className={cn("text-4xl font-black tracking-[-0.05em] sm:text-5xl", dark ? "text-white" : "text-slate-950 dark:text-white")}>{title}</h2>
+      <h2 className={cn("text-[2rem] font-black leading-[1.08] tracking-[-0.04em] sm:text-5xl sm:leading-[1] sm:tracking-[-0.05em]", dark ? "text-white" : "text-slate-950 dark:text-white")}>{title}</h2>
       <p className={cn("mt-5 text-base font-medium leading-8", dark ? "text-slate-400" : "text-slate-600 dark:text-slate-400")}>{description}</p>
     </div>
   );

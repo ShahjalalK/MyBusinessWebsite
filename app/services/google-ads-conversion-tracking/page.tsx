@@ -287,7 +287,7 @@ export default function GoogleAdsConversionTrackingPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+      <main className="overflow-x-hidden bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
         <ScriptJsonLd data={structuredData} />
         <HeroSection />
         <TrustStrip />
@@ -317,39 +317,39 @@ function ScriptJsonLd({ data }: { data: unknown }) {
 
 function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden border-b border-slate-200 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.14),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 py-20 dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.22),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden border-b border-slate-200 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.14),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-14 pt-24 sm:py-20 dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.22),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
-      <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.02fr_0.98fr]">
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-10 lg:gap-14 lg:grid-cols-[1.02fr_0.98fr]">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
             <SearchCheck className="h-4 w-4" /> Google Ads tracking specialist
           </div>
 
-          <h1 className="max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="max-w-4xl text-[2.05rem] font-black leading-[1.04] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02] sm:tracking-[-0.05em] md:text-6xl lg:text-7xl lg:leading-[0.98] lg:tracking-[-0.055em]">
             Google Ads Conversion Tracking <span className="text-blue-600 dark:text-blue-400">Setup & Fix</span> Service
           </h1>
 
-          <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
+          <p className="mt-7 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg sm:leading-8 dark:text-slate-300">
             Fix broken Google Ads conversion tracking, validate GA4 and GTM events, set up enhanced conversions, and make your lead or ecommerce conversion data more reliable before scaling ad spend.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 flex sm:mt-9 flex-col gap-3 sm:flex-row">
             <Link
               href="/free-tracking-audit"
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
               Fix My Conversion Tracking
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="#audit-scope"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
             >
               View Audit Scope
             </Link>
           </div>
 
-          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div className="mt-6 grid max-w-2xl sm:mt-8 gap-3 sm:grid-cols-3">
             {[
               "No login required for first review",
               "GA4, GTM, Google Ads validation",
@@ -371,11 +371,11 @@ function HeroSection() {
 
 function TrackingDiagnosticCard() {
   return (
-    <div className="relative mx-auto w-full max-w-xl">
+    <div className="relative mx-auto w-full max-w-[min(100%,36rem)] min-w-0">
       <div className="absolute -inset-5 rounded-[2.75rem] bg-blue-600/10 blur-3xl" />
       <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900">
         <div className="border-b border-slate-100 bg-slate-50 px-6 py-5 dark:border-slate-800 dark:bg-slate-950/50">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
                 Conversion diagnostics
@@ -390,10 +390,10 @@ function TrackingDiagnosticCard() {
           </div>
         </div>
 
-        <div className="space-y-4 p-6">
+        <div className="space-y-4 p-5 sm:p-6">
           {auditSignals.map((item) => (
             <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/50">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900">
                     <SearchCheck className="h-5 w-5" />
@@ -427,7 +427,7 @@ function TrackingDiagnosticCard() {
 function TrustStrip() {
   return (
     <section className="border-b border-slate-200 bg-white px-4 py-8 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">
+      <div className="mx-auto grid w-full max-w-7xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { value: "Google Ads", label: "Conversion actions, goals, values, imports" },
           { value: "GA4 + GTM", label: "Events, triggers, data layer, DebugView" },
@@ -446,15 +446,15 @@ function TrustStrip() {
 
 function ProblemSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Tracking problems"
           title="When conversion tracking is wrong, Google Ads optimization becomes unreliable."
           description="Conversion tracking Google Ads setups often break because tags, triggers, GA4 events, attribution settings, ecommerce values, or consent behavior are not validated together."
         />
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 md:grid-cols-2">
           {problemCards.map((card) => (
             <IconPanel key={card.title} card={card} tone="red" />
           ))}
@@ -466,15 +466,15 @@ function ProblemSection() {
 
 function SetupScopeSection() {
   return (
-    <section id="audit-scope" className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section id="audit-scope" className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Setup & validation scope"
           title="Google Ads conversion tracking setup built around evidence, not guesses."
           description="The setup covers Google Ads conversion tracking tags, Google Tag Manager, GA4 key events, enhanced conversions, ecommerce events, form leads, calls, and server-side tracking paths where needed."
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 lg:grid-cols-3">
           {setupAreas.map((card) => (
             <IconPanel key={card.title} card={card} tone="blue" />
           ))}
@@ -486,8 +486,8 @@ function SetupScopeSection() {
 
 function EnhancedServerSideSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 lg:gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
             <Database className="h-4 w-4" /> Enhanced + server-side review
@@ -497,7 +497,7 @@ function EnhancedServerSideSection() {
             Better conversion signals for privacy-aware measurement.
           </h2>
 
-          <p className="mt-6 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+          <p className="mt-6 text-[15px] font-medium leading-7 text-slate-600 sm:text-base sm:leading-8 dark:text-slate-400">
             Google Ads conversion tracking without cookies is not a single switch. It usually requires better first-party event quality, enhanced conversions, consent-aware behavior, and, when appropriate, server-side conversion tracking.
           </p>
 
@@ -506,13 +506,13 @@ function EnhancedServerSideSection() {
               Request Free Tracking Review
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/services/server-side-tracking" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30">
+            <Link href="/services/server-side-tracking" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30">
               Server-Side Tracking
             </Link>
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-900/60">
+        <div className="max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-900/60">
           <div className="grid gap-4 sm:grid-cols-2">
             {[
               "Enhanced conversions readiness",
@@ -536,8 +536,8 @@ function EnhancedServerSideSection() {
 
 function EcommerceSection() {
   return (
-    <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_0.95fr] lg:items-center">
+    <section className="bg-slate-950 px-4 py-14 text-white sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 lg:gap-12 lg:grid-cols-[1fr_0.95fr] lg:items-center">
         <div>
           <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-300">
             Ecommerce tracking
@@ -545,7 +545,7 @@ function EcommerceSection() {
           <h2 className="max-w-4xl text-4xl font-black tracking-[-0.05em] text-white sm:text-5xl">
             Shopify, WooCommerce, and ecommerce conversion value checks.
           </h2>
-          <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
+          <p className="mt-5 max-w-2xl text-[15px] font-medium leading-7 text-slate-400 sm:text-base sm:leading-8">
             Ecommerce Google Ads conversion tracking needs clean purchase events, conversion value, currency, transaction IDs, and duplicate purchase protection. Without validation, revenue-based bidding can optimize from unreliable data.
           </p>
         </div>
@@ -565,8 +565,8 @@ function EcommerceSection() {
 
 function ProcessSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Audit → setup → validation"
           title="A clean process for fixing Google Ads conversion tracking."
@@ -574,10 +574,10 @@ function ProcessSection() {
           centered
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-4">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 lg:grid-cols-4">
           {processSteps.map((step) => (
-            <div key={step.number} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-              <div className="mb-8 text-5xl font-black tracking-[-0.06em] text-blue-600 dark:text-blue-400">{step.number}</div>
+            <div key={step.number} className="max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+              <div className="mb-5 text-4xl sm:mb-8 sm:text-5xl font-black tracking-[-0.06em] text-blue-600 dark:text-blue-400">{step.number}</div>
               <h3 className="text-lg font-black text-slate-950 dark:text-white">{step.title}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">{step.description}</p>
             </div>
@@ -590,8 +590,8 @@ function ProcessSection() {
 
 function ReportPreviewSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+    <section className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 lg:gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-900/60">
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-5 dark:border-slate-800 dark:bg-slate-950/50">
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Sample diagnosis</p>
@@ -599,7 +599,7 @@ function ReportPreviewSection() {
               Google Ads Tracking Summary
             </h2>
           </div>
-          <div className="space-y-4 p-6">
+          <div className="space-y-4 p-5 sm:p-6">
             {[
               { title: "Main issue", text: "Google Ads conversion tracking setup needs validation against GA4/GTM event behavior and conversion action settings." },
               { title: "Likely impact", text: "Campaign bidding may be optimizing from incomplete, duplicated, or incorrectly attributed conversion signals." },
@@ -633,8 +633,8 @@ function ReportPreviewSection() {
 
 function DeliverablesSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 lg:gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
         <div>
           <SectionHeader
             eyebrow="What you get"
@@ -657,17 +657,17 @@ function DeliverablesSection() {
 
 function FaqSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-4xl">
+    <section className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-4xl">
         <SectionHeader
           eyebrow="FAQ"
           title="Questions about Google Ads conversion tracking."
           description="Clear answers for businesses that need conversion tracking Google Ads campaigns can rely on."
           centered
         />
-        <div className="mt-12 space-y-4">
+        <div className="mt-8 space-y sm:mt-10 lg:mt-12-4">
           {faqs.map((faq) => (
-            <div key={faq.question} className="rounded-[1.5rem] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900/60">
+            <div key={faq.question} className="max-w-full rounded-[1.5rem] border border-slate-200 bg-white p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/60">
               <h3 className="text-lg font-black text-slate-950 dark:text-white">{faq.question}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">{faq.answer}</p>
             </div>
@@ -680,26 +680,26 @@ function FaqSection() {
 
 function FinalCtaSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.45fr] lg:items-center">
           <div>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
               Fix tracking before scaling
             </p>
-            <h2 className="max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            <h2 className="max-w-3xl text-[2rem] font-black leading-[1.08] tracking-[-0.04em] sm:text-5xl sm:leading-[1] sm:tracking-[-0.05em]">
               Make your Google Ads conversion data easier to trust.
             </h2>
-            <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
+            <p className="mt-5 max-w-2xl text-[15px] font-medium leading-7 text-slate-400 sm:text-base sm:leading-8">
               Start with a no-login tracking review. I will check public browser-visible evidence first and explain what needs deeper validation before implementation.
             </p>
           </div>
           <div className="flex flex-col gap-3">
-            <Link href="/free-tracking-audit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
+            <Link href="/free-tracking-audit" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
               Request Free Tracking Review
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/contact" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:bg-white/[0.08]">
+            <Link href="/contact" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:bg-white/[0.08]">
               Contact Specialist
             </Link>
           </div>
@@ -711,7 +711,7 @@ function FinalCtaSection() {
 
 function IconPanel({ card, tone }: { card: IconCard; tone: "blue" | "red" }) {
   return (
-    <div className="group rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-blue-900/70">
+    <div className="group min-w-0 max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-blue-900/70">
       <div
         className={cn(
           "mb-5 flex h-12 w-12 items-center justify-center rounded-2xl",
@@ -747,7 +747,7 @@ function SectionHeader({
       <h2 className="text-4xl font-black tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl">
         {title}
       </h2>
-      <p className="mt-5 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+      <p className="mt-5 text-[15px] font-medium leading-7 text-slate-600 sm:text-base sm:leading-8 dark:text-slate-400">
         {description}
       </p>
     </div>

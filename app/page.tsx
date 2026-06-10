@@ -253,45 +253,45 @@ export default function HomePage() {
 
 function HomeHero() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pt-24 pb-14 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
-      <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 sm:gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
         <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+          <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-6 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
             <SearchCheck className="h-4 w-4" /> Tracking-first Google Ads specialist
           </div>
 
-          <h1 className="max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="max-w-4xl text-[2.35rem] font-black leading-[0.95] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[0.98] md:text-6xl lg:text-7xl">
             Google Ads Conversion Tracking{" "}
             <span className="text-blue-600 dark:text-blue-400">& Server-Side</span>{" "}
             Tracking Specialist
           </h1>
 
-          <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
+          <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 dark:text-slate-300 sm:mt-7 sm:text-lg sm:leading-8">
             Fix broken conversion tracking, validate GA4/GTM events, improve Meta CAPI signals, and build a more reliable measurement foundation before scaling ad spend.
           </p>
 
-          <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-slate-500 dark:text-slate-400">
+          <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-slate-500 dark:text-slate-400 sm:mt-4 sm:leading-7">
             Built for businesses already running paid traffic but not fully confident in their conversion data.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
             <Link
               href="/free-tracking-audit"
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25 sm:w-auto sm:px-7"
             >
               Book Free Tracking Review
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/services/google-ads-conversion-tracking"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30 sm:w-auto sm:px-7"
             >
               View Tracking Services
             </Link>
           </div>
 
-          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div className="mt-7 grid max-w-2xl gap-3 sm:mt-8 sm:grid-cols-3">
             {[
               "No login required for first review",
               "Public evidence first",
@@ -321,10 +321,10 @@ function HeroAuditCard() {
 
   return (
     <div className="relative mx-auto w-full max-w-xl">
-      <div className="absolute -inset-4 rounded-[2.5rem] bg-blue-600/10 blur-2xl" />
-      <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900">
-        <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/50">
-          <div className="flex items-center justify-between gap-4">
+      <div className="absolute -inset-3 rounded-[2rem] bg-blue-600/10 blur-2xl sm:-inset-4 sm:rounded-[2.5rem]" />
+      <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900 sm:rounded-[2rem]">
+        <div className="border-b border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
                 Tracking audit preview
@@ -339,19 +339,19 @@ function HeroAuditCard() {
           </div>
         </div>
 
-        <div className="space-y-4 p-6">
+        <div className="space-y-3 p-4 sm:space-y-4 sm:p-6">
           {rows.map((row) => (
             <div
               key={row.label}
-              className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/50"
+              className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-950/50 sm:flex-row sm:items-center sm:gap-4 sm:p-4"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900 sm:h-10 sm:w-10">
                   <SearchCheck className="h-5 w-5" />
                 </span>
                 <span>
-                  <span className="block text-base font-black text-slate-950 dark:text-white">{row.label}</span>
-                  <span className="mt-1 block text-sm font-bold text-slate-500 dark:text-slate-400">
+                  <span className="block text-sm font-black text-slate-950 dark:text-white sm:text-base">{row.label}</span>
+                  <span className="mt-1 block text-xs font-bold text-slate-500 dark:text-slate-400 sm:text-sm">
                     Browser-visible evidence
                   </span>
                 </span>
@@ -361,7 +361,7 @@ function HeroAuditCard() {
           ))}
         </div>
 
-        <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/50">
+        <div className="border-t border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6">
           <p className="text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
             Final confirmation may require GA4, GTM, Google Ads, Meta, CRM, or server-log access.
           </p>
@@ -374,7 +374,7 @@ function HeroAuditCard() {
 function TrustBar() {
   return (
     <section className="border-y border-slate-200 bg-white px-4 py-8 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">
+      <div className="mx-auto grid max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {proofStats.map((item) => (
           <div
             key={item.label}
@@ -398,7 +398,7 @@ function TrustBar() {
 
 function ProblemSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Tracking problems"
@@ -406,11 +406,11 @@ function ProblemSection() {
           description="If Google Ads, GA4, GTM, Meta Pixel, or server-side events are not validated, you may scale decisions using incomplete data."
         />
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 grid gap-4 sm:mt-10 sm:gap-6 md:grid-cols-2">
           {problems.map((problem) => (
             <div
               key={problem.title}
-              className="group rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70"
+              className="group rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70 sm:rounded-[2rem] sm:p-7"
             >
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300">
                 {problem.icon}
@@ -431,7 +431,7 @@ function ProblemSection() {
 
 function ServicesSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+    <section className="bg-slate-50 px-4 py-14 dark:bg-slate-900/25 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Specialist services"
@@ -439,12 +439,12 @@ function ServicesSection() {
           description="A focused service stack for businesses that rely on paid traffic and need cleaner conversion data."
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:mt-10 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           {services.map((service) => (
             <Link
               key={service.href}
               href={service.href}
-              className="group flex flex-col rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-blue-900/70"
+              className="group flex flex-col rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-blue-900/70 sm:rounded-[2rem] sm:p-6"
             >
               <span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-950/40 dark:text-blue-300">
                 {service.icon}
@@ -471,16 +471,16 @@ function ServicesSection() {
 
 function AuditProofSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid max-w-7xl gap-8 sm:gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-12">
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
             <LockKeyhole className="h-4 w-4" /> Trust-first audit process
           </div>
-          <h2 className="text-4xl font-black tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl">
+          <h2 className="text-[2rem] font-black leading-[1.03] tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02]">
             No login required for the first tracking review.
           </h2>
-          <p className="mt-6 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+          <p className="mt-4 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400 sm:mt-6 sm:text-base sm:leading-8">
             The first review is based on public browser-visible evidence. That means I can inspect tags, network requests, conversion events, pixels, and form behavior without asking for account access upfront.
           </p>
           <div className="mt-8 space-y-4">
@@ -497,8 +497,8 @@ function AuditProofSection() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900/50">
-          <div className="rounded-[1.5rem] bg-white p-6 shadow-sm dark:bg-slate-950">
+        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50 sm:rounded-[2rem] sm:p-6">
+          <div className="rounded-[1.25rem] bg-white p-4 shadow-sm dark:bg-slate-950 sm:rounded-[1.5rem] sm:p-6">
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
               Sample audit scope
             </p>
@@ -530,7 +530,7 @@ function AuditProofSection() {
 
 function ProcessSection() {
   return (
-    <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
+    <section className="bg-slate-950 px-4 py-14 text-white sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Audit → Fix → Validate"
@@ -539,10 +539,10 @@ function ProcessSection() {
           dark
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:mt-10 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           {auditSteps.map((step) => (
-            <div key={step.number} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
-              <div className="mb-8 text-5xl font-black tracking-[-0.06em] text-blue-400">
+            <div key={step.number} className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 sm:rounded-[2rem] sm:p-6">
+              <div className="mb-5 text-4xl font-black tracking-[-0.06em] text-blue-400 sm:mb-8 sm:text-5xl">
                 {step.number}
               </div>
               <h3 className="text-lg font-black text-white">{step.title}</h3>
@@ -559,9 +559,9 @@ function ProcessSection() {
 
 function ReportPreviewSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-900/60">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid max-w-7xl gap-8 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12">
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-900/60 sm:rounded-[2rem] sm:p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
@@ -612,7 +612,7 @@ function ReportPreviewSection() {
           <div className="mt-8">
             <Link
               href="/free-tracking-audit"
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 sm:w-auto"
             >
               Get a tracking audit
               <ArrowRight className="h-4 w-4" />
@@ -626,14 +626,14 @@ function ReportPreviewSection() {
 
 function FounderTrustSection() {
   return (
- <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-  <div className="mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 lg:grid-cols-[0.9fr_1.1fr] lg:p-10">
-    <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 dark:border-slate-800 dark:from-blue-950/25 dark:via-slate-950 dark:to-slate-900">
+ <section className="bg-slate-50 px-4 py-14 dark:bg-slate-900/25 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+  <div className="mx-auto grid max-w-7xl gap-8 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 sm:rounded-[2.5rem] sm:p-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-10 lg:p-10">
+    <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-4 dark:border-slate-800 dark:from-blue-950/25 dark:via-slate-950 dark:to-slate-900 sm:rounded-[2rem] sm:p-6">
       <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
 
       <div className="relative text-center">
-        <div className="mx-auto h-52 w-52 overflow-hidden rounded-[2.25rem] border border-white bg-white shadow-2xl shadow-blue-950/10 ring-8 ring-white/70 dark:border-slate-800 dark:bg-slate-900 dark:ring-slate-900/70 sm:h-60 sm:w-60">
+        <div className="mx-auto h-44 w-44 overflow-hidden rounded-[1.75rem] border border-white bg-white shadow-2xl shadow-blue-950/10 ring-8 ring-white/70 dark:border-slate-800 dark:bg-slate-900 dark:ring-slate-900/70 sm:h-60 sm:w-60 sm:rounded-[2.25rem]">
           <Image
             src="/team/shahjalal-khan-founder-trackflow-pro.webp"
             alt="Shahjalal Khan, Founder and Tracking Specialist at TrackFlow Pro"
@@ -679,15 +679,15 @@ function FounderTrustSection() {
     </div>
 
     <div className="flex flex-col justify-center p-2 lg:p-6">
-      <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+      <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300 sm:mb-4 sm:text-[11px] sm:tracking-[0.24em]">
         Specialist, not a general agency
       </p>
 
-      <h3 className="max-w-3xl text-4xl font-black tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl">
+      <h3 className="max-w-3xl text-[2rem] font-black leading-[1.03] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02]">
         Built by a tracking specialist, not a general marketing agency.
       </h3>
 
-      <p className="mt-6 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+      <p className="mt-4 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400 sm:mt-6 sm:text-base sm:leading-8">
         TrackFlow Pro is focused on Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, server-side measurement, and conversion signal quality.
       </p>
 
@@ -695,7 +695,7 @@ function FounderTrustSection() {
         The goal is simple: help you understand whether your conversion data is reliable before you make bigger decisions about budget, bidding, reporting, or attribution.
       </p>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4">
         {[
           "Google Ads conversion tracking audit",
           "GA4 and GTM event validation",
@@ -740,7 +740,7 @@ function FounderTrustSection() {
 
 function FaqSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-4xl">
         <SectionHeader
           eyebrow="FAQ"
@@ -748,11 +748,11 @@ function FaqSection() {
           description="Clear answers for businesses that want to fix conversion tracking before scaling ad spend."
           centered
         />
-        <div className="mt-12 space-y-4">
+        <div className="mt-8 space-y-4 sm:mt-12">
           {faqs.map((faq) => (
             <div
               key={faq.question}
-              className="rounded-[1.5rem] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900/50"
+              className="rounded-[1.25rem] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/50 sm:rounded-[1.5rem] sm:p-6"
             >
               <h3 className="text-lg font-black text-slate-950 dark:text-white">{faq.question}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">
@@ -768,14 +768,14 @@ function FaqSection() {
 
 function FinalCtaSection() {
   return (
-    <section className="px-4 pb-20 sm:px-6 lg:px-8 lg:pb-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
+    <section className="px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8 lg:pb-28">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-[1.5rem] bg-slate-950 p-5 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 sm:rounded-[2rem] sm:p-8 lg:p-12">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.45fr] lg:items-center">
           <div>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
               Free tracking review
             </p>
-            <h2 className="max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            <h2 className="max-w-3xl text-[2rem] font-black leading-[1.03] tracking-[-0.05em] sm:text-5xl sm:leading-[1.02]">
               Find out what is really happening with your conversion tracking.
             </h2>
             <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
@@ -818,12 +818,12 @@ function SectionHeader({
 }) {
   return (
     <div className={centered ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
-      <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+      <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300 sm:mb-4 sm:text-[11px] sm:tracking-[0.24em]">
         {eyebrow}
       </p>
       <h2
         className={cn(
-          "text-4xl font-black tracking-[-0.05em] sm:text-5xl",
+          "text-[2rem] font-black leading-[1.03] tracking-[-0.05em] sm:text-5xl sm:leading-[1.02]",
           dark ? "text-white" : "text-slate-950 dark:text-white"
         )}
       >
@@ -831,7 +831,7 @@ function SectionHeader({
       </h2>
       <p
         className={cn(
-          "mt-5 text-base font-medium leading-8",
+          "mt-4 text-sm font-medium leading-7 sm:mt-5 sm:text-base sm:leading-8",
           dark ? "text-slate-400" : "text-slate-600 dark:text-slate-400"
         )}
       >
@@ -846,7 +846,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 function badgeClass(tone: string) {
-  const base = "shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest";
+  const base = "shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] sm:px-3 sm:text-[10px] sm:tracking-widest";
   if (tone === "amber") return `${base} bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300`;
   if (tone === "red") return `${base} bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300`;
   if (tone === "blue") return `${base} bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300`;

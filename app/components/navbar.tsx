@@ -158,6 +158,17 @@ export default function Navbar() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   return (
     <>
       <nav
@@ -168,15 +179,15 @@ export default function Navbar() {
             : "border-slate-200/60 bg-white/90 backdrop-blur-xl dark:border-slate-900/70 dark:bg-slate-950/90"
         )}
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="group flex shrink-0 items-center gap-3" aria-label="TrackFlow Pro home">
-            <span className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:gap-4 sm:px-6 lg:px-8">
+          <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3" aria-label="TrackFlow Pro home">
+            <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 sm:h-10 sm:w-10">
               <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
-              <span className="relative text-xl font-black tracking-tight">T</span>
+              <span className="relative text-lg font-black tracking-tight sm:text-xl">T</span>
             </span>
 
             <span className="leading-none">
-              <span className="block whitespace-nowrap text-[21px] font-black tracking-[-0.04em] text-slate-950 dark:text-white">
+              <span className="block whitespace-nowrap text-[19px] font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-[21px]">
                 TrackFlow<span className="text-blue-600 dark:text-blue-400">Pro</span>
               </span>
               <span className="mt-1 hidden whitespace-nowrap text-[9px] font-black uppercase tracking-[0.22em] text-slate-400 xl:block">
@@ -243,17 +254,17 @@ export default function Navbar() {
         </div>
 
         {isOpen && (
-          <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-950 lg:hidden">
-            <div className="mx-auto max-w-7xl space-y-7 px-4 py-6 sm:px-6">
+          <div className="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-950 lg:hidden">
+            <div className="mx-auto max-w-7xl space-y-5 px-4 py-4 sm:px-6 sm:py-6">
               <MobileSection title="Services" items={services} />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {directLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      "rounded-2xl border p-4 text-sm font-black transition",
+                      "rounded-2xl border p-3 text-center text-xs font-black transition sm:p-4 sm:text-sm",
                       isActive(pathname, link.href)
                         ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300"
                         : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:text-blue-300"
@@ -266,7 +277,7 @@ export default function Navbar() {
 
               <MobileSection title="Resources" items={resources} />
 
-              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-4">
                 <div>
                   <p className="text-sm font-black text-slate-950 dark:text-white">Appearance</p>
                   <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -276,7 +287,7 @@ export default function Navbar() {
                 <ThemeToggleButton />
               </div>
 
-              <div className="rounded-[1.75rem] border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 dark:border-blue-900/60 dark:from-blue-950/30 dark:to-slate-950">
+              <div className="rounded-[1.5rem] border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 dark:border-blue-900/60 dark:from-blue-950/30 dark:to-slate-950 sm:rounded-[1.75rem] sm:p-5">
                 <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 shadow-sm dark:bg-slate-900 dark:text-blue-300">
                   <Sparkles className="h-3.5 w-3.5" /> Tracking Review
                 </div>
@@ -481,19 +492,19 @@ function DropdownItem({ item }: { item: MenuItem }) {
 
 function MobileSection({ title, items }: { title: string; items: MenuItem[] }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
         {title}
       </p>
 
-      <div className="grid gap-3">
+      <div className="grid gap-2.5 sm:gap-3">
         {items.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/50 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-blue-800 dark:hover:bg-blue-950/20"
+            className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 transition hover:border-blue-200 hover:bg-blue-50/50 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-blue-800 dark:hover:bg-blue-950/20 sm:gap-4 sm:p-4"
           >
-            <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300 sm:h-10 sm:w-10">
               {item.icon}
             </span>
 

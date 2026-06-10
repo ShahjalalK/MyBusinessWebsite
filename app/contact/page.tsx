@@ -234,7 +234,7 @@ export default function ContactPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+      <main className="overflow-x-hidden bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
         <script
           type="application/ld+json"
           suppressHydrationWarning
@@ -257,28 +257,28 @@ export default function ContactPage() {
 
 function ContactHero({ calendlyUrl }: { calendlyUrl: string }) {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.2),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-14 pt-24 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.2),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
-      <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.02fr_0.98fr]">
-        <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+      <div className="mx-auto grid w-full max-w-7xl min-w-0 items-center gap-9 lg:grid-cols-[1.02fr_0.98fr] lg:gap-12">
+        <div className="min-w-0">
+          <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-6 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
             <MessageSquare className="h-4 w-4" /> Contact a tracking specialist
           </div>
 
-          <h1 className="max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="max-w-4xl text-balance text-[2.15rem] font-black leading-[1.04] tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02] md:text-6xl lg:text-7xl lg:leading-[0.98]">
             Talk to a Google Ads tracking specialist before you scale spend.
           </h1>
 
-          <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
+          <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 dark:text-slate-300 sm:mt-7 sm:text-lg sm:leading-8">
             Use this page to contact TrackFlow Pro about Google Ads conversion tracking,
             GA4/GTM audits, Meta CAPI, enhanced conversions, or server-side tracking issues.
             The first review starts with public browser-visible evidence.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
             <a
               href="#contact-form"
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white sm:w-auto shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
               Send Tracking Issue
               <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
@@ -289,25 +289,25 @@ function ContactHero({ calendlyUrl }: { calendlyUrl: string }) {
                 href={calendlyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 sm:w-auto shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
               >
                 Book a Review Call
               </a>
             ) : (
               <Link
                 href="/free-tracking-audit"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 sm:w-auto shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
               >
                 Request Free Tracking Review
               </Link>
             )}
           </div>
 
-          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-2">
+          <div className="mt-6 grid max-w-2xl gap-3 sm:mt-8 sm:grid-cols-2">
             {trustPoints.map((item) => (
               <div key={item} className="flex items-start gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
-                <span>{item}</span>
+                <span className="min-w-0">{item}</span>
               </div>
             ))}
           </div>
@@ -321,10 +321,10 @@ function ContactHero({ calendlyUrl }: { calendlyUrl: string }) {
 
 function ContactProofCard() {
   return (
-    <div className="relative mx-auto w-full max-w-xl">
+    <div className="relative mx-auto w-full max-w-full min-w-0 sm:max-w-xl">
       <div className="absolute -inset-4 rounded-[2.5rem] bg-blue-600/10 blur-2xl" />
       <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900">
-        <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/50">
+        <div className="border-b border-slate-100 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6">
           <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
             What to include
           </p>
@@ -333,7 +333,7 @@ function ContactProofCard() {
           </h2>
         </div>
 
-        <div className="space-y-4 p-6">
+        <div className="space-y-3 p-5 sm:space-y-4 sm:p-6">
           {[
             {
               label: "Website URL",
@@ -364,7 +364,7 @@ function ContactProofCard() {
                 <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-300">
                   {item.icon}
                 </span>
-                <span>
+                <span className="min-w-0">
                   <span className="block text-sm font-black text-slate-950 dark:text-white">
                     {item.label}
                   </span>
@@ -383,8 +383,8 @@ function ContactProofCard() {
 
 function TrustStrip() {
   return (
-    <section className="border-y border-slate-200 bg-white px-4 py-8 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">
+    <section className="border-y border-slate-200 bg-white px-4 py-6 dark:border-slate-800 dark:bg-slate-950 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         {[
           { value: "0 login", label: "First review", note: "Public browser-visible evidence first." },
           { value: "GA4 + GTM", label: "Core systems", note: "Google Ads, Meta CAPI, and server-side paths." },
@@ -393,7 +393,7 @@ function TrustStrip() {
         ].map((item) => (
           <div
             key={item.label}
-            className="rounded-2xl border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/50"
+            className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50 sm:p-5"
           >
             <div className="text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">
               {item.value}
@@ -413,20 +413,20 @@ function TrustStrip() {
 
 function ContactMain({ calendlyUrl }: { calendlyUrl: string }) {
   return (
-    <section id="contact-form" className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
-        <div className="lg:sticky lg:top-24">
-          <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+    <section id="contact-form" className="scroll-mt-24 px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-start lg:gap-10">
+        <div className="min-w-0 lg:sticky lg:top-24">
+          <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300 sm:mb-4 sm:text-[11px] sm:tracking-[0.24em]">
             Send your tracking issue
           </p>
-          <h2 className="text-4xl font-black tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl">
+          <h2 className="text-[2rem] font-black leading-[1.06] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02]">
             Contact should feel useful before the call starts.
           </h2>
-          <p className="mt-5 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+          <p className="mt-4 text-base font-medium leading-7 text-slate-600 dark:text-slate-400 sm:mt-5 sm:leading-8">
             Share the website, the issue, and the system involved. I use that context to avoid generic advice and focus on what needs to be checked first.
           </p>
 
-          <div className="mt-8 space-y-4">
+          <div className="mt-6 space-y-3 sm:mt-8 sm:space-y-4">
             <ContactMiniCard
               icon={<Mail className="h-5 w-5" />}
               title="Best for detailed requests"
@@ -467,7 +467,7 @@ function ContactMain({ calendlyUrl }: { calendlyUrl: string }) {
 
 function DirectContactCard() {
   return (
-    <div className="mt-7 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
+    <div className="mt-6 max-w-full overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/50 sm:mt-7 sm:rounded-[2rem]">
       <div className="border-b border-slate-100 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-950/40">
         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
           Prefer direct contact?
@@ -477,7 +477,7 @@ function DirectContactCard() {
         </p>
       </div>
 
-      <div className="space-y-3 p-5">
+      <div className="space-y-3 p-4 sm:p-5">
         <a
           href={`mailto:${BUSINESS_EMAIL}?subject=Tracking%20Review%20Request`}
           className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-900/70 dark:hover:bg-blue-950/25"
@@ -534,7 +534,7 @@ function ContactMiniCard({
   text: string;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/50">
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50 sm:p-5">
       <div className="flex gap-3">
         <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
           {icon}
@@ -552,7 +552,7 @@ function ContactMiniCard({
 
 function WhyContactSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+    <section className="bg-slate-50 px-4 py-14 dark:bg-slate-900/25 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="When to contact"
@@ -560,11 +560,11 @@ function WhyContactSection() {
           description="A tracking problem can make campaigns look worse or better than they really are. These are the most common reasons to contact TrackFlow Pro."
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 lg:grid-cols-3">
           {contactReasons.map((reason) => (
             <div
               key={reason.title}
-              className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-blue-900/70"
+              className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 sm:rounded-[2rem] sm:p-7 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-950/70 dark:hover:border-blue-900/70"
             >
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
                 {reason.icon}
@@ -585,7 +585,7 @@ function WhyContactSection() {
 
 function NextStepsSection() {
   return (
-    <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
+    <section className="bg-slate-950 px-4 py-14 text-white sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="What happens next"
@@ -594,10 +594,10 @@ function NextStepsSection() {
           dark
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 lg:grid-cols-3">
           {nextSteps.map((step) => (
-            <div key={step.step} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
-              <div className="mb-8 text-5xl font-black tracking-[-0.06em] text-blue-400">
+            <div key={step.step} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5 sm:rounded-[2rem] sm:p-6">
+              <div className="mb-5 text-4xl font-black tracking-[-0.06em] text-blue-400 sm:mb-8 sm:text-5xl">
                 {step.step}
               </div>
               <h3 className="text-lg font-black text-white">{step.title}</h3>
@@ -614,7 +614,7 @@ function NextStepsSection() {
 
 function ServiceIntentSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Service focus"
@@ -622,12 +622,12 @@ function ServiceIntentSection() {
           description="If you are not sure which service fits, select General tracking issue in the contact form. The first review will help identify the correct path."
         />
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           {serviceCards.map((service) => (
             <Link
               key={service.href}
               href={service.href}
-              className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70"
+              className="group rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 sm:rounded-[2rem] sm:p-6 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70"
             >
               <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-950/40 dark:text-blue-300">
                 {service.icon}
@@ -648,7 +648,7 @@ function ServiceIntentSection() {
 
 function FaqSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+    <section className="bg-slate-50 px-4 py-14 dark:bg-slate-900/25 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-4xl">
         <SectionHeader
           eyebrow="Contact FAQ"
@@ -657,17 +657,22 @@ function FaqSection() {
           centered
         />
 
-        <div className="mt-12 space-y-4">
+        <div className="mt-8 space-y-3 sm:mt-12 sm:space-y-4">
           {faqs.map((faq) => (
-            <div
+            <details
               key={faq.question}
-              className="rounded-[1.5rem] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950"
+              className="group rounded-[1.35rem] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950 sm:rounded-[1.5rem] sm:p-6"
             >
-              <h3 className="text-lg font-black text-slate-950 dark:text-white">{faq.question}</h3>
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-4 text-base font-black text-slate-950 marker:hidden dark:text-white sm:text-lg">
+                <span>{faq.question}</span>
+                <span className="mt-1 text-blue-600 transition group-open:rotate-90 dark:text-blue-300">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </summary>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">
                 {faq.answer}
               </p>
-            </div>
+            </details>
           ))}
         </div>
       </div>
@@ -677,14 +682,14 @@ function FaqSection() {
 
 function FinalCtaSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-[1.75rem] bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 sm:rounded-[2rem] sm:p-8 lg:p-12">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.45fr] lg:items-center">
           <div>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
               Free tracking review
             </p>
-            <h2 className="max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            <h2 className="max-w-3xl text-[2rem] font-black leading-[1.06] tracking-[-0.045em] sm:text-5xl sm:leading-[1.02]">
               Not ready to explain everything? Start with the audit request.
             </h2>
             <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
@@ -727,13 +732,13 @@ function SectionHeader({
 }) {
   return (
     <div className={centered ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
-      <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
+      <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300 sm:mb-4 sm:text-[11px] sm:tracking-[0.24em]">
         {eyebrow}
       </p>
-      <h2 className={cn("text-4xl font-black tracking-[-0.05em] sm:text-5xl", dark ? "text-white" : "text-slate-950 dark:text-white")}>
+      <h2 className={cn("text-[2rem] font-black leading-[1.06] tracking-[-0.045em] sm:text-5xl sm:leading-[1.02] sm:tracking-[-0.05em]", dark ? "text-white" : "text-slate-950 dark:text-white")}>
         {title}
       </h2>
-      <p className={cn("mt-5 text-base font-medium leading-8", dark ? "text-slate-400" : "text-slate-600 dark:text-slate-400")}>
+      <p className={cn("mt-4 text-base font-medium leading-7 sm:mt-5 sm:leading-8", dark ? "text-slate-400" : "text-slate-600 dark:text-slate-400")}>
         {description}
       </p>
     </div>

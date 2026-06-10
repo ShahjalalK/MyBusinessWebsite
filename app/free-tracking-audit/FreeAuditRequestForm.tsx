@@ -167,8 +167,8 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label htmlFor={htmlFor} className="block space-y-2">
-      <span className="block text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+    <label htmlFor={htmlFor} className="block min-w-0 space-y-2">
+      <span className="block text-[11px] font-black uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.16em]">
         {label} {required && <span className="text-blue-600 dark:text-blue-300">*</span>}
       </span>
       {children}
@@ -337,20 +337,20 @@ export default function FreeAuditRequestForm() {
   }
 
   return (
-    <div id="audit-request" className="relative mx-auto w-full max-w-xl scroll-mt-28">
-      <div className="absolute -inset-4 rounded-[2.5rem] bg-blue-600/10 blur-2xl" />
+    <div id="audit-request" className="relative mx-auto w-full max-w-xl min-w-0 scroll-mt-24 sm:scroll-mt-28">
+      <div className="pointer-events-none absolute -inset-2 rounded-[2rem] bg-blue-600/10 blur-2xl sm:-inset-4 sm:rounded-[2.5rem]" />
       <form
         onSubmit={handleSubmit}
-        className="relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900"
+        className="relative w-full max-w-full overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900 sm:rounded-[1.75rem]"
       >
-        <div className="border-b border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-5 py-5 text-white dark:border-slate-800 sm:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-200">Secure audit request</p>
-              <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-white">
+        <div className="border-b border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-4 py-4 text-white dark:border-slate-800 sm:px-6 sm:py-5">
+          <div className="flex min-w-0 items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 sm:tracking-[0.22em]">Secure audit request</p>
+              <h2 className="mt-2 text-xl font-black tracking-[-0.04em] text-white sm:text-2xl">
                 Request your free tracking review
               </h2>
-              <p className="mt-2 text-sm font-semibold leading-6 text-blue-100/90">
+              <p className="mt-2 text-[13px] font-semibold leading-6 text-blue-100/90 sm:text-sm">
                 Fill in the essentials first. Optional screenshot/PDF can be attached under 2 MB.
               </p>
             </div>
@@ -360,8 +360,8 @@ export default function FreeAuditRequestForm() {
           </div>
         </div>
 
-        <div className="space-y-4 p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-4 p-4 sm:p-6">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <Field label="Your name" htmlFor="name" required>
               <input
                 id="name"
@@ -371,7 +371,7 @@ export default function FreeAuditRequestForm() {
                 placeholder="Your name"
                 autoComplete="name"
                 required
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+                className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 sm:text-sm"
               />
             </Field>
 
@@ -384,7 +384,7 @@ export default function FreeAuditRequestForm() {
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+                className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 sm:text-sm"
               />
             </Field>
           </div>
@@ -398,7 +398,7 @@ export default function FreeAuditRequestForm() {
               placeholder="https://example.com"
               autoComplete="url"
               required
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+              className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 sm:text-sm"
             />
           </Field>
 
@@ -408,7 +408,7 @@ export default function FreeAuditRequestForm() {
               value={form.issue}
               onChange={(event) => updateField("issue", event.target.value)}
               required
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+              className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white sm:text-sm"
             >
               <option value="" disabled>
                 Select an issue
@@ -436,13 +436,13 @@ export default function FreeAuditRequestForm() {
           </Field>
 
           <details className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-950/50">
-            <summary className="cursor-pointer text-sm font-black text-slate-900 dark:text-white">
-              Optional details, screenshot or PDF
-              <span className="ml-2 text-xs font-bold text-slate-500 dark:text-slate-400">Company, phone, ad spend, document link, attachment</span>
+            <summary className="cursor-pointer text-sm font-black leading-6 text-slate-900 dark:text-white">
+              <span className="block sm:inline">Optional details, screenshot or PDF</span>
+              <span className="mt-1 block text-xs font-bold leading-5 text-slate-500 dark:text-slate-400 sm:ml-2 sm:mt-0 sm:inline">Company, phone, ad spend, document link, attachment</span>
             </summary>
 
             <div className="mt-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <Field label="Company" htmlFor="company">
                   <input
                     id="company"
@@ -451,7 +451,7 @@ export default function FreeAuditRequestForm() {
                     type="text"
                     placeholder="Company name"
                     autoComplete="organization"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+                    className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 sm:text-sm"
                   />
                 </Field>
 
@@ -463,18 +463,18 @@ export default function FreeAuditRequestForm() {
                     type="text"
                     placeholder="Optional"
                     autoComplete="tel"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+                    className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 sm:text-sm"
                   />
                 </Field>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <Field label="Platforms used" htmlFor="platforms">
                   <select
                     id="platforms"
                     value={form.platforms}
                     onChange={(event) => updateField("platforms", event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white sm:text-sm"
                   >
                     <option>Google Ads + GA4 + GTM</option>
                     <option>Google Ads only</option>
@@ -491,7 +491,7 @@ export default function FreeAuditRequestForm() {
                     id="adSpend"
                     value={form.adSpend}
                     onChange={(event) => updateField("adSpend", event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+                    className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white sm:text-sm"
                   >
                     <option value="">Select range</option>
                     <option value="Under $1,000/month">Under $1,000/month</option>
@@ -511,12 +511,12 @@ export default function FreeAuditRequestForm() {
                   onChange={(event) => updateField("documentLink", event.target.value)}
                   type="url"
                   placeholder="Google Drive, Dropbox, Loom, or screenshot link"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
+                  className="min-h-12 w-full max-w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 sm:text-sm"
                 />
               </Field>
 
               <div className="rounded-2xl border border-dashed border-blue-200 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
-                <div className="flex items-start gap-3">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-950 dark:text-blue-300">
                     <UploadCloud className="h-5 w-5" />
                   </div>
@@ -534,11 +534,11 @@ export default function FreeAuditRequestForm() {
                       type="file"
                       accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
                       onChange={handleAttachmentChange}
-                      className="mt-3 block w-full cursor-pointer rounded-xl border border-blue-100 bg-white text-xs font-bold text-slate-600 file:mr-3 file:border-0 file:bg-slate-950 file:px-4 file:py-3 file:text-xs file:font-black file:text-white hover:file:bg-blue-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                      className="mt-3 block w-full max-w-full cursor-pointer rounded-xl border border-blue-100 bg-white text-xs font-bold text-slate-600 file:mr-3 file:border-0 file:bg-slate-950 file:px-3 file:py-3 file:text-xs file:font-black file:text-white hover:file:bg-blue-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 sm:file:px-4"
                     />
 
                     {attachment && (
-                      <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300">
+                      <div className="mt-3 flex min-w-0 items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300">
                         <span className="flex min-w-0 items-center gap-2">
                           <FileText className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{attachment.name}</span>
@@ -576,7 +576,7 @@ export default function FreeAuditRequestForm() {
             aria-hidden="true"
           />
 
-          <label className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
+          <label className="flex min-w-0 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
             <input
               type="checkbox"
               checked={form.consent}
@@ -584,7 +584,7 @@ export default function FreeAuditRequestForm() {
               className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600"
               required
             />
-            <span className="text-sm font-medium leading-6 text-slate-600 dark:text-slate-400">
+            <span className="text-[13px] font-medium leading-6 text-slate-600 dark:text-slate-400 sm:text-sm">
               I agree to be contacted about this free audit request and understand the first review uses public browser-visible evidence. I agree to the{" "}
               <Link href="/privacy-policy" className="font-black text-blue-600 dark:text-blue-300">
                 Privacy Policy
@@ -600,7 +600,7 @@ export default function FreeAuditRequestForm() {
                 Security check
               </div>
 
-              <div className="overflow-hidden rounded-xl">
+              <div className="max-w-full overflow-hidden rounded-xl">
                 <Turnstile
                   key={turnstileRenderKey}
                   siteKey={turnstileSiteKey}
@@ -636,7 +636,7 @@ export default function FreeAuditRequestForm() {
           <button
             type="submit"
             disabled={!canSubmit || status === "submitting"}
-            className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            className="group inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
           >
             {status === "submitting" ? (
               <>
@@ -651,7 +651,7 @@ export default function FreeAuditRequestForm() {
             )}
           </button>
 
-          <div className="flex items-start gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-xs font-semibold leading-5 text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
+          <div className="flex min-w-0 items-start gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-xs font-semibold leading-5 text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
             <Paperclip className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-300" />
             <span>
              Files are sent by email only and are not stored on our website.

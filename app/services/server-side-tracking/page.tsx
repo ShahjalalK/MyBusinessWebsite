@@ -267,7 +267,7 @@ export default function ServerSideTrackingPage() {
   return (
     <>
       <Navbar />
-      <main className="bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+      <main className="overflow-x-hidden bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -289,39 +289,39 @@ export default function ServerSideTrackingPage() {
 
 function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_35%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.2),transparent_35%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_35%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-14 pt-24 sm:py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.2),transparent_35%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
-      <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-10 lg:gap-14 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
             <ShieldCheck className="h-4 w-4" /> GTM server-side & first-party measurement
           </div>
 
-          <h1 className="max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="max-w-4xl text-[2.05rem] font-black leading-[1.04] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[1.02] sm:tracking-[-0.05em] md:text-6xl lg:text-7xl lg:leading-[0.98] lg:tracking-[-0.055em]">
             Server-Side Tracking <span className="text-blue-600 dark:text-blue-400">& Server-Side</span> Tagging Service
           </h1>
 
-          <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
+          <p className="mt-7 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg sm:leading-8 dark:text-slate-300">
             Build a stronger first-party measurement layer with server-side tracking, GTM server-side, Google Ads conversion tracking, Meta CAPI, and validated event routing.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 flex sm:mt-9 flex-col gap-3 sm:flex-row">
             <Link
               href="/free-tracking-audit"
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-7 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
               Verify My Server-Side Tracking
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/services/google-ads-conversion-tracking"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30"
             >
               Google Ads Tracking Service
             </Link>
           </div>
 
-          <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+          <div className="mt-6 grid max-w-2xl sm:mt-8 gap-3 sm:grid-cols-3">
             {[
               "GTM server-side review",
               "Meta CAPI event validation",
@@ -343,11 +343,11 @@ function HeroSection() {
 
 function HeroSignalCard() {
   return (
-    <div className="relative mx-auto w-full max-w-xl">
+    <div className="relative mx-auto w-full max-w-[min(100%,36rem)] min-w-0">
       <div className="absolute -inset-4 rounded-[2.5rem] bg-blue-600/10 blur-2xl" />
       <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900">
         <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/50">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Measurement layer review</p>
               <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">Server-Side Signal Check</h2>
@@ -358,14 +358,14 @@ function HeroSignalCard() {
           </div>
         </div>
 
-        <div className="space-y-4 p-6">
+        <div className="space-y-4 p-5 sm:p-6">
           {[
             { label: "GTM server-side", value: "Container review", tone: "blue" },
             { label: "Event routing", value: "Needs validation", tone: "amber" },
             { label: "Meta CAPI", value: "Deduplication check", tone: "blue" },
             { label: "Google Ads conversions", value: "Signal path review", tone: "slate" },
           ].map((row) => (
-            <div key={row.label} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/50">
+            <div key={row.label} className="flex flex-col items-start gap-3 rounded-2xl sm:flex-row sm:items-center sm:justify-between sm:gap-4 border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/50">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900">
                   <SearchCheck className="h-5 w-5" />
@@ -386,17 +386,17 @@ function HeroSignalCard() {
 
 function SignalProblemSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Why server-side measurement matters"
           title="Browser-only tracking can lose important conversion signals."
           description="Server-side tracking helps create a more reliable measurement path, but it must be implemented, routed, and validated carefully before you trust it for paid traffic decisions."
         />
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 md:grid-cols-2">
           {signalIssues.map((issue) => (
-            <div key={issue.title} className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70">
+            <div key={issue.title} className="max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-7 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70">
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-300">
                 {issue.icon}
               </div>
@@ -412,15 +412,15 @@ function SignalProblemSection() {
 
 function ServiceScopeSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Server-side tracking service scope"
           title="What I review, fix, or help implement."
           description="The goal is not only to install server-side tagging. The goal is to verify whether event routing, parameters, deduplication, and destinations are working correctly."
         />
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {serviceScope.map((item) => (
             <div key={item} className="rounded-2xl border border-slate-200 bg-white p-5 text-sm font-black leading-6 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-200">
               <CheckCircle2 className="mb-4 h-5 w-5 text-emerald-500" />
@@ -435,8 +435,8 @@ function ServiceScopeSection() {
 
 function ArchitectureSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 lg:gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
             <LockKeyhole className="h-4 w-4" /> Privacy-aware signal routing
@@ -444,14 +444,14 @@ function ArchitectureSection() {
           <h2 className="text-4xl font-black tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl">
             GTM server-side should be a controlled measurement layer, not just another tag.
           </h2>
-          <p className="mt-6 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+          <p className="mt-6 text-[15px] font-medium leading-7 text-slate-600 sm:text-base sm:leading-8 dark:text-slate-400">
             A proper server side tracking GTM setup can support first-party measurement, cleaner destination routing, Meta CAPI, Google Ads conversion paths, and event validation. But the setup needs the right event design, consent behavior, identifiers, and destination checks.
           </p>
         </div>
 
         <div className="grid gap-6">
           {implementationCards.map((card) => (
-            <div key={card.title} className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900/50">
+            <div key={card.title} className="max-w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/50">
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
                 {card.icon}
               </div>
@@ -467,8 +467,8 @@ function ArchitectureSection() {
 
 function ComparisonSection() {
   return (
-    <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="bg-slate-950 px-4 py-14 text-white sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Server side tracking vs client side tracking"
           title="Both layers matter. The difference is control and resilience."
@@ -497,8 +497,8 @@ function ComparisonSection() {
 
 function ProcessSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader
           eyebrow="Audit → Map → Implement → Validate"
           title="A careful server-side tracking process."
@@ -506,10 +506,10 @@ function ProcessSection() {
           centered
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-4">
+        <div className="mt-8 grid sm:mt-10 lg:mt-12 gap-6 lg:grid-cols-4">
           {processSteps.map((step) => (
-            <div key={step.number} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
-              <div className="mb-8 text-5xl font-black tracking-[-0.06em] text-blue-600 dark:text-blue-400">{step.number}</div>
+            <div key={step.number} className="max-w-full rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
+              <div className="mb-5 text-4xl sm:mb-8 sm:text-5xl font-black tracking-[-0.06em] text-blue-600 dark:text-blue-400">{step.number}</div>
               <h3 className="text-lg font-black text-slate-950 dark:text-white">{step.title}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">{step.description}</p>
             </div>
@@ -522,8 +522,8 @@ function ProcessSection() {
 
 function DeliverablesSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+    <section className="bg-slate-50 px-4 py-14 sm:py-16 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto grid w-full max-w-7xl gap-8 lg:gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
         <div>
           <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
             What you receive
@@ -531,7 +531,7 @@ function DeliverablesSection() {
           <h2 className="text-4xl font-black tracking-[-0.05em] text-slate-950 dark:text-white sm:text-5xl">
             A practical plan for stronger server-side measurement.
           </h2>
-          <p className="mt-6 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
+          <p className="mt-6 text-[15px] font-medium leading-7 text-slate-600 sm:text-base sm:leading-8 dark:text-slate-400">
             You receive a clear server-side tracking review that explains what was found, what it likely means, what needs validation, and which fixes should happen first.
           </p>
           <div className="mt-8">
@@ -557,17 +557,17 @@ function DeliverablesSection() {
 
 function FaqSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-      <div className="mx-auto max-w-4xl">
+    <section className="px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-28">
+      <div className="mx-auto w-full max-w-4xl">
         <SectionHeader
           eyebrow="Server-side tracking FAQ"
           title="Questions before verifying server-side tracking."
           description="Clear answers for businesses considering GTM server-side, server-side tagging, Meta CAPI, and first-party measurement improvements."
           centered
         />
-        <div className="mt-12 space-y-4">
+        <div className="mt-8 space-y sm:mt-10 lg:mt-12-4">
           {faqs.map((faq) => (
-            <div key={faq.question} className="rounded-[1.5rem] border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900/50">
+            <div key={faq.question} className="max-w-full rounded-[1.5rem] border border-slate-200 bg-white p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900/50">
               <h3 className="text-lg font-black text-slate-950 dark:text-white">{faq.question}</h3>
               <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">{faq.answer}</p>
             </div>
@@ -580,24 +580,24 @@ function FaqSection() {
 
 function FinalCtaSection() {
   return (
-    <section className="px-4 pb-20 sm:px-6 lg:px-8 lg:pb-28">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
+    <section className="px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8 lg:pb-28">
+      <div className="mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/15 dark:border dark:border-slate-800 lg:p-12">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.45fr] lg:items-center">
           <div>
             <p className="mb-4 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">Server-side tracking review</p>
-            <h2 className="max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-5xl">
+            <h2 className="max-w-3xl text-[2rem] font-black leading-[1.08] tracking-[-0.04em] sm:text-5xl sm:leading-[1] sm:tracking-[-0.05em]">
               Verify whether your server-side tracking is really working.
             </h2>
-            <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
+            <p className="mt-5 max-w-2xl text-[15px] font-medium leading-7 text-slate-400 sm:text-base sm:leading-8">
               Get an evidence-based review of GTM server-side, server-side tagging, Google Ads conversions, GA4 events, Meta CAPI, and first-party measurement paths.
             </p>
           </div>
           <div className="flex flex-col gap-3">
-            <Link href="/free-tracking-audit" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
+            <Link href="/free-tracking-audit" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 sm:w-auto px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500">
               Verify My Server-Side Tracking
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/contact" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:bg-white/[0.08]">
+            <Link href="/contact" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border sm:w-auto border-white/10 bg-white/[0.03] px-6 py-4 text-sm font-black text-white transition hover:bg-white/[0.08]">
               Contact Specialist
             </Link>
           </div>
@@ -623,7 +623,7 @@ function SectionHeader({
   return (
     <div className={centered ? "mx-auto max-w-3xl text-center" : "max-w-3xl"}>
       <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">{eyebrow}</p>
-      <h2 className={cn("text-4xl font-black tracking-[-0.05em] sm:text-5xl", dark ? "text-white" : "text-slate-950 dark:text-white")}>{title}</h2>
+      <h2 className={cn("text-[2rem] font-black leading-[1.08] tracking-[-0.04em] sm:text-5xl sm:leading-[1] sm:tracking-[-0.05em]", dark ? "text-white" : "text-slate-950 dark:text-white")}>{title}</h2>
       <p className={cn("mt-5 text-base font-medium leading-8", dark ? "text-slate-400" : "text-slate-600 dark:text-slate-400")}>{description}</p>
     </div>
   );

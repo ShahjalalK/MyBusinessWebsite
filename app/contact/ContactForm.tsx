@@ -237,20 +237,20 @@ export default function ContactForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 sm:p-8"
+      className="w-full max-w-full min-w-0 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 sm:rounded-[2rem] sm:p-8"
     >
-      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+      <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-6 sm:tracking-[0.2em]">
         <ShieldCheck className="h-3.5 w-3.5" />
         Secure request
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4">
         <label className="space-y-2">
           <span className="text-sm font-black text-slate-950 dark:text-white">Name *</span>
           <input
             value={form.name}
             onChange={(event) => updateField("name", event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 px-4 py-3 text-base font-semibold sm:text-sm text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             placeholder="Your name"
             autoComplete="name"
             required
@@ -262,7 +262,7 @@ export default function ContactForm() {
           <input
             value={form.email}
             onChange={(event) => updateField("email", event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 px-4 py-3 text-base font-semibold sm:text-sm text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             placeholder="you@example.com"
             autoComplete="email"
             type="email"
@@ -275,7 +275,7 @@ export default function ContactForm() {
           <input
             value={form.website}
             onChange={(event) => updateField("website", event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 px-4 py-3 text-base font-semibold sm:text-sm text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             placeholder="https://example.com"
             autoComplete="url"
           />
@@ -286,7 +286,7 @@ export default function ContactForm() {
           <select
             value={form.serviceInterest}
             onChange={(event) => updateField("serviceInterest", event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 px-4 py-3 text-base font-semibold sm:text-sm text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
           >
             <option>Free Tracking Review</option>
             <option>Google Ads Conversion Tracking</option>
@@ -302,7 +302,7 @@ export default function ContactForm() {
           <input
             value={form.company}
             onChange={(event) => updateField("company", event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 px-4 py-3 text-base font-semibold sm:text-sm text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             placeholder="Company name"
             autoComplete="organization"
           />
@@ -313,7 +313,7 @@ export default function ContactForm() {
           <input
             value={form.phone}
             onChange={(event) => updateField("phone", event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-2xl border border-slate-200 bg-white min-h-12 px-4 py-3 text-base font-semibold sm:text-sm text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             placeholder="Optional"
             autoComplete="tel"
           />
@@ -327,7 +327,7 @@ export default function ContactForm() {
         <textarea
           value={form.message}
           onChange={(event) => updateField("message", event.target.value)}
-          className="min-h-36 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+          className="min-h-32 w-full max-w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900 dark:text-white sm:min-h-36 sm:text-sm"
           placeholder="Example: Google Ads leads are not matching GA4, enhanced conversions may be missing, or Meta CAPI is not verified..."
           required
         />
@@ -343,7 +343,7 @@ export default function ContactForm() {
         aria-hidden="true"
       />
 
-      <label className="mt-5 flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+      <label className="mt-5 flex max-w-full gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
         <input
           type="checkbox"
           checked={form.consent}
@@ -351,7 +351,7 @@ export default function ContactForm() {
           className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600"
           required
         />
-        <span className="text-sm font-medium leading-6 text-slate-600 dark:text-slate-400">
+        <span className="min-w-0 text-sm font-medium leading-6 text-slate-600 dark:text-slate-400">
           I agree to be contacted about my request and understand that submitted details may be processed according to the{" "}
           <Link href="/privacy-policy" className="font-black text-blue-600 dark:text-blue-300">
             Privacy Policy
@@ -367,7 +367,7 @@ export default function ContactForm() {
             Security check
           </div>
 
-          <div className="overflow-hidden rounded-xl">
+          <div className="max-w-full overflow-hidden rounded-xl">
             <Turnstile
               key={turnstileRenderKey}
               siteKey={turnstileSiteKey}
@@ -403,7 +403,7 @@ export default function ContactForm() {
       <button
         type="submit"
         disabled={!canSubmit || status === "submitting"}
-        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+        className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
       >
         {status === "submitting" ? (
           <>

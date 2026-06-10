@@ -941,6 +941,28 @@ function ReportViewBeacon({ token }: { token: string }) {
 
 function AssistantVisibilityScript() {
   const styles = `
+html {
+  scroll-behavior: smooth;
+}
+main[data-trackflow-secure-report] {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+main[data-trackflow-secure-report] * {
+  min-width: 0;
+}
+main[data-trackflow-secure-report] a,
+main[data-trackflow-secure-report] button {
+  -webkit-tap-highlight-color: transparent;
+}
+main[data-trackflow-secure-report] iframe {
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  main[data-trackflow-secure-report] {
+    text-rendering: optimizeLegibility;
+  }
+}
 [data-trackflow-sticky-assistant-shell] {
   opacity: 0;
   pointer-events: none;
@@ -1236,7 +1258,7 @@ function LinkButton({
       data-trackflow-analytics-event={analyticsEvent}
       data-trackflow-analytics-section={analyticsSection}
       data-trackflow-analytics-label={analyticsLabel}
-      className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-center text-sm font-black transition focus:outline-none focus:ring-4 sm:w-auto ${styles}`}
+      className={`inline-flex min-h-[46px] w-full max-w-full items-center justify-center rounded-2xl px-4 py-3.5 text-center text-sm font-black leading-5 transition focus:outline-none focus:ring-4 sm:min-h-0 sm:w-auto sm:px-5 sm:py-3 ${styles}`}
     >
       {children}
     </a>
@@ -1245,16 +1267,16 @@ function LinkButton({
 
 function ReportNavbar() {
   return (
-    <nav className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-sm shadow-slate-950/5 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3" aria-label="TrackFlow Pro home">
-          <span className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
+    <nav className="fixed inset-x-0 top-0 z-50 overflow-x-hidden border-b border-slate-200/80 bg-white/95 shadow-sm shadow-slate-950/5 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
+        <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3" aria-label="TrackFlow Pro home">
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 sm:h-10 sm:w-10">
             <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
-            <span className="relative text-xl font-black tracking-tight">T</span>
+            <span className="relative text-lg font-black tracking-tight sm:text-xl">T</span>
           </span>
 
-          <span className="leading-none">
-            <span className="block whitespace-nowrap text-[21px] font-black tracking-[-0.04em] text-slate-950">
+          <span className="min-w-0 leading-none">
+            <span className="block whitespace-nowrap text-[18px] font-black tracking-[-0.04em] text-slate-950 sm:text-[21px]">
               TrackFlow<span className="text-blue-600">Pro</span>
             </span>
             <span className="mt-1 hidden whitespace-nowrap text-[9px] font-black uppercase tracking-[0.22em] text-slate-400 sm:block">
@@ -1286,7 +1308,7 @@ function ReportNavbar() {
 
         <Link
           href="/free-tracking-audit"
-          className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+          className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4 sm:text-sm"
         >
           Book Review
         </Link>
@@ -1312,11 +1334,11 @@ function SectionCard({
   }[tone];
 
   return (
-    <section className={`rounded-[1.75rem] border p-5 shadow-sm sm:p-6 ${toneClass}`}>
-      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+    <section className={`min-w-0 max-w-full overflow-hidden rounded-[1.5rem] border p-4 shadow-sm sm:rounded-[1.75rem] sm:p-6 ${toneClass}`}>
+      <p className="break-words text-[10px] font-black uppercase leading-5 tracking-[0.18em] text-slate-500 sm:text-[11px] sm:tracking-[0.2em]">
         {label}
       </p>
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 min-w-0">{children}</div>
     </section>
   );
 }
@@ -1340,10 +1362,10 @@ function BulletList({
       {items.map((item, index) => (
         <li
           key={`${item}-${index}`}
-          className="flex gap-3 text-sm font-semibold leading-6 text-slate-700"
+          className="flex min-w-0 gap-3 text-sm font-semibold leading-6 text-slate-700"
         >
           <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${markerClass}`} />
-          <span>{item}</span>
+          <span className="min-w-0 break-words">{item}</span>
         </li>
       ))}
     </ul>
@@ -1356,12 +1378,12 @@ function NumberedStepList({ items }: { items: string[] }) {
       {items.map((item, index) => (
         <li
           key={`${item}-${index}`}
-          className="grid grid-cols-[2.25rem_1fr] gap-3 rounded-2xl border border-amber-100 bg-white/70 p-4 shadow-sm shadow-amber-950/5"
+          className="grid min-w-0 grid-cols-[2rem_minmax(0,1fr)] gap-3 rounded-[1.25rem] border border-amber-100 bg-white/70 p-3 shadow-sm shadow-amber-950/5 sm:grid-cols-[2.25rem_minmax(0,1fr)] sm:rounded-2xl sm:p-4"
         >
           <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-xs font-black text-white shadow-lg shadow-emerald-500/20">
             {index + 1}
           </span>
-          <span className="text-sm font-bold leading-6 text-slate-700">{item}</span>
+          <span className="min-w-0 break-words text-sm font-bold leading-6 text-slate-700">{item}</span>
         </li>
       ))}
     </ol>
@@ -1370,21 +1392,21 @@ function NumberedStepList({ items }: { items: string[] }) {
 
 function ReportFooter() {
   return (
-    <footer className="border-t border-slate-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <footer className="overflow-x-hidden border-t border-slate-200 bg-white">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-center">
           <div>
-            <Link href="/" className="inline-flex items-center gap-3" aria-label="TrackFlow Pro home">
+            <Link href="/" className="inline-flex max-w-full min-w-0 items-center gap-3" aria-label="TrackFlow Pro home">
               <span className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
                 <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
-                <span className="relative text-xl font-black tracking-tight">T</span>
+                <span className="relative text-lg font-black tracking-tight sm:text-xl">T</span>
               </span>
 
-              <span>
+              <span className="min-w-0">
                 <span className="block text-2xl font-black tracking-[-0.04em] text-slate-950">
                   TrackFlow<span className="text-blue-600">Pro</span>
                 </span>
-                <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                <span className="mt-1 block break-words text-[10px] font-black uppercase leading-5 tracking-[0.18em] text-slate-400 sm:tracking-[0.22em]">
                   Google Ads · GA4 · Server-Side Tracking
                 </span>
               </span>
@@ -1407,7 +1429,7 @@ function ReportFooter() {
                 data-trackflow-analytics-event="secure_report_email_click"
                 data-trackflow-analytics-section="footer"
                 data-trackflow-analytics-label="Email TrackFlow Pro"
-                className="inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
+                className="inline-flex min-h-[46px] flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
               >
                 Email TrackFlow Pro
               </a>
@@ -1419,21 +1441,21 @@ function ReportFooter() {
                 data-trackflow-analytics-event="secure_report_linkedin_click"
                 data-trackflow-analytics-section="footer"
                 data-trackflow-analytics-label="LinkedIn Profile"
-                className="inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
+                className="inline-flex min-h-[46px] flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700"
               >
                 LinkedIn Profile
               </a>
             </div>
 
-            <p className="mt-4 text-xs font-semibold leading-6 text-slate-500">
+            <p className="mt-4 break-words text-xs font-semibold leading-6 text-slate-500">
               {MAILING_ADDRESS}
             </p>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs font-semibold text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} TrackFlow Pro. Conversion tracking and attribution support.</p>
-          <p className="max-w-3xl leading-6">Not affiliated with Google, Meta, or the reviewed business. Audit notes are based on browser-visible evidence first.</p>
+        <div className="mt-8 flex min-w-0 flex-col gap-3 border-t border-slate-200 pt-6 text-xs font-semibold text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <p className="break-words">© {new Date().getFullYear()} TrackFlow Pro. Conversion tracking and attribution support.</p>
+          <p className="max-w-3xl break-words leading-6">Not affiliated with Google, Meta, or the reviewed business. Audit notes are based on browser-visible evidence first.</p>
 
           <div className="flex flex-wrap gap-4">
             <Link href="/privacy-policy" className="hover:text-blue-700">
@@ -1766,7 +1788,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main data-trackflow-secure-report className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900">
       <ReportViewBeacon token={token} />
       <ReportServedPixel token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
       <SecureReportAnalytics
@@ -1782,42 +1804,42 @@ export default async function ReportPage({ params }: ReportPageProps) {
       <AssistantVisibilityScript />
       <ReportNavbar />
 
-      <section data-trackflow-hero className="relative overflow-hidden border-b border-slate-200 bg-white pt-20 sm:pt-24">
+      <section data-trackflow-hero className="relative overflow-hidden border-b border-slate-200 bg-white pt-16 sm:pt-24">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute right-[-12rem] top-[-12rem] h-96 w-96 rounded-full bg-blue-100 blur-3xl" />
+          <div className="absolute right-[-16rem] top-[-12rem] h-80 w-80 rounded-full bg-blue-100 blur-3xl sm:right-[-12rem] sm:h-96 sm:w-96" />
           <div className="absolute bottom-[-10rem] left-[-8rem] h-80 w-80 rounded-full bg-slate-100 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto grid max-w-7xl gap-6 px-4 pb-9 pt-6 sm:gap-8 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-16 lg:pt-12">
-          <div>
-            <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
+        <div className="relative mx-auto grid max-w-7xl gap-5 px-4 pb-8 pt-5 sm:gap-8 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:pb-16 lg:pt-12">
+          <div className="min-w-0">
+            <div className="inline-flex max-w-full items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase leading-5 tracking-[0.18em] text-blue-700 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
               Private tracking review
             </div>
 
-            <h1 className="mt-4 max-w-3xl break-words text-3xl font-black leading-[0.98] tracking-[-0.05em] text-slate-950 sm:mt-6 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-4 max-w-3xl break-words text-[2rem] font-black leading-[1.03] tracking-[-0.045em] text-slate-950 sm:mt-6 sm:text-5xl sm:leading-[0.98] lg:text-6xl">
               {heroHeadline}
             </h1>
 
-            <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
+            <p className="mt-4 max-w-2xl break-words text-sm font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
-              {domain ? <span> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
+              {domain ? <span className="break-all"> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
             </p>
 
-            <div className="mt-5 grid gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
+            <div className="mt-5 grid min-w-0 gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
               {heroSummaryCards.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-[1.25rem] border border-slate-200 bg-white/85 p-4 shadow-sm shadow-slate-950/5 backdrop-blur"
+                  className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white/85 p-3 shadow-sm shadow-slate-950/5 backdrop-blur sm:p-4"
                 >
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                     {item.label}
                   </p>
-                  <p className="mt-2 text-sm font-black leading-5 text-slate-900">{item.value}</p>
+                  <p className="mt-2 break-words text-sm font-black leading-5 text-slate-900">{item.value}</p>
                 </div>
               ))}
             </div>
 
-            <div className="mt-6 grid gap-3 sm:mt-7 sm:flex sm:flex-wrap">
+            <div className="mt-6 grid min-w-0 gap-3 sm:mt-7 sm:flex sm:flex-wrap">
               <LinkButton
                 href="#findings"
                 variant="dark"
@@ -1849,13 +1871,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </LinkButton>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
+            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2 text-xs font-bold text-slate-500 sm:gap-3">
               <a
                 href="#pdf-report"
                 data-trackflow-analytics-event="secure_report_pdf_anchor_click"
                 data-trackflow-analytics-section="hero"
                 data-trackflow-analytics-label="Full PDF report available"
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 transition hover:border-blue-200 hover:text-blue-700"
+                className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 transition hover:border-blue-200 hover:text-blue-700 sm:px-4"
               >
                 Full PDF report available
               </a>
@@ -1866,46 +1888,46 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   data-trackflow-analytics-section="hero"
                   data-trackflow-analytics-label="Short evidence video available"
                   data-trackflow-video-id={evidenceVideo.videoId}
-                  className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-blue-700 transition hover:border-blue-200 hover:bg-white"
+                  className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-blue-700 transition hover:border-blue-200 hover:bg-white sm:px-4"
                 >
                   Short evidence video available
                 </a>
               ) : null}
-              <span className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-emerald-700">
+              <span className="max-w-full break-words rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-emerald-700 sm:px-4">
                 Report-aware assistant included
               </span>
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 sm:mt-8 sm:gap-3 sm:text-[11px] sm:tracking-[0.18em]">
-              <span className="rounded-full border border-slate-200 bg-white px-4 py-2">
+            <div className="mt-6 flex min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase leading-5 tracking-[0.14em] text-slate-500 sm:mt-8 sm:gap-3 sm:text-[11px] sm:tracking-[0.18em]">
+              <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                 Prepared by TrackFlow Pro
               </span>
-              <span className="rounded-full border border-slate-200 bg-white px-4 py-2">
+              <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                 Browser-visible evidence
               </span>
               {reportDate ? (
-                <span className="rounded-full border border-slate-200 bg-white px-4 py-2">
+                <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                   {reportDate}
                 </span>
               ) : null}
-              <span className="rounded-full border border-slate-200 bg-white px-4 py-2">
+              <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                 No account access used
               </span>
               {manualAds.checked ? (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-amber-700">
+                <span className="max-w-full break-words rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 sm:px-4">
                   Ads Transparency: {manualAds.adsFound === "yes" ? "Ads found" : manualAds.adsFound === "no" ? "No ads found" : "Checked"}
                 </span>
               ) : null}
             </div>
           </div>
 
-          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-950/10 sm:rounded-[2rem] lg:p-5">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-950 p-5 text-white sm:p-6">
+          <div className="min-w-0 max-w-full rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-950/10 sm:rounded-[2rem] sm:p-4 lg:p-5">
+            <div className="min-w-0 rounded-[1.35rem] border border-slate-200 bg-slate-950 p-4 text-white sm:rounded-[1.5rem] sm:p-6">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 Private review snapshot
               </p>
 
-              <p className="mt-4 text-2xl font-black tracking-[-0.04em]">
+              <p className="mt-4 break-words text-xl font-black tracking-[-0.04em] sm:text-2xl">
                 {auditSnapshotTitle}
               </p>
 
@@ -1914,7 +1936,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   <a
                     key={item}
                     href="#ask-this-review"
-                    className="group rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-xs font-bold leading-5 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white sm:p-4 sm:text-sm sm:leading-6"
+                    className="group min-w-0 break-words rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-xs font-bold leading-5 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white sm:p-4 sm:text-sm sm:leading-6"
                   >
                     <span>{item}</span>
                     <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
@@ -1959,14 +1981,14 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <div className="grid gap-3 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3 lg:p-5">
+      <section className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+        <div className="grid min-w-0 gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3 sm:rounded-[2rem] sm:p-4 lg:p-5">
           {trustSignals.map((item, index) => (
-            <div key={item} className="flex items-start gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50 p-4">
+            <div key={item} className="flex min-w-0 items-start gap-3 rounded-[1.25rem] border border-slate-100 bg-slate-50 p-3 sm:rounded-[1.35rem] sm:p-4">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-black text-white">
                 {index + 1}
               </span>
-              <p className="text-sm font-black leading-6 text-slate-900">{item}</p>
+              <p className="min-w-0 break-words text-sm font-black leading-6 text-slate-900">{item}</p>
             </div>
           ))}
         </div>
@@ -1979,12 +2001,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
           data-trackflow-analytics-section="evidence_video"
           data-trackflow-analytics-label="Evidence video visible"
           data-trackflow-video-id={evidenceVideo.videoId}
-          className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8"
+          className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8"
         >
-          <div className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10">
-            <div className="grid items-start gap-0 lg:grid-cols-[1.18fr_0.82fr]">
+          <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
+            <div className="grid min-w-0 items-start gap-0 lg:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
               <div className="bg-slate-950 p-2 sm:p-4 lg:self-start lg:p-5">
-                <div className="relative aspect-video w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20">
+                <div className="relative aspect-video w-full max-w-full overflow-hidden rounded-[1.1rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20 sm:rounded-[1.35rem]">
                   <iframe
                     data-trackflow-youtube-iframe="true"
                     title={evidenceVideo.title}
@@ -1998,11 +2020,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </div>
               </div>
 
-              <div className="border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
+              <div className="min-w-0 border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
                   Browser-side evidence walkthrough
                 </p>
-                <h2 className="mt-3 text-2xl font-black tracking-[-0.05em] text-slate-950 sm:mt-4 sm:text-4xl">
+                <h2 className="mt-3 break-words text-2xl font-black leading-tight tracking-[-0.045em] text-slate-950 sm:mt-4 sm:text-4xl">
                   Watch the evidence before reading the PDF.
                 </h2>
                 <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">
@@ -2016,7 +2038,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     </p>
                     <div className="mt-3 grid gap-2">
                       {reviewedPageBadges.map((item) => (
-                        <div key={item} className="break-words rounded-2xl border border-blue-100 bg-white px-4 py-3 text-xs font-black leading-5 text-slate-700 shadow-sm">
+                        <div key={item} className="break-all rounded-2xl border border-blue-100 bg-white px-4 py-3 text-xs font-black leading-5 text-slate-700 shadow-sm">
                           {item}
                         </div>
                       ))}
@@ -2031,7 +2053,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {evidenceSignalBadges.map((item) => (
-                        <span key={item} className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800">
+                        <span key={item} className="max-w-full break-words rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-black leading-5 text-emerald-800">
                           {item}
                         </span>
                       ))}
@@ -2055,18 +2077,18 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
       <section
         id="findings"
-        className="mx-auto grid max-w-7xl scroll-mt-24 gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-16"
+        className="mx-auto grid w-full max-w-7xl scroll-mt-24 gap-5 overflow-hidden px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:py-16"
       >
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-5 sm:space-y-6">
           <SectionCard label="Primary finding" tone="blue">
-            <p className="text-lg font-black leading-8 text-slate-950">{mainFinding}</p>
+            <p className="break-words text-base font-black leading-7 text-slate-950 sm:text-lg sm:leading-8">{mainFinding}</p>
             <p className="mt-3 text-sm font-semibold leading-7 text-blue-950/70">
               This section summarizes the main browser-visible point to review before relying on the data for reporting or optimisation decisions.
             </p>
           </SectionCard>
 
           <SectionCard label="Business impact" tone="green">
-            <p className="text-base font-bold leading-8 text-emerald-950">{businessImpact}</p>
+            <p className="break-words text-base font-bold leading-8 text-emerald-950">{businessImpact}</p>
           </SectionCard>
 
           {manualAds.checked ? (
@@ -2090,7 +2112,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </SectionCard>
         </div>
 
-        <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+        <aside className="min-w-0 space-y-5 sm:space-y-6 xl:sticky xl:top-24 xl:self-start">
           <SectionCard label="Recommended verification plan" tone="amber">
             <NumberedStepList items={recommendations} />
           </SectionCard>
@@ -2110,16 +2132,16 @@ export default async function ReportPage({ params }: ReportPageProps) {
             data-trackflow-observe-event="secure_report_pdf_preview_visible"
             data-trackflow-analytics-section="pdf"
             data-trackflow-analytics-label="PDF preview visible"
-            className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5"
+            className="min-w-0 scroll-mt-24 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5 sm:rounded-[2rem]"
           >
-            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-5 sm:p-6">
+              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
                     Full PDF report
                   </p>
 
-                  <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">
+                  <h2 className="mt-3 break-words text-2xl font-black tracking-[-0.04em] text-slate-950">
                     Review the full audit document
                   </h2>
 
@@ -2129,28 +2151,28 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </div>
 
                 {expiresLabel ? (
-                  <p className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm">
+                  <p className="max-w-full shrink-0 break-words rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase leading-5 tracking-[0.14em] text-slate-500 shadow-sm">
                     Available until {expiresLabel}
                   </p>
                 ) : null}
               </div>
 
-              <div className="mt-5 grid gap-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-3">
-                <span className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-blue-700 shadow-sm">
+              <div className="mt-5 grid min-w-0 gap-2 text-xs font-black uppercase leading-5 tracking-[0.12em] text-slate-500 sm:grid-cols-3 sm:gap-3 sm:tracking-[0.14em]">
+                <span className="break-words rounded-2xl border border-blue-100 bg-white px-4 py-3 text-center text-blue-700 shadow-sm sm:text-left">
                   Secure PDF stream
                 </span>
-                <span className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-emerald-700 shadow-sm">
+                <span className="break-words rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-center text-emerald-700 shadow-sm sm:text-left">
                   Download stays on page
                 </span>
-                <span className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <span className="break-words rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm sm:text-left">
                   Account access not used
                 </span>
               </div>
             </div>
 
-            <div className="bg-slate-100 p-3 sm:p-4">
-              <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="overflow-hidden bg-slate-100 p-3 sm:p-4">
+              <div className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[1.5rem] md:p-5">
+                <div className="mb-4 flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                       Embedded PDF preview
@@ -2167,7 +2189,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     data-trackflow-analytics-event="secure_report_pdf_open_click"
                     data-trackflow-analytics-section="pdf"
                     data-trackflow-analytics-label="Open full screen"
-                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-blue-600"
+                    className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-blue-600 sm:w-auto sm:py-2.5"
                   >
                     Open full screen
                   </a>
@@ -2185,29 +2207,29 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   title="TrackFlow Pro audit PDF preview"
                   src={previewHref}
                   loading="lazy"
-                  className="hidden h-[430px] w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[500px] xl:h-[540px]"
+                  className="hidden h-[430px] w-full max-w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[500px] xl:h-[540px]"
                 />
               </div>
             </div>
 
-            <div className="border-t border-slate-200 bg-white p-5">
+            <div className="border-t border-slate-200 bg-white p-4 sm:p-5">
               <div
                 data-trackflow-pdf-status
                 role="status"
                 aria-live="polite"
                 className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600"
               >
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <span data-trackflow-pdf-status-icon className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                     Ready
                   </span>
-                  <span data-trackflow-pdf-status-message className="text-sm font-bold leading-6">
+                  <span data-trackflow-pdf-status-message className="min-w-0 break-words text-sm font-bold leading-6">
                     Click Download PDF — the file will prepare here without leaving this secure page.
                   </span>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                 <LinkButton
                   href={previewHref}
                   variant="dark"
@@ -2229,7 +2251,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   data-trackflow-analytics-label="Download PDF"
                   data-download-state="idle"
                   data-default-label="Download PDF"
-                  className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-center text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/15 sm:w-auto"
+                  className="inline-flex min-h-[46px] w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-center text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/15 sm:min-h-0 sm:w-auto sm:py-3"
                 >
                   <span
                     data-trackflow-pdf-download-spinner
@@ -2262,15 +2284,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
         />
       </div>
 
-      <section id="book-verification" className="mx-auto max-w-7xl scroll-mt-24 px-4 pb-28 sm:px-6 sm:pb-16 lg:px-8">
-        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white shadow-2xl shadow-slate-950/15">
-          <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="p-8 lg:p-10">
+      <section id="book-verification" className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 pb-24 sm:px-6 sm:pb-16 lg:px-8">
+        <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950 text-white shadow-2xl shadow-slate-950/15 sm:rounded-[2rem]">
+          <div className="grid min-w-0 gap-0 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+            <div className="min-w-0 p-6 sm:p-8 lg:p-10">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 Verification call
               </p>
 
-              <h2 className="mt-4 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+              <h2 className="mt-4 break-words text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">
                 {bookingHeadline}
               </h2>
 
@@ -2278,24 +2300,24 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 {bookingDescription}
               </p>
 
-              <div className="mt-5 grid gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
+              <div className="mt-5 grid min-w-0 gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
                 {[
                   "Review the finding",
                   "Check account-side evidence",
                   "Confirm the next action",
                 ].map((item, index) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div key={item} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                     <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-xs font-black text-white">
                       {index + 1}
                     </span>
-                    <p className="mt-3 text-sm font-black leading-6 text-white">{item}</p>
+                    <p className="mt-3 break-words text-sm font-black leading-6 text-white">{item}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="border-t border-white/10 bg-white/[0.04] p-6 lg:border-l lg:border-t-0 lg:p-8">
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5">
+            <div className="min-w-0 border-t border-white/10 bg-white/[0.04] p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
+              <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-5">
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-200">
                   Best after reading the review
                 </p>

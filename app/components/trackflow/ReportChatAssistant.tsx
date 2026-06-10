@@ -1067,61 +1067,67 @@ export default function ReportChatAssistant({
         Ask about this review
       </span>
 
-      <div className="fixed inset-x-3 bottom-4 z-[90] flex flex-col items-end sm:inset-x-auto sm:right-6 lg:bottom-6">
+      <div className="fixed inset-x-2 bottom-3 z-[90] flex max-w-full flex-col items-end sm:inset-x-auto sm:right-6 lg:bottom-6"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}>
         {isOpen ? (
           <div
-            className="flex h-[min(720px,calc(100vh-32px))] w-full max-w-[540px] flex-col overflow-hidden rounded-[1.75rem] border border-blue-100 bg-white shadow-2xl shadow-slate-950/25 sm:w-[470px] lg:w-[520px]"
+            className="flex h-[calc(100vh_-_1rem)] max-h-[720px] w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[1.6rem] border border-blue-100 bg-white shadow-2xl shadow-slate-950/25 sm:w-[470px] sm:max-w-[470px] sm:rounded-[1.75rem] lg:w-[520px] lg:max-w-[520px]"
+            style={{
+              height: "min(760px, calc(100dvh - 1rem))",
+              maxHeight: "calc(100dvh - 1rem)",
+            }}
             role="dialog"
             aria-modal="false"
             aria-label="TrackFlow Pro report chat"
           >
-            <div className="relative overflow-hidden bg-slate-950 px-5 py-4 text-white">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.45),transparent_32%),linear-gradient(135deg,#020617,#0f172a)]" />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-600 shadow-lg shadow-blue-900/40">
-                    <Bot className="h-5 w-5" />
-                    <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-slate-950 bg-emerald-400" />
-                  </div>
+            <div className="relative shrink-0 overflow-hidden bg-slate-950 px-4 py-3.5 text-white sm:px-5 sm:py-4">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.42),transparent_36%),linear-gradient(135deg,#020617,#0f172a)]" />
 
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black">Ask about this review</p>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-blue-100">{helperBadge} · answers from this report</p>
-                  </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="absolute right-3 top-3 z-20 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/10 text-white/80 shadow-lg shadow-slate-950/20 backdrop-blur transition hover:bg-white/20 hover:text-white focus:outline-none focus:ring-4 focus:ring-blue-500/30 sm:right-4 sm:top-4"
+                aria-label="Minimize chat"
+              >
+                <ChevronDown className="h-5 w-5 sm:hidden" />
+                <X className="hidden h-4 w-4 sm:block" />
+              </button>
+
+              <div className="relative z-10 flex min-w-0 items-center gap-3 pr-12 sm:pr-14">
+                <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-600 shadow-lg shadow-blue-900/40 sm:h-12 sm:w-12">
+                  <Bot className="h-5 w-5" />
+                  <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-slate-950 bg-emerald-400" />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="rounded-full border border-white/10 bg-white/10 p-2 text-white/80 transition hover:bg-white/20 hover:text-white focus:outline-none focus:ring-4 focus:ring-blue-500/30"
-                  aria-label="Close chat"
-                >
-                  <ChevronDown className="h-4 w-4 sm:hidden" />
-                  <X className="hidden h-4 w-4 sm:block" />
-                </button>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="truncate text-[15px] font-black leading-5 sm:text-base">Ask about this review</p>
+                  <p className="mt-0.5 truncate text-xs font-semibold leading-5 text-blue-100/90">
+                    {helperBadge} · answers from this report
+                  </p>
+                </div>
               </div>
 
-              <div className="relative mt-3 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-blue-100">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Report-aware
+              <div className="relative z-10 mt-3 grid grid-cols-2 gap-2 pr-0 sm:flex sm:flex-wrap sm:items-center">
+                <span className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-[0.14em] text-blue-100 shadow-sm shadow-black/10 sm:px-3 sm:text-[10px] sm:tracking-[0.16em]">
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Report-aware</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-blue-100">
-                  <LockKeyhole className="h-3.5 w-3.5" />
-                  Evidence-safe
+                <span className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-[0.14em] text-blue-100 shadow-sm shadow-black/10 sm:px-3 sm:text-[10px] sm:tracking-[0.16em]">
+                  <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Evidence-safe</span>
                 </span>
               </div>
             </div>
 
-            <div className="border-b border-slate-100 bg-slate-50 px-5 py-2.5">
-              <p className="line-clamp-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+            <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
+              <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 sm:text-[11px] sm:tracking-[0.18em]">
                 Private tracking review for {companyName}
               </p>
-              <p className="mt-1 line-clamp-1 text-sm font-extrabold text-slate-900">{headline}</p>
+              <p className="mt-1 truncate text-sm font-extrabold leading-5 text-slate-900">{headline}</p>
             </div>
 
             <div
-              className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-white to-slate-50 px-4 py-4"
+              className="min-h-0 flex-1 overscroll-contain overflow-y-auto bg-gradient-to-b from-white to-slate-50 px-3.5 py-4 sm:px-4"
               aria-live="polite"
             >
               <div className="space-y-3">
@@ -1130,10 +1136,10 @@ export default function ReportChatAssistant({
                   const isLatestAssistant = message.id === latestAssistantMessage?.id;
 
                   return (
-                    <div key={message.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[92%] ${isUser ? "text-right" : "text-left"}`}>
+                    <div key={message.id} className={`flex min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
+                      <div className={`min-w-0 max-w-[88%] sm:max-w-[86%] ${isUser ? "text-left" : "text-left"}`}>
                         <div
-                          className={`rounded-3xl px-4 py-3 shadow-sm ${
+                          className={`min-w-0 break-words rounded-[1.35rem] px-4 py-3 shadow-sm ${
                             isUser
                               ? "rounded-br-md bg-blue-600 text-white shadow-blue-900/15"
                               : "rounded-bl-md border border-slate-100 bg-white text-slate-700 shadow-slate-950/5"
@@ -1154,14 +1160,14 @@ export default function ReportChatAssistant({
                         </div>
 
                         {isLatestAssistant && showFollowUps ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                             {followUpQuestionChips.map((item) => (
                               <button
                                 key={item}
                                 type="button"
                                 onClick={() => void submitQuestion(item, "follow_up")}
                                 disabled={isSending || isDisabled}
-                                className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-left text-[11px] font-bold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="min-h-10 rounded-full border border-blue-100 bg-white px-3 py-2 text-left text-[11px] font-bold leading-4 text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {item}
                               </button>
@@ -1186,12 +1192,12 @@ export default function ReportChatAssistant({
               </div>
             </div>
 
-            <div className="border-t border-slate-100 bg-white p-4">
+            <div className="shrink-0 border-t border-slate-100 bg-white px-3.5 pb-[calc(env(safe-area-inset-bottom)_+_0.75rem)] pt-3 sm:px-4 sm:pb-4">
               {!hasUserMessages && !isDisabled && starterQuestionChips.length > 0 ? (
                 <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
                   <div className="mb-2 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-blue-600" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                    <Sparkles className="h-4 w-4 shrink-0 text-blue-600" />
+                    <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 sm:tracking-[0.18em]">
                       Start with one question
                     </p>
                   </div>
@@ -1202,7 +1208,7 @@ export default function ReportChatAssistant({
                         type="button"
                         onClick={() => void submitQuestion(item, "starter")}
                         disabled={isSending || isDisabled}
-                        className="rounded-2xl border border-blue-100 bg-white px-3 py-2 text-left text-[11px] font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-h-11 rounded-2xl border border-blue-100 bg-white px-3 py-2.5 text-left text-[11px] font-bold leading-4 text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {item}
                       </button>
@@ -1225,7 +1231,7 @@ export default function ReportChatAssistant({
                   </a>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="flex items-end gap-2">
+                <form onSubmit={handleSubmit} className="flex min-w-0 items-end gap-2">
                   <label className="sr-only" htmlFor="trackflow-report-chat-input">
                     Ask a question about this tracking review
                   </label>
@@ -1243,12 +1249,12 @@ export default function ReportChatAssistant({
                     placeholder="Ask about this review..."
                     rows={1}
                     disabled={isSending}
-                    className="min-h-[48px] flex-1 resize-none overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-[50px] min-w-0 flex-1 resize-none overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[48px] sm:text-sm"
                   />
                   <button
                     type="submit"
                     disabled={!question.trim() || isSending}
-                    className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:-translate-y-0.5 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                    className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-900/20 transition hover:-translate-y-0.5 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none sm:h-12 sm:w-12"
                     aria-label="Send question"
                   >
                     {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
@@ -1256,34 +1262,32 @@ export default function ReportChatAssistant({
                 </form>
               )}
 
-              <p className="mt-2 text-center text-[10px] font-semibold leading-4 text-slate-400">
+              <p className="mt-2 px-1 text-center text-[10px] font-semibold leading-4 text-slate-400">
                 Conversation and basic visit details may be saved for follow-up. Final confirmation requires approved access.
               </p>
             </div>
           </div>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => openAssistantChat("sticky_button")}
-              className="group flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full bg-blue-600 px-4 py-3.5 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:px-5 sm:py-4"
-              aria-label="Open tracking review chat"
-              aria-expanded={isOpen}
-            >
-              <span className="relative grid h-10 w-10 place-items-center rounded-full bg-white/15">
-                <MessageCircle className="h-5 w-5" />
-                <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-blue-600 bg-emerald-400" />
-                <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 animate-ping rounded-full bg-emerald-300 opacity-60" />
-              </span>
+          <button
+            type="button"
+            onClick={() => openAssistantChat("sticky_button")}
+            className="group flex max-w-[calc(100vw-1rem)] items-center gap-3 rounded-full bg-blue-600 px-3.5 py-3.5 text-white shadow-2xl shadow-blue-950/25 transition hover:-translate-y-1 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:px-5 sm:py-4"
+            aria-label="Open tracking review chat"
+            aria-expanded={isOpen}
+          >
+            <span className="relative grid h-10 w-10 place-items-center rounded-full bg-white/15">
+              <MessageCircle className="h-5 w-5" />
+              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-blue-600 bg-emerald-400" />
+              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 animate-ping rounded-full bg-emerald-300 opacity-60" />
+            </span>
 
-              <span className="hidden text-left sm:block">
-                <span className="block text-sm font-black leading-none">Ask about this review</span>
-                <span className="mt-1 block text-[11px] font-bold text-blue-100">Online • report-aware answers</span>
-              </span>
+            <span className="hidden min-w-0 text-left sm:block">
+              <span className="block truncate text-sm font-black leading-none">Ask about this review</span>
+              <span className="mt-1 block truncate text-[11px] font-bold text-blue-100">Online • report-aware answers</span>
+            </span>
 
-              <Sparkles className="hidden h-4 w-4 opacity-80 transition group-hover:rotate-12 sm:block" />
-            </button>
-          </>
+            <Sparkles className="hidden h-4 w-4 shrink-0 opacity-80 transition group-hover:rotate-12 sm:block" />
+          </button>
         )}
       </div>
     </>

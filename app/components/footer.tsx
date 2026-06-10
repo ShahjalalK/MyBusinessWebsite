@@ -111,20 +111,20 @@ export default function Footer() {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="mb-14 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-2xl shadow-blue-950/20 backdrop-blur">
-          <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-center lg:p-10">
+      <div className="relative mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+        <div className="mb-10 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.03] shadow-2xl shadow-blue-950/20 backdrop-blur sm:mb-14 sm:rounded-[2rem]">
+          <div className="grid gap-6 p-5 sm:gap-8 sm:p-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-center lg:p-10">
             <div>
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Tracking Review
               </div>
 
-              <h2 className="max-w-3xl text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl lg:text-5xl">
+              <h2 className="max-w-3xl text-2xl font-black leading-tight tracking-[-0.04em] text-white sm:text-4xl lg:text-5xl">
                 Not sure if your Google Ads conversion tracking is accurate?
               </h2>
 
-              <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-400 sm:text-lg">
+              <p className="mt-4 max-w-2xl text-sm font-medium leading-7 text-slate-400 sm:mt-5 sm:text-lg">
                 Start with a tracking-first audit for Google Ads, GA4, GTM, Meta CAPI,
                 enhanced conversions, and server-side measurement issues.
               </p>
@@ -153,8 +153,8 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="grid gap-12 lg:grid-cols-[1.1fr_1.9fr]">
-          <div className="space-y-8">
+        <div className="grid gap-10 lg:grid-cols-[1.1fr_1.9fr] lg:gap-12">
+          <div className="space-y-6 sm:space-y-8">
             <Link href="/" className="inline-flex items-center gap-3" aria-label="TrackFlow Pro home">
               <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
                 <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
@@ -185,7 +185,7 @@ export default function Footer() {
               ))}
             </div>
 
-            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4 sm:rounded-[1.75rem] sm:p-5">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 Direct contact
               </p>
@@ -256,7 +256,7 @@ export default function Footer() {
             </div>
           </div>
 
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-10">
             <FooterColumn title="Services" links={services} featuredIcon={<Target className="h-4 w-4" />} />
             <FooterColumn title="Resources" links={resources} featuredIcon={<BookIcon />} />
             <FooterColumn title="Company" links={company} featuredIcon={<FileSearch className="h-4 w-4" />} />
@@ -289,8 +289,8 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-14 border-t border-white/10 pt-8">
-          <div className="flex flex-col gap-5 text-sm font-medium text-slate-500 md:flex-row md:items-center md:justify-between">
+        <div className="mt-10 border-t border-white/10 pt-6 sm:mt-14 sm:pt-8">
+          <div className="flex flex-col gap-4 text-sm font-medium text-slate-500 md:flex-row md:items-center md:justify-between">
             <p>© {currentYear} TrackFlow Pro. All rights reserved.</p>
             <div className="max-w-3xl space-y-2 leading-6 md:text-right">
               <p>
