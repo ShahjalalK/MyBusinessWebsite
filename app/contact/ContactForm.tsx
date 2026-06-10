@@ -2,8 +2,20 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Turnstile } from "@marsidev/react-turnstile";
+import dynamic from "next/dynamic";
 import { ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+
+const TurnstileWidget = dynamic(
+  () => import("@marsidev/react-turnstile").then((module) => module.Turnstile),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[65px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-center text-xs font-bold text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+        Loading security check...
+      </div>
+    ),
+  },
+);
 
 type FormState = {
   name: string;
@@ -130,6 +142,8 @@ export default function ContactForm() {
 
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   const needsTurnstile = Boolean(turnstileSiteKey);
+  const [securityCheckRequested, setSecurityCheckRequested] = useState(false);
+  const shouldRenderTurnstile = needsTurnstile && securityCheckRequested;
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileRenderKey, setTurnstileRenderKey] = useState(0);
 
@@ -177,6 +191,7 @@ export default function ContactForm() {
   }, [form, needsTurnstile, turnstileToken]);
 
   const updateField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    if (needsTurnstile) setSecurityCheckRequested(true);
     setForm((current) => ({ ...current, [key]: value }));
   };
 
@@ -189,6 +204,7 @@ export default function ContactForm() {
     event.preventDefault();
 
     if (!canSubmit) {
+      if (needsTurnstile) setSecurityCheckRequested(true);
       setStatus("error");
 
       if (needsTurnstile && !turnstileToken) {
@@ -226,6 +242,7 @@ export default function ContactForm() {
       setStatus("success");
       setMessage(result.message || "Thanks. Your message has been received.");
       setForm(initialState);
+      setSecurityCheckRequested(false);
       resetTurnstile();
     } catch (error) {
       setStatus("error");
@@ -237,6 +254,12 @@ export default function ContactForm() {
   return (
     <form
       onSubmit={handleSubmit}
+      onFocusCapture={() => {
+        if (needsTurnstile) setSecurityCheckRequested(true);
+      }}
+      onPointerDownCapture={() => {
+        if (needsTurnstile) setSecurityCheckRequested(true);
+      }}
       className="w-full max-w-full min-w-0 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 sm:rounded-[2rem] sm:p-8"
     >
       <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-6 sm:tracking-[0.2em]">
@@ -360,7 +383,7 @@ export default function ContactForm() {
         </span>
       </label>
 
-      {turnstileSiteKey && (
+      {shouldRenderTurnstile && (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
           <div className="mb-3 flex items-center gap-2 text-sm font-black text-slate-950 dark:text-white">
             <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-300" />
@@ -368,7 +391,7 @@ export default function ContactForm() {
           </div>
 
           <div className="max-w-full overflow-hidden rounded-xl">
-            <Turnstile
+            <TurnstileWidget
               key={turnstileRenderKey}
               siteKey={turnstileSiteKey}
               options={{

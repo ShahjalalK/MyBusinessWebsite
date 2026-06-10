@@ -710,7 +710,7 @@ export default function ReportChatAssistant({
   const followUpQuestionChips = questionSuggestions.followUpQuestions;
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !isOpen) return;
 
     const tokenKey = normalizeSessionToken(token);
     const preferredSessionId = sessionTokenRef.current === tokenKey ? sessionIdRef.current : "";
@@ -719,10 +719,10 @@ export default function ReportChatAssistant({
     sessionTokenRef.current = tokenKey;
     sessionIdRef.current = stableSessionId;
     setSessionId((current) => (current === stableSessionId ? current : stableSessionId));
-  }, [token]);
+  }, [isOpen, token]);
 
   useEffect(() => {
-    if (!token || !sessionId) return;
+    if (!token || !sessionId || !isOpen) return;
 
     let cancelled = false;
     const controller = new AbortController();
@@ -788,7 +788,7 @@ export default function ReportChatAssistant({
       cancelled = true;
       controller.abort();
     };
-  }, [domainSlug, sessionId, token]);
+  }, [domainSlug, isOpen, sessionId, token]);
 
   useEffect(() => {
     if (!storageKey || !historyLoaded) return;

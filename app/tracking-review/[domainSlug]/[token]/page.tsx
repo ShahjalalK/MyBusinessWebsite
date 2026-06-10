@@ -175,6 +175,29 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
   };
 }
 
+function escapeHtmlAttribute(value: unknown): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function getYouTubeLiteEmbedSrcDoc(video: EvidenceVideoDisplay): string {
+  const title = escapeHtmlAttribute(video.title || "Watch evidence video");
+  const embedUrl = escapeHtmlAttribute(video.embedUrl);
+  const thumbnailUrl = escapeHtmlAttribute(`https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`);
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;overflow:hidden;background:#020617;font-family:Arial,sans-serif}a{position:absolute;inset:0;display:grid;place-items:center;text-decoration:none;color:#fff;background:linear-gradient(135deg,rgba(2,6,23,.24),rgba(2,6,23,.76)),url('${thumbnailUrl}') center/cover no-repeat}.play{display:grid;place-items:center;width:76px;height:76px;border-radius:999px;background:#2563eb;box-shadow:0 24px 50px rgba(37,99,235,.38);transition:transform .18s ease}.play:before{content:"";margin-left:5px;border-left:22px solid white;border-top:14px solid transparent;border-bottom:14px solid transparent}.label{position:absolute;left:16px;right:16px;bottom:14px;padding:10px 12px;border-radius:16px;background:rgba(15,23,42,.78);backdrop-filter:blur(10px);font-size:13px;font-weight:800;line-height:1.4}a:hover .play{transform:scale(1.04)}@media(max-width:640px){.play{width:64px;height:64px}.play:before{border-left-width:18px;border-top-width:11px;border-bottom-width:11px}.label{font-size:12px}}</style></head><body><a href="${embedUrl}" aria-label="Play ${title}"><span class="play"></span><span class="label">Tap to load evidence video</span></a></body></html>`;
+}
+
+function getPdfLitePreviewSrcDoc(previewHref: string): string {
+  const href = escapeHtmlAttribute(previewHref);
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;overflow:hidden;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a}.wrap{height:100%;display:grid;place-items:center;padding:24px;box-sizing:border-box}.card{max-width:420px;width:100%;border:1px solid #e2e8f0;border-radius:24px;background:white;padding:24px;box-sizing:border-box;text-align:center;box-shadow:0 18px 50px rgba(15,23,42,.08)}.icon{display:grid;place-items:center;width:54px;height:54px;margin:0 auto 14px;border-radius:18px;background:#eff6ff;color:#2563eb;font-size:24px;font-weight:900}.eyebrow{font-size:11px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;color:#2563eb}.title{margin:9px 0 0;font-size:20px;font-weight:900;line-height:1.15;letter-spacing:-.03em}.text{margin:10px 0 18px;font-size:14px;font-weight:700;line-height:1.65;color:#64748b}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;width:100%;border-radius:16px;background:#0f172a;color:white;font-size:13px;font-weight:900;text-decoration:none}.note{margin-top:12px;font-size:12px;font-weight:700;color:#94a3b8}</style></head><body><div class="wrap"><div class="card"><div class="icon">PDF</div><div class="eyebrow">Secure document</div><h1 class="title">Load PDF preview</h1><p class="text">The PDF preview is loaded only when needed to keep this secure review fast.</p><a class="button" href="${href}">Load preview here</a><div class="note">Open PDF and Download PDF are also available below.</div></div></div></body></html>`;
+}
+
+
 
 function getObjectCandidate(...values: unknown[]): Record<string, any> {
   for (const value of values) {
@@ -2010,7 +2033,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   <iframe
                     data-trackflow-youtube-iframe="true"
                     title={evidenceVideo.title}
-                    src={evidenceVideo.embedUrl}
+                    srcDoc={getYouTubeLiteEmbedSrcDoc(evidenceVideo)}
                     loading="lazy"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
@@ -2205,7 +2228,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 <iframe
                   data-trackflow-pdf-preview="true"
                   title="TrackFlow Pro audit PDF preview"
-                  src={previewHref}
+                  srcDoc={getPdfLitePreviewSrcDoc(previewHref)}
                   loading="lazy"
                   className="hidden h-[430px] w-full max-w-full rounded-2xl border border-slate-200 bg-white md:block lg:h-[500px] xl:h-[540px]"
                 />

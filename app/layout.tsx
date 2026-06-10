@@ -96,7 +96,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </ThemeProvider>
 
-        <Script src="https://www.clarity.ms/tag/wd3r4mftjy" strategy="afterInteractive" />
+        <Script src="https://www.clarity.ms/tag/wd3r4mftjy" strategy="lazyOnload" />
       </body>
     </html>
   );

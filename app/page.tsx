@@ -234,7 +234,7 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
       />
       <Navbar />
-      <main className="bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+      <main className="overflow-x-hidden bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
         <HomeHero />
         <TrustBar />
         <ProblemSection />
@@ -639,7 +639,8 @@ function FounderTrustSection() {
             alt="Shahjalal Khan, Founder and Tracking Specialist at TrackFlow Pro"
             width={320}
             height={320}
-            priority
+            sizes="(max-width: 640px) 176px, 240px"
+            loading="lazy"
             className="h-full w-full object-contain object-bottom"
           />
         </div>

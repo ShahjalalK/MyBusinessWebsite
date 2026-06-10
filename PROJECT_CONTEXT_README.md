@@ -1,8 +1,462 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v23.21-open-prefetch-fix-and-zip-handoff
-Last updated: 2026-06-04
-Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, and what to update for each problem.
+Version: v24.00-public-ui-speed-chatbot-bengali-handoff
+Last updated: 2026-06-10
+Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, how to safely patch files, how to return ZIP handoffs, and how to communicate with the owner in natural Bengali.
+
+---
+
+
+## Latest Critical Update — v24.00 Public UI/UX, Speed Optimization, Messenger-Style Chatbot, and Bengali Assistant Handoff
+
+This section is the current top-level operating rule for future ChatGPT assistants working with this project. It adds the most recent public-page UI/UX, secure-page speed, chatbot polish, and communication/ZIP handoff rules.
+
+### Required conversation style for the project owner
+
+When responding to Md. Alamin Hossain in ChatGPT, the assistant must use natural Bengali script.
+
+Correct style:
+
+```text
+আমি শুধু প্রয়োজনীয় ফাইলগুলো পরিবর্তন করেছি। Backend, API, tracking logic touch করা হয়নি।
+```
+
+Avoid Romanized Banglish as the main conversation style:
+
+```text
+ami shudhu dorkar moto file change korechi
+```
+
+Language rules:
+
+```text
+1. Talk to the owner in natural বাংলা script.
+2. Keep code paths, commands, filenames, env vars, URLs, package names, and code identifiers in English.
+3. Keep public/client-facing website copy English-only.
+4. Do not rewrite client-facing service/report/audit copy in Bengali.
+5. Keep explanations practical, short, and honest.
+6. Always say clearly what was changed and what was not touched.
+7. Never claim lint/build/tests passed unless they were actually run.
+8. If build cannot be run because the full project/node_modules are not available, say that clearly.
+```
+
+Preferred final response pattern after a patch:
+
+```text
+Patch ready:
+[download link]
+
+Changed files:
+- app/example/page.tsx
+- app/components/example.tsx
+
+Touched:
+- Mobile spacing
+- Overflow guard
+- Lazy loading
+
+Untouched:
+- API routes
+- Backend
+- Firestore/B2/Supabase
+- Tracking logic
+
+Run:
+npm run lint
+npm run build
+```
+
+### Required ZIP / file handoff behavior
+
+Future assistants must return patched files in a ZIP with exact project-relative paths. The owner should be able to download the ZIP, copy/extract the folders into the project root, and replace the intended files directly.
+
+Correct:
+
+```text
+trackflow-some-fix.zip
+├── app/page.tsx
+├── app/contact/page.tsx
+├── app/contact/ContactForm.tsx
+└── README_FIX.txt
+```
+
+Correct for dynamic routes:
+
+```text
+trackflow-secure-page-fix.zip
+├── app/tracking-review/[domainSlug]/[token]/page.tsx
+└── README_FIX.txt
+```
+
+Incorrect:
+
+```text
+page.updated.tsx
+ContactForm.fixed.tsx
+route-new.ts
+files placed only at ZIP root without folders
+```
+
+ZIP rules:
+
+```text
+1. Use the real filename, not .updated, .fixed, or .new suffixes.
+2. Preserve exact app/lib/component folder paths.
+3. Preserve bracketed dynamic route folders exactly, for example [domainSlug], [token], [...action].
+4. Include only intentionally changed files.
+5. Always include README_FIX.txt.
+6. README_FIX.txt must list changed files, what changed, what was untouched, env changes if any, and test steps.
+7. Do not include node_modules, .next, screenshots, old backup files, or unrelated files.
+8. Do not add new dependencies unless the user explicitly approves and package.json is checked.
+```
+
+### Current public website patch status
+
+Recent UI/UX and speed patches targeted only public/client-facing pages, not the dashboard/backend.
+
+Public pages recently polished:
+
+```text
+Homepage:
+app/page.tsx
+app/components/navbar.tsx
+app/components/footer.tsx
+
+Free tracking audit page:
+app/free-tracking-audit/page.tsx
+app/free-tracking-audit/FreeAuditRequestForm.tsx
+
+Contact page:
+app/contact/page.tsx
+app/contact/ContactForm.tsx
+
+Services pages:
+app/services/page.tsx
+app/services/google-ads-conversion-tracking/page.tsx
+app/services/server-side-tracking/page.tsx
+app/services/ga4-gtm-audit/page.tsx
+app/services/meta-capi/page.tsx
+
+Secure tracking review page:
+app/tracking-review/[domainSlug]/[token]/page.tsx
+
+Secure-page chatbot:
+app/components/trackflow/ReportChatAssistant.tsx
+
+Root layout speed script timing:
+app/layout.tsx
+```
+
+The most recent public-page optimization intent:
+
+```text
+1. Fix right-side mobile shift / horizontal overflow.
+2. Make mobile pages compact, readable, and premium.
+3. Keep CTA buttons full-width on phones and normal on larger screens.
+4. Make form inputs mobile-safe with 16px text to avoid iPhone zoom.
+5. Preserve form endpoints, field names, consent, honeypot, Turnstile, and trackingContext.
+6. Defer heavy widgets where safe.
+7. Avoid changing dashboard/admin/backends unless the issue is specifically there.
+```
+
+### Current secure page UX/speed guardrails
+
+The secure tracking review page is the most critical client-facing page. It contains report view tracking, served pixel, secure analytics, PDF preview/download, optional evidence video, report-aware chatbot, booking/email redirects, and Firestore report data rendering.
+
+Do not casually change or remove these secure-page behaviors:
+
+```text
+ReportViewBeacon
+ReportServedPixel
+SecureReportAnalytics
+PdfDownloadExperienceScript
+AssistantVisibilityScript
+/api/trackflow/reports/preview?token=...
+/api/trackflow/reports/download?token=...
+/api/report-redirect
+/api/report-event
+/api/trackflow/reports/view
+ReportChatAssistant props and analytics events
+```
+
+Safe secure-page UI/UX changes:
+
+```text
+1. Mobile spacing, headings, card padding, and button hierarchy.
+2. overflow-x-hidden, min-w-0, max-w-full, break-words/break-all for long URLs.
+3. Video iframe responsive wrappers.
+4. PDF mobile fallback card instead of forced heavy iframe.
+5. Desktop/tablet PDF preview lazy loading.
+6. Better CTA hierarchy and evidence-safe copy.
+```
+
+Unsafe secure-page changes unless explicitly requested:
+
+```text
+1. Changing token lookup or Firestore report document shape.
+2. Replacing internal PDF routes with direct B2 URLs.
+3. Removing tracking beacons/analytics scripts.
+4. Changing report-chat API request/response logic.
+5. Changing Supabase chat schema behavior.
+6. Changing report redirect URLs or event names.
+7. Removing evidence-safety disclaimers.
+```
+
+### Secure-page speed optimization rules
+
+For speed work, optimize heavy UI surfaces without breaking tracking or report access.
+
+Recommended safe optimizations:
+
+```text
+1. Evidence video should be click-to-load.
+   Do not load YouTube iframe on first render if a thumbnail/preview card can be shown.
+
+2. PDF preview should be lightweight on mobile.
+   Mobile should show Open PDF / Download PDF controls instead of forcing a full embedded PDF iframe.
+
+3. Chatbot should not fetch history/API data until needed.
+   Initial page load may show only the floating chat button. Full chat history and API GET should load when the assistant opens.
+
+4. Microsoft Clarity can use lazyOnload when performance is the priority.
+   Do not remove analytics unless the owner explicitly approves.
+
+5. Keep report served/view beacons active.
+   Speed optimization must not remove client/report engagement tracking.
+```
+
+After secure-page speed patches, test:
+
+```text
+1. Secure page first load.
+2. Report served/view tracking still fires.
+3. Evidence video loads only after tap/click.
+4. Open PDF works.
+5. Download PDF works without navigating away.
+6. Chatbot opens, history loads, questions send, streaming answer works.
+7. Booking/email CTAs still route through tracking redirects.
+8. Mobile has no horizontal scroll.
+```
+
+### Messenger-style chatbot guardrails
+
+The secure-page chatbot should feel like a premium Messenger-style assistant, especially on Android mobile, iPhone, and in-app browsers.
+
+Current UX expectation:
+
+```text
+1. Bottom-sheet style on phones.
+2. Header title/subtitle must never sit under the close/minimize icon.
+3. Header has reserved right-side space for the close button.
+4. Uses dynamic viewport height such as 100dvh where safe.
+5. Messages area scrolls; composer stays visible at the bottom.
+6. User bubble is right-aligned and blue.
+7. Assistant bubble is left-aligned and readable.
+8. Suggested question chips are tappable and compact.
+9. Input text is 16px on mobile to avoid iPhone zoom.
+10. No right-side overflow in Android/Facebook/LinkedIn in-app browsers.
+```
+
+Do not break these chatbot internals:
+
+```text
+/api/trackflow/report-chat GET history loading
+/api/trackflow/report-chat POST streaming response
+sessionId creation and persistence
+localStorage/sessionStorage/cookie fallback
+trackflow:secure-report-event dispatch
+question suggestion builder
+fallback disabled state
+ctaHref / ctaText fallback
+```
+
+If the chatbot opens slowly, prefer lazy/deferred history loading. Do not remove session stability or analytics.
+
+### Public pages speed optimization guardrails
+
+Homepage, free-audit, and contact page speed work should be safe and minimal.
+
+Homepage:
+
+```text
+1. Above-the-fold hero should stay lightweight.
+2. Do not priority-load below-the-fold images.
+3. Use next/image sizes and lazy behavior for below-the-fold images.
+4. Keep metadata/JSON-LD unchanged unless SEO issue is targeted.
+```
+
+Free tracking audit form:
+
+```text
+1. Keep /api/free-audit-request endpoint unchanged.
+2. Keep FormData field names unchanged.
+3. Keep file validation unchanged unless requested.
+4. Keep consent, honeypot, trackingContext, and Turnstile validation unchanged.
+5. Turnstile can be dynamic/lazy-mounted after form interaction, but submit must still require the token when NEXT_PUBLIC_TURNSTILE_SITE_KEY exists.
+```
+
+Contact form:
+
+```text
+1. Keep /api/contact endpoint unchanged.
+2. Keep JSON payload shape unchanged.
+3. Keep consent, honeypot, trackingContext, and Turnstile validation unchanged.
+4. Turnstile can be dynamic/lazy-mounted after form interaction, but submit must still require the token when configured.
+```
+
+Services pages:
+
+```text
+1. Mostly static SEO pages.
+2. Optimize mobile spacing/overflow first.
+3. Do not rewrite service copy unless the owner asks.
+4. Do not add animations or dependencies for speed work.
+```
+
+### File request matrix — public website UI/UX/speed
+
+If the owner asks to fix homepage:
+
+```text
+app/page.tsx
+app/components/navbar.tsx
+app/components/footer.tsx
+```
+
+If the owner asks to fix free audit page:
+
+```text
+app/free-tracking-audit/page.tsx
+app/free-tracking-audit/FreeAuditRequestForm.tsx
+```
+
+If the owner asks to fix contact page:
+
+```text
+app/contact/page.tsx
+app/contact/ContactForm.tsx
+```
+
+If the owner asks to fix services overview or service landing pages:
+
+```text
+app/services/page.tsx
+app/services/google-ads-conversion-tracking/page.tsx
+app/services/server-side-tracking/page.tsx
+app/services/ga4-gtm-audit/page.tsx
+app/services/meta-capi/page.tsx
+```
+
+If the owner asks to fix secure page UI/speed:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+app/components/trackflow/ReportChatAssistant.tsx
+app/layout.tsx
+```
+
+Ask for app/layout.tsx only if global scripts, fonts, body, ThemeProvider, ServerTrack, or Clarity timing are involved.
+
+Ask for backend/API files only if behavior fails, not for pure UI polish:
+
+```text
+app/api/trackflow/[...action]/route.ts
+app/api/trackflow/report-chat/route.ts
+lib/trackflow-storage/b2.ts
+lib/supabase-admin.ts
+lib/firebase-admin.ts
+```
+
+### Safe patch workflow for future assistants
+
+When the owner asks for a fix:
+
+```text
+1. Identify the target area: public page, secure page, chatbot, dashboard, email automation, local/Python flow, or backend.
+2. Ask for only the connected files if they are not uploaded.
+3. Inspect screenshots and code before changing anything.
+4. Preserve business logic, endpoints, payload names, analytics attributes, and tracking scripts.
+5. Make the smallest useful patch.
+6. Prefer Tailwind class/layout changes for UI issues.
+7. Prefer lazy/dynamic loading for heavy widgets instead of deleting features.
+8. Package exact changed files in a ZIP with README_FIX.txt.
+9. In the final answer, explain in Bengali what changed and what was untouched.
+10. Tell the owner to run npm run lint and npm run build.
+```
+
+For responsive/right-shift bugs, check:
+
+```text
+overflow-x-hidden
+min-w-0
+max-w-full
+break-words / break-all for long URLs
+flex-wrap for badge rows
+w-full on mobile buttons
+iframe/video/PDF wrapper max-w-full
+absolute blur/background not visually forcing overflow
+```
+
+For forms, check:
+
+```text
+16px mobile input text
+min-h-12 touch targets
+Turnstile containment max-w-full overflow-hidden
+consent text wrapping
+file upload row overflow
+submit disabled logic unchanged
+```
+
+For speed patches, check:
+
+```text
+Heavy iframe/embed lazy or click-to-load
+below-fold image not priority-loaded
+Turnstile lazy-mounted after interaction
+Clarity lazyOnload if acceptable
+no API/tracking behavior removed
+```
+
+### Build/test honesty rule
+
+Future assistants must be transparent:
+
+```text
+If npm run lint/build was run and passed, say it passed.
+If npm run lint/build was not run, say it was not run and why.
+If only a ZIP/package check was done, say only packaging was checked.
+Do not pretend a full project build succeeded inside ChatGPT unless it actually did.
+```
+
+### Client-facing language rule
+
+Public website, secure report page, PDF, outreach email, and evidence video copy must stay professional English-only.
+
+Client-facing copy must be:
+
+```text
+Evidence-safe
+Non-accusatory
+Professional
+Clear about browser-visible evidence vs final account-level confirmation
+```
+
+Avoid:
+
+```text
+Your tracking is broken.
+You are wasting money.
+This proves conversions are missing.
+Google Ads is not recording leads.
+```
+
+Use:
+
+```text
+Browser-visible evidence suggests this path should be verified inside GA4, GTM, Google Ads, CRM, or server logs.
+Final confirmation requires approved account-level access.
+```
 
 ---
 
@@ -25,6 +479,14 @@ Current system priorities:
 10. Self-hosted email open pixels are the primary source for open_count; Brevo opened webhooks are diagnostic unless intentionally enabled.
 11. For email tracking bugs, first inspect public tracking URL, lead/message identity, provider image-proxy ignore rules, and dashboard cache separately.
 12. Evidence videos are optional high-value lead assets; they must remain browser-visible, evidence-safe, and stored as YouTube/metadata links rather than video files in Firestore.
+13. For public-page UI work, touch only the page/component files needed for that page.
+14. For secure-page UI/speed work, preserve tracking beacons, PDF routes, report redirects, and chatbot API/session logic.
+15. Return code patches as ZIP files with exact project-relative paths and README_FIX.txt.
+16. Communicate with the project owner in natural Bengali script; do not use Romanized Banglish as the main response style.
+17. Keep all client-facing website/report/outreach copy in English.
+18. Do not add dependencies unless package.json has been checked and the owner approves.
+19. For speed work, prefer lazy/click-to-load/defer patterns over deleting features.
+20. Be honest about whether lint/build/tests were run.
 ```
 
 ---
