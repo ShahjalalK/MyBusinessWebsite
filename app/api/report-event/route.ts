@@ -247,6 +247,16 @@ function journeyMeta(eventName: string) {
     };
   }
 
+  if (name.includes("duration")) {
+    return {
+      visitStage: "duration",
+      journeyStep: "02_time_on_report",
+      intentLevel: "low",
+      intentScore: 20,
+      isCoreEvent: false,
+    };
+  }
+
   return {
     visitStage: "view",
     journeyStep: "01_report_viewed",
@@ -390,6 +400,18 @@ function normalizePayload(
         input.eventSection ||
         input.event_section,
       200,
+    ),
+    timeOnReportSeconds: input.timeOnReportSeconds ?? input.time_on_report_seconds,
+    timeOnReportMilliseconds:
+      input.timeOnReportMilliseconds ?? input.time_on_report_milliseconds,
+    timeOnReportDeltaSeconds:
+      input.timeOnReportDeltaSeconds ?? input.time_on_report_delta_seconds,
+    timeOnReportDeltaMilliseconds:
+      input.timeOnReportDeltaMilliseconds ??
+      input.time_on_report_delta_milliseconds,
+    durationEventType: sanitizeParam(
+      input.durationEventType || input.duration_event_type,
+      80,
     ),
   };
 }
@@ -548,6 +570,24 @@ async function sendGa4SecureReportEvent(payload: Record<string, unknown>) {
       80,
     ),
     message_length: toNumber(payload.message_length ?? payload.messageLength),
+
+    time_on_report_seconds: toNumber(
+      payload.timeOnReportSeconds ?? payload.time_on_report_seconds,
+    ),
+    time_on_report_milliseconds: toNumber(
+      payload.timeOnReportMilliseconds ?? payload.time_on_report_milliseconds,
+    ),
+    time_on_report_delta_seconds: toNumber(
+      payload.timeOnReportDeltaSeconds ?? payload.time_on_report_delta_seconds,
+    ),
+    time_on_report_delta_milliseconds: toNumber(
+      payload.timeOnReportDeltaMilliseconds ??
+        payload.time_on_report_delta_milliseconds,
+    ),
+    duration_event_type: sanitizeParam(
+      payload.durationEventType || payload.duration_event_type,
+      80,
+    ),
 
     click_text: sanitizeParam(
       payload.clickText ||

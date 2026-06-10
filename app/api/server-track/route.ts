@@ -61,6 +61,11 @@ const serverTrackSchema = z.object({
   question_key: z.string().trim().max(180).optional().default(""),
   question_source: z.string().trim().max(80).optional().default(""),
   message_length: z.coerce.number().min(0).max(5000).optional(),
+  timeOnReportSeconds: z.coerce.number().min(0).max(86400).optional(),
+  timeOnReportMilliseconds: z.coerce.number().min(0).max(86400000).optional(),
+  timeOnReportDeltaSeconds: z.coerce.number().min(0).max(86400).optional(),
+  timeOnReportDeltaMilliseconds: z.coerce.number().min(0).max(86400000).optional(),
+  durationEventType: z.string().trim().max(80).optional().default(""),
 
   visitorId: z.string().trim().max(80).optional().default(""),
   reportVisitorId: z.string().trim().max(100).optional().default(""),
@@ -250,6 +255,11 @@ async function sendGa4Event(
           question_key: payload.question_key,
           question_source: payload.question_source,
           message_length: payload.message_length,
+          time_on_report_seconds: payload.timeOnReportSeconds,
+          time_on_report_milliseconds: payload.timeOnReportMilliseconds,
+          time_on_report_delta_seconds: payload.timeOnReportDeltaSeconds,
+          time_on_report_delta_milliseconds: payload.timeOnReportDeltaMilliseconds,
+          duration_event_type: payload.durationEventType,
           visitor_id: payload.visitorId,
           report_visitor_id: payload.reportVisitorId,
           report_session_id: payload.reportSessionId,
@@ -421,6 +431,16 @@ function normalizeTrackingInput(json: Record<string, unknown>) {
     question_key: json.question_key ?? json.questionKey,
     question_source: json.question_source ?? json.questionSource,
     message_length: json.message_length ?? json.messageLength,
+    timeOnReportSeconds:
+      json.timeOnReportSeconds ?? json.time_on_report_seconds,
+    timeOnReportMilliseconds:
+      json.timeOnReportMilliseconds ?? json.time_on_report_milliseconds,
+    timeOnReportDeltaSeconds:
+      json.timeOnReportDeltaSeconds ?? json.time_on_report_delta_seconds,
+    timeOnReportDeltaMilliseconds:
+      json.timeOnReportDeltaMilliseconds ??
+      json.time_on_report_delta_milliseconds,
+    durationEventType: json.durationEventType ?? json.duration_event_type,
   };
 }
 

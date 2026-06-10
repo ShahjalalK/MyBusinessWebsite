@@ -80,6 +80,8 @@ const EVENT_SESSION_PREFIX = "tfp_event_once_";
 const DEFAULT_ENDPOINT = "/api/report-event";
 const FALLBACK_ENDPOINT = "/api/server-track";
 const YOUTUBE_PROGRESS_MARKS = [25, 50, 75] as const;
+const REPORT_DURATION_PING_INTERVAL_MS = 30 * 1000;
+const REPORT_DURATION_MIN_EVENT_MS = 3 * 1000;
 
 function cleanText(value: unknown, fallback = "") {
   const text = String(value ?? "")
@@ -310,6 +312,16 @@ function getEventJourneyMeta(eventName: string): EventJourneyMeta {
     };
   }
 
+  if (name.includes("duration")) {
+    return {
+      visitStage: "duration",
+      journeyStep: "02_time_on_report",
+      intentLevel: "low",
+      intentScore: 20,
+      isCoreEvent: false,
+    };
+  }
+
   return {
     visitStage: "view",
     journeyStep: "01_report_viewed",
@@ -507,6 +519,16 @@ function getUrlParam(name: string) {
     return new URL(window.location.href).searchParams.get(name) || "";
   } catch {
     return "";
+  }
+}
+
+function getSafeNowMs() {
+  try {
+    return typeof performance !== "undefined" && performance.now
+      ? performance.now()
+      : Date.now();
+  } catch {
+    return Date.now();
   }
 }
 
@@ -909,6 +931,93 @@ export default function SecureReportAnalytics({
         "trackflow:secure-report-event",
         onAssistantEvent,
       );
+  }, [reportId, sendEvent]);
+
+  useEffect(() => {
+    if (!reportId || typeof window === "undefined" || hasPrivacyOptOut()) return;
+
+    let activeDurationMs = 0;
+    let visibleStartedAt = document.visibilityState === "visible" ? getSafeNowMs() : 0;
+    let lastSentDurationMs = 0;
+    let disposed = false;
+
+    function currentActiveDurationMs() {
+      if (visibleStartedAt > 0 && document.visibilityState === "visible") {
+        return activeDurationMs + Math.max(0, getSafeNowMs() - visibleStartedAt);
+      }
+
+      return activeDurationMs;
+    }
+
+    function pauseVisibleTimer() {
+      if (visibleStartedAt <= 0) return;
+      activeDurationMs += Math.max(0, getSafeNowMs() - visibleStartedAt);
+      visibleStartedAt = 0;
+    }
+
+    function resumeVisibleTimer() {
+      if (visibleStartedAt > 0 || document.visibilityState !== "visible") return;
+      visibleStartedAt = getSafeNowMs();
+    }
+
+    function sendDurationEvent(reason: "ping" | "hidden" | "pagehide" | "cleanup") {
+      if (disposed) return;
+
+      const totalMs = Math.round(currentActiveDurationMs());
+      const deltaMs = Math.max(0, totalMs - lastSentDurationMs);
+
+      if (totalMs < REPORT_DURATION_MIN_EVENT_MS || deltaMs <= 0) return;
+
+      lastSentDurationMs = totalMs;
+
+      void sendEvent({
+        eventName:
+          reason === "ping"
+            ? "secure_report_duration_ping"
+            : "secure_report_duration_final",
+        eventSection: "duration",
+        buttonLabel: `Time on report ${Math.round(totalMs / 1000)}s`,
+        extra: {
+          time_on_report_seconds: Math.round(totalMs / 1000),
+          time_on_report_milliseconds: totalMs,
+          time_on_report_delta_seconds: Math.round(deltaMs / 1000),
+          time_on_report_delta_milliseconds: deltaMs,
+          duration_event_type: reason,
+        },
+      });
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      sendDurationEvent("ping");
+    }, REPORT_DURATION_PING_INTERVAL_MS);
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        pauseVisibleTimer();
+        sendDurationEvent("hidden");
+        return;
+      }
+
+      resumeVisibleTimer();
+    }
+
+    function onPageHide() {
+      pauseVisibleTimer();
+      sendDurationEvent("pagehide");
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+
+    return () => {
+      pauseVisibleTimer();
+      sendDurationEvent("cleanup");
+      disposed = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+    };
   }, [reportId, sendEvent]);
 
   useEffect(() => {
