@@ -2374,6 +2374,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
                 <a
                   href={emailReplyTrackingHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   data-trackflow-analytics-event="secure_report_email_click"
                   data-trackflow-analytics-section="booking"
                   data-trackflow-analytics-label="Reply by Email"
@@ -2385,6 +2387,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
               <p className="mt-4 text-xs font-semibold leading-6 text-slate-400">
                 {bookingUrl ? "Booking opens securely in a new tab." : "Booking link is not configured yet, so this button uses the current review CTA."}
+                {" Reply by Email opens the default email app in a separate tab with a copyable fallback."}
               </p>
             </div>
           </div>

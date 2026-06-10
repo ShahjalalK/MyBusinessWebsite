@@ -224,6 +224,86 @@ async function sendGa4RedirectEvent(payload: Record<string, unknown>) {
   };
 }
 
+
+function isMailtoDestination(value: string) {
+  return /^mailto:/i.test(cleanText(value, ""));
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function getMailtoAddress(destination: string) {
+  const withoutProtocol = destination.replace(/^mailto:/i, "");
+  const address = withoutProtocol.split("?")[0] || "";
+
+  try {
+    return decodeURIComponent(address).replace(/[\r\n]/g, "").slice(0, 180);
+  } catch {
+    return address.replace(/[\r\n]/g, "").slice(0, 180);
+  }
+}
+
+function mailtoFallbackResponse(destination: string) {
+  const mailtoHref = escapeHtml(destination);
+  const emailAddress = escapeHtml(getMailtoAddress(destination));
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <title>Open email app | TrackFlow Pro</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #0f172a; font-family: Arial, Helvetica, sans-serif; padding: 24px; }
+    .card { width: min(100%, 460px); border: 1px solid #e2e8f0; border-radius: 28px; background: #fff; padding: 28px; box-shadow: 0 24px 70px rgba(15, 23, 42, .10); }
+    .eyebrow { margin: 0 0 10px; color: #2563eb; font-size: 11px; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(26px, 6vw, 34px); line-height: 1.05; letter-spacing: -.045em; }
+    p { color: #475569; font-size: 15px; font-weight: 700; line-height: 1.7; }
+    .button { display: inline-flex; width: 100%; min-height: 52px; align-items: center; justify-content: center; border-radius: 18px; background: #2563eb; color: #fff; text-decoration: none; font-size: 14px; font-weight: 900; box-shadow: 0 18px 38px rgba(37, 99, 235, .24); }
+    .fallback { margin-top: 16px; padding: 14px; border-radius: 18px; background: #f1f5f9; color: #334155; word-break: break-word; font-size: 13px; font-weight: 800; }
+    .note { margin-bottom: 0; color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <p class="eyebrow">TrackFlow Pro</p>
+    <h1>Opening your email app</h1>
+    <p>If your email app does not open automatically, use the button below or copy the email address.</p>
+    <a class="button" href="${mailtoHref}" rel="nofollow">Open email app</a>
+    <div class="fallback">${emailAddress}</div>
+    <p class="note">This page only helps open your default email app. The secure report remains available in the original tab.</p>
+  </main>
+  <script>
+    (function () {
+      try {
+        var href = ${JSON.stringify(destination)};
+        window.setTimeout(function () { window.location.href = href; }, 120);
+      } catch (error) {}
+    })();
+  </script>
+</body>
+</html>`;
+
+  return new NextResponse(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, max-age=0",
+      "referrer-policy": "no-referrer",
+      "x-robots-tag": "noindex, nofollow, noarchive",
+    },
+  });
+}
+
 async function forwardClickEvent(request: NextRequest, destination: string) {
   const params = request.nextUrl.searchParams;
   const token = params.get("token") || "";
@@ -288,6 +368,10 @@ export async function GET(request: NextRequest) {
     await forwardClickEvent(request, destination);
   } catch (error) {
     console.error("Report redirect tracking failed:", error);
+  }
+
+  if (isMailtoDestination(destination)) {
+    return mailtoFallbackResponse(destination);
   }
 
   return new NextResponse(null, {
