@@ -1,8 +1,113 @@
 # TrackFlow Pro — Looker Studio Secure Page Dashboard Roadmap
 
-**Version:** v1.0  
-**Last updated:** 2026-06-08  
+**Version:** v1.1-secure-duration-ga4-params  
+**Last updated:** 2026-06-10  
 **Purpose:** এই markdown file যেকোনো ChatGPT / developer / analytics helper-কে দিলে সে TrackFlow Pro secure page tracking system এবং Looker Studio dashboard goal বুঝতে পারবে—আলাদা করে code file না দিলেও।
+
+
+---
+
+## Latest Update — v1.1 Secure Report Duration + GA4 Parameter Handoff
+
+This update documents exactly which secure-report data is passed from the website to GA4 and how a future assistant should help when the owner asks:
+
+```text
+এই data আমার secure page-এর dashboard-এ দেখতে চাই
+```
+
+Important rule for future assistants:
+
+```text
+First solve from GA4 + Looker Studio setup.
+Do not ask for code files immediately unless GA4 DebugView does not receive the event, the parameter is missing from fresh events, or `/api/report-event` / `/api/server-track` is failing.
+```
+
+Current secure-report behavior events are sent from the browser through:
+
+```text
+SecureReportAnalytics
+→ /api/report-event
+→ GA4 Measurement Protocol
+```
+
+Fallback/general tracking can use:
+
+```text
+/api/server-track
+```
+
+The secure page can now send custom active-duration parameters:
+
+```text
+time_on_report_seconds
+time_on_report_milliseconds
+time_on_report_delta_seconds
+time_on_report_delta_milliseconds
+duration_event_type
+```
+
+Recommended GA4 custom metrics:
+
+| GA4 custom metric name | Event parameter | Type | Best Looker Studio use |
+|---|---|---|---|
+| Time on Report Seconds | `time_on_report_seconds` | Number | Use `MAX()` per visitor/session |
+| Time on Report Delta Seconds | `time_on_report_delta_seconds` | Number | Use `SUM()` per visitor/session |
+| Time on Report Milliseconds | `time_on_report_milliseconds` | Number | Optional/debug |
+| Time on Report Delta Milliseconds | `time_on_report_delta_milliseconds` | Number | Optional/debug |
+
+Recommended GA4 custom dimension:
+
+| GA4 custom dimension name | Event parameter | Why needed |
+|---|---|---|
+| Duration Event Type | `duration_event_type` | Shows whether the duration event was heartbeat, hidden, unload, or final-style send |
+
+Recommended duration event name:
+
+```text
+secure_report_duration
+```
+
+Expected behavior:
+
+```text
+Visitor opens secure report
+→ secure_report_view fires
+
+Visitor keeps page visible
+→ active time counts only while the page is visible
+
+Every 30 seconds while active
+→ secure_report_duration fires with cumulative and delta time
+
+Visitor switches tab / hides page / closes page
+→ secure_report_duration fires again with latest time where browser allows sendBeacon/fetch
+```
+
+Dashboard interpretation:
+
+```text
+Use MAX(time_on_report_seconds) to answer:
+“How long did this visitor actively keep the secure report open?”
+
+Use SUM(time_on_report_delta_seconds) to answer:
+“How many active seconds were collected across duration heartbeat events?”
+```
+
+If Looker Studio does not allow changing aggregation directly on the GA4 metric, create calculated fields:
+
+```text
+Max Time on Report Seconds = MAX(time_on_report_seconds)
+Total Time on Report Seconds = SUM(time_on_report_delta_seconds)
+Time on Report Minutes = MAX(time_on_report_seconds) / 60
+```
+
+Important data freshness rule:
+
+```text
+GA4 custom definitions only populate for fresh events after the definitions are created.
+Old secure-report events will not backfill the new duration metrics.
+```
+
 
 ---
 
@@ -21,11 +126,12 @@
 
 Code file শুধু তখন চাইবেন যখন:
 
-1. GA4 event আসছে না।
-2. event parameter missing।
-3. secure page click/PDF/chat/video tracking কাজ করছে না।
+1. GA4 DebugView / Realtime-এ fresh event আসছে না।
+2. Fresh event-এ expected event parameter missing।
+3. secure page click/PDF/chat/video/duration tracking কাজ করছে না।
 4. `/api/report-event` বা `/api/server-track` response fail করছে।
-5. Looker Studio-তে field দেখা যাচ্ছে না কিন্তু GA4 DebugView-তে event আছে।
+5. GA4-তে event parameter আছে কিন্তু Looker Studio data source refresh করার পরও field দেখা যাচ্ছে না।
+6. User confirms deploy হয়েছে, new test traffic পাঠানো হয়েছে, তবুও parameter blank/zero।
 
 ---
 
@@ -150,6 +256,87 @@ Can send via sendBeacon/fetch
 Can support GA4 and optional Meta CAPI type tracking
 ```
 
+
+### 2.4 Current website → GA4 parameter flow
+
+Secure page browser-side events should carry these groups of data.
+
+Identity/grouping parameters:
+
+```text
+report_id
+domain_slug
+company_name
+visitor_id
+report_visitor_id
+report_session_id
+ga_session_id
+anonymous_id
+```
+
+Journey/intent parameters:
+
+```text
+visit_stage
+journey_step
+intent_level
+intent_score
+is_core_event
+event_section
+button_label
+```
+
+Content/action parameters:
+
+```text
+event_name
+click_href
+question_key
+question_source
+message_length
+video_id
+video_progress
+scroll_percent
+primary_action_label
+primary_page_label
+```
+
+Duration parameters:
+
+```text
+time_on_report_seconds
+time_on_report_milliseconds
+time_on_report_delta_seconds
+time_on_report_delta_milliseconds
+duration_event_type
+```
+
+Environment/debug parameters:
+
+```text
+page_location
+page_path
+page_title
+referrer
+utm_source
+utm_medium
+utm_campaign
+gclid
+fbclid
+msclkid
+timezone
+language
+viewport
+screen
+device_type
+visitor_country
+visitor_region
+visitor_city
+transport
+```
+
+Do not expose raw `token` in GA4 reports. Use `report_id`, `domain_slug`, and `report_visitor_id` for reporting.
+
 ---
 
 ## 3. Main identity model
@@ -242,6 +429,31 @@ Chat message sent is a strong signal because the visitor is actively trying to u
 
 Booking click is the hottest signal.
 
+
+### 4.7 Duration / active-time events
+
+| Event name | Meaning | Intent |
+|---|---|---|
+| `secure_report_duration` | Visitor actively kept the secure report visible/open for a measurable period | Reading/engagement signal |
+
+Duration parameters:
+
+| Parameter | Meaning | Recommended use |
+|---|---|---|
+| `time_on_report_seconds` | Cumulative active visible time for that visitor/session/report | Use `MAX()` in visitor summary |
+| `time_on_report_milliseconds` | Same as above in milliseconds | Optional/debug |
+| `time_on_report_delta_seconds` | Active seconds since the last duration send | Use `SUM()` if MAX is not available |
+| `time_on_report_delta_milliseconds` | Same as above in milliseconds | Optional/debug |
+| `duration_event_type` | Why the duration event was sent, for example heartbeat/hidden/unload | Debugging and timeline context |
+
+Business meaning:
+
+```text
+A visitor who only opens the page for a few seconds is softer interest.
+A visitor who stays 60–180+ active seconds is likely reading.
+A visitor who stays longer and also downloads PDF / asks chatbot / clicks booking is stronger follow-up priority.
+```
+
 ---
 
 ## 5. Journey metadata model
@@ -302,6 +514,7 @@ Create these in GA4:
 | Video ID | `video_id` | Evidence video grouping |
 | Primary Action Label | `primary_action_label` | CTA/report context |
 | Primary Page Label | `primary_page_label` | Usually Secure tracking review |
+| Duration Event Type | `duration_event_type` | Why active-duration event was sent |
 
 ### 6.2 Event-scoped custom metrics
 
@@ -313,6 +526,10 @@ Create these in GA4:
 | Scroll Percent | `scroll_percent` | Number |
 | Video Progress | `video_progress` | Number |
 | Message Length | `message_length` | Number |
+| Time on Report Seconds | `time_on_report_seconds` | Number |
+| Time on Report Delta Seconds | `time_on_report_delta_seconds` | Number |
+| Time on Report Milliseconds | `time_on_report_milliseconds` | Number |
+| Time on Report Delta Milliseconds | `time_on_report_delta_milliseconds` | Number |
 
 ### 6.3 Optional/debug parameters
 
@@ -330,6 +547,44 @@ Use carefully. These can be high-cardinality.
 | `timezone`, `language`, `viewport`, `screen` | Device/browser context |
 
 Do not overuse full URL fields in main dashboard tables because they can make reports messy.
+
+
+### 6.4 Practical GA4 parameter dictionary by dashboard question
+
+Use this table when the owner asks “এই data secure page dashboard-এ দেখতে চাই”.
+
+| Dashboard question | Primary dimensions | Primary metrics | Filter/event logic |
+|---|---|---|---|
+| Which client opened the secure report? | `company_name`, `domain_slug`, `report_visitor_id` | Event count | Event name = `secure_report_view` |
+| Which visitor stayed longest? | `company_name`, `domain_slug`, `report_visitor_id`, `report_session_id` | `MAX(time_on_report_seconds)` | Event name = `secure_report_duration` |
+| How many active seconds did a visitor spend? | `report_visitor_id`, `report_session_id` | `SUM(time_on_report_delta_seconds)` | Event name = `secure_report_duration` |
+| Which visitors downloaded PDF? | `company_name`, `report_visitor_id` | Event count | Event name = `secure_report_pdf_download_click` |
+| Which visitors asked chatbot questions? | `company_name`, `report_visitor_id`, `question_key`, `question_source` | Event count, `message_length` | Event name = `secure_report_assistant_message_sent` |
+| Which visitors watched evidence video? | `company_name`, `report_visitor_id`, `video_id` | `video_progress`, Event count | Event name contains `secure_report_evidence_video` |
+| Which visitors clicked booking? | `company_name`, `report_visitor_id` | Event count, `intent_score` | Event name = `secure_report_booking_click` |
+| Which visitor is hottest? | `company_name`, `domain_slug`, `report_visitor_id` | `MAX(intent_score)`, Event count | Use intent + core event fields |
+| Which page/source campaign produced activity? | `domain_slug`, `utm_source`, `utm_medium`, `utm_campaign` | Event count | Use UTM parameters if present |
+| Which device/country engaged? | `device_type`, `visitor_country`, `visitor_region`, `visitor_city` | Event count, duration metrics | Use geo/device fields |
+
+Recommended table grouping for most reports:
+
+```text
+company_name
+domain_slug
+report_visitor_id
+report_session_id
+visitor_country
+device_type
+```
+
+Recommended metrics for most reports:
+
+```text
+Event count
+MAX(intent_score)
+MAX(time_on_report_seconds)
+SUM(time_on_report_delta_seconds)
+```
 
 ---
 
@@ -444,6 +699,8 @@ Create scorecards:
 | Contact Clicks | Email + LinkedIn click events |
 | Hot Visitors | Visitors where max `intent_score >= 90` |
 | Average Intent Score | Average `intent_score` |
+| Longest Active Time | Max `time_on_report_seconds` |
+| Total Active Time | Sum `time_on_report_delta_seconds` |
 
 ### Main table: Client Activity Summary
 
@@ -461,6 +718,8 @@ PDF Downloaded?
 Chat Asked?
 Booking Clicked?
 Email/LinkedIn Clicked?
+Max Time on Report Seconds
+Total Time on Report Seconds
 Device Type
 ```
 
@@ -506,6 +765,8 @@ Metrics:
 ```text
 Event count
 Intent Score
+Time on Report Seconds
+Time on Report Delta Seconds
 ```
 
 Sort:
@@ -748,6 +1009,65 @@ CASE
 END
 ```
 
+
+### 10.5 Secure report duration calculated fields
+
+Use these if Looker Studio does not let you change aggregation directly on GA4 custom metrics.
+
+```text
+Max Time on Report Seconds
+```
+
+Formula:
+
+```text
+MAX(time_on_report_seconds)
+```
+
+Use this in visitor/session summary tables.
+
+```text
+Total Time on Report Seconds
+```
+
+Formula:
+
+```text
+SUM(time_on_report_delta_seconds)
+```
+
+Use this when you want to total all duration heartbeat deltas.
+
+```text
+Time on Report Minutes
+```
+
+Formula:
+
+```text
+MAX(time_on_report_seconds) / 60
+```
+
+Use this for a more readable duration column.
+
+```text
+Time Quality
+```
+
+Formula:
+
+```text
+CASE
+  WHEN MAX(time_on_report_seconds) >= 180 THEN "Strong read"
+  WHEN MAX(time_on_report_seconds) >= 60 THEN "Meaningful read"
+  WHEN MAX(time_on_report_seconds) >= 15 THEN "Short read"
+  ELSE "Very short visit"
+END
+```
+
+If Looker Studio rejects aggregate functions inside a calculated dimension, create the `MAX(time_on_report_seconds)` metric first, then use that metric in the chart/table rather than trying to classify it globally.
+
+
 ### 10.4 Follow-up Recommendation
 
 ```text
@@ -848,6 +1168,34 @@ Looker Studio
 → Add to report
 ```
 
+
+### Step 4.1 — Refresh fields in Looker Studio after adding GA4 custom definitions
+
+After creating new GA4 custom dimensions or custom metrics, refresh the Looker Studio data source.
+
+```text
+Looker Studio
+→ Resource
+→ Manage added data sources
+→ Edit your GA4 data source
+→ Refresh fields
+→ Apply / Done
+```
+
+Then add the new fields to the chart/table.
+
+If a custom metric appears but aggregation cannot be changed directly, create a calculated field:
+
+```text
+Max Time on Report Seconds = MAX(time_on_report_seconds)
+Total Time on Report Seconds = SUM(time_on_report_delta_seconds)
+Time on Report Minutes = MAX(time_on_report_seconds) / 60
+```
+
+Use `Max Time on Report Seconds` in visitor summary tables.
+Use `Total Time on Report Seconds` only when you want to sum heartbeat deltas.
+
+
 ### Step 5 — Create Page 1 first
 
 Do not build all pages at once.
@@ -882,7 +1230,7 @@ Open page in browser and perform:
 
 ```text
 1. Open secure report page.
-2. Wait 5 seconds.
+2. Wait at least 35 seconds to generate a duration heartbeat event.
 3. Scroll 50%.
 4. Scroll near bottom.
 5. Open PDF.
@@ -911,6 +1259,7 @@ secure_report_evidence_video_start
 secure_report_evidence_video_progress_25/50/75
 secure_report_booking_click
 secure_report_email_click / secure_report_linkedin_click
+secure_report_duration
 ```
 
 ---
@@ -927,6 +1276,10 @@ secure_report_email_click / secure_report_linkedin_click
 | Booking click not tracked | Redirect route not used | Check `/api/report-redirect` link |
 | Video progress missing | YouTube iframe API not loaded or video not present | Check evidence video ID and iframe |
 | Dashboard too messy | Too many raw event rows | Use priority table + filters |
+| `time_on_report_seconds` not showing in Looker Studio | GA4 custom metric added but data source fields not refreshed | Resource → Manage added data sources → Edit → Refresh fields |
+| Duration metric shows 0/blank | Old events or no fresh duration event after deploy/custom metric creation | Open secure page, keep tab visible for 35+ seconds, then check GA4 DebugView |
+| Aggregation cannot be changed | GA4 connector locked metric aggregation | Create calculated fields: `MAX(time_on_report_seconds)` and `SUM(time_on_report_delta_seconds)` |
+| Duration too high or confusing | Using SUM on cumulative `time_on_report_seconds` | Use MAX for cumulative seconds, SUM only for delta seconds |
 
 ---
 
@@ -990,6 +1343,7 @@ The page tracks first-party client behavior and forwards events to GA4 through `
 Do not expose raw report token in analytics; use hashed `report_id`.  
 Important grouping fields are `company_name`, `domain_slug`, `report_visitor_id`, and `report_session_id`.  
 Important intent fields are `visit_stage`, `journey_step`, `intent_level`, and `intent_score`.
+Important active-duration fields are `time_on_report_seconds`, `time_on_report_delta_seconds`, and `duration_event_type`.
 
 Build a Looker Studio dashboard with 4 pages:
 
@@ -1019,6 +1373,7 @@ secure_report_evidence_video_complete
 secure_report_booking_click
 secure_report_email_click
 secure_report_linkedin_click
+secure_report_duration
 ```
 
 Main business logic:
@@ -1032,6 +1387,110 @@ Chat question = high intent
 Video 75%+ = high intent
 Email/LinkedIn click = high intent
 Booking click = hot intent
+MAX(time_on_report_seconds) = how long the visitor actively stayed on the secure report
+SUM(time_on_report_delta_seconds) = total collected active-time deltas
 ```
 
 The dashboard should help the operator decide who needs follow-up first.
+
+---
+
+## 18. Future assistant support protocol for “I want to see this secure page data”
+
+When the owner asks to show a data point in Looker Studio, follow this order.
+
+### Step A — Identify the requested data
+
+Map the request to the GA4 field.
+
+Examples:
+
+| Owner request | Use this GA4 field |
+|---|---|
+| “visitor kotokhon thakche” | `time_on_report_seconds` / `time_on_report_delta_seconds` |
+| “ke PDF download korse” | Event name `secure_report_pdf_download_click` |
+| “ke chatbot question korse” | Event name `secure_report_assistant_message_sent` + `question_key` |
+| “ke booking click korse” | Event name `secure_report_booking_click` |
+| “kon visitor hot” | `intent_score`, `intent_level`, `is_core_event` |
+| “same visitor group korte chai” | `report_visitor_id` |
+| “same visit/session group korte chai” | `report_session_id` |
+
+### Step B — Check GA4 setup first
+
+```text
+Admin → Data display → Custom definitions
+```
+
+Confirm the dimension/metric exists with the correct parameter name.
+
+For metrics, use event-scoped custom metrics.
+
+### Step C — Confirm fresh event data
+
+Open a test secure report and trigger the behavior.
+
+For duration:
+
+```text
+Open secure page
+Keep the tab visible for 35+ seconds
+Then check GA4 DebugView / Realtime
+```
+
+### Step D — Refresh Looker Studio fields
+
+```text
+Resource
+→ Manage added data sources
+→ Edit
+→ Refresh fields
+→ Apply / Done
+```
+
+### Step E — Add to chart/table
+
+For visitor summary:
+
+```text
+Dimensions:
+company_name
+domain_slug
+report_visitor_id
+report_session_id
+
+Metrics:
+Event count
+MAX(intent_score)
+MAX(time_on_report_seconds)
+SUM(time_on_report_delta_seconds)
+```
+
+If aggregation is locked, create calculated fields.
+
+### Step F — Ask for code only when setup is not enough
+
+Ask for files only if:
+
+```text
+GA4 DebugView does not receive the event
+GA4 event receives but parameter is missing
+/api/report-event or /api/server-track fails
+Looker Studio cannot see the field after data source refresh and fresh events
+```
+
+Minimum files for duration/secure behavior tracking:
+
+```text
+app/components/trackflow/SecureReportAnalytics.tsx
+app/api/report-event/route.ts
+app/api/server-track/route.ts
+```
+
+If secure page component mounting is suspected:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+```
+
+Do not touch chatbot, PDF, B2, Firestore, Supabase, email, cleanup, or redirect logic for a Looker Studio field/aggregation issue.
+

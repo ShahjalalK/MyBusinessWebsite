@@ -43,9 +43,19 @@ function uniqueStrings(values: unknown[], max = 100): string[] {
   return output;
 }
 
+function isIgnoredOpenDiagnosticEvent(event: string): boolean {
+  const name = String(event || "").toLowerCase().trim();
+  return name === "brevo_open_ignored" || name === "trackflow_open_ignored";
+}
+
 export function shouldStoreRawEmailEvent(event: string): boolean {
   const name = String(event || "").toLowerCase().trim();
   if (!name) return false;
+
+  if (isIgnoredOpenDiagnosticEvent(name)) {
+    return envFlag("STORE_IGNORED_EMAIL_EVENTS", false);
+  }
+
   if (envFlag("STORE_LOW_VALUE_EMAIL_EVENTS", false)) return true;
 
   return (
@@ -59,9 +69,7 @@ export function shouldStoreRawEmailEvent(event: string): boolean {
     name === "bounced" ||
     name === "failed" ||
     name === "cron_error" ||
-    name === "manual_action" ||
-    name === "brevo_open_ignored" ||
-    name === "trackflow_open_ignored"
+    name === "manual_action"
   );
 }
 
@@ -73,9 +81,12 @@ export async function addEmailEvent(leadId: string, event: string, payload: AnyR
   const trackingTag = cleanId(payload.trackingTag || payload.tracking_tag || payload.tag || "", 180);
   const emailLower = cleanEmail(payload.emailLower || payload.email_lower || payload.email || "");
 
-  // Keep old storage policy, but allow report-token indexed manual/important events
-  // to be stored even when the lead document was already cleaned.
-  if (!shouldStoreRawEmailEvent(event) && payload.forceStore !== true) return;
+  // Keep old storage policy, but do not let ignored/open diagnostic events fill Firestore
+  // unless STORE_IGNORED_EMAIL_EVENTS=true is explicitly enabled for debugging.
+  if (!shouldStoreRawEmailEvent(event)) {
+    if (isIgnoredOpenDiagnosticEvent(event)) return;
+    if (payload.forceStore !== true) return;
+  }
   if (!cleanLeadId && !reportToken && !messageId && !trackingId) return;
 
   await adminDb.collection("email_events").add({

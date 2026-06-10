@@ -282,7 +282,7 @@ function secondsAfterLeadSentForOpenTracking(lead: LeadData = {}, eventMs = Date
 }
 
 function shouldForceStoreOpenDebug(lead: LeadData = {}, eventMs = Date.now()): boolean {
-  if (!envFlag("STORE_OPEN_TRACKING_DEBUG", true)) return false;
+  if (!envFlag("STORE_OPEN_TRACKING_DEBUG", false)) return false;
   const sentMs = getLeadSentMsForOpenTracking(lead);
   if (!sentMs) return true;
   return Math.abs(eventMs - sentMs) <= openTrackingDebugWindowMs();
@@ -4788,7 +4788,7 @@ async function recordSelfHostedEmailEngagement(
         fastOpenWindowSeconds: providerImageProxyOpen.windowSeconds,
         secondsAfterSent,
         userAgent: meta.req?.headers.get("user-agent") || "",
-        forceStore: true,
+        forceStore: forceStoreOpenDebug,
       });
       return { recorded: false, reason: providerImageProxyOpen.reason };
     }
@@ -4813,7 +4813,7 @@ async function recordSelfHostedEmailEngagement(
         ignoredForAutomation: true,
         ignoredReason: "internal_test_recipient",
         secondsAfterSent,
-        forceStore: true,
+        forceStore: forceStoreOpenDebug,
       });
       return { recorded: false, reason: "internal_test_recipient_open_ignored" };
     }
