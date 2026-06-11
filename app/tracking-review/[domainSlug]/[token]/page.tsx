@@ -6,6 +6,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import ReportChatAssistant from "@/app/components/trackflow/ReportChatAssistant";
 import SecureReportAnalytics from "@/app/components/trackflow/SecureReportAnalytics";
 import type { ReportChatQuestionContext } from "@/app/components/trackflow/reportChatQuestions";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -1292,21 +1293,35 @@ function ReportNavbar() {
   return (
     <nav className="fixed inset-x-0 top-0 z-50 overflow-x-hidden border-b border-slate-200/80 bg-white/95 shadow-sm shadow-slate-950/5 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3" aria-label="TrackFlow Pro home">
-          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 sm:h-10 sm:w-10">
-            <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
-            <span className="relative text-lg font-black tracking-tight sm:text-xl">T</span>
-          </span>
+        <Link
+  href="/"
+  className="group flex min-w-0 items-center gap-2.5 sm:gap-3"
+  aria-label="TrackFlow Pro home"
+>
+  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-950/5 ring-1 ring-slate-200/70 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:shadow-blue-600/15 sm:h-11 sm:w-11">
+    <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-white to-blue-50/90 opacity-95" />
+    <Image
+      src="/logo-mark.png"
+      alt=""
+      width={40}
+      height={40}
+      priority
+      className="relative h-8 w-8 object-contain drop-shadow-sm sm:h-9 sm:w-9"
+    />
+  </span>
 
-          <span className="min-w-0 leading-none">
-            <span className="block whitespace-nowrap text-[18px] font-black tracking-[-0.04em] text-slate-950 sm:text-[21px]">
-              TrackFlow<span className="text-blue-600">Pro</span>
-            </span>
-            <span className="mt-1 hidden whitespace-nowrap text-[9px] font-black uppercase tracking-[0.22em] text-slate-400 sm:block">
-              Tracking & Attribution
-            </span>
-          </span>
-        </Link>
+  <span className="flex min-w-0 flex-col leading-none">
+    <span className="whitespace-nowrap text-[18px] font-black tracking-[-0.045em] text-slate-950 sm:text-[21px]">
+      TrackFlow
+      <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-sky-400 bg-clip-text text-transparent">
+        Pro
+      </span>
+    </span>
+    <span className="mt-1 hidden whitespace-nowrap text-[8px] font-black uppercase tracking-[0.14em] text-slate-500 sm:block">
+      Conversion Tracking Specialist
+    </span>
+  </span>
+</Link>
 
         <div className="hidden items-center gap-1 md:flex">
           <Link
@@ -1419,21 +1434,34 @@ function ReportFooter() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-center">
           <div>
-            <Link href="/" className="inline-flex max-w-full min-w-0 items-center gap-3" aria-label="TrackFlow Pro home">
-              <span className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
-                <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
-                <span className="relative text-lg font-black tracking-tight sm:text-xl">T</span>
-              </span>
+           <Link
+  href="/"
+  className="group inline-flex max-w-full min-w-0 items-center gap-3"
+  aria-label="TrackFlow Pro home"
+>
+  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-950/5 ring-1 ring-slate-200/70 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:shadow-blue-600/15">
+    <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-white to-blue-50/90 opacity-95" />
+    <Image
+      src="/logo-mark.png"
+      alt=""
+      width={40}
+      height={40}
+      className="relative h-9 w-9 object-contain drop-shadow-sm"
+    />
+  </span>
 
-              <span className="min-w-0">
-                <span className="block text-2xl font-black tracking-[-0.04em] text-slate-950">
-                  TrackFlow<span className="text-blue-600">Pro</span>
-                </span>
-                <span className="mt-1 block break-words text-[10px] font-black uppercase leading-5 tracking-[0.18em] text-slate-400 sm:tracking-[0.22em]">
-                  Google Ads · GA4 · Server-Side Tracking
-                </span>
-              </span>
-            </Link>
+  <span className="flex min-w-0 flex-col leading-none">
+    <span className="whitespace-nowrap text-2xl font-black tracking-[-0.045em] text-slate-950">
+      TrackFlow
+      <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-sky-400 bg-clip-text text-transparent">
+        Pro
+      </span>
+    </span>
+    <span className="mt-1 block whitespace-nowrap text-[8px] font-black uppercase leading-5 tracking-[0.14em] text-slate-500">
+      Conversion Tracking Specialist
+    </span>
+  </span>
+</Link>
 
             <p className="mt-5 max-w-2xl text-sm font-semibold leading-7 text-slate-500">
               Specialist conversion tracking support for advertisers who need clearer GA4,

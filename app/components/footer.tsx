@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import { BsLinkedin } from "react-icons/bs";
+import Image from "next/image";
 
 const currentYear = new Date().getFullYear();
 
@@ -155,21 +156,34 @@ export default function Footer() {
 
         <div className="grid gap-10 lg:grid-cols-[1.1fr_1.9fr] lg:gap-12">
           <div className="space-y-6 sm:space-y-8">
-            <Link href="/" className="inline-flex items-center gap-3" aria-label="TrackFlow Pro home">
-              <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
-                <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
-                <span className="relative text-2xl font-black tracking-tight">T</span>
-              </span>
+            <Link
+  href="/"
+  className="group inline-flex min-w-0 items-center gap-3"
+  aria-label="TrackFlow Pro home"
+>
+  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-blue-950/30 ring-1 ring-blue-400/30 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-blue-500/20">
+    <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-blue-50 to-blue-100" />
+    <Image
+      src="/logo-mark.png"
+      alt=""
+      width={44}
+      height={44}
+      className="relative h-10 w-10 object-contain drop-shadow-sm"
+    />
+  </span>
 
-              <span>
-                <span className="block text-2xl font-black tracking-[-0.04em] text-white">
-                  TrackFlow<span className="text-blue-400">Pro</span>
-                </span>
-                <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">
-                  Tracking & Attribution
-                </span>
-              </span>
-            </Link>
+  <span className="flex min-w-0 flex-col leading-none">
+    <span className="whitespace-nowrap text-2xl font-black tracking-[-0.045em] text-white">
+      TrackFlow
+      <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-cyan-200 bg-clip-text text-transparent">
+        Pro
+      </span>
+    </span>
+    <span className="mt-1 block whitespace-nowrap text-[8px] font-black uppercase tracking-[0.14em] text-slate-400">
+      Conversion Tracking Specialist
+    </span>
+  </span>
+</Link>
 
             <p className="max-w-md text-sm font-medium leading-7 text-slate-400">
               Specialist support for Google Ads conversion tracking, GA4/GTM audits,

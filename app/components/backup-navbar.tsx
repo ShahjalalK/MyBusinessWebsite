@@ -7,7 +7,6 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -181,32 +180,18 @@ export default function Navbar() {
         )}
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:gap-4 sm:px-6 lg:px-8">
-          <Link
-            href="/"
-            className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3"
-            aria-label="TrackFlow Pro home"
-          >
-           <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-950/5 ring-1 ring-slate-200/70 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:shadow-blue-600/15 dark:bg-white dark:ring-blue-400/30 dark:shadow-blue-950/30 sm:h-11 sm:w-11">
-             <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-white to-blue-50/90 opacity-95 dark:from-white dark:via-blue-50 dark:to-blue-100" />
-              <Image
-                src="/logo-mark.png"
-                alt=""
-                width={40}
-                height={40}
-                priority
-                className="relative h-8 w-8 object-contain drop-shadow-sm sm:h-9 sm:w-9"
-              />
+          <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3" aria-label="TrackFlow Pro home">
+            <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20 sm:h-10 sm:w-10">
+              <span className="absolute inset-0 bg-gradient-to-br from-blue-500 via-blue-600 to-slate-950" />
+              <span className="relative text-lg font-black tracking-tight sm:text-xl">T</span>
             </span>
 
-            <span className="flex min-w-0 flex-col leading-none">
-              <span className="whitespace-nowrap text-[19px] font-black tracking-[-0.045em] text-slate-950 transition-colors dark:text-white sm:text-[22px]">
-                TrackFlow
-                <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-sky-400 bg-clip-text text-transparent dark:from-blue-400 dark:via-sky-300 dark:to-cyan-200">
-                  Pro
-                </span>
+            <span className="leading-none">
+              <span className="block whitespace-nowrap text-[19px] font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-[21px]">
+                TrackFlow<span className="text-blue-600 dark:text-blue-400">Pro</span>
               </span>
-              <span className="mt-1 hidden whitespace-nowrap text-[8px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 xl:block">
-                Conversion Tracking Specialist
+              <span className="mt-1 hidden whitespace-nowrap text-[9px] font-black uppercase tracking-[0.22em] text-slate-400 xl:block">
+                Tracking & Attribution
               </span>
             </span>
           </Link>
