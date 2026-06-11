@@ -2253,63 +2253,15 @@ function normalizeMessageIdHeader(value: any): string {
   return `<${cleaned}>`;
 }
 
-function isBrevoSmtpMessageId(value: any): boolean {
-  const messageId = normalizeMessageIdHeader(value).toLowerCase();
-  return (
-    messageId.endsWith("@smtp-relay.sendinblue.com>") ||
-    messageId.endsWith("@smtp-relay.brevo.com>")
-  );
-}
-
-function uniqueMessageIdList(values: any[]): string[] {
-  const seen = new Set<string>();
-  const output: string[] = [];
-
-  for (const value of values) {
-    const messageId = normalizeMessageIdHeader(value);
-    if (!messageId || seen.has(messageId)) continue;
-    seen.add(messageId);
-    output.push(messageId);
-  }
-
-  return output;
-}
-
 function getLeadMessageIdChain(lead: LeadData): string[] {
-  const providerCandidates: any[] = [];
-  const fallbackCandidates: any[] = [];
+  const candidates: any[] = [];
 
-  const addProviderCandidate = (value: any) => {
-    if (isBrevoSmtpMessageId(value)) providerCandidates.push(value);
-  };
-
-  // Prefer the final SMTP Message-Id that Gmail actually sees. Brevo rewrites
-  // our custom Message-ID and exposes the custom value only as Origin-messageId.
-  addProviderCandidate((lead as AnyRecord).providerSmtpMessageId);
-  addProviderCandidate((lead as AnyRecord).brevoSmtpMessageId);
-  addProviderCandidate((lead as AnyRecord).providerDeliveredMessageId);
-  addProviderCandidate((lead as AnyRecord).brevoDeliveredMessageId);
-  addProviderCandidate((lead as AnyRecord).smtpMessageId);
-  addProviderCandidate(lead.originalMessageId);
-  addProviderCandidate(lead.brevoMessageId);
-
-  fallbackCandidates.push(lead.customMessageId, lead.originalMessageId, lead.brevoMessageId);
+  candidates.push(lead.customMessageId, lead.originalMessageId, lead.brevoMessageId);
 
   if (Array.isArray(lead.sent_messages)) {
-    const messages = [...lead.sent_messages].sort((a: any, b: any) => Number(a?.step || 0) - Number(b?.step || 0));
-    for (const message of messages) {
+    for (const message of lead.sent_messages) {
       if (!message || typeof message !== "object") continue;
-
-      addProviderCandidate(message.providerSmtpMessageId);
-      addProviderCandidate(message.brevoSmtpMessageId);
-      addProviderCandidate(message.providerDeliveredMessageId);
-      addProviderCandidate(message.brevoDeliveredMessageId);
-      addProviderCandidate(message.deliveredMessageId);
-      addProviderCandidate(message.smtpMessageId);
-      addProviderCandidate(message.threadMessageId);
-      addProviderCandidate(message.messageId);
-
-      fallbackCandidates.push(
+      candidates.push(
         message.customMessageId,
         message.messageId,
         message.brevoMessageId,
@@ -2319,15 +2271,17 @@ function getLeadMessageIdChain(lead: LeadData): string[] {
     }
   }
 
-  addProviderCandidate((lead as AnyRecord).lastProviderSmtpMessageId);
-  addProviderCandidate((lead as AnyRecord).lastBrevoSmtpMessageId);
-  addProviderCandidate((lead as AnyRecord).lastFollowupProviderSmtpMessageId);
-  addProviderCandidate((lead as AnyRecord).lastFollowupBrevoSmtpMessageId);
+  const seen = new Set<string>();
+  const output: string[] = [];
 
-  const providerChain = uniqueMessageIdList(providerCandidates);
-  if (providerChain.length) return providerChain;
+  for (const value of candidates) {
+    const messageId = normalizeMessageIdHeader(value);
+    if (!messageId || seen.has(messageId)) continue;
+    seen.add(messageId);
+    output.push(messageId);
+  }
 
-  return uniqueMessageIdList(fallbackCandidates);
+  return output;
 }
 
 function followupThreadingMode(): "legacy_subject_grouping" | "provider_headers" {
@@ -2353,7 +2307,7 @@ function buildThreadHeadersForFollowup(lead: LeadData): Record<string, string> {
   }
 
   const chain = getLeadMessageIdChain(lead);
-  if (!chain.length || !chain.some((messageId) => isBrevoSmtpMessageId(messageId))) return {};
+  if (!chain.length) return {};
 
   const threadRootMessageId = chain[0];
   const previousMessageId = chain[chain.length - 1] || threadRootMessageId;
@@ -4309,104 +4263,6 @@ function brevoMessageIdLookupCandidates(value: any): string[] {
   return Array.from(new Set(candidates));
 }
 
-function normalizeBrevoWebhookUuid(value: any): string {
-  const raw = String(value || "")
-    .trim()
-    .replace(/[<>]/g, "")
-    .replace(/@smtp-relay\.sendinblue\.com$/i, "")
-    .replace(/@smtp-relay\.brevo\.com$/i, "")
-    .replace(/[^a-zA-Z0-9_-]/g, "")
-    .slice(0, 120);
-
-  if (!raw || raw.length < 8) return "";
-  return raw;
-}
-
-function brevoSmtpMessageIdFromWebhook(body: AnyRecord = {}): string {
-  const explicitMessageId = normalizeMessageIdHeader(
-    body.smtpMessageId ||
-      body.smtp_message_id ||
-      body.providerSmtpMessageId ||
-      body.provider_smtp_message_id ||
-      body.deliveredMessageId ||
-      body.delivered_message_id ||
-      "",
-  );
-
-  if (isBrevoSmtpMessageId(explicitMessageId)) return explicitMessageId;
-
-  const uuid = normalizeBrevoWebhookUuid(
-    body.uuid ||
-      body.message_uuid ||
-      body.messageUuid ||
-      body["message-uuid"] ||
-      body["message_uuid"] ||
-      "",
-  );
-
-  return uuid ? `<${uuid}@smtp-relay.sendinblue.com>` : "";
-}
-
-function parseStepNumberFromTrackingTag(tag: string): number {
-  const match = String(tag || "").toLowerCase().match(/_step(\d+)/);
-  const step = match ? Number(match[1]) : 0;
-  return Number.isFinite(step) && step > 0 ? step : 0;
-}
-
-function withBrevoSmtpMessageIdOnSentMessages(
-  sentMessages: any,
-  trackingTag: string,
-  brevoSmtpMessageId: string,
-  event: string,
-  eventTime: any,
-): any[] | null {
-  if (!Array.isArray(sentMessages) || !brevoSmtpMessageId) return null;
-
-  const stepNumber = parseStepNumberFromTrackingTag(trackingTag);
-  let changed = false;
-
-  const updated = sentMessages.map((message: any) => {
-    if (!message || typeof message !== "object" || Array.isArray(message)) return message;
-
-    const messageTag = String(message.trackingTag || message.tracking_tag || "").trim();
-    const messageStep = Number(message.step || 0);
-    const followupNumber = Number(message.followupNumber || 0);
-    const matchesTag = Boolean(trackingTag && messageTag && messageTag === trackingTag);
-    const matchesStep = Boolean(stepNumber && (messageStep === stepNumber || followupNumber === Math.max(0, stepNumber - 1)));
-
-    if (!matchesTag && !matchesStep) return message;
-
-    const nextMessage = {
-      ...message,
-      providerSmtpMessageId: brevoSmtpMessageId,
-      brevoSmtpMessageId,
-      providerDeliveredMessageId: brevoSmtpMessageId,
-      brevoDeliveredMessageId: brevoSmtpMessageId,
-      smtpMessageId: brevoSmtpMessageId,
-    };
-
-    if (!isBrevoSmtpMessageId(nextMessage.messageId)) {
-      nextMessage.messageId = brevoSmtpMessageId;
-    }
-
-    if (event === "delivered") {
-      nextMessage.providerDeliveredAt = eventTime;
-      nextMessage.deliveredAt = eventTime;
-    } else if (event === "request" || event === "sent") {
-      nextMessage.providerRequestedAt = eventTime;
-    } else if (event === "opened" || event === "unique_opened") {
-      nextMessage.providerOpenedAt = eventTime;
-    } else if (event === "click" || event === "clicked") {
-      nextMessage.providerClickedAt = eventTime;
-    }
-
-    changed = true;
-    return nextMessage;
-  });
-
-  return changed ? updated : null;
-}
-
 async function handleBrevoWebhook(req: Request) {
   requireWebhookSecret(req, "BREVO_WEBHOOK_SECRET");
   const body = await readJson(req);
@@ -4414,13 +4270,7 @@ async function handleBrevoWebhook(req: Request) {
   const event = String(body.event || "");
   const emailLower = normalizeEmail(body.email || "");
   const rawMessageId = String(body["message-id"] || body.messageId || body.message_id || "").replace(/[<>]/g, "");
-  const brevoSmtpMessageId = brevoSmtpMessageIdFromWebhook(body);
-  const messageIdCandidates = Array.from(
-    new Set([
-      ...brevoMessageIdLookupCandidates(body["message-id"] || body.messageId || body.message_id || ""),
-      ...brevoMessageIdLookupCandidates(brevoSmtpMessageId),
-    ]),
-  );
+  const messageIdCandidates = brevoMessageIdLookupCandidates(body["message-id"] || body.messageId || body.message_id || "");
   const tags = normalizeBrevoWebhookTagList(body);
   let receivedTag = tags[0] || "";
   const timestamp = Number(body.ts_event || body.ts || Math.floor(Date.now() / 1000));
@@ -4430,8 +4280,6 @@ async function handleBrevoWebhook(req: Request) {
     event,
     emailLower,
     rawMessageId,
-    brevoSmtpMessageId,
-    brevoUuid: normalizeBrevoWebhookUuid(body.uuid || body.message_uuid || body.messageUuid || body["message-uuid"] || body["message_uuid"] || ""),
     receivedTag,
     tags,
     timestamp,
@@ -4467,30 +4315,11 @@ async function handleBrevoWebhook(req: Request) {
     if (!idSnapshot.empty) leadDoc = idSnapshot.docs[0];
   }
 
-  for (const messageIdCandidate of messageIdCandidates) {
-    if (leadDoc) break;
-    const idSnapshot = await outreachRef.where("brevoSmtpMessageId", "==", messageIdCandidate).limit(1).get();
-    if (!idSnapshot.empty) leadDoc = idSnapshot.docs[0];
-  }
-
-  for (const messageIdCandidate of messageIdCandidates) {
-    if (leadDoc) break;
-    const idSnapshot = await outreachRef.where("providerSmtpMessageId", "==", messageIdCandidate).limit(1).get();
-    if (!idSnapshot.empty) leadDoc = idSnapshot.docs[0];
-  }
-
-  for (const messageIdCandidate of messageIdCandidates) {
-    if (leadDoc) break;
-    const idSnapshot = await outreachRef.where("customMessageId", "==", messageIdCandidate).limit(1).get();
-    if (!idSnapshot.empty) leadDoc = idSnapshot.docs[0];
-  }
-
   if (!leadDoc) {
     trackflowEmailDebugLog("brevo_webhook_lead_not_found", {
       event,
       emailLower,
       rawMessageId,
-      brevoSmtpMessageId,
       receivedTag,
       tags,
     });
@@ -4502,7 +4331,6 @@ async function handleBrevoWebhook(req: Request) {
     leadId: leadDoc.id,
     emailLower,
     rawMessageId,
-    brevoSmtpMessageId,
     receivedTag,
   });
 
@@ -4514,48 +4342,6 @@ async function handleBrevoWebhook(req: Request) {
 
   const docRef = outreachRef.doc(leadDoc.id);
   const updatePayload: any = {};
-  const webhookStepNumber = parseStepNumberFromTrackingTag(receivedTag);
-  const brevoWebhookUuid = normalizeBrevoWebhookUuid(body.uuid || body.message_uuid || body.messageUuid || body["message-uuid"] || body["message_uuid"] || "");
-
-  if (brevoSmtpMessageId) {
-    updatePayload.lastBrevoWebhookUuid = brevoWebhookUuid || admin.firestore.FieldValue.delete();
-    updatePayload.lastBrevoSmtpMessageId = brevoSmtpMessageId;
-    updatePayload.lastProviderSmtpMessageId = brevoSmtpMessageId;
-    updatePayload.lastProviderMessageId = brevoSmtpMessageId;
-    updatePayload.brevoProviderLastMessageId = brevoSmtpMessageId;
-
-    const providerSentMessages = withBrevoSmtpMessageIdOnSentMessages(
-      leadData.sent_messages,
-      receivedTag,
-      brevoSmtpMessageId,
-      event,
-      eventTime,
-    );
-    if (providerSentMessages) updatePayload.sent_messages = providerSentMessages;
-
-    if (!webhookStepNumber || webhookStepNumber <= 1) {
-      const oldOriginalMessageId = normalizeMessageIdHeader(leadData.originalMessageId);
-      const oldBrevoMessageId = normalizeMessageIdHeader(leadData.brevoMessageId);
-      if (oldOriginalMessageId && !isBrevoSmtpMessageId(oldOriginalMessageId)) {
-        updatePayload.originMessageId = oldOriginalMessageId;
-      }
-      if (oldBrevoMessageId && !isBrevoSmtpMessageId(oldBrevoMessageId)) {
-        updatePayload.brevoOriginMessageId = oldBrevoMessageId;
-      }
-
-      updatePayload.originalMessageId = brevoSmtpMessageId;
-      updatePayload.brevoMessageId = brevoSmtpMessageId;
-      updatePayload.providerSmtpMessageId = brevoSmtpMessageId;
-      updatePayload.brevoSmtpMessageId = brevoSmtpMessageId;
-      updatePayload.providerDeliveredMessageId = brevoSmtpMessageId;
-      updatePayload.brevoDeliveredMessageId = brevoSmtpMessageId;
-      updatePayload.smtpMessageId = brevoSmtpMessageId;
-    } else {
-      updatePayload.lastFollowupProviderSmtpMessageId = brevoSmtpMessageId;
-      updatePayload.lastFollowupBrevoSmtpMessageId = brevoSmtpMessageId;
-    }
-  }
-
   let openRecorded = false;
   let clickRecorded = false;
   const trackingEntryBase = {
@@ -4776,9 +4562,6 @@ async function handleBrevoWebhook(req: Request) {
     trackingTag: receivedTag || "",
     rawMessageId: rawMessageId || "",
     messageId: rawMessageId || "",
-    providerSmtpMessageId: brevoSmtpMessageId || "",
-    brevoSmtpMessageId: brevoSmtpMessageId || "",
-    brevoUuid: brevoWebhookUuid || "",
     url: body.url || "",
     ip: body.ip || "",
     userAgent: body["user-agent"] || "",
