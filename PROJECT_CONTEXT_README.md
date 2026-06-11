@@ -1,11 +1,571 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v24.00-public-ui-speed-chatbot-bengali-handoff
-Last updated: 2026-06-10
+Version: v25.00-local-audit-ai-context-outreach-handoff
+Last updated: 2026-06-11
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, how to safely patch files, how to return ZIP handoffs, and how to communicate with the owner in natural Bengali.
 
 ---
 
+
+## Latest Critical Update — v25.00 Local Audit Dashboard AI Context MD, Email-Ready Outreach, Search Audit Gate, Screenshot Split, and TypeScript Build Fix
+
+This section is now the highest-priority operating rule for future ChatGPT assistants working on the Localhost/Python audit dashboard and the audit-row handoff workflow. It documents the latest changes added after v24.00.
+
+### Core owner workflow now
+
+The owner may download one safe AI Context `.md` file from an individual audit row and upload that file into ChatGPT.
+
+When an assistant receives that AI Context `.md` file, assume the audit workflow is already complete unless the file clearly says otherwise.
+
+Assume:
+
+```text
+1. Secure report page is already created.
+2. Reviewed PDF is already created.
+3. Evidence video / browser-side walkthrough is already created.
+4. The remaining task is to understand the audit and help write or improve the outreach email.
+```
+
+Do not ask the owner whether the secure page, PDF, or evidence video are complete unless the uploaded AI Context file explicitly says they are missing.
+
+Correct assistant behavior after receiving an audit AI Context MD:
+
+```text
+1. Read the audit context.
+2. Explain the website/audit problem in simple language.
+3. Decide: Send / Maybe / Do not send.
+4. Identify the best outreach email angle.
+5. Explain which evidence is safe to mention.
+6. Explain which claims must be avoided.
+7. Suggest a practical technical fix/checklist.
+8. Provide subject options.
+9. Draft a short, natural, evidence-safe outreach email.
+10. Keep the client-facing email in English only.
+```
+
+### Email mindset for completed audits
+
+The outreach email must be written as if the review assets are already prepared.
+
+Do not write as if the audit has not been done yet.
+
+Avoid:
+
+```text
+I can audit your website.
+I would like to check your tracking.
+I can create a report for you.
+```
+
+Use the completed-review mindset:
+
+```text
+I put together a short private review of your website tracking.
+I noticed one thing that may be worth checking.
+I also recorded a short browser-side walkthrough so it is easier to review.
+Would you like me to send it over?
+```
+
+The email should be:
+
+```text
+Short
+Natural
+Owner-friendly
+Non-spammy
+Evidence-safe
+Not too technical
+Soft CTA
+Under about 120 words when possible
+```
+
+Use soft wording:
+
+```text
+I noticed...
+It may be worth checking...
+It looked like...
+Browser-visible evidence suggests...
+This could make reporting harder...
+Final confirmation would need GA4/GTM/Google Ads/CRM/server access.
+```
+
+Avoid risky claims:
+
+```text
+Your tracking is broken.
+Your ads are wasting money.
+This proves conversions are missing.
+Google Ads is not recording leads.
+Your agency made a mistake.
+```
+
+### AI Context MD export feature
+
+The Localhost/Python dashboard should provide a safe row-level MD export for ChatGPT discussion.
+
+Preferred button label:
+
+```text
+Download AI Context
+```
+
+Alternative labels:
+
+```text
+Download AI context MD
+Export Row for ChatGPT
+```
+
+The old visible GPT prompt/copy workspace should remain hidden/off unless the owner explicitly asks to restore it. The owner wants a clean `.md` file that explains the audit to ChatGPT without needing to manually write a long prompt.
+
+The MD should contain a human-readable summary and a compact safe JSON section.
+
+Recommended AI Context MD structure:
+
+```text
+# TrackFlow AI Audit Context
+
+## Outreach Status
+This audit context is provided after the audit workflow is complete.
+
+Assume:
+- Secure report page is already created
+- Reviewed PDF report is already created
+- Evidence video / walkthrough is already created
+- The only remaining task is to understand the audit and write or improve the outreach email
+
+Do not ask whether the report, PDF, or video are ready unless this file clearly says they are missing.
+
+## What ChatGPT Should Do
+- Explain the audit problem in simple language
+- Decide whether outreach is worthwhile
+- Suggest the safest email angle
+- Identify what evidence can be mentioned
+- Identify what claims should be avoided
+- Suggest a practical fix/checklist
+- Draft a short English outreach email
+
+## Business Snapshot
+Business Name:
+Domain:
+Homepage:
+Website Type:
+Lead Source:
+Email Found Confirmed:
+Manual Business Name Used:
+
+## Audit Summary
+Opportunity Score:
+Score Label:
+Main Opportunity:
+Business Risk:
+Client-Friendly Explanation:
+
+## Tracking Evidence
+GTM:
+GA4:
+Meta Pixel:
+Google Ads:
+Server-side Tracking:
+Other Vendor Signals:
+
+## Form / CTA Evidence
+Lead Form Found:
+Form Test Status:
+CTA Test Status:
+Tracking Observed After Form/CTA:
+Important Pages Reviewed:
+
+## Evidence Strength
+Evidence Level:
+Proof Points:
+Manual Checks Recommended:
+Weak or Uncertain Areas:
+
+## Assets
+Secure report page: Ready
+Reviewed PDF: Ready
+Evidence video: Ready
+
+Do not include raw private links or tokens in this file.
+
+## Outreach Guidance
+Best email angle:
+Safe things to mention:
+Claims to avoid:
+Suggested CTA:
+Technical fix/checklist:
+
+## Compact Safe JSON
+{ ...safe selected fields only... }
+```
+
+### AI Context MD safety rules
+
+The AI Context MD is for ChatGPT discussion only. It must not leak private operational data.
+
+Never include:
+
+```text
+Actual recipient email address
+reportToken raw value
+API keys
+OAuth tokens
+session tokens
+cookies
+secret env values
+raw secure report link if it exposes token
+private Backblaze B2 URL/path/key
+Firestore private document IDs
+Supabase private IDs
+Brevo/API provider message IDs if sensitive
+internal suppression IDs
+private debug logs that include tokens/keys/emails
+```
+
+Allowed:
+
+```text
+Business name
+Domain
+Public homepage URL with query/hash stripped
+Industry / website type
+Lead source label
+Email Found Confirmed: Yes/No
+Opportunity score
+Main problem / opportunity
+Tracking signals
+Form/CTA test summary
+Evidence-safe proof points
+Asset readiness only: Secure page ready / PDF ready / Evidence video ready
+High-level technical checklist
+Compact safe JSON with selected non-secret fields
+```
+
+If a field may contain an email, token, key, cookie, private path, or raw secure URL, redact it before writing the MD.
+
+Recommended redaction behavior:
+
+```text
+email@example.com → [REDACTED_EMAIL]
+token/key/secret-looking values → [REDACTED_SECRET]
+raw report URL with token → [SECURE_REPORT_READY_REDACTED]
+private storage path → [REDACTED_PRIVATE_STORAGE_PATH]
+```
+
+### Connected files for AI Context MD / Email tab export
+
+The latest AI Context MD export work touched or depends on:
+
+```text
+app/components/LeadDetailsModal.tsx
+app/components/LeadDetailsModal/tabs/EmailTab.tsx
+app/components/LeadDetailsModal/emailHelpers.ts
+app/components/LeadDetailsModal/auditHelpers.ts
+app/components/LeadDetailsModal/utils.ts
+app/components/LeadDetailsModal/types.ts
+```
+
+Use these files for:
+
+```text
+AI Context MD download button missing
+MD file includes unsafe data
+MD file does not explain secure page/PDF/video are already complete
+GPT prompt copy button still visible when it should be off
+Email tab export/download issue
+Email draft review workspace issue
+```
+
+Do not touch Python backend, PDF generation, secure page, B2, Firestore, Sheet sync, or email automation for a pure AI Context MD export issue.
+
+### Search audit pre-run gate
+
+For Python Search lead audits, the owner wants to avoid wasting audit resources when no usable contact email has been found.
+
+Current intended behavior:
+
+```text
+1. Do not show a pre-audit email input field.
+2. Show only an “Email found” checkbox/confirmation.
+3. If Email found is not checked, the search audit run button is blocked.
+4. The email address itself is not stored in this UI step.
+5. The owner may add/change the actual email later from the dashboard/edit/send workflow.
+```
+
+Reason:
+
+```text
+If no contact email exists, auditing the search lead may be wasted because there is nobody to send the completed report to.
+```
+
+Client/public copy must never expose this internal rule.
+
+### Manual Business Name priority for search audits
+
+Search audit setup now supports an optional manual business name.
+
+Behavior:
+
+```text
+1. Business Name is optional.
+2. If blank, the system falls back to detected business/company name, lead title, or domain.
+3. If provided, manual business name has highest priority.
+4. It should flow as manual_business_name / business_name / company_name where applicable.
+5. It is client-facing and may affect PDF/report/email/secure page/video context.
+```
+
+Risk:
+
+```text
+The only real risk is entering the wrong business name because it can override detected names.
+```
+
+Do not block audit when the business name is blank.
+
+### Connected files for search audit gate / manual business name
+
+Use these files for related bugs:
+
+```text
+app/components/LeadList.tsx
+app/components/LeadList/LeadRow.tsx
+app/components/LeadList/types.ts
+app/components/LeadList/rowHelpers.tsx
+app/components/LeadList/LinkedInAuditPanel.tsx
+app/components/LeadList/auditApi.ts
+app/components/LeadList/linkedinAuditOptions.ts
+python-backend/audit.py
+python-backend/guided_audit.py
+python-backend/video_evidence.py
+```
+
+Use this area for:
+
+```text
+Email found checkbox missing
+Audit runs even when Email found is unchecked
+Audit blocked even after Email found is checked
+Manual business name not used
+Wrong name appears in report/email/PDF/secure page
+Search audit source metadata wrong
+```
+
+### Custom label / text field space-key fix
+
+Recent bug:
+
+```text
+Custom label fields could not type spaces between words in some audit setup inputs.
+```
+
+Cause:
+
+```text
+A parent/global keyboard handler was intercepting the Space key or key events from nested text inputs.
+```
+
+Intended fix:
+
+```text
+For text inputs/textareas inside setup modals, stop keyboard event propagation where needed.
+Do not trim input value on every onChange.
+Do not block normal typing, spaces, arrows, paste, or composition.
+```
+
+Relevant fields include:
+
+```text
+Python Search custom label
+Python Search anchor/clue/target text
+Search audit business name
+Manual/LinkedIn custom label
+Manual/LinkedIn target anchor text
+Manual/LinkedIn business/contact name
+Manual/LinkedIn focus note / notes textarea
+```
+
+Do not change audit payload logic just to fix text typing.
+
+### TypeScript build fix — React KeyboardEvent vs DOM KeyboardEvent
+
+Recent build error:
+
+```text
+./app/components/LeadList/LeadRow.tsx
+Type error: No overload matches this call.
+window.addEventListener('keydown', handleEscape)
+```
+
+Cause:
+
+```text
+KeyboardEvent was imported from React and then used for a browser window.addEventListener handler.
+TypeScript treated the DOM listener as a React KeyboardEvent<Element>.
+```
+
+Correct pattern:
+
+```ts
+import { useEffect, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+
+const stopTextInputKeyboardPropagation = (
+  event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+) => {
+  event.stopPropagation();
+};
+
+useEffect(() => {
+  if (!isAuditSetupOpen) return;
+
+  const handleEscape = (event: globalThis.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      setAuditSetupOpen(false);
+    }
+  };
+
+  window.addEventListener('keydown', handleEscape);
+  return () => window.removeEventListener('keydown', handleEscape);
+}, [isAuditSetupOpen]);
+```
+
+Rule for future assistants:
+
+```text
+Do not import React KeyboardEvent as bare KeyboardEvent if the file also needs DOM KeyboardEvent.
+Use ReactKeyboardEvent for React input handlers.
+Use globalThis.KeyboardEvent for window/document event listeners.
+```
+
+### PDF screenshots vs Evidence Video screenshots
+
+Recent issue:
+
+```text
+The same manual screenshot upload could be used for both PDF and evidence video.
+Large full-page screenshots made PDF too heavy, while video sometimes used PDF-focused screenshots instead of better video visuals.
+```
+
+Current intended separation:
+
+```text
+PDF Focus Screenshots
+→ cropped/focused/compressed screenshots for PDF only
+→ homepage, primary, secondary
+→ good for exact form area, phone CTA, booking, checkout, quote section
+→ should not drive video visuals
+
+Video Walkthrough Screenshots
+→ wider/full-page/professional screenshots for video only
+→ homepage, primary, secondary
+→ used only when creating/regenerating evidence video
+→ should not be embedded in PDF
+```
+
+Video visual priority:
+
+```text
+1. Video Walkthrough Screenshots if uploaded.
+2. Auto-captured screenshots/browser visuals from the audit.
+3. Do not fall back to PDF Focus Screenshots unless the owner explicitly requests that behavior.
+```
+
+If video still uses PDF screenshots:
+
+```text
+1. Latest patch may not be applied.
+2. Python backend may not have restarted.
+3. Old local Next.js/Python server may still be running.
+4. Browser cache/state may contain older evidence visual data.
+```
+
+Restart:
+
+```powershell
+Ctrl + C
+python audit.py
+npm run dev
+```
+
+### Auto screenshots vs manual screenshots
+
+Automatic screenshot capture can be enough and often gives the best evidence video.
+
+Manual screenshot uploads are optional backup only.
+
+Use manual video screenshots when:
+
+```text
+Auto capture misses the important section
+Cookie/popup blocks the page
+Lazy-loaded page appears blank
+The form/CTA/booking section is far down the page
+The owner wants a specific homepage/form/phone/checkout visual
+```
+
+Otherwise, prefer auto-captured evidence visuals.
+
+### Latest Localhost dashboard test checklist
+
+After applying recent patches, test:
+
+```text
+1. npm run build completes with no LeadRow KeyboardEvent type error.
+2. Python Search audit button is blocked until Email found is checked.
+3. Email found checkbox does not store the actual email address.
+4. Manual Business Name blank does not break audit.
+5. Manual Business Name filled has highest priority in the audit context/report copy.
+6. Custom label fields can type spaces normally.
+7. Target/anchor/focus note text fields can type spaces normally.
+8. PDF Focus Screenshots upload/clear works independently.
+9. Video Walkthrough Screenshots upload/clear works independently.
+10. PDF generation does not use video screenshots.
+11. Evidence video generation uses video screenshots first, then auto visuals.
+12. AI Context MD downloads successfully.
+13. AI Context MD says secure page/PDF/video are complete and only email writing remains.
+14. AI Context MD does not include email address, report token, keys, raw secure link, private B2 path, Firestore/Supabase private IDs, or secret values.
+15. Uploading the AI Context MD into a new ChatGPT chat gives enough context to discuss the audit and draft the outreach email without extra explanation.
+```
+
+### Latest patch ZIP history
+
+Recent related patch handoffs included:
+
+```text
+trackflow-pdf-video-screenshot-split-fix.zip
+trackflow-video-screenshot-priority-fix.zip
+trackflow-search-audit-email-gate-business-name-priority.zip
+trackflow-custom-label-space-key-fix.zip
+trackflow-safe-ai-audit-context-md-export.zip
+trackflow-ai-context-md-complete-outreach-instructions.zip
+trackflow-leadrow-keyboardevent-build-fix.zip
+```
+
+These names are historical references only. Future assistants must inspect the current uploaded files before assuming a patch is already applied.
+
+### Build honesty for these latest patches
+
+If a future assistant creates a patch from partial uploaded files, say clearly what was actually tested.
+
+Allowed statements:
+
+```text
+I checked TypeScript syntax for the changed file only.
+I packaged the replacement files with exact project paths.
+Full npm run build was not run because the complete project/node_modules were not available.
+```
+
+Do not say:
+
+```text
+Build passed.
+Everything is fixed.
+```
+
+unless `npm run build` actually ran and passed in the full project.
+
+---
 
 ## Latest Critical Update — v24.00 Public UI/UX, Speed Optimization, Messenger-Style Chatbot, and Bengali Assistant Handoff
 

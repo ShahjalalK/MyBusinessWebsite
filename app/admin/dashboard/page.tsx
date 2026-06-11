@@ -2719,8 +2719,10 @@ export default function DashboardPage() {
     try {
       const params = new URLSearchParams();
       params.set("limit", "300");
-      params.set("hasEmail", "true");
-
+      // Sheet Leads should show every exported audit row, including LinkedIn/manual
+      // audit rows that may not have a Final Email yet. The Send Email drawer keeps
+      // its own hasEmail=true loader, so removing this filter here does not affect
+      // email-only sending safety.
       if (sheetLeadFilter !== "All") params.set("leadStatus", sheetLeadFilter);
       if (sheetApprovalFilter !== "All") params.set("approvalStatus", sheetApprovalFilter);
       if (sheetSendFilter !== "All") params.set("sendStatus", sheetSendFilter);
