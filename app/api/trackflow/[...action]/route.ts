@@ -1783,57 +1783,95 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
   const websiteLabel = escapeHtml(BRAND_WEBSITE_LABEL);
   const visibleReference = escapeHtml(formatVisibleEmailReference(tag));
   const mailingAddressLine = buildComplianceAddressLine();
-  const mailingAddressHtml = mailingAddressLine
-    ? `<div style="margin:4px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">${mailingAddressLine}</div>`
+  const mailingAddressRow = mailingAddressLine
+    ? `
+                <tr>
+                  <td style="padding:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                    ${mailingAddressLine}
+                  </td>
+                </tr>`
     : "";
 
   if (mode === "compact") {
     return `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:18px;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
         <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:12px 0 0 0;border-top:1px solid #e5e7eb;overflow-wrap:break-word;word-break:normal;">
-            <div style="margin:0 0 2px 0;color:#111827;font-weight:bold;">${senderName}</div>
-            <div style="margin:0;color:#6b7280;">TrackFlowPro · Conversion Tracking Audit</div>
-            <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
-              <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
-              <span style="color:#d1d5db;"> | </span>
-              <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
-            </div>
-            <div style="margin:7px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
-              Reference: ${visibleReference}
-              <span style="color:#d1d5db;"> | </span>
-              <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
-            </div>
-            ${mailingAddressHtml}
+          <td height="16" style="height:16px;line-height:16px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+        </tr>
+        <tr>
+          <td style="height:1px;line-height:1px;font-size:0;border-top:1px solid #e5e7eb;padding:0;mso-line-height-rule:exactly;">&nbsp;</td>
+        </tr>
+        <tr>
+          <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:12px 0 0 0;overflow-wrap:break-word;word-break:normal;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+              <tr>
+                <td style="padding:0 0 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${senderName}</td>
+              </tr>
+              <tr>
+                <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;color:#6b7280;mso-line-height-rule:exactly;">TrackFlowPro · Conversion Tracking Audit</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
+                  <span style="color:#d1d5db;"> | </span>
+                  <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  Reference: ${visibleReference}
+                  <span style="color:#d1d5db;"> | </span>
+                  <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+                </td>
+              </tr>
+              ${mailingAddressRow}
+            </table>
           </td>
         </tr>
       </table>
     `;
   }
 
-  // Full signature is still text/table based. This renders more consistently in Outlook than image-heavy signatures.
+  // Full signature is text/table based only. The spacer rows and single border-left cell keep Outlook from pulling the CTA note into the signature area.
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:22px;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
       <tr>
-        <td style="font-family:Arial,Helvetica,sans-serif;padding:14px 0 0 0;border-top:1px solid #e5e7eb;mso-line-height-rule:exactly;">
+        <td height="18" style="height:18px;line-height:18px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td style="height:1px;line-height:1px;font-size:0;border-top:1px solid #e5e7eb;padding:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td style="font-family:Arial,Helvetica,sans-serif;padding:14px 0 0 0;mso-line-height-rule:exactly;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
-              <td width="4" style="width:4px;background:#2563eb;font-size:0;line-height:0;">&nbsp;</td>
-              <td style="padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
-                <div style="font-size:15px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:#111827;margin:0;">${senderName}</div>
-                <div style="font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;margin:0;">Founder, TrackFlowPro</div>
-                <div style="font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;margin:3px 0 0 0;">Google Ads Tracking · Server-Side Tracking · Conversion Audit</div>
-                <div style="font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;margin:8px 0 0 0;overflow-wrap:break-word;word-break:normal;">
-                  <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
-                  <span style="color:#d1d5db;"> | </span>
-                  <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
-                </div>
-                <div style="font-size:10px;line-height:15px;mso-line-height-rule:exactly;color:#9ca3af;margin:8px 0 0 0;overflow-wrap:break-word;word-break:normal;">
-                  Reference: ${visibleReference}
-                  <span style="color:#d1d5db;"> | </span>
-                  <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
-                </div>
-                ${mailingAddressHtml}
+              <td style="border-left:3px solid #2563eb;padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+                  <tr>
+                    <td style="padding:0 0 1px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:#111827;">${senderName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;">Founder, TrackFlowPro</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;">Google Ads Tracking · Server-Side Tracking · Conversion Audit</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;overflow-wrap:break-word;word-break:normal;">
+                      <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
+                      <span style="color:#d1d5db;"> | </span>
+                      <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;mso-line-height-rule:exactly;color:#9ca3af;overflow-wrap:break-word;word-break:normal;">
+                      Reference: ${visibleReference}
+                      <span style="color:#d1d5db;"> | </span>
+                      <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+                    </td>
+                  </tr>
+                  ${mailingAddressRow}
+                </table>
               </td>
             </tr>
           </table>

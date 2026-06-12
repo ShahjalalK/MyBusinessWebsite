@@ -788,7 +788,7 @@ export default function OutreachPanel({
                   )}
 
                   {safeReportUrl && (
-                    <div className="mt-5">
+                    <div className="mt-5 mb-4">
                       <a
                         href={safeReportUrl}
                         target="_blank"
@@ -804,7 +804,7 @@ export default function OutreachPanel({
                   )}
 
                   {includeSignature ? (
-                    <div dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "full") }} />
+                    <div className={safeReportUrl ? "mt-2" : ""} dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "full") }} />
                   ) : (
                     <p className="mt-5 text-[10px] font-black text-gray-400 uppercase">Signature hidden</p>
                   )}
