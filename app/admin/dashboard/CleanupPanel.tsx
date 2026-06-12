@@ -340,6 +340,16 @@ function formatActiveSeconds(seconds: number): string {
   return `${minutes}m ${remainder}s active`;
 }
 
+function formatDeviceSummary(report: SecureReportRow): { label: string; detail: string; full: string } {
+  const device = String(report.lastVisitorDeviceType || report.visitorDeviceType || report.deviceType || "").trim();
+  const browser = String(report.lastVisitorBrowser || report.visitorBrowser || report.browser || "").trim();
+  const os = String(report.lastVisitorOs || report.visitorOs || report.os || "").trim();
+  const label = device || "Unknown";
+  const detail = [browser, os].filter(Boolean).join(" · ");
+  const full = [label, detail].filter(Boolean).join(" · ");
+  return { label, detail, full };
+}
+
 function formatCtaType(value?: string): string {
   const text = String(value || "").toLowerCase();
   if (text === "booking") return "Booking";
@@ -775,6 +785,7 @@ export default function CleanupPanel({
                 const openReportUrl = report.reportUrl ? normalizeOptionalUrl(report.reportUrl) : "";
                 const activeSeconds = numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds);
                 const countryLabel = report.lastVisitorCountry || report.visitorCountry || "Unknown";
+                const deviceSummary = formatDeviceSummary(report);
                 const lastSeenAt = report.lastSeenAt || report.lastActivityAt;
                 const lastSeenLabel = lastSeenAt ? formatDate(lastSeenAt) : "No visit yet";
                 const expiryLabel = report.pdfExpiresAt ? formatDate(report.pdfExpiresAt) : "No expiry";
@@ -859,22 +870,27 @@ export default function CleanupPanel({
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
                           <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Country</p>
-                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{countryLabel}</p>
+                          <p className="text-[11px] font-black text-gray-800 break-words mt-1">{countryLabel}</p>
                         </div>
-                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0" title={deviceSummary.full}>
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Device</p>
+                          <p className="text-[11px] font-black text-gray-800 break-words mt-1">{deviceSummary.label}</p>
+                          {deviceSummary.detail && <p className="text-[9px] font-bold text-gray-400 break-words mt-0.5">{deviceSummary.detail}</p>}
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0 col-span-2">
                           <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Active</p>
-                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{activeSeconds ? formatActiveSeconds(activeSeconds) : "No active time"}</p>
+                          <p className="text-[11px] font-black text-gray-800 break-words mt-1">{activeSeconds ? formatActiveSeconds(activeSeconds) : "No active time"}</p>
                         </div>
-                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0 col-span-2">
                           <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Last seen</p>
-                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{lastSeenLabel}</p>
+                          <p className="text-[11px] font-black text-gray-800 break-words mt-1">{lastSeenLabel}</p>
                         </div>
-                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0 col-span-2">
                           <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Expiry</p>
-                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{expiryLabel}</p>
+                          <p className="text-[11px] font-black text-gray-800 break-words mt-1">{expiryLabel}</p>
                         </div>
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 mt-2 truncate">{cleanupLabel}</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-2 break-words">{cleanupLabel}</p>
                     </div>
 
                     <div className="flex flex-wrap lg:flex-col lg:items-end lg:justify-center gap-2">

@@ -516,6 +516,12 @@ export type SecureReportRow = {
   lastReportedActiveSeconds?: number;
   visitorCountry?: string;
   lastVisitorCountry?: string;
+  visitorDeviceType?: string;
+  lastVisitorDeviceType?: string;
+  visitorBrowser?: string;
+  lastVisitorBrowser?: string;
+  visitorOs?: string;
+  lastVisitorOs?: string;
   pdfOpened?: boolean;
   pdfOpenCount?: number;
   lastPdfOpenedAt?: string;

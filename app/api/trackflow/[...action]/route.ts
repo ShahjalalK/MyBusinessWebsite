@@ -8466,6 +8466,106 @@ function pdfStreamResponse(buffer: Buffer, filename: string, disposition: "inlin
   });
 }
 
+
+function cleanVisitorHeader(value: string | null, maxLength = 120): string {
+  return String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function cleanVisitorCountryCode(value: string | null): string {
+  const code = cleanVisitorHeader(value, 8).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+  if (code === "XX" || code === "ZZ") return "";
+  return code;
+}
+
+function decodeVisitorLocationHeader(value: string | null, maxLength = 120): string {
+  const cleaned = cleanVisitorHeader(value, maxLength);
+  if (!cleaned) return "";
+
+  try {
+    return decodeURIComponent(cleaned.replace(/\+/g, " ")).slice(0, maxLength);
+  } catch {
+    return cleaned;
+  }
+}
+
+function detectReportVisitorBrowser(userAgent: string): string {
+  const ua = String(userAgent || "").toLowerCase();
+
+  if (!ua) return "Unknown";
+  if (ua.includes("edg/")) return "Microsoft Edge";
+  if (ua.includes("opr/") || ua.includes("opera")) return "Opera";
+  if (ua.includes("firefox/")) return "Firefox";
+  if (ua.includes("crios")) return "Chrome iOS";
+  if (ua.includes("chrome/") || ua.includes("chromium/")) return "Chrome";
+  if (ua.includes("safari/")) return "Safari";
+
+  return "Unknown";
+}
+
+function detectReportVisitorOs(userAgent: string): string {
+  const ua = String(userAgent || "").toLowerCase();
+
+  if (!ua) return "Unknown";
+  if (ua.includes("android")) return "Android";
+  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "iOS";
+  if (ua.includes("windows")) return "Windows";
+  if (ua.includes("mac os") || ua.includes("macintosh")) return "macOS";
+  if (ua.includes("linux")) return "Linux";
+
+  return "Unknown";
+}
+
+function detectReportVisitorDeviceType(userAgent: string): string {
+  const ua = String(userAgent || "").toLowerCase();
+
+  if (!ua) return "Unknown";
+  if (ua.includes("ipad") || ua.includes("tablet")) return "Tablet";
+  if (ua.includes("mobi") || ua.includes("iphone") || ua.includes("android")) return "Mobile";
+
+  return "Desktop";
+}
+
+function buildReportViewVisitorSummary(req: Request): AnyRecord {
+  const userAgent = cleanVisitorHeader(req.headers.get("user-agent"), 600);
+  const countryCode = cleanVisitorCountryCode(
+    req.headers.get("x-vercel-ip-country") ||
+      req.headers.get("cf-ipcountry") ||
+      req.headers.get("cloudfront-viewer-country"),
+  );
+  const countryRegion = decodeVisitorLocationHeader(req.headers.get("x-vercel-ip-country-region"), 120);
+  const countryCity = decodeVisitorLocationHeader(req.headers.get("x-vercel-ip-city"), 120);
+  const deviceType = detectReportVisitorDeviceType(userAgent);
+  const browser = detectReportVisitorBrowser(userAgent);
+  const os = detectReportVisitorOs(userAgent);
+  const update: AnyRecord = {};
+
+  if (countryCode) {
+    update.visitorCountry = countryCode;
+    update.lastVisitorCountry = countryCode;
+  }
+  if (countryRegion) update.lastVisitorRegion = countryRegion;
+  if (countryCity) update.lastVisitorCity = countryCity;
+  if (deviceType && deviceType !== "Unknown") {
+    update.visitorDeviceType = deviceType;
+    update.lastVisitorDeviceType = deviceType;
+  }
+  if (browser && browser !== "Unknown") {
+    update.visitorBrowser = browser;
+    update.lastVisitorBrowser = browser;
+  }
+  if (os && os !== "Unknown") {
+    update.visitorOs = os;
+    update.lastVisitorOs = os;
+  }
+
+  return update;
+}
+
+
 function reportPdfFilename(report: AnyRecord, token: string) {
   const company = String(report.companyName || report.businessName || report.domain || "client")
     .replace(/[^a-zA-Z0-9._-]+/g, "-")
@@ -8496,8 +8596,27 @@ async function handleReportView(req: Request) {
   // Free-limit friendly + scanner-resistant:
   // the report page should call this from a client-side beacon after a short delay.
   // We only write the first verified view to Firestore/Sheet. Later page loads return success without extra writes.
+  // If an older report was viewed before visitor summary fields existed, backfill the safe device/country summary once.
+  const visitorSummary = buildReportViewVisitorSummary(req);
+  const hasVisitorSummary = Object.keys(visitorSummary).length > 0;
+  const shouldBackfillVisitorSummary =
+    hasVisitorSummary && Object.keys(visitorSummary).some((key) => !report[key]);
   const alreadyViewed = Boolean(report.lastViewedAt || report.firstViewedAt || report.reportPageViewedAt);
   if (alreadyViewed) {
+    if (shouldBackfillVisitorSummary) {
+      const nowTs = admin.firestore.Timestamp.now();
+      await ref.set(
+        {
+          lastSeenAt: nowTs,
+          lastActivityAt: nowTs,
+          ...visitorSummary,
+        },
+        { merge: true },
+      );
+
+      return json({ success: true, viewed: true, alreadyRecorded: true, visitorSummaryBackfilled: true });
+    }
+
     return json({ success: true, viewed: true, alreadyRecorded: true });
   }
 
@@ -8508,6 +8627,10 @@ async function handleReportView(req: Request) {
       firstViewedAt: nowTs,
       lastViewedAt: nowTs,
       reportPageViewedAt: nowTs,
+      reportPageViewed: true,
+      lastSeenAt: nowTs,
+      lastActivityAt: nowTs,
+      ...visitorSummary,
     },
     { merge: true },
   );
