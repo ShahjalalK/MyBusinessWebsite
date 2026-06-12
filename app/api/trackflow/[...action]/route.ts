@@ -748,35 +748,36 @@ function buildReportLinkBlock(
   const rawText = normalizeVisibleText(buttonText, "View private tracking review", 44);
   const safeText = escapeHtml(rawText);
   const safeClickUrl = escapeHtml(clickUrl);
-  const buttonWidth = Math.min(Math.max(214, rawText.length * 7 + 54), 286);
+  const buttonWidth = Math.min(Math.max(188, rawText.length * 6 + 50), 260);
 
-  // Bulletproof CTA: VML for Outlook desktop + standard anchor for modern/mobile clients.
-  // Keep the tracked click URL exactly as before; only the rendering wrapper changes.
+  // Subtle utility-style CTA: still bulletproof for Outlook, but less promotional than a dark marketing button.
+  // Do not change the tracked click URL; this only adjusts rendering/spacing.
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:18px 0 4px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:16px 0 6px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
       <tr>
         <td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
-              <td align="left" valign="middle" style="padding:0;">
+              <td align="left" valign="top" style="padding:0;line-height:0;font-size:0;">
                 <!--[if mso]>
-                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeClickUrl}" style="height:40px;v-text-anchor:middle;width:${buttonWidth}px;" arcsize="14%" strokecolor="#0f172a" fillcolor="#0f172a">
+                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeClickUrl}" style="height:34px;v-text-anchor:middle;width:${buttonWidth}px;" arcsize="10%" strokecolor="#d1d5db" strokeweight="1px" fillcolor="#ffffff">
                   <w:anchorlock/>
-                  <center style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:40px;mso-line-height-rule:exactly;">${safeText}</center>
+                  <center style="color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;">${safeText}</center>
                 </v:roundrect>
                 <![endif]-->
                 <!--[if !mso]><!-->
-                <a href="${safeClickUrl}" target="_blank" style="display:inline-block;background:#0f172a;border:1px solid #0f172a;border-radius:7px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:18px;text-decoration:none;padding:10px 15px;mso-hide:all;white-space:nowrap;">
+                <a href="${safeClickUrl}" target="_blank" style="display:inline-block;background:#ffffff;border:1px solid #d1d5db;border-radius:5px;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:16px;text-decoration:none;padding:8px 12px;white-space:nowrap;-webkit-text-size-adjust:none;mso-hide:all;">
                   ${safeText}
                 </a>
                 <!--<![endif]-->
               </td>
             </tr>
+            <tr>
+              <td align="left" style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;">
+                Private TrackFlow Pro audit note · PDF opens from the secure report page.
+              </td>
+            </tr>
           </table>
-          <div style="clear:both;font-size:0;line-height:0;height:0;">&nbsp;</div>
-          <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;margin-top:8px;mso-line-height-rule:exactly;">
-            Private TrackFlow Pro audit note · PDF opens from the secure report page.
-          </div>
         </td>
       </tr>
     </table>
