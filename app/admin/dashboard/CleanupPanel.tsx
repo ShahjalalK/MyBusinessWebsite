@@ -188,29 +188,39 @@ function secureReportSourceGroup(report: SecureReportRow): "search_email" | "lin
   const sourceContext = String(report.sourceContext || "").toLowerCase();
   const sourceOrigin = String(report.sourceOrigin || "").toLowerCase();
   const sourceRole = String(report.sourceRole || "").toLowerCase();
-  const sourceHaystack = [sourceType, outreachChannel, leadSource, auditSource, sourceContext, sourceOrigin, sourceRole, source].join(" ");
+  const sourceLabel = String(report.sourceLabel || "").toLowerCase();
+  const sourceHaystack = [sourceType, outreachChannel, leadSource, auditSource, sourceContext, sourceOrigin, sourceRole, sourceLabel, source].join(" ");
 
   if (
     report.channel === "linkedin" ||
     outreachChannel.includes("linkedin") ||
     leadSource.includes("linkedin") ||
     auditSource.includes("linkedin") ||
-    sourceType.includes("linkedin")
+    sourceType.includes("linkedin") ||
+    sourceHaystack.includes("linkedin")
   ) {
     return "linkedin_manual";
   }
 
   if (
     report.channel === "manual" ||
+    sourceOrigin === "manual" ||
     sourceType === "manual" ||
+    sourceType.includes("manual_report") ||
     sourceType.includes("manual_audit") ||
+    leadSource.includes("manual_report") ||
     leadSource.includes("manual_audit") ||
+    auditSource.includes("manual_report") ||
     auditSource.includes("manual_audit") ||
     source.includes("manual_report") ||
-    sourceRole.includes("manual_report")
+    sourceRole.includes("manual_report") ||
+    sourceHaystack.includes("manual_report") ||
+    sourceHaystack.includes("manual report")
   ) {
     return "linkedin_manual";
   }
+
+  const hasContactOrLeadLink = Boolean(report.email || report.leadId);
 
   if (
     report.channel === "email" ||
@@ -219,9 +229,14 @@ function secureReportSourceGroup(report: SecureReportRow): "search_email" | "lin
     sourceHaystack.includes("search") ||
     sourceHaystack.includes("sheet") ||
     report.keepUnderSheetAudit === true ||
+    Number(report.sheetRowNumber || 0) > 0 ||
     outreachChannel.includes("email") ||
+    outreachChannel.includes("gmail") ||
+    sourceHaystack.includes("email") ||
+    sourceHaystack.includes("gmail") ||
     sourceHaystack.includes("brevo") ||
-    sourceHaystack.includes("cold")
+    sourceHaystack.includes("cold") ||
+    hasContactOrLeadLink
   ) {
     return "search_email";
   }
@@ -535,7 +550,7 @@ export default function CleanupPanel({
   const filteredSecureReports = secureReports.rows
     .filter((report) => secureReportMatchesFilter(report, secureReports.filter))
     .filter((report) => secureReportMatchesSearch(report, secureReports.search))
-    .slice(0, 50);
+    .slice(0, 25);
   const selectedReportTokens = secureReports.selectedTokens || [];
   const selectedReportCount = selectedReportTokens.length;
   const allVisibleReportsSelected =

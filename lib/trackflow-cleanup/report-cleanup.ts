@@ -1350,24 +1350,64 @@ function boolFromAny(value: any): boolean {
 }
 
 function normalizeReportChannel(data: AnyRecord): "email" | "linkedin" | "manual" | "unknown" {
-  const sourceText = firstCleanString(
+  const channel = clean(data.channel).toLowerCase();
+  const sourceType = firstCleanString(data.sourceType, data.source_type).toLowerCase();
+  const sourceOrigin = firstCleanString(data.sourceOrigin, data.source_origin).toLowerCase();
+  const sourceRole = firstCleanString(data.sourceRole, data.source_role).toLowerCase();
+  const outreachChannel = firstCleanString(data.outreachChannel, data.outreach_channel).toLowerCase();
+
+  const sourceText = [
     data.channel,
     data.outreachChannel,
     data.outreach_channel,
     data.source,
+    data.auditSource,
     data.audit_source,
     data.leadSource,
     data.lead_source,
     data.sourceType,
     data.source_type,
+    data.sourceContext,
+    data.source_context,
     data.sourceOrigin,
     data.source_origin,
     data.sourceRole,
     data.source_role,
-  ).toLowerCase();
-  if (sourceText.includes("linkedin")) return "linkedin";
-  if (sourceText.includes("email") || sourceText.includes("brevo") || sourceText.includes("cold") || sourceText.includes("search") || sourceText.includes("sheet")) return "email";
-  if (sourceText.includes("manual")) return "manual";
+    data.sourceLabel,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (channel === "linkedin" || outreachChannel.includes("linkedin") || sourceText.includes("linkedin")) return "linkedin";
+  if (channel === "email" || outreachChannel === "email" || outreachChannel === "gmail") return "email";
+
+  const explicitManualReport =
+    channel === "manual" ||
+    sourceOrigin === "manual" ||
+    sourceType === "manual" ||
+    sourceType.includes("manual_report") ||
+    sourceType.includes("manual_audit") ||
+    sourceRole.includes("manual_report") ||
+    sourceText.includes("manual_report") ||
+    sourceText.includes("manual report") ||
+    sourceText.includes("manual_audit");
+
+  if (explicitManualReport) return "manual";
+
+  if (
+    sourceText.includes("email") ||
+    sourceText.includes("gmail") ||
+    sourceText.includes("brevo") ||
+    sourceText.includes("cold") ||
+    sourceText.includes("python_search") ||
+    sourceText.includes("google_search") ||
+    sourceText.includes("search") ||
+    sourceText.includes("sheet")
+  ) {
+    return "email";
+  }
+
   return "unknown";
 }
 
@@ -1387,12 +1427,30 @@ function sourceTextFromReportData(data: AnyRecord): string {
     data.source_origin,
     data.sourceRole,
     data.source_role,
+    data.sourceLabel,
+    data.source_label,
     data.source,
     data.channel,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function hasReportContactOrLeadLink(data: AnyRecord): boolean {
+  return Boolean(
+    firstCleanString(
+      data.email,
+      data.emailLower,
+      data.email_lower,
+      data.leadId,
+      data.lead_id,
+      data.firestoreLeadId,
+      data.firestore_lead_id,
+      data.outreachLeadId,
+      data.outreach_lead_id,
+    ),
+  );
 }
 
 function normalizeSecureReportSourceGroup(data: AnyRecord, channel: "email" | "linkedin" | "manual" | "unknown"): "search_email" | "linkedin_manual" | "other" {
@@ -1410,7 +1468,8 @@ function normalizeSecureReportSourceGroup(data: AnyRecord, channel: "email" | "l
     outreachChannel.includes("linkedin") ||
     leadSource.includes("linkedin") ||
     auditSource.includes("linkedin") ||
-    sourceType.includes("linkedin")
+    sourceType.includes("linkedin") ||
+    text.includes("linkedin")
   ) {
     return "linkedin_manual";
   }
@@ -1419,12 +1478,18 @@ function normalizeSecureReportSourceGroup(data: AnyRecord, channel: "email" | "l
   // Only classify as manual when the source/audit fields clearly describe the report source itself.
   if (
     channel === "manual" ||
+    sourceOrigin === "manual" ||
     sourceType === "manual" ||
+    sourceType.includes("manual_report") ||
     sourceType.includes("manual_audit") ||
+    leadSource.includes("manual_report") ||
     leadSource.includes("manual_audit") ||
+    auditSource.includes("manual_report") ||
     auditSource.includes("manual_audit") ||
     source.includes("manual_report") ||
-    sourceRole.includes("manual_report")
+    sourceRole.includes("manual_report") ||
+    text.includes("manual_report") ||
+    text.includes("manual report")
   ) {
     return "linkedin_manual";
   }
@@ -1438,9 +1503,14 @@ function normalizeSecureReportSourceGroup(data: AnyRecord, channel: "email" | "l
     sourceOrigin.includes("sheet") ||
     sourceRole.includes("sheet") ||
     data.keepUnderSheetAudit === true ||
+    Number(data.sheetRowNumber || data.sheet_row_number || 0) > 0 ||
     outreachChannel.includes("email") ||
+    outreachChannel.includes("gmail") ||
+    text.includes("email") ||
+    text.includes("gmail") ||
     text.includes("brevo") ||
-    text.includes("cold")
+    text.includes("cold") ||
+    hasReportContactOrLeadLink(data)
   ) {
     return "search_email";
   }
@@ -1807,8 +1877,8 @@ function secureReportMatchesListFilter(row: AnyRecord, filter: string): boolean 
       !isSecureReportCleaned(row)
     );
   }
-  if (filter === "search_email") return row.sourceGroup === "search_email";
-  if (filter === "linkedin_manual") return row.sourceGroup === "linkedin_manual";
+  if (filter === "search_email") return normalizeSecureReportSourceGroup(row, normalizeReportChannel(row)) === "search_email";
+  if (filter === "linkedin_manual") return normalizeSecureReportSourceGroup(row, normalizeReportChannel(row)) === "linkedin_manual";
 
   // Keep older direct API filter values backward-compatible even though the dashboard no longer shows them.
   if (filter === "cleaned") return isSecureReportCleaned(row);
@@ -1859,9 +1929,10 @@ export function createReportCleanupHandlers(deps: ReportCleanupHandlerDeps) {
     await deps.requireAdmin(req);
 
     const url = new URL(req.url);
-    const maxLimit = 200;
-    const requestedLimit = Number(url.searchParams.get("limit") || 100);
-    const limitCount = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 100, maxLimit));
+    const maxLimit = 100;
+    const defaultLimit = 25;
+    const requestedLimit = Number(url.searchParams.get("limit") || defaultLimit);
+    const limitCount = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : defaultLimit, maxLimit));
     const search = clean(url.searchParams.get("search") || "");
     const filter = clean(url.searchParams.get("filter") || "all").toLowerCase();
 
