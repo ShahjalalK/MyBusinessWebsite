@@ -747,21 +747,31 @@ export default function CleanupPanel({
             </p>
           )}
 
-          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
             {secureReports.loading && !secureReports.rows.length ? (
               <div className="rounded-2xl bg-white border border-gray-100 p-5 text-sm font-bold text-gray-500 flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin" /> Loading saved secure reports...
               </div>
             ) : filteredSecureReports.length ? (
-              filteredSecureReports.map((report) => {
+              filteredSecureReports.map((report, reportIndex) => {
                 const bulkSelected = selectedReportTokens.includes(report.token);
                 const selected = bulkSelected || secureReports.selectedToken === report.token || reportAssetCleanup.input.includes(report.token);
+                const rowNumber = reportIndex + 1;
+                const openReportUrl = report.reportUrl ? normalizeOptionalUrl(report.reportUrl) : "";
+                const activeSeconds = numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds);
+                const countryLabel = report.lastVisitorCountry || report.visitorCountry || "Unknown";
+                const lastSeenAt = report.lastSeenAt || report.lastActivityAt;
+                const lastSeenLabel = lastSeenAt ? formatDate(lastSeenAt) : "No visit yet";
+                const expiryLabel = report.pdfExpiresAt ? formatDate(report.pdfExpiresAt) : "No expiry";
+                const cleanupLabel = report.cleanupStatus || "Not cleaned";
+                const activityPills = secureReportActivityPills(report);
+
                 return (
                   <div
                     key={report.token}
-                    className={`rounded-[26px] border p-4 bg-white shadow-sm grid grid-cols-1 2xl:grid-cols-[auto_1.3fr_0.95fr_1.25fr_0.75fr_auto] gap-4 items-center transition ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100 hover:border-blue-100 hover:shadow-md"}`}
+                    className={`rounded-[28px] border p-4 bg-white shadow-sm grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1.15fr)_minmax(280px,1.45fr)_minmax(210px,0.85fr)_auto] gap-4 items-stretch transition ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100 hover:border-blue-100 hover:shadow-md"}`}
                   >
-                    <label className="inline-flex items-center justify-start 2xl:justify-center">
+                    <label className="inline-flex items-start justify-start lg:justify-center pt-1">
                       <input
                         type="checkbox"
                         checked={bulkSelected}
@@ -771,43 +781,48 @@ export default function CleanupPanel({
                       />
                     </label>
 
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-black text-gray-950 truncate max-w-full">{report.companyName || report.domain || "Untitled report"}</p>
-                        <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportSourceTone(report)}`}>
-                          {secureReportSourceLabel(report)}
-                        </span>
-                        <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportStatusTone(report)}`}>
-                          {secureReportStatusLabel(report)}
-                        </span>
+                    <div className="min-w-0 flex flex-col justify-between gap-3">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-950 px-2 text-[10px] font-black text-white">
+                            #{rowNumber}
+                          </span>
+                          <p className="min-w-0 flex-1 text-sm font-black text-gray-950 truncate">
+                            {report.companyName || report.domain || "Untitled report"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportSourceTone(report)}`}>
+                            {secureReportSourceLabel(report)}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportStatusTone(report)}`}>
+                            {secureReportStatusLabel(report)}
+                          </span>
+                          <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportContactTone(report)}`}>
+                            {secureReportContactLabel(report)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-black text-gray-500 truncate">{report.domain || report.domainSlug || report.token}</p>
+
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-[11px] font-black text-gray-600 truncate">{report.domain || report.domainSlug || report.token}</p>
                         {report.email && <p className="text-[10px] font-bold text-gray-400 truncate">{report.email}</p>}
-                        <p className="text-[10px] font-bold text-gray-400 truncate">{secureReportSourceNote(report)}</p>
+                        <p className="text-[10px] font-bold text-gray-400 leading-4 line-clamp-2">{secureReportSourceNote(report)}</p>
                       </div>
                     </div>
 
-                    <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</p>
-                      <span className={`inline-flex mt-2 px-2 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportContactTone(report)}`}>
-                        {secureReportContactLabel(report)}
-                      </span>
-                      <p className="text-[10px] font-bold text-gray-400 mt-2 leading-4 line-clamp-2">{secureReportContactNote(report)}</p>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</p>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3 min-w-0" title={secureReportActivityMeta(report)}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity & Contact</p>
                         <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase ${secureReportIntentTone(report)}`}>
-                          {secureReportIntentLabel(report)}
+                          {secureReportIntentLabel(report)} intent
                         </span>
                       </div>
                       <p className="text-xs font-black text-gray-800 mt-2 leading-5">
                         {secureReportActivitySummary(report)}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {secureReportActivityPills(report).map((pill) => (
+                        {activityPills.map((pill) => (
                           <span
                             key={`${report.token}-${pill.label}`}
                             className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase ${pill.active ? pill.tone : "bg-white text-gray-300 border-gray-100"}`}
@@ -816,22 +831,44 @@ export default function CleanupPanel({
                           </span>
                         ))}
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 mt-2 leading-4">{secureReportActivityMeta(report)}</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-2 leading-4 line-clamp-2">{secureReportContactNote(report)}</p>
                     </div>
 
-                    <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</p>
-                      <p className="text-xs font-bold text-gray-700 mt-2">{report.pdfExpiresAt ? formatDate(report.pdfExpiresAt) : "No expiry"}</p>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1">{report.cleanupStatus || "Not cleaned"}</p>
+                    <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Visitor</p>
+                        <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase ${secureReportIntentTone(report)}`}>
+                          {secureReportIntentLabel(report)}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Country</p>
+                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{countryLabel}</p>
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Active</p>
+                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{activeSeconds ? formatActiveSeconds(activeSeconds) : "No active time"}</p>
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Last seen</p>
+                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{lastSeenLabel}</p>
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 px-2.5 py-2 min-w-0">
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Expiry</p>
+                          <p className="text-[11px] font-black text-gray-800 truncate mt-1">{expiryLabel}</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 mt-2 truncate">{cleanupLabel}</p>
                     </div>
 
-                    <div className="flex flex-wrap 2xl:justify-end gap-2">
-                      {report.reportUrl && normalizeOptionalUrl(report.reportUrl) && (
+                    <div className="flex flex-wrap lg:flex-col lg:items-end lg:justify-center gap-2">
+                      {openReportUrl && (
                         <a
-                          href={normalizeOptionalUrl(report.reportUrl) || "#"}
+                          href={openReportUrl || "#"}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-3 py-2 rounded-xl bg-gray-50 text-gray-500 text-[10px] font-black uppercase inline-flex items-center gap-1"
+                          className="px-3 py-2 rounded-xl bg-gray-50 text-gray-500 text-[10px] font-black uppercase inline-flex items-center justify-center gap-1"
                         >
                           Open <ExternalLink size={11} />
                         </a>
