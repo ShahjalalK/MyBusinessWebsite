@@ -780,7 +780,7 @@ export default function OutreachPanel({
                   <p className="text-[10px] font-bold text-gray-500"><b>Subject:</b> {subject || "Subject preview"}</p>
                 </div>
 
-                <div className="p-5 text-sm leading-7 text-gray-800">
+                <div className="p-5 text-sm leading-[22px] text-gray-800">
                   {stripHtml(previewMessage) ? (
                     <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewMessage }} />
                   ) : (
@@ -788,12 +788,12 @@ export default function OutreachPanel({
                   )}
 
                   {safeReportUrl && (
-                    <div className="mt-5 mb-4">
+                    <div className="mt-4 mb-4">
                       <a
                         href={safeReportUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-bold leading-none text-gray-900 no-underline"
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-[13px] font-bold leading-4 text-gray-900 no-underline"
                       >
                         {reportButtonText || "View private tracking review"}
                       </a>

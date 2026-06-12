@@ -748,36 +748,28 @@ function buildReportLinkBlock(
   const rawText = normalizeVisibleText(buttonText, "View private tracking review", 44);
   const safeText = escapeHtml(rawText);
   const safeClickUrl = escapeHtml(clickUrl);
-  const buttonWidth = Math.min(Math.max(188, rawText.length * 6 + 50), 260);
 
-  // Subtle utility-style CTA: still bulletproof for Outlook, but less promotional than a dark marketing button.
+  // Outlook desktop clips bordered VML buttons in some builds.
+  // This table-only CTA is intentionally simple: stable first, styling second.
   // Do not change the tracked click URL; this only adjusts rendering/spacing.
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:16px 0 6px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:12px 0 8px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
       <tr>
         <td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
-              <td align="left" valign="top" style="padding:0;line-height:0;font-size:0;">
-                <!--[if mso]>
-                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeClickUrl}" style="height:34px;v-text-anchor:middle;width:${buttonWidth}px;" arcsize="10%" strokecolor="#d1d5db" strokeweight="1px" fillcolor="#ffffff">
-                  <w:anchorlock/>
-                  <center style="color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;">${safeText}</center>
-                </v:roundrect>
-                <![endif]-->
-                <!--[if !mso]><!-->
-                <a href="${safeClickUrl}" target="_blank" style="display:inline-block;background:#ffffff;border:1px solid #d1d5db;border-radius:5px;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:16px;text-decoration:none;padding:8px 12px;white-space:nowrap;-webkit-text-size-adjust:none;mso-hide:all;">
+              <td align="center" valign="middle" bgcolor="#ffffff" style="background:#ffffff;border:1px solid #d1d5db;border-radius:5px;padding:8px 12px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:16px;font-weight:bold;mso-line-height-rule:exactly;">
+                <a href="${safeClickUrl}" target="_blank" style="display:block;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:16px;font-weight:bold;text-decoration:none;-webkit-text-size-adjust:none;">
                   ${safeText}
                 </a>
-                <!--<![endif]-->
-              </td>
-            </tr>
-            <tr>
-              <td align="left" style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;">
-                Private TrackFlow Pro audit note · PDF opens from the secure report page.
               </td>
             </tr>
           </table>
+        </td>
+      </tr>
+      <tr>
+        <td align="left" style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+          Private TrackFlow Pro audit note · PDF opens from the secure report page.
         </td>
       </tr>
     </table>
@@ -1854,7 +1846,7 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
                     <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;">Founder, TrackFlowPro</td>
                   </tr>
                   <tr>
-                    <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;">Google Ads Tracking · Server-Side Tracking · Conversion Audit</td>
+                    <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;overflow-wrap:break-word;word-break:normal;">Google Ads Conversion Tracking · GA4/GTM Audit · Server-Side Tracking</td>
                   </tr>
                   <tr>
                     <td style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;overflow-wrap:break-word;word-break:normal;">
@@ -1894,17 +1886,34 @@ function applyEmailTagStyle(html: string, tagName: string, baseStyle: string): s
   return String(html || "").replace(pattern, (_match, attrs) => `<${tagName}${mergeEmailInlineStyle(String(attrs || ""), baseStyle)}>`);
 }
 
+function removeEmptyEmailBlocks(html: string): string {
+  let output = String(html || "");
+
+  for (let index = 0; index < 3; index += 1) {
+    const before = output;
+    output = output.replace(/<(p|div)\b[^>]*>(?:\s|&nbsp;|\u00a0|<br\s*\/?>)*<\/\1>/gi, "");
+    output = output.replace(/(?:<br\s*\/?>\s*){3,}/gi, "<br /><br />");
+    if (output === before) break;
+  }
+
+  return output.trim();
+}
+
 function normalizeEmailBodyHtml(input: string): string {
-  const cleanMessage = stripDangerousHtml(input || "").trim();
+  const cleanMessage = stripDangerousHtml(input || "").replace(/\u00a0/g, " ").trim();
   if (!cleanMessage) return "";
 
   const hasHtml = /<\/?[a-z][\s\S]*>/i.test(cleanMessage);
   if (hasHtml) {
-    let html = cleanMessage;
-    html = applyEmailTagStyle(html, "p", "margin:0 0 14px 0;");
-    html = applyEmailTagStyle(html, "div", "margin:0 0 14px 0;");
-    html = applyEmailTagStyle(html, "li", "margin:0 0 8px 0;");
+    let html = removeEmptyEmailBlocks(cleanMessage);
+    if (!plainTextFromHtml(html)) return "";
+
+    html = applyEmailTagStyle(html, "p", "margin:0 0 12px 0;");
+    html = applyEmailTagStyle(html, "div", "margin:0 0 12px 0;");
+    html = applyEmailTagStyle(html, "li", "margin:0 0 7px 0;");
     html = applyEmailTagStyle(html, "a", "color:#2563eb;text-decoration:underline;font-weight:bold;");
+    html = removeEmptyEmailBlocks(html);
+
     return html;
   }
 
@@ -1912,7 +1921,7 @@ function normalizeEmailBodyHtml(input: string): string {
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => `<p style="margin:0 0 14px 0;">${escapeHtml(part).replace(/\n/g, "<br />")}</p>`)
+    .map((part) => `<p style="margin:0 0 12px 0;">${escapeHtml(part).replace(/\n/g, "<br />")}</p>`)
     .join("");
 }
 
