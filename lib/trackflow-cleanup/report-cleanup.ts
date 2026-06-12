@@ -1454,6 +1454,34 @@ function hasReportContactOrLeadLink(data: AnyRecord): boolean {
 }
 
 function normalizeSecureReportSourceGroup(data: AnyRecord, channel: "email" | "linkedin" | "manual" | "unknown"): "search_email" | "linkedin_manual" | "other" {
+  const explicitGroup = firstCleanString(data.sourceGroup, data.source_group)
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (
+    explicitGroup === "search_email" ||
+    explicitGroup === "search" ||
+    explicitGroup === "email" ||
+    explicitGroup === "sheet" ||
+    explicitGroup.includes("search_email") ||
+    explicitGroup.includes("email_lead") ||
+    explicitGroup.includes("sheet_lead")
+  ) {
+    return "search_email";
+  }
+
+  if (
+    explicitGroup === "linkedin_manual" ||
+    explicitGroup === "linkedin" ||
+    explicitGroup === "manual" ||
+    explicitGroup === "manual_report" ||
+    explicitGroup.includes("linkedin_manual") ||
+    explicitGroup.includes("manual_report") ||
+    explicitGroup.includes("linkedin_report")
+  ) {
+    return "linkedin_manual";
+  }
+
   const text = sourceTextFromReportData(data);
   const source = firstCleanString(data.source, data.outreachSource, data.outreach_source).toLowerCase();
   const sourceType = firstCleanString(data.sourceType, data.source_type).toLowerCase();
@@ -1757,12 +1785,12 @@ function buildSecureReportListRow(doc: any): AnyRecord {
     lastReportedActiveSeconds,
     visitorCountry: firstCleanString(data.visitorCountry, data.visitor_country),
     lastVisitorCountry: firstCleanString(data.lastVisitorCountry, data.last_visitor_country, data.visitorCountry, data.visitor_country),
-    visitorDeviceType: firstCleanString(data.visitorDeviceType, data.visitor_device_type, data.firstVisitorDeviceType, data.first_visitor_device_type, data.deviceType, data.device_type, data.device),
-    lastVisitorDeviceType: firstCleanString(data.lastVisitorDeviceType, data.last_visitor_device_type, data.latestVisitorDeviceType, data.latest_visitor_device_type, data.visitorDeviceType, data.visitor_device_type, data.firstVisitorDeviceType, data.first_visitor_device_type, data.deviceType, data.device_type, data.device),
-    visitorBrowser: firstCleanString(data.visitorBrowser, data.visitor_browser, data.firstVisitorBrowser, data.first_visitor_browser, data.browser),
-    lastVisitorBrowser: firstCleanString(data.lastVisitorBrowser, data.last_visitor_browser, data.latestVisitorBrowser, data.latest_visitor_browser, data.visitorBrowser, data.visitor_browser, data.firstVisitorBrowser, data.first_visitor_browser, data.browser),
-    visitorOs: firstCleanString(data.visitorOs, data.visitor_os, data.firstVisitorOs, data.first_visitor_os, data.os),
-    lastVisitorOs: firstCleanString(data.lastVisitorOs, data.last_visitor_os, data.latestVisitorOs, data.latest_visitor_os, data.visitorOs, data.visitor_os, data.firstVisitorOs, data.first_visitor_os, data.os),
+    visitorDeviceType: firstCleanString(data.visitorDeviceType, data.visitor_device_type, data.deviceType, data.device_type),
+    lastVisitorDeviceType: firstCleanString(data.lastVisitorDeviceType, data.last_visitor_device_type, data.visitorDeviceType, data.visitor_device_type, data.deviceType, data.device_type),
+    visitorBrowser: firstCleanString(data.visitorBrowser, data.visitor_browser, data.browser),
+    lastVisitorBrowser: firstCleanString(data.lastVisitorBrowser, data.last_visitor_browser, data.visitorBrowser, data.visitor_browser, data.browser),
+    visitorOs: firstCleanString(data.visitorOs, data.visitor_os, data.os),
+    lastVisitorOs: firstCleanString(data.lastVisitorOs, data.last_visitor_os, data.visitorOs, data.visitor_os, data.os),
     pdfOpened: boolFromAny(data.pdfOpened || data.pdf_opened) || pdfOpenCount > 0,
     pdfOpenCount,
     lastPdfOpenedAt: toIso(data.lastPdfOpenedAt || data.last_pdf_opened_at),

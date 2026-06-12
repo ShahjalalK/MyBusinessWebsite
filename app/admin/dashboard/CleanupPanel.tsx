@@ -176,9 +176,31 @@ function secureReportChannelLabel(channel?: SecureReportRow["channel"]): string 
 }
 
 function secureReportSourceGroup(report: SecureReportRow): "search_email" | "linkedin_manual" | "other" {
-  const explicit = String(report.sourceGroup || "").toLowerCase();
-  if (explicit === "search_email" || explicit === "search-email") return "search_email";
-  if (explicit === "linkedin_manual" || explicit === "linkedin-manual") return "linkedin_manual";
+  const explicit = String(report.sourceGroup || "")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (
+    explicit === "search_email" ||
+    explicit === "search" ||
+    explicit === "email" ||
+    explicit === "sheet" ||
+    explicit.includes("search_email") ||
+    explicit.includes("email_lead") ||
+    explicit.includes("sheet_lead")
+  ) {
+    return "search_email";
+  }
+  if (
+    explicit === "linkedin_manual" ||
+    explicit === "linkedin" ||
+    explicit === "manual" ||
+    explicit === "manual_report" ||
+    explicit.includes("linkedin_manual") ||
+    explicit.includes("manual_report") ||
+    explicit.includes("linkedin_report")
+  ) {
+    return "linkedin_manual";
+  }
 
   const source = String(report.source || "").toLowerCase();
   const sourceType = String(report.sourceType || "").toLowerCase();
@@ -341,19 +363,12 @@ function formatActiveSeconds(seconds: number): string {
 }
 
 function formatDeviceSummary(report: SecureReportRow): { label: string; detail: string; full: string } {
-  const firstDevice = String(report.visitorDeviceType || report.deviceType || "").trim();
-  const latestDevice = String(report.lastVisitorDeviceType || firstDevice || "").trim();
+  const device = String(report.lastVisitorDeviceType || report.visitorDeviceType || report.deviceType || "").trim();
   const browser = String(report.lastVisitorBrowser || report.visitorBrowser || report.browser || "").trim();
   const os = String(report.lastVisitorOs || report.visitorOs || report.os || "").trim();
-  const label = latestDevice || "Not captured";
-  const detailParts = [browser, os].filter(Boolean);
-
-  if (firstDevice && latestDevice && firstDevice.toLowerCase() !== latestDevice.toLowerCase()) {
-    detailParts.push(`First: ${firstDevice}`);
-  }
-
-  const detail = detailParts.join(" · ");
-  const full = [latestDevice ? `Latest: ${latestDevice}` : "Latest device not captured", detail].filter(Boolean).join(" · ");
+  const label = device || "Unknown";
+  const detail = [browser, os].filter(Boolean).join(" · ");
+  const full = [label, detail].filter(Boolean).join(" · ");
   return { label, detail, full };
 }
 
@@ -453,14 +468,67 @@ function secureReportActivityPills(report: SecureReportRow): Array<{ label: stri
   ];
 }
 
+function secureReportMatchesSourceFilter(report: SecureReportRow, filter: "search_email" | "linkedin_manual"): boolean {
+  const group = secureReportSourceGroup(report);
+  if (group === filter) return true;
+
+  const text = [
+    report.sourceGroup,
+    report.sourceLabel,
+    report.channel,
+    report.source,
+    report.sourceType,
+    report.outreachChannel,
+    report.leadSource,
+    report.auditSource,
+    report.sourceContext,
+    report.sourceOrigin,
+    report.sourceRole,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const isLinkedInManual =
+    report.channel === "linkedin" ||
+    report.channel === "manual" ||
+    text.includes("linkedin") ||
+    text.includes("manual_report") ||
+    text.includes("manual report") ||
+    text.includes("manual_audit") ||
+    text.includes("manual audit") ||
+    text.includes("linkedin_manual") ||
+    text.includes("linkedin report");
+
+  if (filter === "linkedin_manual") return isLinkedInManual;
+  if (isLinkedInManual) return false;
+
+  return Boolean(
+    report.channel === "email" ||
+      text.includes("search_email") ||
+      text.includes("search / email") ||
+      text.includes("python_search") ||
+      text.includes("google_search") ||
+      text.includes("search") ||
+      text.includes("sheet") ||
+      text.includes("email") ||
+      text.includes("gmail") ||
+      text.includes("brevo") ||
+      text.includes("cold") ||
+      report.keepUnderSheetAudit === true ||
+      Number(report.sheetRowNumber || 0) > 0 ||
+      Boolean(report.email || report.leadId),
+  );
+}
+
 function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReportFilter): boolean {
   if (filter === "all") return true;
   if (filter === "active") return !isSecureReportCleaned(report) && !isSecureReportExpired(report);
   if (filter === "expired") return isSecureReportExpired(report);
   if (filter === "viewed") return Boolean(report.reportPageViewed || report.pdfOpened || report.pdfDownloaded || report.videoPlayClicked || report.videoWatched || report.chatboxOpened || report.chatQuestionAsked || report.ctaClicked);
   if (filter === "no_view") return !report.reportPageViewed && !report.pdfOpened && !report.pdfDownloaded && !report.videoPlayClicked && !report.videoWatched && !report.chatboxOpened && !report.chatQuestionAsked && !report.ctaClicked && !isSecureReportCleaned(report);
-  if (filter === "search_email") return secureReportSourceGroup(report) === "search_email";
-  if (filter === "linkedin_manual") return secureReportSourceGroup(report) === "linkedin_manual";
+  if (filter === "search_email") return secureReportMatchesSourceFilter(report, "search_email");
+  if (filter === "linkedin_manual") return secureReportMatchesSourceFilter(report, "linkedin_manual");
   return true;
 }
 
