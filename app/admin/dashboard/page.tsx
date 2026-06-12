@@ -1075,7 +1075,7 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("Follow-up config load error:", err);
-      window.alert("Follow-up config could not be loaded. Please check your admin login and server logs.");
+     
     } finally {
       setFollowupLoading(false);
     }
