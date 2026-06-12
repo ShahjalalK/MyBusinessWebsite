@@ -1482,16 +1482,38 @@ function buildSecureReportListRow(doc: any): AnyRecord {
   const reportUrl = buildPublicReportUrl(token, domainSlug, firstCleanString(data.reportUrl, data.report_url));
   const channel = normalizeReportChannel(data);
   const contactSummary = buildContactSummaryFromRecord(data, channel);
-  const viewedCount = Number(data.reportViewCount || data.report_view_count || data.pageViewCount || data.viewCount || 0) || 0;
+  const viewedCount = Number(data.reportViewCount || data.report_view_count || data.pageViewCount || data.viewCount || data.viewedCount || 0) || 0;
+  const pdfOpenCount = Number(data.pdfOpenCount || data.pdf_open_count || 0) || 0;
   const pdfDownloadCount = Number(data.pdfDownloadCount || data.pdf_download_count || data.downloadCount || 0) || 0;
   const ctaClickCount = Number(data.ctaClickCount || data.cta_click_count || data.clickCount || 0) || 0;
+  const videoPlayClickCount = Number(data.videoPlayClickCount || data.video_play_click_count || 0) || 0;
+  const chatboxOpenCount = Number(data.chatboxOpenCount || data.chatbox_open_count || 0) || 0;
+  const chatQuestionCount = Number(data.chatQuestionCount || data.chat_question_count || 0) || 0;
+  const estimatedActiveSeconds = Number(data.estimatedActiveSeconds || data.estimated_active_seconds || 0) || 0;
+  const lastReportedActiveSeconds = Number(data.lastReportedActiveSeconds || data.last_reported_active_seconds || 0) || 0;
   const lastActivityAt = toIso(
     data.lastActivityAt ||
       data.last_activity_at ||
+      data.lastSeenAt ||
+      data.last_seen_at ||
+      data.lastVideoWatchedAt ||
+      data.last_video_watched_at ||
+      data.lastVideoPlayClickedAt ||
+      data.last_video_play_clicked_at ||
+      data.lastChatQuestionAt ||
+      data.last_chat_question_at ||
+      data.lastChatboxOpenedAt ||
+      data.last_chatbox_opened_at ||
       data.lastReportViewedAt ||
       data.last_report_viewed_at ||
+      data.lastViewedAt ||
+      data.last_viewed_at ||
+      data.lastDownloadedAt ||
+      data.last_downloaded_at ||
       data.lastPdfDownloadedAt ||
       data.last_pdf_downloaded_at ||
+      data.lastPdfOpenedAt ||
+      data.last_pdf_opened_at ||
       data.lastCtaClickedAt ||
       data.last_cta_clicked_at ||
       data.updatedAt,
@@ -1511,16 +1533,49 @@ function buildSecureReportListRow(doc: any): AnyRecord {
     updatedAt: toIso(data.updatedAt || data.updated_at),
     pdfExpiresAt: toIso(data.pdfExpiresAt || data.pdf_expires_at),
     lastActivityAt,
+    lastSeenAt: toIso(data.lastSeenAt || data.last_seen_at),
     reportPageViewed: boolFromAny(data.reportPageViewed || data.report_page_viewed) || viewedCount > 0,
+    viewCount: viewedCount,
+    viewedCount,
+    estimatedActiveSeconds,
+    lastReportedActiveSeconds,
+    visitorCountry: firstCleanString(data.visitorCountry, data.visitor_country),
+    lastVisitorCountry: firstCleanString(data.lastVisitorCountry, data.last_visitor_country, data.visitorCountry, data.visitor_country),
+    pdfOpened: boolFromAny(data.pdfOpened || data.pdf_opened) || pdfOpenCount > 0,
+    pdfOpenCount,
+    lastPdfOpenedAt: toIso(data.lastPdfOpenedAt || data.last_pdf_opened_at),
     pdfDownloaded: boolFromAny(data.pdfDownloaded || data.pdf_downloaded) || pdfDownloadCount > 0,
+    downloadCount: Number(data.downloadCount || data.download_count || pdfDownloadCount || 0) || 0,
+    pdfDownloadCount,
+    lastDownloadedAt: toIso(data.lastDownloadedAt || data.last_downloaded_at || data.lastPdfDownloadedAt || data.last_pdf_downloaded_at),
+    lastPdfDownloadedAt: toIso(data.lastPdfDownloadedAt || data.last_pdf_downloaded_at || data.lastDownloadedAt || data.last_downloaded_at),
+    videoPlayClicked: boolFromAny(data.videoPlayClicked || data.video_play_clicked) || videoPlayClickCount > 0,
+    videoPlayClickCount,
+    lastVideoPlayClickedAt: toIso(data.lastVideoPlayClickedAt || data.last_video_play_clicked_at),
+    videoWatched: boolFromAny(data.videoWatched || data.video_watched),
+    videoWatchedThreshold: Number(data.videoWatchedThreshold || data.video_watched_threshold || 60) || 60,
+    lastVideoWatchedAt: toIso(data.lastVideoWatchedAt || data.last_video_watched_at),
+    chatboxOpened: boolFromAny(data.chatboxOpened || data.chatbox_opened) || chatboxOpenCount > 0,
+    chatboxOpenCount,
+    lastChatboxOpenedAt: toIso(data.lastChatboxOpenedAt || data.last_chatbox_opened_at),
+    chatQuestionAsked: boolFromAny(data.chatQuestionAsked || data.chat_question_asked) || chatQuestionCount > 0,
+    chatQuestionCount,
+    lastChatQuestionAt: toIso(data.lastChatQuestionAt || data.last_chat_question_at),
     ctaClicked: boolFromAny(data.ctaClicked || data.cta_clicked) || ctaClickCount > 0,
+    ctaClickCount,
+    lastCtaClickedAt: toIso(data.lastCtaClickedAt || data.last_cta_clicked_at),
+    lastCtaType: firstCleanString(data.lastCtaType, data.last_cta_type),
+    bookingClicked: boolFromAny(data.bookingClicked || data.booking_clicked),
+    whatsappClicked: boolFromAny(data.whatsappClicked || data.whatsapp_clicked),
+    emailClicked: boolFromAny(data.emailClicked || data.email_clicked),
+    gmailClicked: boolFromAny(data.gmailClicked || data.gmail_clicked),
+    linkedinClicked: boolFromAny(data.linkedinClicked || data.linkedin_clicked),
+    lastIntentScore: Number(data.lastIntentScore || data.last_intent_score || data.intentScore || data.intent_score || 0) || 0,
+    lastIntentLabel: firstCleanString(data.lastIntentLabel, data.last_intent_label, data.intentLabel, data.intent_label),
     cleanupStatus: firstCleanString(data.cleanupStatus, data.cleanup_status),
     active: data.active === undefined ? true : data.active !== false,
     leadId: firstCleanString(data.leadId, data.lead_id, data.firestoreLeadId, data.firestore_lead_id, data.outreachLeadId, data.outreach_lead_id),
     sheetRowNumber: Number(data.sheetRowNumber || data.sheet_row_number || 0) || null,
-    viewedCount,
-    pdfDownloadCount,
-    ctaClickCount,
   };
 }
 
@@ -1548,6 +1603,10 @@ function secureReportMatchesListSearch(row: AnyRecord, search: string): boolean 
     row.cleanupStatus,
     row.contactStatus,
     row.contactStatusLabel,
+    row.visitorCountry,
+    row.lastVisitorCountry,
+    row.lastCtaType,
+    row.lastIntentLabel,
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query));
@@ -1570,8 +1629,31 @@ function secureReportMatchesListFilter(row: AnyRecord, filter: string): boolean 
   if (!filter || filter === "all") return true;
   if (filter === "active") return !isSecureReportCleaned(row) && !isSecureReportExpired(row);
   if (filter === "expired") return isSecureReportExpired(row);
-  if (filter === "viewed") return Boolean(row.reportPageViewed || row.pdfDownloaded || row.ctaClicked);
-  if (filter === "no_view") return !row.reportPageViewed && !row.pdfDownloaded && !row.ctaClicked && !isSecureReportCleaned(row);
+  if (filter === "viewed") {
+    return Boolean(
+      row.reportPageViewed ||
+        row.pdfOpened ||
+        row.pdfDownloaded ||
+        row.videoPlayClicked ||
+        row.videoWatched ||
+        row.chatboxOpened ||
+        row.chatQuestionAsked ||
+        row.ctaClicked,
+    );
+  }
+  if (filter === "no_view") {
+    return (
+      !row.reportPageViewed &&
+      !row.pdfOpened &&
+      !row.pdfDownloaded &&
+      !row.videoPlayClicked &&
+      !row.videoWatched &&
+      !row.chatboxOpened &&
+      !row.chatQuestionAsked &&
+      !row.ctaClicked &&
+      !isSecureReportCleaned(row)
+    );
+  }
   if (filter === "cleaned") return isSecureReportCleaned(row);
   if (filter === "test") {
     const haystack = [row.source, row.companyName, row.domain, row.email, row.cleanupStatus].join(" ").toLowerCase();
