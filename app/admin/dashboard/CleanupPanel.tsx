@@ -188,7 +188,8 @@ function isSecureReportExpired(report: SecureReportRow): boolean {
 
 function secureReportStatusLabel(report: SecureReportRow): string {
   if (isSecureReportCleaned(report)) return "Cleaned";
-  if (reportIntentScore(report) >= 65 || report.ctaClicked || report.pdfDownloaded) return "High intent";
+  if (report.ctaClicked || report.pdfDownloaded || report.videoWatched || report.chatQuestionAsked) return "High intent";
+  if (report.videoPlayClicked || report.chatboxOpened || report.pdfOpened) return "Engaged";
   if (report.reportPageViewed) return "Viewed";
   if (isSecureReportExpired(report)) return "Expired";
   return "Active";
@@ -197,62 +198,11 @@ function secureReportStatusLabel(report: SecureReportRow): string {
 function secureReportStatusTone(report: SecureReportRow): string {
   const status = secureReportStatusLabel(report);
   if (status === "High intent") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (status === "Engaged") return "bg-cyan-50 text-cyan-700 border-cyan-100";
   if (status === "Viewed") return "bg-blue-50 text-blue-700 border-blue-100";
   if (status === "Expired") return "bg-amber-50 text-amber-700 border-amber-100";
   if (status === "Cleaned") return "bg-gray-50 text-gray-500 border-gray-100";
   return "bg-violet-50 text-violet-700 border-violet-100";
-}
-
-function reportIntentScore(report: SecureReportRow): number {
-  const score = Number(report.intentScore || 0);
-  if (Number.isFinite(score) && score > 0) return Math.min(100, Math.max(0, Math.round(score)));
-  if (report.ctaClicked) return 85;
-  if (report.chatEngaged || Number(report.chatQuestionCount || 0) > 0) return 80;
-  if (report.pdfDownloaded) return 75;
-  if (Number(report.estimatedActiveSeconds || 0) >= 60) return 35;
-  if (report.reportPageViewed) return 10;
-  return 0;
-}
-
-function reportIntentLabel(report: SecureReportRow): string {
-  const explicit = String(report.intentLabel || "").trim();
-  if (explicit) return explicit;
-
-  const score = reportIntentScore(report);
-  if (score >= 85) return "Hot";
-  if (score >= 65) return "High";
-  if (score >= 35) return "Medium";
-  if (score > 0) return "Low";
-  return "Not tracked";
-}
-
-function formatReportActiveTime(seconds?: number): string {
-  const total = Number(seconds || 0);
-  if (!Number.isFinite(total) || total <= 0) return "No active time";
-  if (total < 60) return `${Math.round(total)}s active`;
-  const minutes = Math.floor(total / 60);
-  const remainingSeconds = Math.round(total % 60);
-  if (minutes < 60) return remainingSeconds ? `${minutes}m ${remainingSeconds}s active` : `${minutes}m active`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes ? `${hours}h ${remainingMinutes}m active` : `${hours}h active`;
-}
-
-function reportCountryLabel(report: SecureReportRow): string {
-  return String(report.lastVisitorCountryName || report.visitorCountry || report.lastVisitorCountry || "").trim();
-}
-
-function reportActivitySummary(report: SecureReportRow): string {
-  const chatCount = Number(report.chatQuestionCount || 0);
-  if (report.ctaClicked) {
-    const type = String(report.lastCtaType || "CTA").replace(/[_-]+/g, " ");
-    return `${type.charAt(0).toUpperCase()}${type.slice(1)} clicked`;
-  }
-  if (chatCount > 0) return `${chatCount} chat question${chatCount === 1 ? "" : "s"}`;
-  if (report.pdfDownloaded) return "PDF downloaded";
-  if (report.pdfOpened) return "PDF opened";
-  if (report.reportPageViewed) return "Page viewed";
-  return "No view yet";
 }
 
 function secureReportContactLabel(report: SecureReportRow): string {
@@ -280,12 +230,102 @@ function secureReportContactNote(report: SecureReportRow): string {
   return report.contacted ? "Outreach history found" : "Safe as test/no outreach";
 }
 
+
+function numberFromReport(...values: unknown[]): number {
+  for (const value of values) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  }
+  return 0;
+}
+
+function formatActiveSeconds(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  if (!total) return "No active time";
+  const minutes = Math.floor(total / 60);
+  const remainder = total % 60;
+  if (minutes <= 0) return `${remainder}s active`;
+  if (!remainder) return `${minutes}m active`;
+  return `${minutes}m ${remainder}s active`;
+}
+
+function formatCtaType(value?: string): string {
+  const text = String(value || "").toLowerCase();
+  if (text === "booking") return "Booking";
+  if (text === "whatsapp") return "WhatsApp";
+  if (text === "email" || text === "gmail") return "Email";
+  if (text === "linkedin") return "LinkedIn";
+  return "CTA";
+}
+
+function secureReportIntentScore(report: SecureReportRow): number {
+  const explicit = Number(report.lastIntentScore || report.intentScore || 0);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.min(100, explicit);
+  if (report.bookingClicked || report.lastCtaType === "booking") return 95;
+  if (report.ctaClicked || report.whatsappClicked || report.emailClicked || report.gmailClicked || report.linkedinClicked) return 85;
+  if (report.chatQuestionAsked || report.videoWatched) return 80;
+  if (report.pdfDownloaded) return 75;
+  if (report.videoPlayClicked || report.chatboxOpened) return 55;
+  if (report.pdfOpened) return 45;
+  if (numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds) >= 60) return 30;
+  if (report.reportPageViewed) return 10;
+  return 0;
+}
+
+function secureReportIntentLabel(report: SecureReportRow): string {
+  const explicit = String(report.lastIntentLabel || report.intentLabel || "").toLowerCase();
+  if (["hot", "high", "medium", "low"].includes(explicit)) return explicit.charAt(0).toUpperCase() + explicit.slice(1);
+  const score = secureReportIntentScore(report);
+  if (score >= 90) return "Hot";
+  if (score >= 70) return "High";
+  if (score >= 45) return "Medium";
+  if (score > 0) return "Low";
+  return "No intent";
+}
+
+function secureReportIntentTone(report: SecureReportRow): string {
+  const label = secureReportIntentLabel(report).toLowerCase();
+  if (label === "hot") return "bg-red-50 text-red-700 border-red-100";
+  if (label === "high") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (label === "medium") return "bg-blue-50 text-blue-700 border-blue-100";
+  if (label === "low") return "bg-slate-50 text-slate-600 border-slate-100";
+  return "bg-gray-50 text-gray-500 border-gray-100";
+}
+
+function secureReportActivitySummary(report: SecureReportRow): string {
+  const items: string[] = [];
+
+  if (report.videoWatched) items.push(`Video watched ${report.videoWatchedThreshold || 60}%`);
+  else if (report.videoPlayClicked) items.push("Video clicked");
+
+  if (report.pdfDownloaded) items.push("PDF downloaded");
+  else if (report.pdfOpened) items.push("PDF opened");
+
+  if (report.chatQuestionAsked) items.push("Chat question asked");
+  else if (report.chatboxOpened) items.push("Chatbox opened");
+
+  if (report.ctaClicked || report.lastCtaType) items.push(`${formatCtaType(report.lastCtaType)} clicked`);
+  if (!items.length && report.reportPageViewed) items.push("Page viewed");
+
+  return items.length ? items.slice(0, 4).join(" · ") : "No view yet";
+}
+
+function secureReportActivityMeta(report: SecureReportRow): string {
+  const details: string[] = [];
+  const activeSeconds = numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds);
+  if (activeSeconds) details.push(formatActiveSeconds(activeSeconds));
+  if (report.lastVisitorCountry || report.visitorCountry) details.push(`Country: ${report.lastVisitorCountry || report.visitorCountry}`);
+  const lastTime = report.lastSeenAt || report.lastActivityAt;
+  if (lastTime) details.push(`Last: ${formatDate(lastTime)}`);
+  return details.length ? details.join(" · ") : "No activity date";
+}
+
 function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReportFilter): boolean {
   if (filter === "all") return true;
   if (filter === "active") return !isSecureReportCleaned(report) && !isSecureReportExpired(report);
   if (filter === "expired") return isSecureReportExpired(report);
-  if (filter === "viewed") return Boolean(report.reportPageViewed || report.pdfDownloaded || report.ctaClicked);
-  if (filter === "no_view") return !report.reportPageViewed && !report.pdfDownloaded && !report.ctaClicked && !isSecureReportCleaned(report);
+  if (filter === "viewed") return Boolean(report.reportPageViewed || report.pdfOpened || report.pdfDownloaded || report.videoPlayClicked || report.videoWatched || report.chatboxOpened || report.chatQuestionAsked || report.ctaClicked);
+  if (filter === "no_view") return !report.reportPageViewed && !report.pdfOpened && !report.pdfDownloaded && !report.videoPlayClicked && !report.videoWatched && !report.chatboxOpened && !report.chatQuestionAsked && !report.ctaClicked && !isSecureReportCleaned(report);
   if (filter === "cleaned") return isSecureReportCleaned(report);
   if (filter === "test") {
     const haystack = [report.source, report.companyName, report.domain, report.email, report.cleanupStatus].join(" ").toLowerCase();
@@ -654,17 +694,15 @@ export default function CleanupPanel({
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</p>
-                      <p className="text-xs font-bold text-gray-700 mt-1">{reportActivitySummary(report)}</p>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1">
-                        {report.lastSeenAt || report.lastActivityAt ? formatDate(report.lastSeenAt || report.lastActivityAt) : "No activity date"}
+                      <p className="text-xs font-bold text-gray-700 mt-1 leading-5">
+                        {secureReportActivitySummary(report)}
                       </p>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1">
-                        {formatReportActiveTime(report.estimatedActiveSeconds)}
-                        {reportCountryLabel(report) ? ` · ${reportCountryLabel(report)}` : ""}
-                      </p>
-                      <p className="text-[10px] font-black text-gray-500 mt-1">
-                        Intent: {reportIntentLabel(report)}{reportIntentScore(report) ? ` (${reportIntentScore(report)})` : ""}
-                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase ${secureReportIntentTone(report)}`}>
+                          Intent: {secureReportIntentLabel(report)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 mt-1 leading-4">{secureReportActivityMeta(report)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</p>

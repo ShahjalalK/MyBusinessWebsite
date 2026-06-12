@@ -184,14 +184,6 @@ function escapeHtmlAttribute(value: unknown): string {
     .replace(/>/g, "&gt;");
 }
 
-function getYouTubeLiteEmbedSrcDoc(video: EvidenceVideoDisplay): string {
-  const title = escapeHtmlAttribute(video.title || "Watch evidence video");
-  const embedUrl = escapeHtmlAttribute(video.embedUrl);
-  const thumbnailUrl = escapeHtmlAttribute(`https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`);
-
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;overflow:hidden;background:#020617;font-family:Arial,sans-serif}a{position:absolute;inset:0;display:grid;place-items:center;text-decoration:none;color:#fff;background:linear-gradient(135deg,rgba(2,6,23,.24),rgba(2,6,23,.76)),url('${thumbnailUrl}') center/cover no-repeat}.play{display:grid;place-items:center;width:76px;height:76px;border-radius:999px;background:#2563eb;box-shadow:0 24px 50px rgba(37,99,235,.38);transition:transform .18s ease}.play:before{content:"";margin-left:5px;border-left:22px solid white;border-top:14px solid transparent;border-bottom:14px solid transparent}.label{position:absolute;left:16px;right:16px;bottom:14px;padding:10px 12px;border-radius:16px;background:rgba(15,23,42,.78);backdrop-filter:blur(10px);font-size:13px;font-weight:800;line-height:1.4}a:hover .play{transform:scale(1.04)}@media(max-width:640px){.play{width:64px;height:64px}.play:before{border-left-width:18px;border-top-width:11px;border-bottom-width:11px}.label{font-size:12px}}</style></head><body><a href="${embedUrl}" aria-label="Play ${title}"><span class="play"></span><span class="label">Tap to load evidence video</span></a></body></html>`;
-}
-
 function getPdfLitePreviewSrcDoc(previewHref: string): string {
   const href = escapeHtmlAttribute(previewHref);
 
@@ -867,7 +859,7 @@ function buildReportRedirectHref({
 }: {
   token: string;
   domainSlug: string;
-  kind: "booking" | "email" | "linkedin" | "cta";
+  kind: "booking" | "email" | "linkedin" | "whatsapp" | "cta";
   destinationUrl: string;
   label: string;
   eventSection?: string;
@@ -920,181 +912,47 @@ function ReportServedPixel({
   );
 }
 
-function ReportViewBeacon({
-  token,
-  domainSlug,
-  companyName,
-  primaryActionLabel,
-}: {
-  token: string;
-  domainSlug: string;
-  companyName: string;
-  primaryActionLabel: string;
-}) {
+function ReportViewBeacon({ token }: { token: string }) {
   const script = `
 (function () {
   try {
     var token = ${JSON.stringify(token)};
-    var domainSlug = ${JSON.stringify(domainSlug)};
-    var companyName = ${JSON.stringify(companyName)};
-    var primaryActionLabel = ${JSON.stringify(primaryActionLabel)};
     if (!token) return;
 
-    var viewStorageKey = "trackflow_report_view_" + token;
-    var sessionStorageKey = "trackflow_report_session_" + token;
-    var heartbeatKey = "__trackflowReportHeartbeatReady_" + token;
+    var storageKey = "trackflow_report_view_" + token;
+    try {
+      if (window.sessionStorage && window.sessionStorage.getItem(storageKey)) return;
+    } catch (storageError) {}
 
-    function getSessionId() {
+    window.setTimeout(function () {
       try {
-        if (window.sessionStorage) {
-          var existing = window.sessionStorage.getItem(sessionStorageKey);
-          if (existing) return existing;
-        }
-      } catch (storageError) {}
+        try {
+          if (window.sessionStorage) window.sessionStorage.setItem(storageKey, "1");
+        } catch (storageError) {}
 
-      var next = "rpt_" + token.slice(0, 24) + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
-
-      try {
-        if (window.sessionStorage) window.sessionStorage.setItem(sessionStorageKey, next);
-      } catch (storageError) {}
-
-      return next;
-    }
-
-    var reportSessionId = getSessionId();
-
-    function sendJson(url, payload) {
-      try {
-        var body = JSON.stringify(payload || {});
+        var url = "/api/trackflow/reports/view?token=" + encodeURIComponent(token);
+        var payload = JSON.stringify({ token: token, source: "report_page_beacon" });
 
         if (navigator.sendBeacon) {
-          var blob = new Blob([body], { type: "application/json" });
-          if (navigator.sendBeacon(url, blob)) return;
+          var body = new Blob([payload], { type: "application/json" });
+          navigator.sendBeacon(url, body);
+          return;
         }
 
         fetch(url, {
           method: "POST",
           keepalive: true,
           headers: { "content-type": "application/json" },
-          body: body
+          body: payload
         }).catch(function () {});
       } catch (error) {}
-    }
-
-    function sendInitialView() {
-      try {
-        var alreadySent = false;
-        try {
-          alreadySent = Boolean(window.sessionStorage && window.sessionStorage.getItem(viewStorageKey));
-          if (window.sessionStorage) window.sessionStorage.setItem(viewStorageKey, "1");
-        } catch (storageError) {}
-
-        if (alreadySent) return;
-
-        sendJson("/api/trackflow/reports/view?token=" + encodeURIComponent(token), {
-          token: token,
-          source: "report_page_beacon"
-        });
-
-        sendJson("/api/report-event", {
-          eventName: "secure_report_viewed",
-          token: token,
-          domainSlug: domainSlug,
-          companyName: companyName,
-          eventSection: "secure_report",
-          buttonLabel: "Secure report viewed",
-          primaryActionLabel: primaryActionLabel,
-          primaryPageLabel: "Secure tracking review",
-          transport: "report_view_beacon",
-          reportSessionId: reportSessionId,
-          sessionStarted: true,
-          intentScore: 10
-        });
-      } catch (error) {}
-    }
-
-    window.setTimeout(sendInitialView, 3500);
-
-    if (window[heartbeatKey]) return;
-    window[heartbeatKey] = true;
-
-    var activeMilliseconds = 0;
-    var activeStartedAt = document.visibilityState === "visible" ? Date.now() : 0;
-    var lastInteractionAt = Date.now();
-    var idleAfterMs = 90000;
-
-    function isVisitorActive(now) {
-      return document.visibilityState === "visible" && now - lastInteractionAt <= idleAfterMs;
-    }
-
-    function noteInteraction() {
-      var now = Date.now();
-      lastInteractionAt = now;
-      if (!activeStartedAt && document.visibilityState === "visible") activeStartedAt = now;
-    }
-
-    function accumulateActiveTime() {
-      var now = Date.now();
-      if (activeStartedAt && isVisitorActive(now)) {
-        activeMilliseconds += Math.max(0, now - activeStartedAt);
-        activeStartedAt = now;
-        return;
-      }
-      activeStartedAt = isVisitorActive(now) ? now : 0;
-    }
-
-    function flushHeartbeat(reason) {
-      try {
-        accumulateActiveTime();
-        var deltaSeconds = Math.round(activeMilliseconds / 1000);
-        if (deltaSeconds <= 0) return;
-        activeMilliseconds = 0;
-
-        sendJson("/api/report-event", {
-          eventName: "secure_report_duration_heartbeat",
-          token: token,
-          domainSlug: domainSlug,
-          companyName: companyName,
-          eventSection: "secure_report",
-          buttonLabel: "Visitor active heartbeat",
-          primaryActionLabel: primaryActionLabel,
-          primaryPageLabel: "Secure tracking review",
-          transport: "report_heartbeat_beacon",
-          reportSessionId: reportSessionId,
-          durationEventType: reason || "heartbeat",
-          timeOnReportDeltaSeconds: Math.min(deltaSeconds, 120),
-          intentScore: 20
-        });
-      } catch (error) {}
-    }
-
-    ["pointerdown", "mousemove", "keydown", "scroll", "touchstart"].forEach(function (eventName) {
-      try {
-        window.addEventListener(eventName, noteInteraction, { passive: true });
-      } catch (eventError) {}
-    });
-
-    document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "hidden") {
-        flushHeartbeat("hidden");
-        activeStartedAt = 0;
-      } else {
-        noteInteraction();
-      }
-    });
-
-    window.setInterval(function () {
-      flushHeartbeat("heartbeat");
-    }, 60000);
-
-    window.addEventListener("pagehide", function () {
-      flushHeartbeat("pagehide");
-    });
+    }, 3500);
   } catch (error) {}
 })();`;
 
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
+
 
 
 function AssistantVisibilityScript() {
@@ -1232,7 +1090,7 @@ html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-s
   );
 }
 
-function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: { token: string; domainSlug: string; primaryActionLabel: string }) {
+function PdfDownloadExperienceScript() {
   const script = `
 (function () {
   try {
@@ -1290,6 +1148,12 @@ function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: 
       return 'trackflow-audit-report.pdf';
     }
 
+    function dispatchReportEvent(detail) {
+      try {
+        window.dispatchEvent(new CustomEvent('trackflow:secure-report-event', { detail: detail || {} }));
+      } catch (error) {}
+    }
+
     function setButtonState(button, state, labelText) {
       var label = button.querySelector('[data-trackflow-pdf-download-label]');
       var spinner = button.querySelector('[data-trackflow-pdf-download-spinner]');
@@ -1311,38 +1175,6 @@ function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: 
       button.classList.remove('pointer-events-none', 'opacity-80');
       if (spinner) spinner.hidden = true;
       if (dot) dot.hidden = false;
-    }
-
-    function trackPdfDownloadSuccess(href, fileName, blobSize) {
-      try {
-        var payload = {
-          eventName: 'secure_report_pdf_download_success',
-          token: ${JSON.stringify(token)},
-          domainSlug: ${JSON.stringify(domainSlug)},
-          eventSection: 'pdf',
-          buttonLabel: 'Download PDF',
-          primaryActionLabel: ${JSON.stringify(primaryActionLabel)},
-          primaryPageLabel: 'Secure tracking review',
-          transport: 'pdf_download_experience',
-          clickHref: href || '',
-          fileName: fileName || '',
-          fileSizeBytes: blobSize || 0,
-          intentScore: 75
-        };
-        var body = JSON.stringify(payload);
-
-        if (navigator.sendBeacon) {
-          var beaconBody = new Blob([body], { type: 'application/json' });
-          if (navigator.sendBeacon('/api/report-event', beaconBody)) return;
-        }
-
-        fetch('/api/report-event', {
-          method: 'POST',
-          keepalive: true,
-          headers: { 'content-type': 'application/json' },
-          body: body
-        }).catch(function () {});
-      } catch (error) {}
     }
 
     async function downloadPdf(button, href) {
@@ -1370,7 +1202,6 @@ function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: 
         }
 
         var fileName = parseFileName(response);
-        trackPdfDownloadSuccess(href, fileName, blob.size);
         var objectUrl = window.URL.createObjectURL(blob);
         var link = document.createElement('a');
 
@@ -1389,6 +1220,11 @@ function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: 
 
         setStatus('Download started. Please check your browser downloads bar or download folder.', 'success');
         setButtonState(button, 'success', 'Download started');
+        dispatchReportEvent({
+          eventName: 'secure_report_pdf_download_success',
+          buttonLabel: 'PDF download started',
+          eventSection: 'pdf'
+        });
 
         window.setTimeout(function () {
           setButtonState(button, 'idle', button.getAttribute('data-default-label') || 'Download PDF');
@@ -1415,6 +1251,79 @@ function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: 
       if (button.getAttribute('data-download-state') === 'loading') return;
 
       downloadPdf(button, href);
+    }, true);
+  } catch (error) {}
+})();`;
+
+  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+}
+
+
+function EvidenceVideoExperienceScript() {
+  const script = `(() => {
+  try {
+    function dispatchReportEvent(detail) {
+      try {
+        window.dispatchEvent(new CustomEvent('trackflow:secure-report-event', { detail: detail || {} }));
+      } catch (error) {}
+    }
+
+    function buildEmbedUrl(rawUrl) {
+      try {
+        var url = new URL(rawUrl, window.location.origin);
+        url.searchParams.set('autoplay', '1');
+        url.searchParams.set('enablejsapi', '1');
+        url.searchParams.set('origin', window.location.origin);
+        url.searchParams.set('rel', url.searchParams.get('rel') || '0');
+        url.searchParams.set('modestbranding', url.searchParams.get('modestbranding') || '1');
+        url.searchParams.set('playsinline', url.searchParams.get('playsinline') || '1');
+        return url.toString();
+      } catch (error) {
+        return rawUrl || '';
+      }
+    }
+
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) return;
+
+      var button = target.closest('[data-trackflow-video-play]');
+      if (!button) return;
+
+      var shell = button.closest('[data-trackflow-video-shell]');
+      if (!shell || shell.getAttribute('data-video-loaded') === 'true') return;
+
+      var embedUrl = shell.getAttribute('data-trackflow-video-embed-url') || '';
+      var videoId = shell.getAttribute('data-trackflow-video-id') || '';
+      var title = shell.getAttribute('data-trackflow-video-title') || 'Evidence video';
+      if (!embedUrl) return;
+
+      event.preventDefault();
+      shell.setAttribute('data-video-loaded', 'true');
+
+      dispatchReportEvent({
+        eventName: 'secure_report_evidence_video_play_click',
+        buttonLabel: 'Evidence video play clicked',
+        eventSection: 'evidence_video',
+        videoId: videoId
+      });
+
+      var iframe = document.createElement('iframe');
+      iframe.setAttribute('data-trackflow-youtube-iframe', 'true');
+      iframe.title = title;
+      iframe.src = buildEmbedUrl(embedUrl);
+      iframe.loading = 'lazy';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      iframe.allowFullscreen = true;
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+      iframe.className = 'absolute inset-0 h-full w-full';
+
+      shell.innerHTML = '';
+      shell.appendChild(iframe);
+
+      try {
+        window.dispatchEvent(new CustomEvent('trackflow:evidence-video-loaded', { detail: { videoId: videoId } }));
+      } catch (error) {}
     }, true);
   } catch (error) {}
 })();`;
@@ -2007,7 +1916,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
   return (
     <main data-trackflow-secure-report className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900">
-      <ReportViewBeacon token={token} domainSlug={domainSlug} companyName={companyName} primaryActionLabel={ctaText} />
+      <ReportViewBeacon token={token} />
       <ReportServedPixel token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
       <SecureReportAnalytics
         token={token}
@@ -2018,7 +1927,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
         primaryPageLabel="Secure tracking review"
         evidenceVideoId={evidenceVideo?.videoId || ""}
       />
-      <PdfDownloadExperienceScript token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
+      <PdfDownloadExperienceScript />
+      <EvidenceVideoExperienceScript />
       <AssistantVisibilityScript />
       <ReportNavbar />
 
@@ -2224,17 +2134,31 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
             <div className="grid min-w-0 items-start gap-0 lg:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
               <div className="bg-slate-950 p-2 sm:p-4 lg:self-start lg:p-5">
-                <div className="relative aspect-video w-full max-w-full overflow-hidden rounded-[1.1rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20 sm:rounded-[1.35rem]">
-                  <iframe
-                    data-trackflow-youtube-iframe="true"
-                    title={evidenceVideo.title}
-                    srcDoc={getYouTubeLiteEmbedSrcDoc(evidenceVideo)}
-                    loading="lazy"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    className="absolute inset-0 h-full w-full"
-                  />
+                <div
+                  data-trackflow-video-shell="true"
+                  data-trackflow-video-id={evidenceVideo.videoId}
+                  data-trackflow-video-embed-url={evidenceVideo.embedUrl}
+                  data-trackflow-video-title={evidenceVideo.title}
+                  className="relative aspect-video w-full max-w-full overflow-hidden rounded-[1.1rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20 sm:rounded-[1.35rem]"
+                >
+                  <button
+                    type="button"
+                    data-trackflow-video-play="true"
+                    className="absolute inset-0 grid h-full w-full place-items-center overflow-hidden text-white focus:outline-none focus:ring-4 focus:ring-blue-400/40"
+                    aria-label={`Play ${evidenceVideo.title}`}
+                    style={{
+                      backgroundImage: `linear-gradient(135deg,rgba(2,6,23,.24),rgba(2,6,23,.76)),url(https://i.ytimg.com/vi/${evidenceVideo.videoId}/hqdefault.jpg)`,
+                      backgroundPosition: "center",
+                      backgroundSize: "cover",
+                    }}
+                  >
+                    <span className="grid h-16 w-16 place-items-center rounded-full bg-blue-600 shadow-2xl shadow-blue-600/40 transition hover:scale-105 sm:h-20 sm:w-20">
+                      <span className="ml-1 block h-0 w-0 border-y-[12px] border-l-[20px] border-y-transparent border-l-white sm:border-y-[15px] sm:border-l-[25px]" />
+                    </span>
+                    <span className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-950/75 px-4 py-3 text-left text-xs font-black leading-5 backdrop-blur sm:text-sm">
+                      Tap to load evidence video
+                    </span>
+                  </button>
                 </div>
               </div>
 

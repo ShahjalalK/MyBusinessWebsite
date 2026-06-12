@@ -79,8 +79,8 @@ const CONSENT_SKIP_KEY = "tfp_analytics_disabled";
 const EVENT_SESSION_PREFIX = "tfp_event_once_";
 const DEFAULT_ENDPOINT = "/api/report-event";
 const FALLBACK_ENDPOINT = "/api/server-track";
-const YOUTUBE_PROGRESS_MARKS = [25, 50, 75] as const;
-const REPORT_DURATION_PING_INTERVAL_MS = 30 * 1000;
+const VIDEO_WATCHED_THRESHOLD = 60;
+const REPORT_DURATION_PING_INTERVAL_MS = 60 * 1000;
 const REPORT_DURATION_MIN_EVENT_MS = 3 * 1000;
 
 function cleanText(value: unknown, fallback = "") {
@@ -215,7 +215,7 @@ function getEventJourneyMeta(eventName: string): EventJourneyMeta {
     };
   }
 
-  if (name.includes("email") || name.includes("linkedin")) {
+  if (name.includes("email") || name.includes("gmail") || name.includes("linkedin") || name.includes("whatsapp")) {
     return {
       visitStage: "contact",
       journeyStep: "07_contact_clicked",
@@ -264,6 +264,26 @@ function getEventJourneyMeta(eventName: string): EventJourneyMeta {
       journeyStep: "03_pdf_viewed",
       intentLevel: "medium",
       intentScore: 45,
+      isCoreEvent: true,
+    };
+  }
+
+  if (name.includes("video_watched_60")) {
+    return {
+      visitStage: "video",
+      journeyStep: "04_video_watched",
+      intentLevel: "high",
+      intentScore: 80,
+      isCoreEvent: true,
+    };
+  }
+
+  if (name.includes("video_play_click")) {
+    return {
+      visitStage: "video",
+      journeyStep: "03_video_play_clicked",
+      intentLevel: "medium",
+      intentScore: 55,
       isCoreEvent: true,
     };
   }
@@ -655,6 +675,8 @@ export default function SecureReportAnalytics({
       );
 
       const payload = {
+        token: normalizeToken(token),
+        reportToken: normalizeToken(token),
         eventName: name,
         eventId,
         pageTitle: document.title || headline,
@@ -738,6 +760,7 @@ export default function SecureReportAnalytics({
     headline,
     primaryActionLabel,
     primaryPageLabel,
+    token,
   ]);
 
   useEffect(() => {
@@ -879,6 +902,7 @@ export default function SecureReportAnalytics({
           "secure_report_booking_click",
           "secure_report_email_click",
           "secure_report_linkedin_click",
+          "secure_report_whatsapp_click",
           "secure_report_cta_click",
         ].includes(normalizedEventName);
 
@@ -909,11 +933,16 @@ export default function SecureReportAnalytics({
 
       void sendEvent({
         eventName,
-        eventSection: "assistant",
+        eventSection: sanitizeParam(detail.eventSection || "assistant", 120),
         buttonLabel: sanitizeParam(
-          detail.buttonLabel || detail.question || "Assistant interaction",
+          detail.buttonLabel || detail.question || "Secure report interaction",
           160,
         ),
+        videoId: sanitizeParam(detail.videoId || "", 80),
+        videoProgress:
+          typeof detail.videoProgress === "number"
+            ? detail.videoProgress
+            : undefined,
         extra: {
           question_key: sanitizeParam(detail.questionKey || "", 160),
           question_source: sanitizeParam(detail.questionSource || "", 80),
@@ -1021,29 +1050,25 @@ export default function SecureReportAnalytics({
   }, [reportId, sendEvent]);
 
   useEffect(() => {
-    if (!reportId || !evidenceVideoId) return;
-
-    const iframe = document.querySelector<HTMLIFrameElement>(
-      "[data-trackflow-youtube-iframe]",
-    );
-    if (!iframe) return;
-
-    // Keep a non-null local reference for callbacks below.
-    // TypeScript does not preserve querySelector null-narrowing across nested functions.
-    const youtubeIframe: HTMLIFrameElement = iframe;
-
-    try {
-      const iframeUrl = new URL(youtubeIframe.src);
-      iframeUrl.searchParams.set("enablejsapi", "1");
-      iframeUrl.searchParams.set("origin", window.location.origin);
-      youtubeIframe.src = iframeUrl.toString();
-    } catch {
-      // Keep the existing iframe if URL parsing fails.
-    }
+    if (!reportId || !evidenceVideoId || typeof window === "undefined") return;
 
     const win = window as YouTubeApiWindow;
     let intervalId = 0;
     let disposed = false;
+    let initializedIframe: HTMLIFrameElement | null = null;
+
+    function fireWatched60(videoProgress = VIDEO_WATCHED_THRESHOLD) {
+      if (youtubeProgressRef.current.has(VIDEO_WATCHED_THRESHOLD)) return;
+      youtubeProgressRef.current.add(VIDEO_WATCHED_THRESHOLD);
+
+      void sendEvent({
+        eventName: "secure_report_evidence_video_watched_60",
+        eventSection: "evidence_video",
+        buttonLabel: "Evidence video watched 60%",
+        videoId: evidenceVideoId,
+        videoProgress,
+      });
+    }
 
     function trackProgress(player?: {
       getDuration?: () => number;
@@ -1059,22 +1084,34 @@ export default function SecureReportAnalytics({
         0,
         Math.min(100, Math.round((current / duration) * 100)),
       );
-      YOUTUBE_PROGRESS_MARKS.forEach((mark) => {
-        if (percent >= mark && !youtubeProgressRef.current.has(mark)) {
-          youtubeProgressRef.current.add(mark);
-          void sendEvent({
-            eventName: `secure_report_evidence_video_progress_${mark}`,
-            eventSection: "evidence_video",
-            buttonLabel: `Video progress ${mark}%`,
-            videoId: evidenceVideoId,
-            videoProgress: mark,
-          });
-        }
-      });
+
+      if (percent >= VIDEO_WATCHED_THRESHOLD) {
+        fireWatched60(percent);
+      }
+    }
+
+    function prepareIframe(iframe: HTMLIFrameElement) {
+      try {
+        const iframeUrl = new URL(iframe.src);
+        iframeUrl.searchParams.set("enablejsapi", "1");
+        iframeUrl.searchParams.set("origin", window.location.origin);
+        const nextSrc = iframeUrl.toString();
+        if (iframe.src !== nextSrc) iframe.src = nextSrc;
+      } catch {
+        // Keep the existing iframe if URL parsing fails.
+      }
     }
 
     function initPlayer() {
       if (disposed || !win.YT?.Player) return;
+
+      const youtubeIframe = document.querySelector<HTMLIFrameElement>(
+        "[data-trackflow-youtube-iframe]",
+      );
+      if (!youtubeIframe || youtubeIframe === initializedIframe) return;
+
+      initializedIframe = youtubeIframe;
+      prepareIframe(youtubeIframe);
 
       const player = new win.YT.Player(youtubeIframe, {
         events: {
@@ -1083,47 +1120,38 @@ export default function SecureReportAnalytics({
             const states = win.YT?.PlayerState || {};
 
             if (state === states.PLAYING) {
-              if (
-                !onePerSession(`${reportId}_video_start_${evidenceVideoId}`)
-              ) {
-                return;
-              }
-
-              void sendEvent({
-                eventName: "secure_report_evidence_video_start",
-                eventSection: "evidence_video",
-                buttonLabel: "Evidence video started",
-                videoId: evidenceVideoId,
-              });
-
               window.clearInterval(intervalId);
               intervalId = window.setInterval(
                 () => trackProgress(event.target),
-                2500,
+                5000,
               );
+              return;
+            }
+
+            if (state === states.PAUSED) {
+              trackProgress(event.target);
+              window.clearInterval(intervalId);
               return;
             }
 
             if (state === states.ENDED) {
               window.clearInterval(intervalId);
-              void sendEvent({
-                eventName: "secure_report_evidence_video_complete",
-                eventSection: "evidence_video",
-                buttonLabel: "Evidence video completed",
-                videoId: evidenceVideoId,
-                videoProgress: 100,
-              });
+              fireWatched60(100);
             }
           },
         },
       });
 
-      window.setTimeout(() => trackProgress(player), 3000);
+      window.setTimeout(() => trackProgress(player), 5000);
     }
 
-    if (win.YT?.Player) {
-      initPlayer();
-    } else {
+    function loadApiAndInit() {
+      if (disposed) return;
+      if (win.YT?.Player) {
+        initPlayer();
+        return;
+      }
+
       const previousReady = win.onYouTubeIframeAPIReady;
       win.onYouTubeIframeAPIReady = () => {
         previousReady?.();
@@ -1142,11 +1170,20 @@ export default function SecureReportAnalytics({
       }
     }
 
+    function onEvidenceVideoLoaded() {
+      loadApiAndInit();
+    }
+
+    window.addEventListener("trackflow:evidence-video-loaded", onEvidenceVideoLoaded);
+    window.setTimeout(loadApiAndInit, 600);
+
     return () => {
       disposed = true;
       window.clearInterval(intervalId);
+      window.removeEventListener("trackflow:evidence-video-loaded", onEvidenceVideoLoaded);
     };
   }, [evidenceVideoId, reportId, sendEvent]);
+
 
   return null;
 }

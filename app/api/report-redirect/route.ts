@@ -6,7 +6,7 @@ import { adminDb } from "@/lib/firebase-admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RedirectKind = "booking" | "email" | "linkedin" | "cta";
+type RedirectKind = "booking" | "email" | "linkedin" | "whatsapp" | "cta";
 
 function cleanText(value: unknown, fallback = "") {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -94,7 +94,7 @@ function reportVisitorLabel(reportId: string, anonymousId: string) {
 
 function sanitizeKind(value: unknown): RedirectKind {
   const text = cleanText(value, "cta").toLowerCase();
-  if (text === "booking" || text === "email" || text === "linkedin" || text === "cta") return text;
+  if (text === "booking" || text === "email" || text === "linkedin" || text === "whatsapp" || text === "cta") return text;
   return "cta";
 }
 
@@ -102,12 +102,16 @@ function eventNameForKind(kind: RedirectKind) {
   if (kind === "booking") return "secure_report_booking_click";
   if (kind === "email") return "secure_report_email_click";
   if (kind === "linkedin") return "secure_report_linkedin_click";
+  if (kind === "whatsapp") return "secure_report_whatsapp_click";
   return "secure_report_cta_click";
 }
 
 function metaForKind(kind: RedirectKind) {
   if (kind === "booking") {
     return { visitStage: "booking", journeyStep: "08_booking_clicked", intentLevel: "hot", intentScore: 95, isCoreEvent: true };
+  }
+  if (kind === "whatsapp") {
+    return { visitStage: "contact", journeyStep: "07_whatsapp_clicked", intentLevel: "high", intentScore: 85, isCoreEvent: true };
   }
   return { visitStage: "contact", journeyStep: "07_contact_clicked", intentLevel: "high", intentScore: 85, isCoreEvent: true };
 }
@@ -141,94 +145,6 @@ function cleanParams(params: Record<string, unknown>) {
   }
 
   return output;
-}
-
-
-function clampNumber(value: unknown, min = 0, max = 100, fallback = 0): number {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return fallback;
-  return Math.min(max, Math.max(min, numeric));
-}
-
-function intentLabelForScore(score: number): string {
-  if (score >= 85) return "Hot";
-  if (score >= 65) return "High";
-  if (score >= 35) return "Medium";
-  if (score > 0) return "Low";
-  return "Not tracked";
-}
-
-async function updateRedirectEngagementSummary(input: {
-  token: string;
-  kind: RedirectKind;
-  payload: Record<string, unknown>;
-  destination: string;
-}) {
-  const token = normalizeToken(input.token);
-  if (!token || token === "unknown") return { skipped: true, reason: "missing_token" };
-
-  const reportRef = adminDb.collection("audit_reports").doc(token);
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  const increment = admin.firestore.FieldValue.increment;
-  const eventScore = clampNumber(input.payload.intentScore, 0, 100, input.kind === "booking" ? 95 : 85);
-
-  return adminDb.runTransaction(async (transaction) => {
-    const snap = await transaction.get(reportRef);
-    if (!snap.exists) return { skipped: true, reason: "report_not_found" };
-
-    const current = snap.data() || {};
-    const currentScore = clampNumber(current.intentScore, 0, 100, 0);
-    const nextScore = Math.max(currentScore, eventScore);
-    const visitorCountry = sanitizeParam(input.payload.visitorCountry, 16).toUpperCase();
-    const visitorRegion = sanitizeParam(input.payload.visitorRegion, 80);
-    const visitorCity = sanitizeParam(input.payload.visitorCity, 120);
-
-    const update: Record<string, unknown> = {
-      ctaClicked: true,
-      ctaClickCount: increment(1),
-      lastCtaClickedAt: timestamp,
-      lastCtaType: input.kind,
-      lastCtaLabel: sanitizeParam(input.payload.buttonLabel || input.payload.clickText, 180),
-      lastCtaHref: sanitizeParam(input.destination, 1200),
-      lastActivityAt: timestamp,
-      lastReportActivityAt: timestamp,
-      lastEngagementEventName: sanitizeParam(input.payload.eventName, 80),
-      reportPageViewed: true,
-      lastSeenAt: timestamp,
-      updatedAt: timestamp,
-    };
-
-    if (visitorCountry) {
-      update.visitorCountry = visitorCountry;
-      update.lastVisitorCountry = visitorCountry;
-    }
-    if (visitorRegion) update.lastVisitorRegion = visitorRegion;
-    if (visitorCity) update.lastVisitorCity = visitorCity;
-
-    if (input.kind === "booking") {
-      update.bookingClicked = true;
-      update.bookingClickCount = increment(1);
-      update.lastBookingClickedAt = timestamp;
-    } else if (input.kind === "email") {
-      update.emailClicked = true;
-      update.emailClickCount = increment(1);
-      update.lastEmailClickedAt = timestamp;
-    } else if (input.kind === "linkedin") {
-      update.linkedinClicked = true;
-      update.linkedinClickCount = increment(1);
-      update.lastLinkedinClickedAt = timestamp;
-    }
-
-    if (nextScore > currentScore) {
-      update.intentScore = nextScore;
-      update.intentLabel = intentLabelForScore(nextScore);
-    } else if (!current.intentLabel && currentScore > 0) {
-      update.intentLabel = intentLabelForScore(currentScore);
-    }
-
-    transaction.set(reportRef, update, { merge: true });
-    return { skipped: false, token, kind: input.kind };
-  });
 }
 
 function isAnalyticsDebugEnabled() {
@@ -312,6 +228,57 @@ async function sendGa4RedirectEvent(payload: Record<string, unknown>) {
     ok: response.ok,
     status: response.status,
   };
+}
+
+
+function intentLabelFromScore(score: number): "low" | "medium" | "high" | "hot" {
+  if (score >= 90) return "hot";
+  if (score >= 70) return "high";
+  if (score >= 45) return "medium";
+  return "low";
+}
+
+async function updateRedirectLightweightSummary(payload: Record<string, unknown>, kind: RedirectKind) {
+  const token = normalizeToken(payload.token || "");
+  if (!token || token === "unknown") return { skipped: true, reason: "missing_report_token" };
+
+  const FieldValue = admin.firestore.FieldValue;
+  const now = FieldValue.serverTimestamp();
+  const score = Number(payload.intentScore || (kind === "booking" ? 95 : 85));
+  const update: Record<string, unknown> = {
+    updatedAt: now,
+    lastActivityAt: now,
+    ctaClicked: true,
+    ctaClickCount: FieldValue.increment(1),
+    lastCtaClickedAt: now,
+    lastCtaType: kind,
+    lastActivityEvent: String(payload.eventName || "secure_report_cta_click").slice(0, 100),
+    lastIntentScore: score,
+    lastIntentLabel: intentLabelFromScore(score),
+  };
+
+  const country = sanitizeParam(payload.visitorCountry || payload.visitor_country, 16);
+  if (country) {
+    update.visitorCountry = country;
+    update.lastVisitorCountry = country;
+  }
+
+  const region = sanitizeParam(payload.visitorRegion || payload.visitor_region, 80);
+  if (region) update.lastVisitorRegion = region;
+
+  const city = sanitizeParam(payload.visitorCity || payload.visitor_city, 120);
+  if (city) update.lastVisitorCity = city;
+
+  if (kind === "booking") update.bookingClicked = true;
+  if (kind === "whatsapp") update.whatsappClicked = true;
+  if (kind === "email") {
+    update.emailClicked = true;
+    update.gmailClicked = true;
+  }
+  if (kind === "linkedin") update.linkedinClicked = true;
+
+  await adminDb.collection("audit_reports").doc(token).set(update, { merge: true });
+  return { ok: true };
 }
 
 
@@ -408,6 +375,7 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
   const geo = getRequestGeo(request);
 
   const payload = {
+    token,
     eventName,
     eventId: `${reportId}_${eventName}_${Date.now()}`,
     pageTitle: "Private Tracking Review",
@@ -438,18 +406,11 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
     clickLocation: eventSection,
   };
 
+  const summary = await updateRedirectLightweightSummary(payload, kind).catch((error) => ({
+    ok: false,
+    error: String(error?.message || error || "summary_update_failed").slice(0, 300),
+  }));
   const ga4 = await sendGa4RedirectEvent(payload);
-
-  try {
-    await updateRedirectEngagementSummary({
-      token,
-      kind,
-      payload,
-      destination,
-    });
-  } catch (summaryError) {
-    console.error("Report redirect engagement summary update failed:", summaryError);
-  }
 
   if (isAnalyticsDebugEnabled()) {
     console.info("[trackflow-analytics] report_redirect", {
@@ -457,6 +418,7 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
       reportId,
       domainSlug,
       destination,
+      summary,
       ga4,
     });
   }

@@ -447,218 +447,186 @@ function toGa4Boolean(value: unknown): boolean | undefined {
 }
 
 
-function toBoolean(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  const text = String(value ?? "").trim().toLowerCase();
-  return ["1", "true", "yes", "y"].includes(text);
-}
-
-function clampNumber(value: unknown, min = 0, max = 100, fallback = 0): number {
+function clampNumber(value: unknown, min: number, max: number): number {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return fallback;
-  return Math.min(max, Math.max(min, numeric));
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(min, Math.min(max, numeric));
 }
 
-function intentLabelForScore(score: number): string {
-  if (score >= 85) return "Hot";
-  if (score >= 65) return "High";
-  if (score >= 35) return "Medium";
-  if (score > 0) return "Low";
-  return "Not tracked";
+function intentLabelFromScore(score: number): "low" | "medium" | "high" | "hot" {
+  if (score >= 90) return "hot";
+  if (score >= 70) return "high";
+  if (score >= 45) return "medium";
+  return "low";
 }
 
-function isReportViewEvent(eventName: string): boolean {
+function scoreForSummaryEvent(eventName: string): number {
   const name = sanitizeEventName(eventName);
-  if (name.includes("pdf_")) return false;
-  if (name.includes("video_")) return false;
-  if (name.includes("assistant_")) return false;
-  return (
-    name === "secure_report_served" ||
-    name === "secure_report_viewed" ||
-    name === "secure_report_view" ||
-    name.includes("report_view") ||
-    name.includes("page_view")
-  );
+  if (name.includes("booking")) return 95;
+  if (name.includes("whatsapp") || name.includes("email") || name.includes("linkedin") || name.includes("cta_click")) return 85;
+  if (name.includes("assistant_message_sent")) return 80;
+  if (name.includes("video_watched_60")) return 80;
+  if (name.includes("pdf_download_success") || name.includes("pdf_downloaded")) return 75;
+  if (name.includes("assistant_open")) return 55;
+  if (name.includes("pdf_open")) return 45;
+  return 10;
 }
 
-function isPdfDownloadSuccessEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return name.includes("pdf_download_success") || name === "secure_report_pdf_downloaded";
-}
-
-function isPdfDownloadClickEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return name.includes("pdf_download") && !isPdfDownloadSuccessEvent(name);
-}
-
-function isPdfOpenEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return name.includes("pdf_open") || name.includes("pdf_preview");
-}
-
-function isCtaEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return (
-    name.includes("booking") ||
-    name.includes("email_click") ||
-    name.includes("linkedin_click") ||
-    name.includes("cta_click")
-  );
-}
-
-function isChatOpenEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return name.includes("assistant_open") || name.includes("assistant_question_click");
-}
-
-function isChatMessageEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return name.includes("assistant_message_sent") || name.includes("chat_message_sent");
-}
-
-function isHeartbeatEvent(eventName: string): boolean {
-  const name = sanitizeEventName(eventName);
-  return name === "secure_report_duration_heartbeat" || name === "secure_report_active_heartbeat";
-}
-
-function activeDeltaSecondsFromPayload(payload: Record<string, unknown>): number {
-  const seconds = clampNumber(
-    payload.timeOnReportDeltaSeconds ?? payload.time_on_report_delta_seconds,
-    0,
-    120,
-    0,
-  );
-  if (seconds > 0) return Math.round(seconds);
-
-  const milliseconds = clampNumber(
-    payload.timeOnReportDeltaMilliseconds ?? payload.time_on_report_delta_milliseconds,
-    0,
-    120000,
-    0,
-  );
-
-  return milliseconds > 0 ? Math.round(milliseconds / 1000) : 0;
-}
-
-function safeLastCtaType(payload: Record<string, unknown>, eventName: string): string {
-  const explicit = sanitizeParam(payload.ctaType || payload.cta_type || payload.clickLocation, 80).toLowerCase();
-  if (explicit) return explicit;
-
+function ctaTypeFromEventName(eventName: string): "booking" | "whatsapp" | "email" | "linkedin" | "cta" {
   const name = sanitizeEventName(eventName);
   if (name.includes("booking")) return "booking";
-  if (name.includes("email")) return "email";
+  if (name.includes("whatsapp")) return "whatsapp";
+  if (name.includes("email") || name.includes("gmail")) return "email";
   if (name.includes("linkedin")) return "linkedin";
   return "cta";
 }
 
-async function updateReportEngagementSummary(payload: Record<string, unknown>) {
-  const token = normalizeToken(payload.token || payload.reportToken || payload.report_token);
-  if (!token || token === "unknown") return { skipped: true, reason: "missing_token" };
+async function updateSecureReportLightweightSummary(payload: Record<string, unknown>) {
+  const token = normalizeToken(payload.token || payload.reportToken || payload.report_token || "");
+  if (!token || token === "unknown") return { skipped: true, reason: "missing_report_token" };
 
-  const eventName = sanitizeEventName(payload.eventName);
-  const reportRef = adminDb.collection("audit_reports").doc(token);
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  const increment = admin.firestore.FieldValue.increment;
-  const eventScore = clampNumber(payload.intentScore ?? payload.intent_score, 0, 100, 0);
-  const sessionStarted = toBoolean(payload.sessionStarted || payload.session_started);
-  const activeDeltaSeconds = isHeartbeatEvent(eventName) ? activeDeltaSecondsFromPayload(payload) : 0;
-  const ctaType = safeLastCtaType(payload, eventName);
+  const eventName = sanitizeEventName(payload.eventName || payload.event_name || "secure_report_event");
+  const FieldValue = admin.firestore.FieldValue;
+  const now = FieldValue.serverTimestamp();
+  const update: Record<string, unknown> = {
+    updatedAt: now,
+  };
+  let shouldWrite = false;
+  let touchActivity = false;
 
-  return adminDb.runTransaction(async (transaction) => {
-    const snap = await transaction.get(reportRef);
-    if (!snap.exists) return { skipped: true, reason: "report_not_found" };
+  const country = sanitizeParam(payload.visitorCountry || payload.visitor_country, 16);
+  if (country) {
+    update.visitorCountry = country;
+    update.lastVisitorCountry = country;
+  }
 
-    const current = snap.data() || {};
-    const currentScore = clampNumber(current.intentScore, 0, 100, 0);
-    const nextScore = Math.max(currentScore, eventScore);
-    const update: Record<string, unknown> = {
-      lastActivityAt: timestamp,
-      lastReportActivityAt: timestamp,
-      lastEngagementEventName: eventName,
-      updatedAt: timestamp,
-    };
+  const region = sanitizeParam(payload.visitorRegion || payload.visitor_region, 80);
+  if (region) update.lastVisitorRegion = region;
 
-    const visitorCountry = sanitizeParam(payload.visitorCountry || payload.visitor_country, 16).toUpperCase();
-    const visitorRegion = sanitizeParam(payload.visitorRegion || payload.visitor_region, 80);
-    const visitorCity = sanitizeParam(payload.visitorCity || payload.visitor_city, 120);
-    const reportSessionId = sanitizeParam(payload.reportSessionId || payload.report_session_id, 100);
+  const city = sanitizeParam(payload.visitorCity || payload.visitor_city, 120);
+  if (city) update.lastVisitorCity = city;
 
-    if (visitorCountry) {
-      update.visitorCountry = visitorCountry;
-      update.lastVisitorCountry = visitorCountry;
+  if (eventName === "secure_report_view") {
+    update.reportPageViewed = true;
+    update.lastViewedAt = now;
+    update.viewedAt = now;
+    update.viewCount = FieldValue.increment(1);
+    update.viewedCount = FieldValue.increment(1);
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  if (eventName.includes("duration")) {
+    const deltaSeconds = clampNumber(
+      payload.timeOnReportDeltaSeconds ?? payload.time_on_report_delta_seconds,
+      0,
+      600,
+    );
+    const totalSeconds = clampNumber(
+      payload.timeOnReportSeconds ?? payload.time_on_report_seconds,
+      0,
+      60 * 60 * 6,
+    );
+
+    // Keep Firestore light: ignore tiny final pings and only add useful active-time deltas.
+    if (deltaSeconds >= 15 || totalSeconds >= 60) {
+      update.lastSeenAt = now;
+      update.estimatedActiveSeconds = FieldValue.increment(Math.max(0, Math.round(deltaSeconds)));
+      update.lastReportedActiveSeconds = Math.round(totalSeconds);
+      shouldWrite = true;
+      touchActivity = true;
     }
-    if (visitorRegion) update.lastVisitorRegion = visitorRegion;
-    if (visitorCity) update.lastVisitorCity = visitorCity;
-    if (reportSessionId) update.lastReportSessionId = reportSessionId;
+  }
 
-    if (isReportViewEvent(eventName) || sessionStarted) {
-      update.reportPageViewed = true;
-      update.lastViewedAt = timestamp;
-      update.lastSeenAt = timestamp;
-      if (!current.firstViewedAt) update.firstViewedAt = timestamp;
-      if (sessionStarted) {
-        update.viewCount = increment(1);
-        update.viewedCount = increment(1);
-        update.sessionCount = increment(1);
-      }
+  if (eventName.includes("pdf_open")) {
+    update.pdfOpened = true;
+    update.lastPdfOpenedAt = now;
+    update.pdfOpenCount = FieldValue.increment(1);
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  if (eventName.includes("pdf_download_success") || eventName.includes("pdf_downloaded")) {
+    update.pdfDownloaded = true;
+    update.lastDownloadedAt = now;
+    update.lastPdfDownloadedAt = now;
+    update.downloadCount = FieldValue.increment(1);
+    update.pdfDownloadCount = FieldValue.increment(1);
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  if (eventName.includes("video_play_click") || eventName.includes("evidence_video_play_click")) {
+    update.videoPlayClicked = true;
+    update.videoPlayClickCount = FieldValue.increment(1);
+    update.lastVideoPlayClickedAt = now;
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  if (eventName.includes("video_watched_60")) {
+    update.videoWatched = true;
+    update.videoWatchedThreshold = 60;
+    update.lastVideoWatchedAt = now;
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  if (eventName.includes("assistant_open")) {
+    update.chatboxOpened = true;
+    update.chatboxOpenCount = FieldValue.increment(1);
+    update.lastChatboxOpenedAt = now;
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  if (eventName.includes("assistant_message_sent")) {
+    update.chatQuestionAsked = true;
+    update.chatQuestionCount = FieldValue.increment(1);
+    update.lastChatQuestionAt = now;
+    shouldWrite = true;
+    touchActivity = true;
+  }
+
+  const isCtaEvent =
+    eventName.includes("booking") ||
+    eventName.includes("whatsapp") ||
+    eventName.includes("email") ||
+    eventName.includes("gmail") ||
+    eventName.includes("linkedin") ||
+    eventName === "secure_report_cta_click";
+
+  if (isCtaEvent) {
+    const ctaType = ctaTypeFromEventName(eventName);
+    update.ctaClicked = true;
+    update.ctaClickCount = FieldValue.increment(1);
+    update.lastCtaClickedAt = now;
+    update.lastCtaType = ctaType;
+
+    if (ctaType === "booking") update.bookingClicked = true;
+    if (ctaType === "whatsapp") update.whatsappClicked = true;
+    if (ctaType === "email") {
+      update.emailClicked = true;
+      update.gmailClicked = true;
     }
+    if (ctaType === "linkedin") update.linkedinClicked = true;
 
-    if (activeDeltaSeconds > 0) {
-      update.lastSeenAt = timestamp;
-      update.estimatedActiveSeconds = increment(activeDeltaSeconds);
-    }
+    shouldWrite = true;
+    touchActivity = true;
+  }
 
-    if (isPdfDownloadClickEvent(eventName)) {
-      update.pdfDownloadClicked = true;
-      update.lastPdfDownloadClickedAt = timestamp;
-    }
+  if (!shouldWrite) return { skipped: true, reason: "non_summary_event" };
 
-    if (isPdfDownloadSuccessEvent(eventName)) {
-      update.pdfDownloaded = true;
-      update.lastDownloadedAt = timestamp;
-      update.lastPdfDownloadedAt = timestamp;
-      update.downloadCount = increment(1);
-      update.pdfDownloadCount = increment(1);
-    }
+  if (touchActivity) {
+    const score = scoreForSummaryEvent(eventName);
+    update.lastActivityAt = now;
+    update.lastActivityEvent = eventName;
+    update.lastIntentScore = score;
+    update.lastIntentLabel = intentLabelFromScore(score);
+  }
 
-    if (isPdfOpenEvent(eventName)) {
-      update.pdfOpened = true;
-      update.lastPdfOpenedAt = timestamp;
-      update.pdfOpenCount = increment(1);
-    }
-
-    if (isCtaEvent(eventName)) {
-      update.ctaClicked = true;
-      update.lastCtaClickedAt = timestamp;
-      update.ctaClickCount = increment(1);
-      update.lastCtaType = ctaType;
-      update.lastCtaLabel = sanitizeParam(payload.buttonLabel || payload.button_label || payload.clickText || payload.click_text, 180);
-      update.lastCtaHref = sanitizeParam(payload.clickHref || payload.click_href, 1200);
-    }
-
-    if (isChatOpenEvent(eventName)) {
-      update.chatOpened = true;
-      update.lastChatOpenedAt = timestamp;
-      update.chatOpenCount = increment(1);
-    }
-
-    if (isChatMessageEvent(eventName)) {
-      update.chatEngaged = true;
-      update.lastChatQuestionAt = timestamp;
-      // chatQuestionCount is incremented in /api/trackflow/report-chat after a real question is accepted,
-      // so analytics click/message events do not double-count the same visitor question.
-    }
-
-    if (nextScore > currentScore) {
-      update.intentScore = nextScore;
-      update.intentLabel = intentLabelForScore(nextScore);
-    } else if (!current.intentLabel && currentScore > 0) {
-      update.intentLabel = intentLabelForScore(currentScore);
-    }
-
-    transaction.set(reportRef, update, { merge: true });
-    return { skipped: false, token, eventName };
-  });
+  await adminDb.collection("audit_reports").doc(token).set(update, { merge: true });
+  return { ok: true };
 }
 
 function isAnalyticsDebugEnabled(): boolean {
@@ -854,24 +822,23 @@ export async function POST(request: NextRequest) {
         ? (raw as Record<string, unknown>)
         : {};
     const payload = normalizePayload(input, request);
+    const summary = await updateSecureReportLightweightSummary(payload).catch((error) => ({
+      ok: false,
+      error: String(error?.message || error || "summary_update_failed").slice(0, 300),
+    }));
     const ga4 = await sendGa4SecureReportEvent(payload);
-
-    try {
-      await updateReportEngagementSummary(payload);
-    } catch (summaryError) {
-      console.error("Report engagement summary update failed:", summaryError);
-    }
 
     if (isAnalyticsDebugEnabled()) {
       console.info("[trackflow-analytics] report_event_post", {
         eventName: payload.eventName,
         reportId: payload.reportId,
         domainSlug: payload.domainSlug,
+        summary,
         ga4,
       });
     }
 
-    return NextResponse.json({ success: true, ga4 });
+    return NextResponse.json({ success: true, ga4, summary });
   } catch (error) {
     console.error("Report event forward failed:", error);
     return NextResponse.json(
@@ -889,19 +856,18 @@ export async function GET(request: NextRequest) {
     });
 
     const payload = normalizePayload(queryPayload, request);
+    const summary = await updateSecureReportLightweightSummary(payload).catch((error) => ({
+      ok: false,
+      error: String(error?.message || error || "summary_update_failed").slice(0, 300),
+    }));
     const ga4 = await sendGa4SecureReportEvent(payload);
-
-    try {
-      await updateReportEngagementSummary(payload);
-    } catch (summaryError) {
-      console.error("Report engagement pixel summary update failed:", summaryError);
-    }
 
     if (isAnalyticsDebugEnabled()) {
       console.info("[trackflow-analytics] report_event_get", {
         eventName: payload.eventName,
         reportId: payload.reportId,
         domainSlug: payload.domainSlug,
+        summary,
         ga4,
       });
     }
