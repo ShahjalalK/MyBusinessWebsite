@@ -472,7 +472,7 @@ export type BulkSecureReportCleanupRow = {
   [key: string]: any;
 };
 
-export type SecureReportFilter = "all" | "active" | "expired" | "viewed" | "no_view" | "cleaned" | "test";
+export type SecureReportFilter = "all" | "active" | "expired" | "viewed" | "no_view" | "search_email" | "linkedin_manual";
 export type SecureReportContactStatus =
   | "not_contacted"
   | "email_sent"
@@ -494,6 +494,16 @@ export type SecureReportRow = {
   companyName?: string;
   email?: string;
   source?: string;
+  sourceType?: string;
+  outreachChannel?: string;
+  leadSource?: string;
+  auditSource?: string;
+  sourceContext?: string;
+  sourceOrigin?: string;
+  sourceRole?: string;
+  keepUnderSheetAudit?: boolean;
+  sourceGroup?: "search_email" | "linkedin_manual" | "other" | string;
+  sourceLabel?: string;
   channel?: "email" | "linkedin" | "manual" | "unknown";
   createdAt?: string;
   updatedAt?: string;

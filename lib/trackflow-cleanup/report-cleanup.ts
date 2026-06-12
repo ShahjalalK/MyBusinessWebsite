@@ -1350,11 +1350,111 @@ function boolFromAny(value: any): boolean {
 }
 
 function normalizeReportChannel(data: AnyRecord): "email" | "linkedin" | "manual" | "unknown" {
-  const sourceText = firstCleanString(data.channel, data.outreachChannel, data.outreach_channel, data.source, data.audit_source).toLowerCase();
+  const sourceText = firstCleanString(
+    data.channel,
+    data.outreachChannel,
+    data.outreach_channel,
+    data.source,
+    data.audit_source,
+    data.leadSource,
+    data.lead_source,
+    data.sourceType,
+    data.source_type,
+    data.sourceOrigin,
+    data.source_origin,
+    data.sourceRole,
+    data.source_role,
+  ).toLowerCase();
   if (sourceText.includes("linkedin")) return "linkedin";
-  if (sourceText.includes("email") || sourceText.includes("brevo") || sourceText.includes("cold")) return "email";
+  if (sourceText.includes("email") || sourceText.includes("brevo") || sourceText.includes("cold") || sourceText.includes("search") || sourceText.includes("sheet")) return "email";
   if (sourceText.includes("manual")) return "manual";
   return "unknown";
+}
+
+function sourceTextFromReportData(data: AnyRecord): string {
+  return [
+    data.sourceType,
+    data.source_type,
+    data.outreachChannel,
+    data.outreach_channel,
+    data.leadSource,
+    data.lead_source,
+    data.auditSource,
+    data.audit_source,
+    data.sourceContext,
+    data.source_context,
+    data.sourceOrigin,
+    data.source_origin,
+    data.sourceRole,
+    data.source_role,
+    data.source,
+    data.channel,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function normalizeSecureReportSourceGroup(data: AnyRecord, channel: "email" | "linkedin" | "manual" | "unknown"): "search_email" | "linkedin_manual" | "other" {
+  const text = sourceTextFromReportData(data);
+  const source = firstCleanString(data.source, data.outreachSource, data.outreach_source).toLowerCase();
+  const sourceType = firstCleanString(data.sourceType, data.source_type).toLowerCase();
+  const outreachChannel = firstCleanString(data.outreachChannel, data.outreach_channel).toLowerCase();
+  const leadSource = firstCleanString(data.leadSource, data.lead_source).toLowerCase();
+  const auditSource = firstCleanString(data.auditSource, data.audit_source).toLowerCase();
+  const sourceOrigin = firstCleanString(data.sourceOrigin, data.source_origin).toLowerCase();
+  const sourceRole = firstCleanString(data.sourceRole, data.source_role).toLowerCase();
+
+  if (
+    channel === "linkedin" ||
+    outreachChannel.includes("linkedin") ||
+    leadSource.includes("linkedin") ||
+    auditSource.includes("linkedin") ||
+    sourceType.includes("linkedin")
+  ) {
+    return "linkedin_manual";
+  }
+
+  // Be careful with the word "manual": an email may be manually verified but still come from Python/Search.
+  // Only classify as manual when the source/audit fields clearly describe the report source itself.
+  if (
+    channel === "manual" ||
+    sourceType === "manual" ||
+    sourceType.includes("manual_audit") ||
+    leadSource.includes("manual_audit") ||
+    auditSource.includes("manual_audit") ||
+    source.includes("manual_report") ||
+    sourceRole.includes("manual_report")
+  ) {
+    return "linkedin_manual";
+  }
+
+  if (
+    channel === "email" ||
+    text.includes("python_search") ||
+    text.includes("google_search") ||
+    text.includes("search") ||
+    text.includes("sheet") ||
+    sourceOrigin.includes("sheet") ||
+    sourceRole.includes("sheet") ||
+    data.keepUnderSheetAudit === true ||
+    outreachChannel.includes("email") ||
+    text.includes("brevo") ||
+    text.includes("cold")
+  ) {
+    return "search_email";
+  }
+
+  return "other";
+}
+
+function secureReportSourceLabelFromGroup(group: string, channel: "email" | "linkedin" | "manual" | "unknown"): string {
+  if (group === "search_email") return "Search / Email";
+  if (group === "linkedin_manual") return channel === "linkedin" ? "LinkedIn report" : "Manual report";
+  if (channel === "email") return "Email report";
+  if (channel === "linkedin") return "LinkedIn report";
+  if (channel === "manual") return "Manual report";
+  return "Report";
 }
 
 function normalizeContactStatusLabel(status: string): string {
@@ -1454,11 +1554,45 @@ async function enrichSecureReportListRowWithLead(row: AnyRecord): Promise<AnyRec
     }
 
     const lead: AnyRecord = { ...asRecord(leadSnap.data()), id: leadSnap.id };
-    const leadSummary = buildContactSummaryFromRecord(lead, row.channel || "unknown");
+    const sourceData: AnyRecord = {
+      ...lead,
+      ...row,
+      source: row.source || lead.source,
+      sourceType: row.sourceType || lead.sourceType || lead.source_type,
+      source_type: row.sourceType || lead.sourceType || lead.source_type,
+      outreachChannel: row.outreachChannel || lead.outreachChannel || lead.outreach_channel,
+      outreach_channel: row.outreachChannel || lead.outreachChannel || lead.outreach_channel,
+      leadSource: row.leadSource || lead.leadSource || lead.lead_source,
+      lead_source: row.leadSource || lead.leadSource || lead.lead_source,
+      auditSource: row.auditSource || lead.auditSource || lead.audit_source,
+      audit_source: row.auditSource || lead.auditSource || lead.audit_source,
+      sourceContext: row.sourceContext || lead.sourceContext || lead.source_context,
+      source_context: row.sourceContext || lead.sourceContext || lead.source_context,
+      sourceOrigin: row.sourceOrigin || lead.sourceOrigin || lead.source_origin,
+      source_origin: row.sourceOrigin || lead.sourceOrigin || lead.source_origin,
+      sourceRole: row.sourceRole || lead.sourceRole || lead.source_role,
+      source_role: row.sourceRole || lead.sourceRole || lead.source_role,
+      keepUnderSheetAudit: row.keepUnderSheetAudit === true || lead.keepUnderSheetAudit === true,
+    };
+    const channel = row.channel && row.channel !== "unknown" ? row.channel : normalizeReportChannel(sourceData);
+    const sourceGroup = row.sourceGroup && row.sourceGroup !== "other" ? row.sourceGroup : normalizeSecureReportSourceGroup(sourceData, channel);
+    const leadSummary = buildContactSummaryFromRecord(lead, channel || "unknown");
 
     return {
       ...row,
       ...leadSummary,
+      channel,
+      source: row.source || firstCleanString(lead.source, lead.audit_source, lead.outreachSource, lead.outreach_source),
+      sourceType: row.sourceType || firstCleanString(lead.sourceType, lead.source_type),
+      outreachChannel: row.outreachChannel || firstCleanString(lead.outreachChannel, lead.outreach_channel),
+      leadSource: row.leadSource || firstCleanString(lead.leadSource, lead.lead_source),
+      auditSource: row.auditSource || firstCleanString(lead.auditSource, lead.audit_source),
+      sourceContext: row.sourceContext || firstCleanString(lead.sourceContext, lead.source_context),
+      sourceOrigin: row.sourceOrigin || firstCleanString(lead.sourceOrigin, lead.source_origin),
+      sourceRole: row.sourceRole || firstCleanString(lead.sourceRole, lead.source_role),
+      keepUnderSheetAudit: row.keepUnderSheetAudit === true || lead.keepUnderSheetAudit === true,
+      sourceGroup,
+      sourceLabel: secureReportSourceLabelFromGroup(sourceGroup, channel),
       linkedLeadFound: true,
       leadId: leadSnap.id,
       email: row.email || firstCleanString(lead.emailLower, lead.email_lower, lead.email),
@@ -1481,6 +1615,8 @@ function buildSecureReportListRow(doc: any): AnyRecord {
   const domainSlug = normalizeSlug(firstCleanString(data.domainSlug, data.domain_slug, domain, data.companyName, data.company_name, "website"));
   const reportUrl = buildPublicReportUrl(token, domainSlug, firstCleanString(data.reportUrl, data.report_url));
   const channel = normalizeReportChannel(data);
+  const sourceGroup = normalizeSecureReportSourceGroup(data, channel);
+  const sourceLabel = secureReportSourceLabelFromGroup(sourceGroup, channel);
   const contactSummary = buildContactSummaryFromRecord(data, channel);
   const viewedCount = Number(data.reportViewCount || data.report_view_count || data.pageViewCount || data.viewCount || data.viewedCount || 0) || 0;
   const pdfOpenCount = Number(data.pdfOpenCount || data.pdf_open_count || 0) || 0;
@@ -1527,6 +1663,16 @@ function buildSecureReportListRow(doc: any): AnyRecord {
     companyName: firstCleanString(data.companyName, data.company_name, data.businessName, data.business_name),
     email: firstCleanString(data.emailLower, data.email_lower, data.email, data.finalEmail, data.final_email),
     source: firstCleanString(data.source, data.audit_source, data.outreachSource, data.outreach_source),
+    sourceType: firstCleanString(data.sourceType, data.source_type),
+    outreachChannel: firstCleanString(data.outreachChannel, data.outreach_channel),
+    leadSource: firstCleanString(data.leadSource, data.lead_source),
+    auditSource: firstCleanString(data.auditSource, data.audit_source),
+    sourceContext: firstCleanString(data.sourceContext, data.source_context),
+    sourceOrigin: firstCleanString(data.sourceOrigin, data.source_origin),
+    sourceRole: firstCleanString(data.sourceRole, data.source_role),
+    keepUnderSheetAudit: data.keepUnderSheetAudit === true,
+    sourceGroup,
+    sourceLabel,
     channel,
     ...contactSummary,
     createdAt: toIso(data.createdAt || data.created_at),
@@ -1600,6 +1746,13 @@ function secureReportMatchesListSearch(row: AnyRecord, search: string): boolean 
     row.token,
     row.reportUrl,
     row.source,
+    row.sourceType,
+    row.outreachChannel,
+    row.leadSource,
+    row.auditSource,
+    row.sourceContext,
+    row.sourceGroup,
+    row.sourceLabel,
     row.cleanupStatus,
     row.contactStatus,
     row.contactStatusLabel,
@@ -1654,6 +1807,10 @@ function secureReportMatchesListFilter(row: AnyRecord, filter: string): boolean 
       !isSecureReportCleaned(row)
     );
   }
+  if (filter === "search_email") return row.sourceGroup === "search_email";
+  if (filter === "linkedin_manual") return row.sourceGroup === "linkedin_manual";
+
+  // Keep older direct API filter values backward-compatible even though the dashboard no longer shows them.
   if (filter === "cleaned") return isSecureReportCleaned(row);
   if (filter === "test") {
     const haystack = [row.source, row.companyName, row.domain, row.email, row.cleanupStatus].join(" ").toLowerCase();

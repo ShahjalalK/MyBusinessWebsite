@@ -74,11 +74,11 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
 const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = [
   { id: "all", label: "All reports" },
   { id: "active", label: "Active" },
-  { id: "expired", label: "Expired" },
   { id: "viewed", label: "Viewed" },
   { id: "no_view", label: "No view" },
-  { id: "cleaned", label: "Cleaned" },
-  { id: "test", label: "Test" },
+  { id: "expired", label: "Expired" },
+  { id: "search_email", label: "Search / Email leads" },
+  { id: "linkedin_manual", label: "LinkedIn / Manual reports" },
 ];
 
 function formatSourceLabel(sourceKind?: string, source?: string) {
@@ -173,6 +173,82 @@ function secureReportChannelLabel(channel?: SecureReportRow["channel"]): string 
   if (channel === "email") return "Email";
   if (channel === "manual") return "Manual";
   return "Report";
+}
+
+function secureReportSourceGroup(report: SecureReportRow): "search_email" | "linkedin_manual" | "other" {
+  const explicit = String(report.sourceGroup || "").toLowerCase();
+  if (explicit === "search_email" || explicit === "search-email") return "search_email";
+  if (explicit === "linkedin_manual" || explicit === "linkedin-manual") return "linkedin_manual";
+
+  const source = String(report.source || "").toLowerCase();
+  const sourceType = String(report.sourceType || "").toLowerCase();
+  const outreachChannel = String(report.outreachChannel || "").toLowerCase();
+  const leadSource = String(report.leadSource || "").toLowerCase();
+  const auditSource = String(report.auditSource || "").toLowerCase();
+  const sourceContext = String(report.sourceContext || "").toLowerCase();
+  const sourceOrigin = String(report.sourceOrigin || "").toLowerCase();
+  const sourceRole = String(report.sourceRole || "").toLowerCase();
+  const sourceHaystack = [sourceType, outreachChannel, leadSource, auditSource, sourceContext, sourceOrigin, sourceRole, source].join(" ");
+
+  if (
+    report.channel === "linkedin" ||
+    outreachChannel.includes("linkedin") ||
+    leadSource.includes("linkedin") ||
+    auditSource.includes("linkedin") ||
+    sourceType.includes("linkedin")
+  ) {
+    return "linkedin_manual";
+  }
+
+  if (
+    report.channel === "manual" ||
+    sourceType === "manual" ||
+    sourceType.includes("manual_audit") ||
+    leadSource.includes("manual_audit") ||
+    auditSource.includes("manual_audit") ||
+    source.includes("manual_report") ||
+    sourceRole.includes("manual_report")
+  ) {
+    return "linkedin_manual";
+  }
+
+  if (
+    report.channel === "email" ||
+    sourceHaystack.includes("python_search") ||
+    sourceHaystack.includes("google_search") ||
+    sourceHaystack.includes("search") ||
+    sourceHaystack.includes("sheet") ||
+    report.keepUnderSheetAudit === true ||
+    outreachChannel.includes("email") ||
+    sourceHaystack.includes("brevo") ||
+    sourceHaystack.includes("cold")
+  ) {
+    return "search_email";
+  }
+
+  return "other";
+}
+
+function secureReportSourceLabel(report: SecureReportRow): string {
+  if (report.sourceLabel) return report.sourceLabel;
+  const group = secureReportSourceGroup(report);
+  if (group === "search_email") return "Search / Email";
+  if (group === "linkedin_manual") return report.channel === "linkedin" ? "LinkedIn report" : "Manual report";
+  return secureReportChannelLabel(report.channel);
+}
+
+function secureReportSourceTone(report: SecureReportRow): string {
+  const group = secureReportSourceGroup(report);
+  if (group === "search_email") return "bg-blue-50 text-blue-700 border-blue-100";
+  if (group === "linkedin_manual") return "bg-violet-50 text-violet-700 border-violet-100";
+  return "bg-gray-50 text-gray-600 border-gray-100";
+}
+
+function secureReportSourceNote(report: SecureReportRow): string {
+  const group = secureReportSourceGroup(report);
+  if (group === "search_email") return "Python/search audit sent by email";
+  if (group === "linkedin_manual") return "Secure report URL shared manually/LinkedIn";
+  return report.source || "Report source";
 }
 
 function isSecureReportCleaned(report: SecureReportRow): boolean {
@@ -320,17 +396,39 @@ function secureReportActivityMeta(report: SecureReportRow): string {
   return details.length ? details.join(" · ") : "No activity date";
 }
 
+function secureReportActivityPills(report: SecureReportRow): Array<{ label: string; active: boolean; tone: string }> {
+  return [
+    {
+      label: report.videoWatched ? `Video ${report.videoWatchedThreshold || 60}%` : report.videoPlayClicked ? "Video clicked" : "Video",
+      active: Boolean(report.videoWatched || report.videoPlayClicked),
+      tone: report.videoWatched ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-blue-50 text-blue-700 border-blue-100",
+    },
+    {
+      label: report.pdfDownloaded ? "PDF downloaded" : report.pdfOpened ? "PDF opened" : "PDF",
+      active: Boolean(report.pdfDownloaded || report.pdfOpened),
+      tone: report.pdfDownloaded ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-blue-50 text-blue-700 border-blue-100",
+    },
+    {
+      label: report.chatQuestionAsked ? "Chat question" : report.chatboxOpened ? "Chatbox opened" : "Chat",
+      active: Boolean(report.chatQuestionAsked || report.chatboxOpened),
+      tone: report.chatQuestionAsked ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-blue-50 text-blue-700 border-blue-100",
+    },
+    {
+      label: report.ctaClicked || report.lastCtaType ? `${formatCtaType(report.lastCtaType)} click` : "CTA",
+      active: Boolean(report.ctaClicked || report.lastCtaType),
+      tone: report.bookingClicked || report.lastCtaType === "booking" ? "bg-red-50 text-red-700 border-red-100" : "bg-emerald-50 text-emerald-700 border-emerald-100",
+    },
+  ];
+}
+
 function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReportFilter): boolean {
   if (filter === "all") return true;
   if (filter === "active") return !isSecureReportCleaned(report) && !isSecureReportExpired(report);
   if (filter === "expired") return isSecureReportExpired(report);
   if (filter === "viewed") return Boolean(report.reportPageViewed || report.pdfOpened || report.pdfDownloaded || report.videoPlayClicked || report.videoWatched || report.chatboxOpened || report.chatQuestionAsked || report.ctaClicked);
   if (filter === "no_view") return !report.reportPageViewed && !report.pdfOpened && !report.pdfDownloaded && !report.videoPlayClicked && !report.videoWatched && !report.chatboxOpened && !report.chatQuestionAsked && !report.ctaClicked && !isSecureReportCleaned(report);
-  if (filter === "cleaned") return isSecureReportCleaned(report);
-  if (filter === "test") {
-    const haystack = [report.source, report.companyName, report.domain, report.email, report.cleanupStatus].join(" ").toLowerCase();
-    return haystack.includes("test") || haystack.includes("demo") || haystack.includes("fake");
-  }
+  if (filter === "search_email") return secureReportSourceGroup(report) === "search_email";
+  if (filter === "linkedin_manual") return secureReportSourceGroup(report) === "linkedin_manual";
   return true;
 }
 
@@ -543,7 +641,7 @@ export default function CleanupPanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3">
             <div className="relative">
               <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -661,9 +759,9 @@ export default function CleanupPanel({
                 return (
                   <div
                     key={report.token}
-                    className={`rounded-2xl border p-4 bg-white grid grid-cols-1 xl:grid-cols-[auto_1.35fr_0.75fr_0.75fr_0.75fr_auto] gap-3 items-center ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100"}`}
+                    className={`rounded-[26px] border p-4 bg-white shadow-sm grid grid-cols-1 2xl:grid-cols-[auto_1.3fr_0.95fr_1.25fr_0.75fr_auto] gap-4 items-center transition ${selected ? "border-blue-200 ring-4 ring-blue-50" : "border-gray-100 hover:border-blue-100 hover:shadow-md"}`}
                   >
-                    <label className="inline-flex items-center justify-start xl:justify-center">
+                    <label className="inline-flex items-center justify-start 2xl:justify-center">
                       <input
                         type="checkbox"
                         checked={bulkSelected}
@@ -672,44 +770,62 @@ export default function CleanupPanel({
                         aria-label={`Select ${report.companyName || report.domain || report.token}`}
                       />
                     </label>
-                    <div className="min-w-0">
+
+                    <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-black text-gray-900 truncate">{report.companyName || report.domain || "Untitled report"}</p>
-                        <span className="px-2 py-1 rounded-full bg-gray-50 border border-gray-100 text-[9px] font-black text-gray-500 uppercase">
-                          {secureReportChannelLabel(report.channel)}
+                        <p className="text-sm font-black text-gray-950 truncate max-w-full">{report.companyName || report.domain || "Untitled report"}</p>
+                        <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportSourceTone(report)}`}>
+                          {secureReportSourceLabel(report)}
                         </span>
-                        <span className={`px-2 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportStatusTone(report)}`}>
+                        <span className={`px-2.5 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportStatusTone(report)}`}>
                           {secureReportStatusLabel(report)}
                         </span>
                       </div>
-                      <p className="text-[11px] font-bold text-gray-400 truncate mt-1">{report.domain || report.domainSlug || report.token}</p>
-                      {report.email && <p className="text-[10px] font-bold text-gray-400 truncate mt-1">{report.email}</p>}
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-black text-gray-500 truncate">{report.domain || report.domainSlug || report.token}</p>
+                        {report.email && <p className="text-[10px] font-bold text-gray-400 truncate">{report.email}</p>}
+                        <p className="text-[10px] font-bold text-gray-400 truncate">{secureReportSourceNote(report)}</p>
+                      </div>
                     </div>
-                    <div>
+
+                    <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</p>
-                      <span className={`inline-flex mt-1 px-2 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportContactTone(report)}`}>
+                      <span className={`inline-flex mt-2 px-2 py-1 rounded-full border text-[9px] font-black uppercase ${secureReportContactTone(report)}`}>
                         {secureReportContactLabel(report)}
                       </span>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1 truncate">{secureReportContactNote(report)}</p>
+                      <p className="text-[10px] font-bold text-gray-400 mt-2 leading-4 line-clamp-2">{secureReportContactNote(report)}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</p>
-                      <p className="text-xs font-bold text-gray-700 mt-1 leading-5">
-                        {secureReportActivitySummary(report)}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
+
+                    <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Activity</p>
                         <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase ${secureReportIntentTone(report)}`}>
-                          Intent: {secureReportIntentLabel(report)}
+                          {secureReportIntentLabel(report)}
                         </span>
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1 leading-4">{secureReportActivityMeta(report)}</p>
+                      <p className="text-xs font-black text-gray-800 mt-2 leading-5">
+                        {secureReportActivitySummary(report)}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {secureReportActivityPills(report).map((pill) => (
+                          <span
+                            key={`${report.token}-${pill.label}`}
+                            className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase ${pill.active ? pill.tone : "bg-white text-gray-300 border-gray-100"}`}
+                          >
+                            {pill.label}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 mt-2 leading-4">{secureReportActivityMeta(report)}</p>
                     </div>
-                    <div>
+
+                    <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Expires</p>
-                      <p className="text-xs font-bold text-gray-700 mt-1">{report.pdfExpiresAt ? formatDate(report.pdfExpiresAt) : "No expiry"}</p>
+                      <p className="text-xs font-bold text-gray-700 mt-2">{report.pdfExpiresAt ? formatDate(report.pdfExpiresAt) : "No expiry"}</p>
                       <p className="text-[10px] font-bold text-gray-400 mt-1">{report.cleanupStatus || "Not cleaned"}</p>
                     </div>
-                    <div className="flex flex-wrap xl:justify-end gap-2">
+
+                    <div className="flex flex-wrap 2xl:justify-end gap-2">
                       {report.reportUrl && normalizeOptionalUrl(report.reportUrl) && (
                         <a
                           href={normalizeOptionalUrl(report.reportUrl) || "#"}
@@ -726,7 +842,7 @@ export default function CleanupPanel({
                           onClick={() => viewSecureReportLead(report)}
                           className="px-3 py-2 rounded-xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase"
                         >
-                          View in Leads
+                          View lead
                         </button>
                       )}
                       <button

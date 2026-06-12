@@ -1,10 +1,501 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v25.10-brevo-smtp-message-id-threading-fix
-Last updated: 2026-06-11
+Version: v26.00-secure-report-lightweight-intent-dashboard-source-filters
+Last updated: 2026-06-12
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, how to safely patch files, how to return ZIP handoffs, and how to communicate with the owner in natural Bengali.
 
 ---
+
+## Latest Critical Update — v26.00 Secure Report Lightweight Intent Tracking, Dashboard List Fields, and Source Filters
+
+This section is now the highest-priority operating rule for future work on secure report visitor activity tracking and the Saved Secure Reports list in the dashboard.
+
+### Product goal
+
+The owner wants a lightweight sales-intent view for each secure report, not a heavy analytics system.
+
+The Saved Secure Reports list should quickly answer:
+
+```text
+Did the prospect open the secure report page?
+How long were they active on the page?
+Which country did they visit from?
+Did they open or download the PDF?
+Did they click the evidence video button?
+Did they watch at least 60% of the video?
+Did they open the chatbot?
+Did they ask a chat question?
+Did they click Booking, WhatsApp, Gmail/Email, LinkedIn, or another CTA?
+Was this a Search/Email lead or a LinkedIn/Manual report?
+```
+
+The system should stay Firestore-free-limit friendly.
+
+### Firestore lightweight tracking rule
+
+For secure report visitor activity, keep only small summary fields on:
+
+```text
+audit_reports/{reportToken}
+```
+
+Allowed lightweight summary fields:
+
+```text
+reportPageViewed
+firstViewedAt
+lastViewedAt
+lastSeenAt
+viewCount
+sessionCount
+estimatedActiveSeconds
+lastReportedActiveSeconds
+
+visitorCountry
+lastVisitorCountry
+
+pdfOpened
+pdfOpenCount
+lastPdfOpenedAt
+pdfDownloaded
+downloadCount
+lastDownloadedAt
+lastPdfDownloadedAt
+
+videoPlayClicked
+videoPlayClickCount
+lastVideoPlayClickedAt
+videoWatched
+videoWatchedThreshold
+lastVideoWatchedAt
+
+chatboxOpened
+chatboxOpenCount
+lastChatboxOpenedAt
+chatQuestionAsked
+chatQuestionCount
+lastChatQuestionAt
+
+ctaClicked
+ctaClickCount
+lastCtaClickedAt
+lastCtaType
+bookingClicked
+whatsappClicked
+emailClicked
+gmailClicked
+linkedinClicked
+
+lastActivityAt
+lastIntentScore
+lastIntentLabel
+intentScore
+intentLabel
+```
+
+Do not store heavy/raw analytics data in `audit_reports`.
+
+Never store:
+
+```text
+raw visitor IP
+full user agent
+mouse movement logs
+scroll event arrays
+per-second video progress
+all video progress marks
+full chat transcript
+raw chat messages
+large analytics arrays
+raw request headers
+third-party iframe logs
+```
+
+### Video tracking rule
+
+Evidence video tracking should be lightweight.
+
+Correct behavior:
+
+```text
+Visitor clicks the video preview/play button
+→ save videoPlayClicked=true and increment videoPlayClickCount once/limited.
+
+Visitor reaches at least 60% watched
+→ save videoWatched=true, videoWatchedThreshold=60, lastVideoWatchedAt.
+
+Do not write 25/50/75/100 progress milestones.
+Do not write every second of watch time.
+Do not keep a video event history array.
+```
+
+Reason:
+
+```text
+The owner only needs to know whether the prospect intentionally opened the video and whether they watched enough of it to count as engaged.
+```
+
+If using YouTube iframe/player API, keep it optional and resilient. Browser/iframe restrictions should not break the secure page.
+
+### PDF tracking rule
+
+PDF tracking should remain practical and lightweight.
+
+Correct behavior:
+
+```text
+PDF open button clicked
+→ mark pdfOpened=true and lastPdfOpenedAt.
+
+PDF download should be counted only after the browser receives a successful non-empty PDF blob when possible
+→ mark pdfDownloaded=true, increment downloadCount, update lastDownloadedAt.
+```
+
+Do not navigate the visitor away unnecessarily during download. Keep internal routes:
+
+```text
+/api/trackflow/reports/preview?token=...
+/api/trackflow/reports/download?token=...
+```
+
+Never expose private B2 object URLs to prospects.
+
+### Chatbox tracking rule
+
+Chatbox tracking needs two separate lightweight signals:
+
+```text
+chatboxOpened=true
+→ visitor opened/clicked the floating chat assistant.
+
+chatQuestionAsked=true
+→ visitor actually sent a real question.
+```
+
+Keep only summary fields on Firestore.
+
+Do not store chat transcript in `audit_reports`.
+
+The actual secure-page chat transcript should remain in Supabase only when configured.
+
+### Active time / heartbeat rule
+
+The secure report page may send a heartbeat, but it must stay lightweight.
+
+Recommended behavior:
+
+```text
+Initial page view once.
+Heartbeat around every 60 seconds while the page is visible/active.
+Update estimatedActiveSeconds and lastSeenAt.
+Stop or pause active counting when the tab is hidden where possible.
+```
+
+Do not write every few seconds.
+
+Do not add high-frequency Firestore writes.
+
+### CTA tracking rule
+
+CTA tracking should be summarized, not logged as heavy event history.
+
+Correct fields:
+
+```text
+ctaClicked=true
+ctaClickCount
+lastCtaClickedAt
+lastCtaType
+bookingClicked
+whatsappClicked
+emailClicked / gmailClicked
+linkedinClicked
+```
+
+`lastCtaType` should be one of:
+
+```text
+booking
+whatsapp
+email
+gmail
+linkedin
+cta
+```
+
+WhatsApp does not need a separate heavy analytics model. It only needs to be identifiable as the latest or a clicked CTA type.
+
+### Dashboard Saved Secure Reports list — current UX goal
+
+The Saved Secure Reports list in the Cleanup dashboard should be clean, readable, and sales-friendly.
+
+Each row should show a compact premium summary:
+
+```text
+Company / domain / email
+Source badge: Search / Email, LinkedIn report, Manual report, Report
+Status badge: Active, Viewed, Engaged, High Intent
+Contact badge: Not contacted, Email sent, Email opened, Email clicked, LinkedIn sent, Replied, etc.
+Activity badges: Video 60%, PDF opened/downloaded, Chat opened/question, CTA clicked
+Active time
+Country
+Last seen
+Intent label
+Expiry / cleanup status
+Open / View in Leads / Select actions
+```
+
+The goal is not to create a complex analytics dashboard. The goal is to make follow-up decisions faster.
+
+### Saved Secure Reports filters
+
+Remove these filters from the visible dropdown:
+
+```text
+Cleaned
+Test
+```
+
+Keep useful engagement filters:
+
+```text
+All reports
+Active
+Expired
+Viewed
+No view
+```
+
+Add source-routing filters:
+
+```text
+Search / Email leads
+LinkedIn / Manual reports
+```
+
+The exact filter ids can be implementation-specific, but preferred ids are:
+
+```text
+search_email
+linkedin_manual
+```
+
+### Source classification rule
+
+The dashboard must separate source types carefully.
+
+Search / Email leads include reports that come from Python/search/Sheet/email outreach style flows, such as:
+
+```text
+sourceOrigin = sheet
+sourceRole = sheet_primary
+sourceRole = sheet_additional
+sourceRole = sheet_additional_recipient
+source includes google_sheet
+source includes sheet_queue
+source includes python_search
+source includes search
+channel = email
+outreachChannel = email
+Lead Source = python_search
+Source Type = search
+Outreach Channel = email
+```
+
+LinkedIn / Manual reports include reports that are only manually created or LinkedIn secure-report URL outreach style flows, such as:
+
+```text
+channel = linkedin
+outreachChannel = linkedin
+source includes linkedin
+Lead Source = linkedin_audit
+Source Type = linkedin
+sourceRole = manual_report_linked
+sourceOrigin = manual
+source includes manual_report
+```
+
+Important rule:
+
+```text
+Do not classify a lead as Manual report only because Email Source = Manual or the email was manually verified.
+```
+
+Manual/verified email only means the email address was manually found or checked. It does not necessarily mean the audit/report source is manual.
+
+### Dashboard list API rule
+
+The dashboard Saved Secure Reports list is served by the report cleanup handler:
+
+```text
+/api/trackflow/cleanup/reports
+```
+
+Primary file for the list response:
+
+```text
+lib/trackflow-cleanup/report-cleanup.ts
+```
+
+For list-display changes, touch only the list row builder/filter/search logic, such as:
+
+```text
+buildSecureReportListRow(...)
+secureReportMatchesListFilter(...)
+secureReportMatchesListSearch(...)
+normalizeReportChannel(...)
+source classification helper(s)
+```
+
+Do not change cleanup execution functions for pure dashboard display/filter work.
+
+Do not touch:
+
+```text
+deleteB2PdfStep(...)
+deleteBlobImagesStep(...)
+deleteSupabaseChatStep(...)
+cleanupReportEmailEventsStep(...)
+writeSheetCleanupStep(...)
+cleanupLeadStep(...)
+cleanupFirestoreReportStep(...)
+cleanupDomainIndexStep(...)
+runCleanup(...)
+handleReportCleanup(...)
+handleBulkReportCleanup(...)
+handleExpiredReportCleanupCron(...)
+```
+
+### Connected files for secure report lightweight tracking
+
+Use these files for tracking behavior bugs:
+
+```text
+app/tracking-review/[domainSlug]/[token]/page.tsx
+app/components/trackflow/SecureReportAnalytics.tsx
+app/api/report-event/route.ts
+app/api/report-redirect/route.ts
+app/components/trackflow/ReportChatAssistant.tsx
+app/api/trackflow/report-chat/route.ts
+```
+
+Use these files for dashboard display/filter bugs:
+
+```text
+app/admin/dashboard/CleanupPanel.tsx
+app/admin/dashboard/types.ts
+lib/trackflow-cleanup/report-cleanup.ts
+```
+
+Ask for this file only if the catch-all route dispatch itself is suspected:
+
+```text
+app/api/trackflow/[...action]/route.ts
+```
+
+Avoid touching the catch-all route for pure Saved Secure Reports list UI/filter work.
+
+### What not to touch for this feature
+
+For secure-report tracking/list/filter/dashboard UI work, do not touch these systems unless a separate bug clearly belongs there:
+
+```text
+Brevo email sending
+Brevo webhook threading
+follow-up threading
+email open/click tracking
+open/click dedupe windows
+sender selection
+outreach email copy
+B2 PDF storage/read logic
+Supabase chat transcript schema
+Google Sheet cleanup
+daily_sending_stats cleanup
+lead/contact memory cleanup
+report cleanup execution steps
+```
+
+### Safe implementation pattern
+
+Recommended safe approach:
+
+```text
+1. Add or preserve lightweight secure-report summary fields.
+2. Keep Firestore writes low frequency.
+3. Use frontend events for PDF/video/chat/CTA where possible.
+4. Use server routes only to summarize fields on audit_reports/{token}.
+5. Dashboard reads summarized fields from /api/trackflow/cleanup/reports.
+6. UI displays badges and short labels, not raw event rows.
+7. Source filters rely on explicit source/channel/sourceRole fields, not guesswork.
+8. Cleanup/delete actions remain unchanged.
+```
+
+### Test checklist after applying related patches
+
+Test secure page activity:
+
+```text
+1. Open a secure report page.
+2. Wait at least 60 seconds while tab is visible.
+3. Open PDF.
+4. Download PDF.
+5. Click video preview/play button.
+6. Watch at least 60% of the video if a video is attached.
+7. Open chatbox.
+8. Ask one chat question.
+9. Click Booking / WhatsApp / Gmail/Email / LinkedIn CTA if available.
+10. Check Firestore audit_reports/{token} lightweight summary fields.
+11. Refresh dashboard Saved Secure Reports list.
+12. Confirm row shows country, active time, PDF, video, chat, CTA, and intent.
+```
+
+Test dashboard filters:
+
+```text
+1. Dropdown should not show Cleaned or Test.
+2. Search / Email leads should show Python/search/sheet/email source reports.
+3. LinkedIn / Manual reports should show LinkedIn/manual report URL style reports.
+4. Viewed filter should include any report with page, PDF, video, chat, or CTA engagement.
+5. No view filter should exclude reports that have any of those engagement signals.
+6. Search should still find domain, company, email, token, source, contact status, and activity fields.
+```
+
+Test cleanup safety:
+
+```text
+1. Use a test/fake report only.
+2. Click Preview first.
+3. Confirm cleanup preview steps still show B2 PDF, Blob preview, Supabase chat, email events, Firestore report, domain index, Google Sheet, and contact record steps as before.
+4. Do not run Delete All Data on a real client report without preview.
+5. If running deletion on a test report, verify it behaves like before the dashboard UI/filter patches.
+```
+
+### Patch history for this feature
+
+Recent related patch handoffs:
+
+```text
+trackflow-lightweight-secure-report-intent-v2.zip
+trackflow-secure-report-dashboard-list-fields-v3.zip
+trackflow-secure-report-list-ui-source-filters-v4.zip
+```
+
+Purpose:
+
+```text
+v2: Add lightweight secure report intent tracking for PDF, video, chatbox, CTA, active time, and country.
+v3: Ensure Saved Secure Reports list API returns the new lightweight fields.
+v4: Improve Saved Secure Reports row UI and add source filters while removing Test/Cleaned from the visible dropdown.
+```
+
+Build honesty:
+
+```text
+These patches were created from uploaded partial project files.
+Changed-file TypeScript syntax/transpile checks were done where possible.
+Full npm run build was not run in ChatGPT because the full project/node_modules were not available.
+After applying patches, run npm run lint and npm run build in the full project.
+```
 
 
 ## Latest Critical Update — v25.10 Brevo SMTP Message-Id Follow-up Threading Fix
