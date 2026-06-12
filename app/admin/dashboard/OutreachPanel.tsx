@@ -184,6 +184,8 @@ export default function OutreachPanel({
       { label: "Subject added", ok: Boolean(subject.trim()) },
       { label: "Message body ready", ok: Boolean(stripHtml(message)) },
       { label: "Links kept minimal", ok: totalLinkCount <= 2 },
+      { label: "CTA text short", ok: !safeReportUrl || (reportButtonText || "View private tracking review").trim().length <= 44 },
+      { label: "Signature / unsubscribe visible", ok: includeSignature },
       { label: "Secure /r report link valid or empty", ok: !reportUrl.trim() || Boolean(safeReportUrl && isSecureReportUrl(safeReportUrl)) },
       { label: "No duplicate lead", ok: !duplicateLead || allowDuplicateSend },
       { label: "Cooldown memory cleared/overridden", ok: !contactMemoryWarning || allowCooldownOverride },
@@ -786,8 +788,18 @@ export default function OutreachPanel({
                   )}
 
                   {safeReportUrl && (
-                    <div className="mt-5 text-sm">
-                      Short audit note: <span className="text-blue-600 font-bold underline">{reportButtonText || "View short audit note"}</span>
+                    <div className="mt-5">
+                      <a
+                        href={safeReportUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-lg bg-slate-950 px-4 py-2.5 text-[13px] font-black leading-none text-white no-underline shadow-sm"
+                      >
+                        {reportButtonText || "View private tracking review"}
+                      </a>
+                      <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+                        Private TrackFlow Pro audit note · PDF opens from the secure report page.
+                      </p>
                     </div>
                   )}
 

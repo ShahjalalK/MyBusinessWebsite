@@ -139,7 +139,7 @@ export const COLD_EMAIL_TEMPLATES: Record<ColdEmailTemplateId, ColdEmailTemplate
     id: "google_ads_tracking_note",
     service: "Google Ads",
     subject: "Quick tracking note for {company}",
-    reportButtonText: "View short audit note",
+    reportButtonText: "View private tracking review",
     body:
       "<p>Hi {name},</p><p>I was reviewing {company} and noticed one tracking item worth checking on {website}.</p><p>If important lead actions are not measured clearly, it can be harder to know which campaigns are actually creating enquiries.</p><p>I put the short browser-visible note on a private report page.</p><p>Would it be useful if I verified this inside GA4, GTM, or Google Ads before you make any tracking changes?</p>",
   },
@@ -147,7 +147,7 @@ export const COLD_EMAIL_TEMPLATES: Record<ColdEmailTemplateId, ColdEmailTemplate
     id: "server_side_tracking_note",
     service: "Server Side Tracking",
     subject: "Tracking check for {company}",
-    reportButtonText: "View short audit note",
+    reportButtonText: "View private tracking review",
     body:
       "<p>Hi {name},</p><p>I checked {website} from the public browser side and noticed a tracking signal that may be worth verifying.</p><p>This does not prove the account-level setup by itself, but it is a useful starting point before checking GTM, GA4, server logs, or ad platform diagnostics.</p><p>I shared the short note on a private report page.</p><p>Would a quick verification be useful?</p>",
   },
@@ -155,7 +155,7 @@ export const COLD_EMAIL_TEMPLATES: Record<ColdEmailTemplateId, ColdEmailTemplate
     id: "email_signature_tracking_note",
     service: "Email Signature",
     subject: "Small tracking note for {company}",
-    reportButtonText: "View short audit note",
+    reportButtonText: "View private tracking review",
     body:
       "<p>Hi {name},</p><p>I noticed a small tracking opportunity around {company}'s outbound email or website journey.</p><p>If email signature clicks or enquiry-path visits are not labelled clearly, it can be hard to tell which conversations came from outbound activity.</p><p>I put the short note on a private report page.</p><p>Worth a quick check?</p>",
   },

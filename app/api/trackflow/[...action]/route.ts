@@ -711,32 +711,70 @@ function rewriteHtmlLinksForTracking(html: string, context: EmailTrackingContext
   );
 }
 
+function normalizeVisibleText(value: any, fallback: string, maxLength = 48): string {
+  const text = String(value || fallback || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+  return text || fallback;
+}
+
+function formatVisibleEmailReference(tag: string): string {
+  const normalized = String(tag || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .toUpperCase();
+
+  if (!normalized) return "TF-EMAIL";
+
+  const stepMatch = normalized.match(/(?:_|-)?STEP(\d+)$/i);
+  const stepLabel = stepMatch ? `-STEP${stepMatch[1]}` : "";
+  const withoutStep = normalized.replace(/(?:_|-)?STEP\d+$/i, "");
+  const firstReadableSegment = withoutStep.split(/[-_]/).filter(Boolean)[0] || withoutStep;
+  const shortId = firstReadableSegment.replace(/[^A-Z0-9]/g, "").slice(0, 8) || "EMAIL";
+
+  return `TF-${shortId}${stepLabel}`;
+}
+
 function buildReportLinkBlock(
   reportUrl?: string,
-  buttonText = "View private audit note",
+  buttonText = "View private tracking review",
   trackingContext: EmailTrackingContext = {},
 ) {
   const safeUrl = sanitizePublicReportUrl(reportUrl || "");
   if (!safeUrl) return "";
 
   const clickUrl = hasEmailTrackingIdentity(trackingContext) ? buildTrackedClickUrl(safeUrl, trackingContext) : safeUrl;
-  const safeText = escapeHtml(buttonText || "View private audit note").slice(0, 80);
+  const rawText = normalizeVisibleText(buttonText, "View private tracking review", 44);
+  const safeText = escapeHtml(rawText);
+  const safeClickUrl = escapeHtml(clickUrl);
+  const buttonWidth = Math.min(Math.max(214, rawText.length * 7 + 54), 286);
 
-  // Agency-style, Outlook-safe CTA. Keep it as a table so Brevo/Outlook render consistently.
+  // Bulletproof CTA: VML for Outlook desktop + standard anchor for modern/mobile clients.
+  // Keep the tracked click URL exactly as before; only the rendering wrapper changes.
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:18px 0 2px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:18px 0 4px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
       <tr>
-        <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+        <td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
-              <td bgcolor="#0f172a" style="border-radius:6px;background:#0f172a;mso-padding-alt:10px 14px;">
-                <a href="${escapeHtml(clickUrl)}" target="_blank" style="display:inline-block;padding:10px 14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#ffffff;text-decoration:none;font-weight:bold;">
+              <td align="left" valign="middle" style="padding:0;">
+                <!--[if mso]>
+                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeClickUrl}" style="height:40px;v-text-anchor:middle;width:${buttonWidth}px;" arcsize="14%" strokecolor="#0f172a" fillcolor="#0f172a">
+                  <w:anchorlock/>
+                  <center style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:40px;mso-line-height-rule:exactly;">${safeText}</center>
+                </v:roundrect>
+                <![endif]-->
+                <!--[if !mso]><!-->
+                <a href="${safeClickUrl}" target="_blank" style="display:inline-block;background:#0f172a;border:1px solid #0f172a;border-radius:7px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:18px;text-decoration:none;padding:10px 15px;mso-hide:all;white-space:nowrap;">
                   ${safeText}
                 </a>
+                <!--<![endif]-->
               </td>
             </tr>
           </table>
-          <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;margin-top:8px;">
+          <div style="clear:both;font-size:0;line-height:0;height:0;">&nbsp;</div>
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;margin-top:8px;mso-line-height-rule:exactly;">
             Private TrackFlow Pro audit note · PDF opens from the secure report page.
           </div>
         </td>
@@ -1742,23 +1780,26 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
   const visibleEmail = escapeHtml(MAIN_INBOX_EMAIL);
   const websiteUrl = escapeHtml(BRAND_WEBSITE);
   const websiteLabel = escapeHtml(BRAND_WEBSITE_LABEL);
-  const safeTag = escapeHtml(tag.toUpperCase());
+  const visibleReference = escapeHtml(formatVisibleEmailReference(tag));
   const mailingAddressLine = buildComplianceAddressLine();
   const mailingAddressHtml = mailingAddressLine
-    ? `<div style="margin:4px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;mso-line-height-rule:exactly;">${mailingAddressLine}</div>`
+    ? `<div style="margin:4px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">${mailingAddressLine}</div>`
     : "";
 
   if (mode === "compact") {
     return `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:18px;mso-table-lspace:0pt;mso-table-rspace:0pt;">
         <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:12px 0 0 0;border-top:1px solid #e5e7eb;">
+          <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:12px 0 0 0;border-top:1px solid #e5e7eb;overflow-wrap:break-word;word-break:normal;">
             <div style="margin:0 0 2px 0;color:#111827;font-weight:bold;">${senderName}</div>
             <div style="margin:0;color:#6b7280;">TrackFlowPro · Conversion Tracking Audit</div>
-            <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;mso-line-height-rule:exactly;">
+            <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
               <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
               <span style="color:#d1d5db;"> | </span>
               <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+            </div>
+            <div style="margin:7px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+              Reference: ${visibleReference}
               <span style="color:#d1d5db;"> | </span>
               <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
             </div>
@@ -1777,17 +1818,17 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
               <td width="4" style="width:4px;background:#2563eb;font-size:0;line-height:0;">&nbsp;</td>
-              <td style="padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;">
+              <td style="padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
                 <div style="font-size:15px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:#111827;margin:0;">${senderName}</div>
                 <div style="font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;margin:0;">Founder, TrackFlowPro</div>
                 <div style="font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;margin:3px 0 0 0;">Google Ads Tracking · Server-Side Tracking · Conversion Audit</div>
-                <div style="font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;margin:8px 0 0 0;">
+                <div style="font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;margin:8px 0 0 0;overflow-wrap:break-word;word-break:normal;">
                   <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
                   <span style="color:#d1d5db;"> | </span>
                   <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
                 </div>
-                <div style="font-size:10px;line-height:15px;mso-line-height-rule:exactly;color:#9ca3af;margin:8px 0 0 0;">
-                  Ref: ${safeTag}
+                <div style="font-size:10px;line-height:15px;mso-line-height-rule:exactly;color:#9ca3af;margin:8px 0 0 0;overflow-wrap:break-word;word-break:normal;">
+                  Reference: ${visibleReference}
                   <span style="color:#d1d5db;"> | </span>
                   <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
                 </div>
@@ -1801,23 +1842,38 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
   `;
 }
 
+function mergeEmailInlineStyle(attrs: string, baseStyle: string): string {
+  const rawAttrs = String(attrs || "");
+  if (/\sstyle\s*=/.test(rawAttrs)) {
+    return rawAttrs.replace(/\sstyle=(['"])(.*?)\1/i, (_match, quote, currentStyle) => ` style=${quote}${baseStyle}${currentStyle}${quote}`);
+  }
+  return ` style="${baseStyle}"${rawAttrs}`;
+}
+
+function applyEmailTagStyle(html: string, tagName: string, baseStyle: string): string {
+  const pattern = new RegExp(`<${tagName}\\b([^>]*)>`, "gi");
+  return String(html || "").replace(pattern, (_match, attrs) => `<${tagName}${mergeEmailInlineStyle(String(attrs || ""), baseStyle)}>`);
+}
+
 function normalizeEmailBodyHtml(input: string): string {
   const cleanMessage = stripDangerousHtml(input || "").trim();
   if (!cleanMessage) return "";
 
   const hasHtml = /<\/?[a-z][\s\S]*>/i.test(cleanMessage);
   if (hasHtml) {
-    return cleanMessage
-      .replace(/<p(\s|>)/gi, '<p style="margin:0 0 12px 0;"$1')
-      .replace(/<div(\s|>)/gi, '<div style="margin:0 0 12px 0;"$1')
-      .replace(/<a\s/gi, '<a style="color:#2563eb;text-decoration:underline;font-weight:bold;" ');
+    let html = cleanMessage;
+    html = applyEmailTagStyle(html, "p", "margin:0 0 14px 0;");
+    html = applyEmailTagStyle(html, "div", "margin:0 0 14px 0;");
+    html = applyEmailTagStyle(html, "li", "margin:0 0 8px 0;");
+    html = applyEmailTagStyle(html, "a", "color:#2563eb;text-decoration:underline;font-weight:bold;");
+    return html;
   }
 
   return cleanMessage
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => `<p style="margin:0 0 12px 0;">${escapeHtml(part).replace(/\n/g, "<br />")}</p>`)
+    .map((part) => `<p style="margin:0 0 14px 0;">${escapeHtml(part).replace(/\n/g, "<br />")}</p>`)
     .join("");
 }
 
@@ -1855,18 +1911,26 @@ function buildEmailHtml(
   const openPixel = buildOpenTrackingPixel(trackingContext);
 
   return `<!doctype html>
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--[if mso]>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:AllowPNG/>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+    <![endif]-->
   </head>
-  <body style="margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#ffffff;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+  <body style="margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;width:100% !important;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#ffffff;mso-table-lspace:0pt;mso-table-rspace:0pt;width:100%;">
       <tr>
-        <td align="left" style="padding:0;margin:0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;max-width:620px;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+        <td align="left" style="padding:20px 16px 20px 16px;margin:0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;max-width:620px;width:100%;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
-              <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;mso-line-height-rule:exactly;color:#1f2937;padding:0;margin:0;">
+              <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;mso-line-height-rule:exactly;color:#1f2937;padding:0;margin:0;overflow-wrap:break-word;word-break:normal;">
                 ${trackedMessage}
                 ${reportBlock}
                 ${signatureBlock}
