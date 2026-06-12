@@ -8529,7 +8529,37 @@ function detectReportVisitorDeviceType(userAgent: string): string {
   return "Desktop";
 }
 
-function buildReportViewVisitorSummary(req: Request): AnyRecord {
+function existingVisitorField(report: AnyRecord = {}, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = cleanVisitorHeader(report[key] == null ? "" : String(report[key]), 120);
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function setFirstAndLastVisitorField(
+  update: AnyRecord,
+  report: AnyRecord,
+  firstKey: string,
+  lastKey: string,
+  value: string,
+  ...fallbackFirstKeys: string[]
+) {
+  const cleanValue = cleanVisitorHeader(value, 120);
+  if (!cleanValue || cleanValue === "Unknown") return;
+
+  const existingFirst = existingVisitorField(report, firstKey, ...fallbackFirstKeys);
+  const existingLast = existingVisitorField(report, lastKey, firstKey, ...fallbackFirstKeys);
+
+  // Keep the original/first visitor value stable. Only backfill it when it is missing.
+  if (!existingFirst) update[firstKey] = cleanValue;
+
+  // Keep the latest visitor value useful for follow-up. Write only when it is missing or changed.
+  if (existingLast !== cleanValue) update[lastKey] = cleanValue;
+}
+
+function buildReportViewVisitorSummary(req: Request, report: AnyRecord = {}): AnyRecord {
   const userAgent = cleanVisitorHeader(req.headers.get("user-agent"), 600);
   const countryCode = cleanVisitorCountryCode(
     req.headers.get("x-vercel-ip-country") ||
@@ -8543,23 +8573,19 @@ function buildReportViewVisitorSummary(req: Request): AnyRecord {
   const os = detectReportVisitorOs(userAgent);
   const update: AnyRecord = {};
 
-  if (countryCode) {
-    update.visitorCountry = countryCode;
-    update.lastVisitorCountry = countryCode;
+  setFirstAndLastVisitorField(update, report, "visitorCountry", "lastVisitorCountry", countryCode, "visitor_country");
+  setFirstAndLastVisitorField(update, report, "visitorDeviceType", "lastVisitorDeviceType", deviceType, "visitor_device_type", "deviceType", "device_type", "device");
+  setFirstAndLastVisitorField(update, report, "visitorBrowser", "lastVisitorBrowser", browser, "visitor_browser", "browser");
+  setFirstAndLastVisitorField(update, report, "visitorOs", "lastVisitorOs", os, "visitor_os", "os");
+
+  if (countryRegion) {
+    const previousRegion = existingVisitorField(report, "lastVisitorRegion", "last_visitor_region");
+    if (previousRegion !== countryRegion) update.lastVisitorRegion = countryRegion;
   }
-  if (countryRegion) update.lastVisitorRegion = countryRegion;
-  if (countryCity) update.lastVisitorCity = countryCity;
-  if (deviceType && deviceType !== "Unknown") {
-    update.visitorDeviceType = deviceType;
-    update.lastVisitorDeviceType = deviceType;
-  }
-  if (browser && browser !== "Unknown") {
-    update.visitorBrowser = browser;
-    update.lastVisitorBrowser = browser;
-  }
-  if (os && os !== "Unknown") {
-    update.visitorOs = os;
-    update.lastVisitorOs = os;
+
+  if (countryCity) {
+    const previousCity = existingVisitorField(report, "lastVisitorCity", "last_visitor_city");
+    if (previousCity !== countryCity) update.lastVisitorCity = countryCity;
   }
 
   return update;
@@ -8597,10 +8623,8 @@ async function handleReportView(req: Request) {
   // the report page should call this from a client-side beacon after a short delay.
   // We only write the first verified view to Firestore/Sheet. Later page loads return success without extra writes.
   // If an older report was viewed before visitor summary fields existed, backfill the safe device/country summary once.
-  const visitorSummary = buildReportViewVisitorSummary(req);
-  const hasVisitorSummary = Object.keys(visitorSummary).length > 0;
-  const shouldBackfillVisitorSummary =
-    hasVisitorSummary && Object.keys(visitorSummary).some((key) => !report[key]);
+  const visitorSummary = buildReportViewVisitorSummary(req, report);
+  const shouldBackfillVisitorSummary = Object.keys(visitorSummary).length > 0;
   const alreadyViewed = Boolean(report.lastViewedAt || report.firstViewedAt || report.reportPageViewedAt);
   if (alreadyViewed) {
     if (shouldBackfillVisitorSummary) {

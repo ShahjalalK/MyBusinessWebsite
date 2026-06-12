@@ -341,12 +341,19 @@ function formatActiveSeconds(seconds: number): string {
 }
 
 function formatDeviceSummary(report: SecureReportRow): { label: string; detail: string; full: string } {
-  const device = String(report.lastVisitorDeviceType || report.visitorDeviceType || report.deviceType || "").trim();
+  const firstDevice = String(report.visitorDeviceType || report.deviceType || "").trim();
+  const latestDevice = String(report.lastVisitorDeviceType || firstDevice || "").trim();
   const browser = String(report.lastVisitorBrowser || report.visitorBrowser || report.browser || "").trim();
   const os = String(report.lastVisitorOs || report.visitorOs || report.os || "").trim();
-  const label = device || "Unknown";
-  const detail = [browser, os].filter(Boolean).join(" · ");
-  const full = [label, detail].filter(Boolean).join(" · ");
+  const label = latestDevice || "Not captured";
+  const detailParts = [browser, os].filter(Boolean);
+
+  if (firstDevice && latestDevice && firstDevice.toLowerCase() !== latestDevice.toLowerCase()) {
+    detailParts.push(`First: ${firstDevice}`);
+  }
+
+  const detail = detailParts.join(" · ");
+  const full = [latestDevice ? `Latest: ${latestDevice}` : "Latest device not captured", detail].filter(Boolean).join(" · ");
   return { label, detail, full };
 }
 
