@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import type {
+  DailySendingStatsCleanupState,
   FootprintMemoryRow,
   FootprintMemoryState,
   ReportAssetCleanupMode,
@@ -32,6 +33,9 @@ type CleanupPanelProps = {
   setReportAssetCleanup: (value: ReportAssetCleanupState | ((prev: ReportAssetCleanupState) => ReportAssetCleanupState)) => void;
   previewReportAssetCleanup: () => Promise<void>;
   runReportAssetCleanup: () => Promise<void>;
+  dailySendingStatsCleanup: DailySendingStatsCleanupState;
+  loadDailySendingStatsCleanup: (force?: boolean) => Promise<void>;
+  deleteOldDailySendingStats: () => Promise<void>;
   secureReports: SecureReportListState;
   setSecureReports: (value: SecureReportListState | ((prev: SecureReportListState) => SecureReportListState)) => void;
   loadSecureReports: (force?: boolean) => Promise<void>;
@@ -304,6 +308,9 @@ export default function CleanupPanel({
   setReportAssetCleanup,
   previewReportAssetCleanup,
   runReportAssetCleanup,
+  dailySendingStatsCleanup,
+  loadDailySendingStatsCleanup,
+  deleteOldDailySendingStats,
   secureReports,
   setSecureReports,
   loadSecureReports,
@@ -358,6 +365,8 @@ export default function CleanupPanel({
   const suppressionFootprintCount = footprintMemory.rows.filter((row) => row.source === "suppression_list" || row.source === "combined").length;
   const showingSuppressionFootprints = footprintMemory.filter === "suppression";
   const showingOldFootprints = footprintMemory.filter === "old";
+  const dailyStatsDeleteDisabled = dailySendingStatsCleanup.loading || dailySendingStatsCleanup.actionLoading || dailySendingStatsCleanup.oldDocs <= 0;
+
 
   return (
     <div className="space-y-6">
@@ -383,6 +392,14 @@ export default function CleanupPanel({
           </button>
           <button
             type="button"
+            onClick={() => loadDailySendingStatsCleanup(true)}
+            disabled={dailySendingStatsCleanup.loading || dailySendingStatsCleanup.actionLoading}
+            className="px-4 py-3 rounded-2xl bg-amber-50 text-amber-700 text-[10px] font-black uppercase disabled:opacity-50 flex items-center gap-2"
+          >
+            <Database size={14} /> Refresh Daily Stats
+          </button>
+          <button
+            type="button"
             onClick={() => loadFootprintMemories(true)}
             disabled={footprintMemory.loading || footprintMemory.actionLoading}
             className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 text-[10px] font-black uppercase disabled:opacity-50 flex items-center gap-2"
@@ -392,7 +409,9 @@ export default function CleanupPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <StatCard label="Old daily stats" value={dailySendingStatsCleanup.oldDocs} icon={<Database size={22} />} tone="orange" />
+        <StatCard label="Today stats" value={dailySendingStatsCleanup.todayDocs} icon={<CheckCircle2 size={22} />} tone="green" />
         <StatCard label="Secure reports" value={secureReports.rows.length} icon={<FileText size={22} />} />
         <StatCard label="Selected reports" value={selectedReportCount} icon={<MousePointer2 size={22} />} tone="orange" />
         <StatCard label="Footprints" value={footprintMemory.rows.length} icon={<Database size={22} />} tone="blue" />
@@ -815,6 +834,120 @@ export default function CleanupPanel({
               ))}
             </div>
           </div>
+        )}
+      </div>
+
+      <div className="bg-white border border-amber-100 rounded-[30px] p-5 shadow-sm space-y-5">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
+              <Database size={14} /> Daily Sending Stats Cleanup
+            </p>
+            <h2 className="text-2xl font-black tracking-tighter text-gray-900">Delete old sender stats, keep today</h2>
+            <p className="text-sm text-gray-500 font-semibold mt-2 max-w-3xl">
+              This only cleans the <span className="font-black text-gray-800">daily_sending_stats</span> collection. Today's dateKey stays protected so sender limits do not reset accidentally.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => loadDailySendingStatsCleanup(true)}
+              disabled={dailySendingStatsCleanup.loading || dailySendingStatsCleanup.actionLoading}
+              className="px-4 py-3 rounded-2xl bg-white border border-amber-100 text-amber-700 text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
+            >
+              <RefreshCw size={14} className={dailySendingStatsCleanup.loading ? "animate-spin" : ""} /> Preview Stats
+            </button>
+            <button
+              type="button"
+              onClick={deleteOldDailySendingStats}
+              disabled={dailyStatsDeleteDisabled}
+              className="px-4 py-3 rounded-2xl bg-red-600 text-white text-[10px] font-black uppercase disabled:opacity-40 flex items-center gap-2"
+              title="Deletes only records where dateKey is before today."
+            >
+              {dailySendingStatsCleanup.actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete Old Stats, Keep Today
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total records</p>
+            <p className="text-2xl font-black text-gray-900 mt-1">{dailySendingStatsCleanup.totalDocs}</p>
+          </div>
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Today protected</p>
+            <p className="text-2xl font-black text-emerald-700 mt-1">{dailySendingStatsCleanup.todayDocs}</p>
+          </div>
+          <div className="rounded-2xl bg-red-50 border border-red-100 p-4">
+            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Old records</p>
+            <p className="text-2xl font-black text-red-600 mt-1">{dailySendingStatsCleanup.oldDocs}</p>
+          </div>
+          <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Previewed senders</p>
+            <p className="text-2xl font-black text-amber-700 mt-1">{dailySendingStatsCleanup.senderCount}</p>
+          </div>
+          <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Keep dateKey</p>
+            <p className="text-sm font-black text-gray-900 mt-2">{dailySendingStatsCleanup.keepDateKey || "Today"}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-[12px] font-bold text-amber-800 leading-relaxed">
+          Safety rule: delete query uses <span className="font-black">dateKey &lt; today</span>. It does not touch today's sender count, outreach leads, email events, report cleanup, B2, Supabase, or follow-up automation.
+        </div>
+
+        {(dailySendingStatsCleanup.status || dailySendingStatsCleanup.error) && (
+          <p className={`text-[10px] font-black uppercase tracking-widest ${dailySendingStatsCleanup.error ? "text-red-600" : "text-gray-500"}`}>
+            {dailySendingStatsCleanup.error || dailySendingStatsCleanup.status}
+          </p>
+        )}
+
+        {dailySendingStatsCleanup.senderRows.length > 0 && (
+          <div className="border border-gray-100 rounded-[24px] overflow-hidden">
+            <div className="bg-gray-50 border-b border-gray-100 p-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sender breakdown</p>
+              <p className="text-xs font-bold text-gray-500 mt-1">Shows today + the first preview sample of old stats. Old records are the ones that will be deleted.</p>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {dailySendingStatsCleanup.senderRows.slice(0, 12).map((row) => (
+                <div key={row.senderEmail} className="p-4 grid grid-cols-1 md:grid-cols-[1.4fr_0.5fr_0.5fr_0.7fr] gap-3 items-center">
+                  <div>
+                    <p className="text-xs font-black text-gray-900 break-all">{row.senderEmail}</p>
+                    <p className="text-[10px] font-bold text-gray-400 mt-1">{row.oldestDateKey || "—"} → {row.latestDateKey || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-gray-400">Old docs</p>
+                    <p className="text-sm font-black text-red-600">{row.oldDocs}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-gray-400">Today</p>
+                    <p className="text-sm font-black text-emerald-700">{row.todayDocs}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-gray-400">Sent count</p>
+                    <p className="text-sm font-black text-gray-900">{row.totalSent}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {dailySendingStatsCleanup.sampleRows.length > 0 && (
+          <details className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+            <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-gray-500">Show old records sample</summary>
+            <div className="mt-4 max-h-72 overflow-auto divide-y divide-gray-100">
+              {dailySendingStatsCleanup.sampleRows.slice(0, 50).map((row) => (
+                <div key={row.id} className="py-3 grid grid-cols-1 md:grid-cols-[0.5fr_1.4fr_0.5fr_0.5fr] gap-2 text-xs font-bold text-gray-600">
+                  <span className="font-black text-gray-900">{row.dateKey || "—"}</span>
+                  <span className="break-all">{row.senderEmail || "global"}</span>
+                  <span>Initial: {row.initialSent}</span>
+                  <span>Follow-up: {row.followupSent}</span>
+                </div>
+              ))}
+            </div>
+          </details>
         )}
       </div>
 

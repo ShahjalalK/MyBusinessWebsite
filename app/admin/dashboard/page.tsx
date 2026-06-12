@@ -67,6 +67,7 @@ import type {
   CleanupCandidate,
   CleanupState,
   ContactMemoryWarning,
+  DailySendingStatsCleanupState,
   FootprintMemoryState,
   FirebaseUsageState,
   FollowupConfig,
@@ -190,6 +191,27 @@ function emptyReportAssetCleanupState(): ReportAssetCleanupState {
     lastPreviewAt: null,
     manifest: null,
     steps: [],
+  };
+}
+
+function emptyDailySendingStatsCleanupState(): DailySendingStatsCleanupState {
+  return {
+    loading: false,
+    actionLoading: false,
+    error: "",
+    status: "",
+    loadedAt: null,
+    keepDateKey: "",
+    totalDocs: 0,
+    todayDocs: 0,
+    oldDocs: 0,
+    deletedCount: 0,
+    remainingOldDocs: 0,
+    senderCount: 0,
+    oldestDateKey: "",
+    latestDateKey: "",
+    senderRows: [],
+    sampleRows: [],
   };
 }
 
@@ -477,6 +499,7 @@ export default function DashboardPage() {
   const [followupCandidatesLoading, setFollowupCandidatesLoading] = useState(false);
   const [followupCandidatesStatus, setFollowupCandidatesStatus] = useState("");
   const [reportAssetCleanup, setReportAssetCleanup] = useState<ReportAssetCleanupState>(() => emptyReportAssetCleanupState());
+  const [dailySendingStatsCleanup, setDailySendingStatsCleanup] = useState<DailySendingStatsCleanupState>(() => emptyDailySendingStatsCleanupState());
   const [secureReports, setSecureReports] = useState<SecureReportListState>(() => emptySecureReportListState());
   const [chatInsights, setChatInsights] = useState<ChatInsightsState>(() => emptyChatInsightsState());
   const [footprintMemory, setFootprintMemory] = useState<FootprintMemoryState>(() => emptyFootprintMemoryState());
@@ -2101,6 +2124,123 @@ export default function DashboardPage() {
     }
   };
 
+  const loadDailySendingStatsCleanup = async (force = false) => {
+    if (!force && dailySendingStatsCleanup.loadedAt && Date.now() - dailySendingStatsCleanup.loadedAt < 60_000) return;
+
+    setDailySendingStatsCleanup((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+      status: "Loading daily sending stats...",
+    }));
+
+    try {
+      const response = await fetch("/api/trackflow/cleanup/daily-sending-stats", {
+        method: "GET",
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Daily sending stats could not be loaded.");
+      }
+
+      setDailySendingStatsCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        actionLoading: false,
+        error: "",
+        status: data.message || "Daily sending stats preview loaded.",
+        loadedAt: Date.now(),
+        keepDateKey: String(data.keepDateKey || ""),
+        totalDocs: Number(data.totalDocs || 0),
+        todayDocs: Number(data.todayDocs || 0),
+        oldDocs: Number(data.oldDocs || 0),
+        deletedCount: Number(data.deletedCount || prev.deletedCount || 0),
+        remainingOldDocs: Number(data.remainingOldDocs ?? data.oldDocs ?? 0),
+        senderCount: Number(data.senderCount || 0),
+        oldestDateKey: String(data.oldestDateKey || ""),
+        latestDateKey: String(data.latestDateKey || ""),
+        senderRows: Array.isArray(data.senderRows) ? data.senderRows : [],
+        sampleRows: Array.isArray(data.sampleRows) ? data.sampleRows : [],
+      }));
+    } catch (error: any) {
+      console.error("Daily sending stats cleanup preview error:", error);
+      setDailySendingStatsCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        actionLoading: false,
+        error: error?.message || "Daily sending stats could not be loaded.",
+        status: "",
+      }));
+    }
+  };
+
+  const deleteOldDailySendingStats = async () => {
+    const confirmText = "DELETE OLD DAILY STATS";
+    const typedConfirm = window.prompt(
+      "This deletes old daily_sending_stats records only. Today's dateKey stays protected. Type DELETE OLD DAILY STATS to continue.",
+      "",
+    );
+    if (String(typedConfirm || "").trim().toUpperCase() !== confirmText) return;
+
+    setDailySendingStatsCleanup((prev) => ({
+      ...prev,
+      actionLoading: true,
+      error: "",
+      status: "Deleting old daily sending stats while keeping today protected...",
+      deletedCount: 0,
+    }));
+
+    try {
+      const response = await fetch("/api/trackflow/cleanup/daily-sending-stats", {
+        method: "POST",
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({
+          confirm: confirmText,
+          batchSize: 400,
+          maxBatches: 10,
+        }),
+      });
+
+      const data = await readTrackflowJson(response);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || "Old daily sending stats cleanup failed.");
+      }
+
+      setDailySendingStatsCleanup((prev) => ({
+        ...prev,
+        loading: false,
+        actionLoading: false,
+        error: "",
+        status: data.message || "Old daily sending stats were deleted. Today's data stayed protected.",
+        loadedAt: Date.now(),
+        keepDateKey: String(data.keepDateKey || ""),
+        totalDocs: Number(data.totalDocs || 0),
+        todayDocs: Number(data.todayDocs || 0),
+        oldDocs: Number(data.oldDocs || 0),
+        deletedCount: Number(data.deletedCount || 0),
+        remainingOldDocs: Number(data.remainingOldDocs ?? data.oldDocs ?? 0),
+        senderCount: Number(data.senderCount || 0),
+        oldestDateKey: String(data.oldestDateKey || ""),
+        latestDateKey: String(data.latestDateKey || ""),
+        senderRows: Array.isArray(data.senderRows) ? data.senderRows : [],
+        sampleRows: Array.isArray(data.sampleRows) ? data.sampleRows : [],
+      }));
+
+      await loadFirebaseUsage(true);
+    } catch (error: any) {
+      console.error("Daily sending stats cleanup delete error:", error);
+      setDailySendingStatsCleanup((prev) => ({
+        ...prev,
+        actionLoading: false,
+        error: error?.message || "Old daily sending stats cleanup failed.",
+        status: "",
+      }));
+    }
+  };
+
   const selectSecureReportForCleanup = (report: SecureReportRow) => {
     const input = report.reportUrl || report.token;
     setSecureReports((prev) => ({
@@ -2930,6 +3070,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (activeTab === "cleanup") {
       loadSecureReports(false);
+      loadDailySendingStatsCleanup(false);
       loadFootprintMemories(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3945,6 +4086,9 @@ export default function DashboardPage() {
             <CleanupPanel
               reportAssetCleanup={reportAssetCleanup}
               setReportAssetCleanup={setReportAssetCleanup}
+              dailySendingStatsCleanup={dailySendingStatsCleanup}
+              loadDailySendingStatsCleanup={loadDailySendingStatsCleanup}
+              deleteOldDailySendingStats={deleteOldDailySendingStats}
               previewReportAssetCleanup={previewReportAssetCleanup}
               runReportAssetCleanup={runReportAssetCleanup}
               secureReports={secureReports}

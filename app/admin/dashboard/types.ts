@@ -381,6 +381,47 @@ export type ReportCleanupStep = {
   details?: Record<string, any>;
 };
 
+export type DailySendingStatsCleanupSenderRow = {
+  senderEmail: string;
+  totalDocs: number;
+  oldDocs: number;
+  todayDocs: number;
+  initialSent: number;
+  followupSent: number;
+  totalSent: number;
+  oldestDateKey?: string;
+  latestDateKey?: string;
+};
+
+export type DailySendingStatsCleanupDocRow = {
+  id: string;
+  dateKey: string;
+  senderEmail: string;
+  initialSent: number;
+  followupSent: number;
+  totalSent: number;
+  updatedAt?: string;
+};
+
+export type DailySendingStatsCleanupState = {
+  loading: boolean;
+  actionLoading: boolean;
+  error: string;
+  status: string;
+  loadedAt: number | null;
+  keepDateKey: string;
+  totalDocs: number;
+  todayDocs: number;
+  oldDocs: number;
+  deletedCount: number;
+  remainingOldDocs: number;
+  senderCount: number;
+  oldestDateKey: string;
+  latestDateKey: string;
+  senderRows: DailySendingStatsCleanupSenderRow[];
+  sampleRows: DailySendingStatsCleanupDocRow[];
+};
+
 export type ReportCleanupManifest = {
   reportToken?: string;
   reportFound?: boolean;

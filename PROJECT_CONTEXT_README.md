@@ -1,8 +1,345 @@
 # TrackFlow Pro — MASTER PROJECT CONTEXT README
 
-Version: v25.00-local-audit-ai-context-outreach-handoff
+Version: v25.10-brevo-smtp-message-id-threading-fix
 Last updated: 2026-06-11
 Purpose: Upload this single README in a new ChatGPT chat so the assistant/developer can quickly understand the full TrackFlow Pro project, where each file lives, which files are connected, how to safely patch files, how to return ZIP handoffs, and how to communicate with the owner in natural Bengali.
+
+---
+
+
+## Latest Critical Update — v25.10 Brevo SMTP Message-Id Follow-up Threading Fix
+
+This section is now the highest-priority operating rule for Vercel/email automation issues where follow-up emails start a new Gmail thread instead of staying inside the original thread.
+
+### Confirmed problem and root cause
+
+Confirmed behavior after live testing:
+
+```text
+Initial email sent through Brevo
+→ TrackFlow custom Message-ID is created, for example:
+  <timestamp.trackingId@mail.trackflowpro.com>
+
+Brevo final delivery to Gmail
+→ Gmail-visible Message-Id becomes:
+  <uuid@smtp-relay.sendinblue.com>
+
+TrackFlow custom id remains in the raw header as Origin-messageId
+→ Gmail does not treat Origin-messageId as the real thread id.
+```
+
+The important finding:
+
+```text
+Brevo webhook payload message-id
+→ usually returns the TrackFlow custom/origin id:
+  <timestamp.trackingId@mail.trackflowpro.com>
+
+Brevo webhook payload uuid
+→ matches the local part of Gmail's real final Message-Id.
+
+Therefore the real Gmail/Brevo SMTP Message-Id can be derived as:
+  <${uuid}@smtp-relay.sendinblue.com>
+```
+
+Example pattern only:
+
+```json
+{
+  "message-id": "<timestamp.trackingId@mail.trackflowpro.com>",
+  "uuid": "provider-generated-uuid",
+  "event": "delivered",
+  "tags": ["trackingId_step1"]
+}
+```
+
+Corresponding Gmail raw header pattern:
+
+```text
+Message-Id: <provider-generated-uuid@smtp-relay.sendinblue.com>
+Origin-messageId: <timestamp.trackingId@mail.trackflowpro.com>
+```
+
+### Correct Firestore storage model after the fix
+
+When a Brevo webhook arrives and `uuid` exists, derive:
+
+```text
+brevoSmtpMessageId = <uuid@smtp-relay.sendinblue.com>
+```
+
+For the initial email / step1 webhook, save this real provider SMTP id on the outreach lead:
+
+```text
+originalMessageId = brevoSmtpMessageId
+brevoMessageId = brevoSmtpMessageId
+providerSmtpMessageId = brevoSmtpMessageId
+brevoSmtpMessageId = brevoSmtpMessageId
+providerDeliveredMessageId = brevoSmtpMessageId
+brevoDeliveredMessageId = brevoSmtpMessageId
+smtpMessageId = brevoSmtpMessageId
+lastBrevoSmtpMessageId = brevoSmtpMessageId
+lastProviderSmtpMessageId = brevoSmtpMessageId
+lastProviderMessageId = brevoSmtpMessageId
+brevoProviderLastMessageId = brevoSmtpMessageId
+```
+
+If the old `originalMessageId` / `brevoMessageId` contained the TrackFlow custom id, preserve it for audit/debug only:
+
+```text
+originMessageId = old custom TrackFlow Message-ID
+brevoOriginMessageId = old custom TrackFlow/Brevo message-id
+```
+
+Also update the matching item in `sent_messages` using the tracking tag / step number:
+
+```text
+sent_messages[n].providerSmtpMessageId = brevoSmtpMessageId
+sent_messages[n].brevoSmtpMessageId = brevoSmtpMessageId
+sent_messages[n].providerDeliveredMessageId = brevoSmtpMessageId
+sent_messages[n].brevoDeliveredMessageId = brevoSmtpMessageId
+sent_messages[n].smtpMessageId = brevoSmtpMessageId
+sent_messages[n].messageId = brevoSmtpMessageId when the existing messageId is not already a Brevo SMTP id
+```
+
+For follow-up webhook events, save the real provider id without overwriting the root initial id:
+
+```text
+lastFollowupProviderSmtpMessageId = brevoSmtpMessageId
+lastFollowupBrevoSmtpMessageId = brevoSmtpMessageId
+sent_messages[n].providerSmtpMessageId = brevoSmtpMessageId
+sent_messages[n].brevoSmtpMessageId = brevoSmtpMessageId
+```
+
+### Correct follow-up threading behavior
+
+Stable env for the confirmed fix:
+
+```env
+FOLLOWUP_THREADING_MODE=provider_headers
+```
+
+Follow-up headers should use only the real Gmail-visible provider SMTP ids when available.
+
+Correct follow-up header pattern:
+
+```text
+In-Reply-To: <initial-or-previous-uuid@smtp-relay.sendinblue.com>
+References: <initial-uuid@smtp-relay.sendinblue.com> <previous-uuid@smtp-relay.sendinblue.com>
+X-TFP-Thread-Root: <initial-uuid@smtp-relay.sendinblue.com>
+```
+
+Important rule:
+
+```text
+Do not send In-Reply-To / References using only TrackFlow custom ids like:
+<timestamp.trackingId@mail.trackflowpro.com>
+
+Gmail may ignore those because Brevo rewrites the final delivered Message-Id.
+```
+
+`getLeadMessageIdChain(lead)` should prefer these provider fields before falling back to custom/origin ids:
+
+```text
+providerSmtpMessageId
+brevoSmtpMessageId
+providerDeliveredMessageId
+brevoDeliveredMessageId
+smtpMessageId
+originalMessageId if it is a Brevo SMTP id
+brevoMessageId if it is a Brevo SMTP id
+sent_messages[n].providerSmtpMessageId
+sent_messages[n].brevoSmtpMessageId
+sent_messages[n].providerDeliveredMessageId
+sent_messages[n].brevoDeliveredMessageId
+sent_messages[n].smtpMessageId
+```
+
+`buildThreadHeadersForFollowup(lead)` should only emit provider headers when the chain contains at least one real Brevo SMTP id.
+
+If no real Brevo SMTP id exists yet:
+
+```text
+Do not emit risky wrong reply headers.
+Fallback to legacy subject grouping behavior.
+```
+
+### Confirmed test result
+
+The issue was reproduced and fixed with this test:
+
+```text
+1. Firestore had only TrackFlow custom/origin Message-ID.
+2. Follow-up used that custom id in In-Reply-To / References.
+3. Gmail opened the follow-up in a new thread.
+4. Firestore was manually changed to the real Gmail/Brevo Message-Id:
+   <uuid@smtp-relay.sendinblue.com>
+5. Follow-up used that id in In-Reply-To / References.
+6. Gmail placed the follow-up perfectly inside the original thread.
+7. The code fix now derives and saves that id automatically from Brevo webhook uuid.
+```
+
+### What not to change while fixing this issue
+
+This fix must be narrow. Do not touch these systems for a pure thread-grouping bug:
+
+```text
+Open tracking pixel
+Click tracking redirect URLs
+Self-hosted /api/trackflow/track/open logic
+Self-hosted /api/trackflow/track/click logic
+Open/click dedupe window
+Follow-up eligibility rules
+Open/click engagement requirement
+Sender selection logic unless sender mismatch is proven
+Cold email body/copy
+Secure report routes
+PDF/B2/Supabase/report cleanup logic
+```
+
+Keep the stable open-tracking env unchanged:
+
+```env
+BREVO_OPEN_WEBHOOK_UPDATES_AUTOMATION=false
+IGNORE_PROVIDER_IMAGE_PROXY_OPEN_SECONDS=3
+STORE_OPEN_TRACKING_DEBUG=true
+TRACKFLOW_DEBUG_EMAIL_FLOW=false
+STORE_LOW_VALUE_EMAIL_EVENTS=false
+```
+
+### Connected files for this threading issue
+
+Primary file:
+
+```text
+app/api/trackflow/[...action]/route.ts
+```
+
+Use this file for:
+
+```text
+Brevo webhook uuid handling
+Brevo SMTP Message-Id derivation
+Firestore provider message id storage
+sent_messages provider id updates
+follow-up In-Reply-To / References headers
+FOLLOWUP_THREADING_MODE behavior
+```
+
+Ask for these only if sender mismatch or dashboard payload is suspected:
+
+```text
+lib/senders.ts
+lib/trackflow-email/sender-selection.ts
+app/admin/dashboard/page.tsx
+app/admin/dashboard/OutreachPanel.tsx
+app/admin/dashboard/hooks/useScheduledEmails.ts
+app/admin/dashboard/AutomationPanel.tsx
+app/admin/dashboard/followup-utils.ts
+lib/trackflow-email/email-events.ts
+```
+
+### Debug checklist for future assistants
+
+If follow-ups start a new Gmail thread again:
+
+```text
+1. Confirm FOLLOWUP_THREADING_MODE=provider_headers in Vercel.
+2. Send a fresh initial email after deployment.
+3. Wait for Brevo webhook request/delivered/opened event.
+4. Check Firestore lead fields:
+   brevoSmtpMessageId
+   providerSmtpMessageId
+   originalMessageId
+   brevoMessageId
+   sent_messages[0].providerSmtpMessageId
+5. These should contain:
+   <uuid@smtp-relay.sendinblue.com>
+6. Trigger the follow-up.
+7. Check Firestore follow-up fields:
+   lastFollowupInReplyTo
+   lastFollowupReferences
+   sent_messages[n].inReplyTo
+   sent_messages[n].references
+   sent_messages[n].threadRootMessageId
+8. These should also use the real Brevo SMTP id, not only the TrackFlow custom/origin id.
+9. If Gmail still opens a new thread, inspect raw Gmail headers for both initial and follow-up.
+```
+
+Raw header comparison should verify:
+
+```text
+Initial Gmail raw header Message-Id
+= Follow-up raw header In-Reply-To / References target
+```
+
+If they do not match, thread grouping can break.
+
+### Brevo webhook payload notes
+
+Brevo webhook `message-id` alone is not enough for Gmail threading because it may be the TrackFlow custom/origin id.
+
+Use:
+
+```text
+body.uuid
+body.message_uuid
+body.messageUuid
+body["message-uuid"]
+body["message_uuid"]
+```
+
+Then normalize and derive:
+
+```text
+<uuid@smtp-relay.sendinblue.com>
+```
+
+If Brevo later changes SMTP domain, also support real explicit provider ids when present:
+
+```text
+smtpMessageId
+smtp_message_id
+providerSmtpMessageId
+provider_smtp_message_id
+deliveredMessageId
+delivered_message_id
+```
+
+Only treat an id as a safe provider SMTP id when it matches a real Brevo SMTP Message-Id shape such as:
+
+```text
+<uuid@smtp-relay.sendinblue.com>
+<uuid@smtp-relay.brevo.com>
+```
+
+### Patch history for this fix
+
+Patch handoff name:
+
+```text
+trackflow-brevo-smtp-message-id-thread-fix.zip
+```
+
+Changed file:
+
+```text
+app/api/trackflow/[...action]/route.ts
+```
+
+Purpose:
+
+```text
+Derive Gmail-visible Brevo SMTP Message-Id from webhook uuid, save it to Firestore, and use it for follow-up reply headers so Gmail keeps follow-ups in the original thread.
+```
+
+Build honesty:
+
+```text
+The patch was packaged as a single-file replacement.
+Full npm run build was not run in ChatGPT because the full project/node_modules were not available.
+After applying the patch, run npm run lint and npm run build in the full project.
+```
 
 ---
 
@@ -1038,7 +1375,8 @@ Current system priorities:
 9. Email open/click/reply/follow-up state remains Firestore source-of-truth; Google Sheet is only pipeline/review/routing.
 10. Self-hosted email open pixels are the primary source for open_count; Brevo opened webhooks are diagnostic unless intentionally enabled.
 11. For email tracking bugs, first inspect public tracking URL, lead/message identity, provider image-proxy ignore rules, and dashboard cache separately.
-12. Evidence videos are optional high-value lead assets; they must remain browser-visible, evidence-safe, and stored as YouTube/metadata links rather than video files in Firestore.
+12. For email follow-up thread bugs, first inspect Brevo webhook uuid, Gmail raw Message-Id, Firestore providerSmtpMessageId / brevoSmtpMessageId, and FOLLOWUP_THREADING_MODE=provider_headers.
+13. Evidence videos are optional high-value lead assets; they must remain browser-visible, evidence-safe, and stored as YouTube/metadata links rather than video files in Firestore.
 13. For public-page UI work, touch only the page/component files needed for that page.
 14. For secure-page UI/speed work, preserve tracking beacons, PDF routes, report redirects, and chatbot API/session logic.
 15. Return code patches as ZIP files with exact project-relative paths and README_FIX.txt.

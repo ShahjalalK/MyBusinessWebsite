@@ -3772,6 +3772,198 @@ async function handleSenderStats(req: Request) {
   });
 }
 
+
+type DailySendingStatsSummary = {
+  keepDateKey: string;
+  totalDocs: number;
+  todayDocs: number;
+  oldDocs: number;
+  senderCount: number;
+  oldestDateKey: string;
+  latestDateKey: string;
+  senderRows: Array<{
+    senderEmail: string;
+    totalDocs: number;
+    oldDocs: number;
+    todayDocs: number;
+    initialSent: number;
+    followupSent: number;
+    totalSent: number;
+    oldestDateKey?: string;
+    latestDateKey?: string;
+  }>;
+  sampleRows: Array<{
+    id: string;
+    dateKey: string;
+    senderEmail: string;
+    initialSent: number;
+    followupSent: number;
+    totalSent: number;
+    updatedAt?: string;
+  }>;
+};
+
+function serializeDailySendingStatsTimestamp(value: any): string {
+  if (!value) return "";
+  try {
+    if (typeof value.toDate === "function") return value.toDate().toISOString();
+    if (typeof value.toMillis === "function") return new Date(value.toMillis()).toISOString();
+  } catch {
+    return "";
+  }
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+  return "";
+}
+
+function normalizeDailySendingStatsRow(docSnap: FirestoreQueryDocSnap) {
+  const data = docSnap.data() || {};
+  const dateKey = String(data.dateKey || "").trim();
+  const senderEmail = normalizeEmail(data.senderEmail || "") || "global";
+  const initialSent = Math.max(0, Number(data.initialSent || 0));
+  const followupSent = Math.max(0, Number(data.followupSent || 0));
+
+  return {
+    id: docSnap.id,
+    dateKey,
+    senderEmail,
+    initialSent,
+    followupSent,
+    totalSent: initialSent + followupSent,
+    updatedAt: serializeDailySendingStatsTimestamp(data.updatedAt),
+  };
+}
+
+async function buildDailySendingStatsCleanupSummary(keepDateKey = todayKey()): Promise<DailySendingStatsSummary> {
+  const collectionRef = adminDb.collection("daily_sending_stats");
+  const [totalDocs, todayDocs, oldDocs, sampleSnap] = await Promise.all([
+    getCount(collectionRef),
+    getCount(collectionRef.where("dateKey", "==", keepDateKey)),
+    getCount(collectionRef.where("dateKey", "<", keepDateKey)),
+    collectionRef.where("dateKey", "<", keepDateKey).orderBy("dateKey", "asc").limit(250).get(),
+  ]);
+
+  const senderMap = new Map<string, DailySendingStatsSummary["senderRows"][number]>();
+  const sampleRows = sampleSnap.docs.map((docSnap: any) => normalizeDailySendingStatsRow(docSnap));
+  let oldestDateKey = "";
+  let latestDateKey = "";
+
+  const addSenderRow = (row: ReturnType<typeof normalizeDailySendingStatsRow>, isToday: boolean) => {
+    const senderEmail = row.senderEmail || "global";
+    const current = senderMap.get(senderEmail) || {
+      senderEmail,
+      totalDocs: 0,
+      oldDocs: 0,
+      todayDocs: 0,
+      initialSent: 0,
+      followupSent: 0,
+      totalSent: 0,
+      oldestDateKey: "",
+      latestDateKey: "",
+    };
+
+    current.totalDocs += 1;
+    current.oldDocs += isToday ? 0 : 1;
+    current.todayDocs += isToday ? 1 : 0;
+    current.initialSent += row.initialSent;
+    current.followupSent += row.followupSent;
+    current.totalSent += row.totalSent;
+    if (row.dateKey && (!current.oldestDateKey || row.dateKey < current.oldestDateKey)) current.oldestDateKey = row.dateKey;
+    if (row.dateKey && (!current.latestDateKey || row.dateKey > current.latestDateKey)) current.latestDateKey = row.dateKey;
+    senderMap.set(senderEmail, current);
+  };
+
+  sampleRows.forEach((row) => {
+    if (row.dateKey && (!oldestDateKey || row.dateKey < oldestDateKey)) oldestDateKey = row.dateKey;
+    if (row.dateKey && (!latestDateKey || row.dateKey > latestDateKey)) latestDateKey = row.dateKey;
+    addSenderRow(row, false);
+  });
+
+  const todaySnap = await collectionRef.where("dateKey", "==", keepDateKey).limit(100).get();
+  todaySnap.docs.map((docSnap: any) => normalizeDailySendingStatsRow(docSnap)).forEach((row) => {
+    if (row.dateKey && (!oldestDateKey || row.dateKey < oldestDateKey)) oldestDateKey = row.dateKey;
+    if (row.dateKey && (!latestDateKey || row.dateKey > latestDateKey)) latestDateKey = row.dateKey;
+    addSenderRow(row, true);
+  });
+
+  return {
+    keepDateKey,
+    totalDocs,
+    todayDocs,
+    oldDocs,
+    senderCount: senderMap.size,
+    oldestDateKey,
+    latestDateKey,
+    senderRows: Array.from(senderMap.values()).sort((a, b) => b.oldDocs - a.oldDocs || a.senderEmail.localeCompare(b.senderEmail)).slice(0, 100),
+    sampleRows,
+  };
+}
+
+async function handleDailySendingStatsCleanupPreview(req: Request) {
+  await requireAdmin(req);
+
+  const keepDateKey = todayKey();
+  const summary = await buildDailySendingStatsCleanupSummary(keepDateKey);
+
+  return json({
+    success: true,
+    mode: "preview",
+    message: summary.oldDocs
+      ? `${summary.oldDocs} old daily sending stat record(s) are ready to delete. Today's ${summary.todayDocs} record(s) will stay.`
+      : "No old daily sending stat records found. Today's data is protected.",
+    ...summary,
+  });
+}
+
+async function handleDailySendingStatsCleanup(req: Request) {
+  await requireAdmin(req);
+
+  const body = await readJson(req).catch(() => ({}));
+  const confirm = String(body?.confirm || "").trim().toUpperCase();
+  if (confirm !== "DELETE OLD DAILY STATS") {
+    throw new ApiError("Type DELETE OLD DAILY STATS before deleting old daily sending stats.", 400);
+  }
+
+  const keepDateKey = todayKey();
+  const batchSize = Math.max(1, Math.min(Number(body?.batchSize || 400), 450));
+  const maxBatches = Math.max(1, Math.min(Number(body?.maxBatches || 10), 20));
+  const collectionRef = adminDb.collection("daily_sending_stats");
+
+  let deletedCount = 0;
+  const deletedSamples: string[] = [];
+
+  for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
+    const snap = await collectionRef.where("dateKey", "<", keepDateKey).orderBy("dateKey", "asc").limit(batchSize).get();
+    if (snap.empty) break;
+
+    const batch = adminDb.batch();
+    snap.docs.forEach((docSnap: any) => {
+      batch.delete(docSnap.ref);
+      if (deletedSamples.length < 10) deletedSamples.push(docSnap.id);
+    });
+    await batch.commit();
+    deletedCount += snap.size;
+
+    if (snap.size < batchSize) break;
+  }
+
+  const summary = await buildDailySendingStatsCleanupSummary(keepDateKey);
+
+  return json({
+    success: true,
+    mode: "delete_old_keep_today",
+    message: deletedCount
+      ? `Deleted ${deletedCount} old daily sending stat record(s). Today's ${summary.todayDocs} record(s) stayed protected.${summary.oldDocs ? ` ${summary.oldDocs} old record(s) still remain; run cleanup again if needed.` : ""}`
+      : "No old daily sending stat records were deleted. Today's data stayed protected.",
+    deletedCount,
+    remainingOldDocs: summary.oldDocs,
+    hasMore: summary.oldDocs > 0,
+    deletedSamples,
+    ...summary,
+  });
+}
+
 async function handleFollowupSummary(req: Request) {
   await requireAdmin(req);
 
@@ -11766,6 +11958,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     if (action === "cleanup/manual-run") return await handleCleanupManualRun(req);
     if (action === "cleanup/report") return await handleReportCleanup(req);
     if (action === "cleanup/reports/bulk") return await handleBulkReportCleanup(req);
+    if (action === "cleanup/daily-sending-stats") return await handleDailySendingStatsCleanup(req);
     if (action === "unsubscribe") return await handleUnsubscribePost(req);
 
     return json({ success: false, error: `Unknown POST action: ${action}` }, 404);
@@ -11806,6 +11999,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "cleanup/footprint-memory") return await handleFootprintMemoryList(req);
     if (action === "cleanup/reports") return await handleSecureReportsList(req);
     if (action === "cleanup/report") return await handleReportCleanupPreview(req);
+    if (action === "cleanup/daily-sending-stats") return await handleDailySendingStatsCleanupPreview(req);
     if (action === "cron/cleanup-expired-reports") return await handleExpiredReportCleanupCron(req);
 
     if (action === "health" || action === "") return await handleTrackflowHealth(req);
