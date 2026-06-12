@@ -920,47 +920,181 @@ function ReportServedPixel({
   );
 }
 
-function ReportViewBeacon({ token }: { token: string }) {
+function ReportViewBeacon({
+  token,
+  domainSlug,
+  companyName,
+  primaryActionLabel,
+}: {
+  token: string;
+  domainSlug: string;
+  companyName: string;
+  primaryActionLabel: string;
+}) {
   const script = `
 (function () {
   try {
     var token = ${JSON.stringify(token)};
+    var domainSlug = ${JSON.stringify(domainSlug)};
+    var companyName = ${JSON.stringify(companyName)};
+    var primaryActionLabel = ${JSON.stringify(primaryActionLabel)};
     if (!token) return;
 
-    var storageKey = "trackflow_report_view_" + token;
-    try {
-      if (window.sessionStorage && window.sessionStorage.getItem(storageKey)) return;
-    } catch (storageError) {}
+    var viewStorageKey = "trackflow_report_view_" + token;
+    var sessionStorageKey = "trackflow_report_session_" + token;
+    var heartbeatKey = "__trackflowReportHeartbeatReady_" + token;
 
-    window.setTimeout(function () {
+    function getSessionId() {
       try {
-        try {
-          if (window.sessionStorage) window.sessionStorage.setItem(storageKey, "1");
-        } catch (storageError) {}
+        if (window.sessionStorage) {
+          var existing = window.sessionStorage.getItem(sessionStorageKey);
+          if (existing) return existing;
+        }
+      } catch (storageError) {}
 
-        var url = "/api/trackflow/reports/view?token=" + encodeURIComponent(token);
-        var payload = JSON.stringify({ token: token, source: "report_page_beacon" });
+      var next = "rpt_" + token.slice(0, 24) + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
+
+      try {
+        if (window.sessionStorage) window.sessionStorage.setItem(sessionStorageKey, next);
+      } catch (storageError) {}
+
+      return next;
+    }
+
+    var reportSessionId = getSessionId();
+
+    function sendJson(url, payload) {
+      try {
+        var body = JSON.stringify(payload || {});
 
         if (navigator.sendBeacon) {
-          var body = new Blob([payload], { type: "application/json" });
-          navigator.sendBeacon(url, body);
-          return;
+          var blob = new Blob([body], { type: "application/json" });
+          if (navigator.sendBeacon(url, blob)) return;
         }
 
         fetch(url, {
           method: "POST",
           keepalive: true,
           headers: { "content-type": "application/json" },
-          body: payload
+          body: body
         }).catch(function () {});
       } catch (error) {}
-    }, 3500);
+    }
+
+    function sendInitialView() {
+      try {
+        var alreadySent = false;
+        try {
+          alreadySent = Boolean(window.sessionStorage && window.sessionStorage.getItem(viewStorageKey));
+          if (window.sessionStorage) window.sessionStorage.setItem(viewStorageKey, "1");
+        } catch (storageError) {}
+
+        if (alreadySent) return;
+
+        sendJson("/api/trackflow/reports/view?token=" + encodeURIComponent(token), {
+          token: token,
+          source: "report_page_beacon"
+        });
+
+        sendJson("/api/report-event", {
+          eventName: "secure_report_viewed",
+          token: token,
+          domainSlug: domainSlug,
+          companyName: companyName,
+          eventSection: "secure_report",
+          buttonLabel: "Secure report viewed",
+          primaryActionLabel: primaryActionLabel,
+          primaryPageLabel: "Secure tracking review",
+          transport: "report_view_beacon",
+          reportSessionId: reportSessionId,
+          sessionStarted: true,
+          intentScore: 10
+        });
+      } catch (error) {}
+    }
+
+    window.setTimeout(sendInitialView, 3500);
+
+    if (window[heartbeatKey]) return;
+    window[heartbeatKey] = true;
+
+    var activeMilliseconds = 0;
+    var activeStartedAt = document.visibilityState === "visible" ? Date.now() : 0;
+    var lastInteractionAt = Date.now();
+    var idleAfterMs = 90000;
+
+    function isVisitorActive(now) {
+      return document.visibilityState === "visible" && now - lastInteractionAt <= idleAfterMs;
+    }
+
+    function noteInteraction() {
+      var now = Date.now();
+      lastInteractionAt = now;
+      if (!activeStartedAt && document.visibilityState === "visible") activeStartedAt = now;
+    }
+
+    function accumulateActiveTime() {
+      var now = Date.now();
+      if (activeStartedAt && isVisitorActive(now)) {
+        activeMilliseconds += Math.max(0, now - activeStartedAt);
+        activeStartedAt = now;
+        return;
+      }
+      activeStartedAt = isVisitorActive(now) ? now : 0;
+    }
+
+    function flushHeartbeat(reason) {
+      try {
+        accumulateActiveTime();
+        var deltaSeconds = Math.round(activeMilliseconds / 1000);
+        if (deltaSeconds <= 0) return;
+        activeMilliseconds = 0;
+
+        sendJson("/api/report-event", {
+          eventName: "secure_report_duration_heartbeat",
+          token: token,
+          domainSlug: domainSlug,
+          companyName: companyName,
+          eventSection: "secure_report",
+          buttonLabel: "Visitor active heartbeat",
+          primaryActionLabel: primaryActionLabel,
+          primaryPageLabel: "Secure tracking review",
+          transport: "report_heartbeat_beacon",
+          reportSessionId: reportSessionId,
+          durationEventType: reason || "heartbeat",
+          timeOnReportDeltaSeconds: Math.min(deltaSeconds, 120),
+          intentScore: 20
+        });
+      } catch (error) {}
+    }
+
+    ["pointerdown", "mousemove", "keydown", "scroll", "touchstart"].forEach(function (eventName) {
+      try {
+        window.addEventListener(eventName, noteInteraction, { passive: true });
+      } catch (eventError) {}
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") {
+        flushHeartbeat("hidden");
+        activeStartedAt = 0;
+      } else {
+        noteInteraction();
+      }
+    });
+
+    window.setInterval(function () {
+      flushHeartbeat("heartbeat");
+    }, 60000);
+
+    window.addEventListener("pagehide", function () {
+      flushHeartbeat("pagehide");
+    });
   } catch (error) {}
 })();`;
 
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
-
 
 
 function AssistantVisibilityScript() {
@@ -1098,7 +1232,7 @@ html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-s
   );
 }
 
-function PdfDownloadExperienceScript() {
+function PdfDownloadExperienceScript({ token, domainSlug, primaryActionLabel }: { token: string; domainSlug: string; primaryActionLabel: string }) {
   const script = `
 (function () {
   try {
@@ -1179,6 +1313,38 @@ function PdfDownloadExperienceScript() {
       if (dot) dot.hidden = false;
     }
 
+    function trackPdfDownloadSuccess(href, fileName, blobSize) {
+      try {
+        var payload = {
+          eventName: 'secure_report_pdf_download_success',
+          token: ${JSON.stringify(token)},
+          domainSlug: ${JSON.stringify(domainSlug)},
+          eventSection: 'pdf',
+          buttonLabel: 'Download PDF',
+          primaryActionLabel: ${JSON.stringify(primaryActionLabel)},
+          primaryPageLabel: 'Secure tracking review',
+          transport: 'pdf_download_experience',
+          clickHref: href || '',
+          fileName: fileName || '',
+          fileSizeBytes: blobSize || 0,
+          intentScore: 75
+        };
+        var body = JSON.stringify(payload);
+
+        if (navigator.sendBeacon) {
+          var beaconBody = new Blob([body], { type: 'application/json' });
+          if (navigator.sendBeacon('/api/report-event', beaconBody)) return;
+        }
+
+        fetch('/api/report-event', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'content-type': 'application/json' },
+          body: body
+        }).catch(function () {});
+      } catch (error) {}
+    }
+
     async function downloadPdf(button, href) {
       var separator = href.indexOf('?') >= 0 ? '&' : '?';
       var url = href + separator + 'downloadRequest=' + Date.now();
@@ -1204,6 +1370,7 @@ function PdfDownloadExperienceScript() {
         }
 
         var fileName = parseFileName(response);
+        trackPdfDownloadSuccess(href, fileName, blob.size);
         var objectUrl = window.URL.createObjectURL(blob);
         var link = document.createElement('a');
 
@@ -1840,7 +2007,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
   return (
     <main data-trackflow-secure-report className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900">
-      <ReportViewBeacon token={token} />
+      <ReportViewBeacon token={token} domainSlug={domainSlug} companyName={companyName} primaryActionLabel={ctaText} />
       <ReportServedPixel token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
       <SecureReportAnalytics
         token={token}
@@ -1851,7 +2018,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
         primaryPageLabel="Secure tracking review"
         evidenceVideoId={evidenceVideo?.videoId || ""}
       />
-      <PdfDownloadExperienceScript />
+      <PdfDownloadExperienceScript token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
       <AssistantVisibilityScript />
       <ReportNavbar />
 

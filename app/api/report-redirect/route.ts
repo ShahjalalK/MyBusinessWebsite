@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import admin from "firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -139,6 +141,94 @@ function cleanParams(params: Record<string, unknown>) {
   }
 
   return output;
+}
+
+
+function clampNumber(value: unknown, min = 0, max = 100, fallback = 0): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function intentLabelForScore(score: number): string {
+  if (score >= 85) return "Hot";
+  if (score >= 65) return "High";
+  if (score >= 35) return "Medium";
+  if (score > 0) return "Low";
+  return "Not tracked";
+}
+
+async function updateRedirectEngagementSummary(input: {
+  token: string;
+  kind: RedirectKind;
+  payload: Record<string, unknown>;
+  destination: string;
+}) {
+  const token = normalizeToken(input.token);
+  if (!token || token === "unknown") return { skipped: true, reason: "missing_token" };
+
+  const reportRef = adminDb.collection("audit_reports").doc(token);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const increment = admin.firestore.FieldValue.increment;
+  const eventScore = clampNumber(input.payload.intentScore, 0, 100, input.kind === "booking" ? 95 : 85);
+
+  return adminDb.runTransaction(async (transaction) => {
+    const snap = await transaction.get(reportRef);
+    if (!snap.exists) return { skipped: true, reason: "report_not_found" };
+
+    const current = snap.data() || {};
+    const currentScore = clampNumber(current.intentScore, 0, 100, 0);
+    const nextScore = Math.max(currentScore, eventScore);
+    const visitorCountry = sanitizeParam(input.payload.visitorCountry, 16).toUpperCase();
+    const visitorRegion = sanitizeParam(input.payload.visitorRegion, 80);
+    const visitorCity = sanitizeParam(input.payload.visitorCity, 120);
+
+    const update: Record<string, unknown> = {
+      ctaClicked: true,
+      ctaClickCount: increment(1),
+      lastCtaClickedAt: timestamp,
+      lastCtaType: input.kind,
+      lastCtaLabel: sanitizeParam(input.payload.buttonLabel || input.payload.clickText, 180),
+      lastCtaHref: sanitizeParam(input.destination, 1200),
+      lastActivityAt: timestamp,
+      lastReportActivityAt: timestamp,
+      lastEngagementEventName: sanitizeParam(input.payload.eventName, 80),
+      reportPageViewed: true,
+      lastSeenAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    if (visitorCountry) {
+      update.visitorCountry = visitorCountry;
+      update.lastVisitorCountry = visitorCountry;
+    }
+    if (visitorRegion) update.lastVisitorRegion = visitorRegion;
+    if (visitorCity) update.lastVisitorCity = visitorCity;
+
+    if (input.kind === "booking") {
+      update.bookingClicked = true;
+      update.bookingClickCount = increment(1);
+      update.lastBookingClickedAt = timestamp;
+    } else if (input.kind === "email") {
+      update.emailClicked = true;
+      update.emailClickCount = increment(1);
+      update.lastEmailClickedAt = timestamp;
+    } else if (input.kind === "linkedin") {
+      update.linkedinClicked = true;
+      update.linkedinClickCount = increment(1);
+      update.lastLinkedinClickedAt = timestamp;
+    }
+
+    if (nextScore > currentScore) {
+      update.intentScore = nextScore;
+      update.intentLabel = intentLabelForScore(nextScore);
+    } else if (!current.intentLabel && currentScore > 0) {
+      update.intentLabel = intentLabelForScore(currentScore);
+    }
+
+    transaction.set(reportRef, update, { merge: true });
+    return { skipped: false, token, kind: input.kind };
+  });
 }
 
 function isAnalyticsDebugEnabled() {
@@ -349,6 +439,17 @@ async function forwardClickEvent(request: NextRequest, destination: string) {
   };
 
   const ga4 = await sendGa4RedirectEvent(payload);
+
+  try {
+    await updateRedirectEngagementSummary({
+      token,
+      kind,
+      payload,
+      destination,
+    });
+  } catch (summaryError) {
+    console.error("Report redirect engagement summary update failed:", summaryError);
+  }
 
   if (isAnalyticsDebugEnabled()) {
     console.info("[trackflow-analytics] report_redirect", {

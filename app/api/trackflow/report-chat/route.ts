@@ -699,6 +699,86 @@ async function loadReportByToken(token: string): Promise<AnyRecord | null> {
   return null;
 }
 
+
+function clampIntentScore(value: unknown, fallback = 0): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(100, Math.max(0, numeric));
+}
+
+function intentLabelForScore(score: number): string {
+  if (score >= 85) return "Hot";
+  if (score >= 65) return "High";
+  if (score >= 35) return "Medium";
+  if (score > 0) return "Low";
+  return "Not tracked";
+}
+
+async function markReportChatQuestionEngagement(input: {
+  sessionId: string;
+  reportToken: string;
+  status?: string;
+  domainSlug?: string;
+  domain?: string;
+  companyName?: string;
+  reportUrl?: string;
+  visit?: ReportChatVisitInfo;
+}) {
+  const token = normalizeToken(input.reportToken);
+  if (!token) return { skipped: true, reason: "missing_token" };
+
+  const reportRef = adminDb.collection("audit_reports").doc(token);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const increment = admin.firestore.FieldValue.increment;
+  const eventScore = 80;
+
+  return adminDb.runTransaction(async (transaction) => {
+    const snap = await transaction.get(reportRef);
+    if (!snap.exists) return { skipped: true, reason: "report_not_found" };
+
+    const current = snap.data() || {};
+    const currentScore = clampIntentScore(current.intentScore, 0);
+    const nextScore = Math.max(currentScore, eventScore);
+    const countryCode = cleanCountryCode(input.visit?.countryCode || "");
+    const countryName = cleanHeader(input.visit?.countryName || "", 120);
+
+    const update: AnyRecord = {
+      chatOpened: true,
+      chatEngaged: true,
+      chatQuestionCount: increment(1),
+      lastChatQuestionAt: timestamp,
+      lastChatSessionId: input.sessionId,
+      lastChatStatus: cleanHeader(input.status || "answered", 80),
+      lastActivityAt: timestamp,
+      lastReportActivityAt: timestamp,
+      lastEngagementEventName: "secure_report_chat_question_answered",
+      reportPageViewed: true,
+      lastSeenAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    if (countryCode) {
+      update.visitorCountry = countryCode;
+      update.lastVisitorCountry = countryCode;
+    }
+    if (countryName && countryName !== "Unknown") update.lastVisitorCountryName = countryName;
+    if (input.domainSlug) update.domainSlug = input.domainSlug;
+    if (input.domain) update.domain = input.domain;
+    if (input.companyName) update.companyName = input.companyName;
+    if (input.reportUrl) update.reportUrl = input.reportUrl;
+
+    if (nextScore > currentScore) {
+      update.intentScore = nextScore;
+      update.intentLabel = intentLabelForScore(nextScore);
+    } else if (!current.intentLabel && currentScore > 0) {
+      update.intentLabel = intentLabelForScore(currentScore);
+    }
+
+    transaction.set(reportRef, update, { merge: true });
+    return { skipped: false, token };
+  });
+}
+
 type AdminCheckResult =
   | { ok: true; email: string }
   | { ok: false; message: string };
@@ -1051,7 +1131,13 @@ async function logSafely(input: {
   try {
     await logReportChatMessages(input);
   } catch {
-    // Optional logging only.
+    // Optional transcript logging only.
+  }
+
+  try {
+    await markReportChatQuestionEngagement(input);
+  } catch {
+    // Firestore engagement summary must never break the chat response.
   }
 }
 

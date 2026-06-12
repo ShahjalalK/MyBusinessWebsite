@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import admin from "firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -444,6 +446,221 @@ function toGa4Boolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "yes", "y"].includes(text);
+}
+
+function clampNumber(value: unknown, min = 0, max = 100, fallback = 0): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function intentLabelForScore(score: number): string {
+  if (score >= 85) return "Hot";
+  if (score >= 65) return "High";
+  if (score >= 35) return "Medium";
+  if (score > 0) return "Low";
+  return "Not tracked";
+}
+
+function isReportViewEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  if (name.includes("pdf_")) return false;
+  if (name.includes("video_")) return false;
+  if (name.includes("assistant_")) return false;
+  return (
+    name === "secure_report_served" ||
+    name === "secure_report_viewed" ||
+    name === "secure_report_view" ||
+    name.includes("report_view") ||
+    name.includes("page_view")
+  );
+}
+
+function isPdfDownloadSuccessEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return name.includes("pdf_download_success") || name === "secure_report_pdf_downloaded";
+}
+
+function isPdfDownloadClickEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return name.includes("pdf_download") && !isPdfDownloadSuccessEvent(name);
+}
+
+function isPdfOpenEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return name.includes("pdf_open") || name.includes("pdf_preview");
+}
+
+function isCtaEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return (
+    name.includes("booking") ||
+    name.includes("email_click") ||
+    name.includes("linkedin_click") ||
+    name.includes("cta_click")
+  );
+}
+
+function isChatOpenEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return name.includes("assistant_open") || name.includes("assistant_question_click");
+}
+
+function isChatMessageEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return name.includes("assistant_message_sent") || name.includes("chat_message_sent");
+}
+
+function isHeartbeatEvent(eventName: string): boolean {
+  const name = sanitizeEventName(eventName);
+  return name === "secure_report_duration_heartbeat" || name === "secure_report_active_heartbeat";
+}
+
+function activeDeltaSecondsFromPayload(payload: Record<string, unknown>): number {
+  const seconds = clampNumber(
+    payload.timeOnReportDeltaSeconds ?? payload.time_on_report_delta_seconds,
+    0,
+    120,
+    0,
+  );
+  if (seconds > 0) return Math.round(seconds);
+
+  const milliseconds = clampNumber(
+    payload.timeOnReportDeltaMilliseconds ?? payload.time_on_report_delta_milliseconds,
+    0,
+    120000,
+    0,
+  );
+
+  return milliseconds > 0 ? Math.round(milliseconds / 1000) : 0;
+}
+
+function safeLastCtaType(payload: Record<string, unknown>, eventName: string): string {
+  const explicit = sanitizeParam(payload.ctaType || payload.cta_type || payload.clickLocation, 80).toLowerCase();
+  if (explicit) return explicit;
+
+  const name = sanitizeEventName(eventName);
+  if (name.includes("booking")) return "booking";
+  if (name.includes("email")) return "email";
+  if (name.includes("linkedin")) return "linkedin";
+  return "cta";
+}
+
+async function updateReportEngagementSummary(payload: Record<string, unknown>) {
+  const token = normalizeToken(payload.token || payload.reportToken || payload.report_token);
+  if (!token || token === "unknown") return { skipped: true, reason: "missing_token" };
+
+  const eventName = sanitizeEventName(payload.eventName);
+  const reportRef = adminDb.collection("audit_reports").doc(token);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const increment = admin.firestore.FieldValue.increment;
+  const eventScore = clampNumber(payload.intentScore ?? payload.intent_score, 0, 100, 0);
+  const sessionStarted = toBoolean(payload.sessionStarted || payload.session_started);
+  const activeDeltaSeconds = isHeartbeatEvent(eventName) ? activeDeltaSecondsFromPayload(payload) : 0;
+  const ctaType = safeLastCtaType(payload, eventName);
+
+  return adminDb.runTransaction(async (transaction) => {
+    const snap = await transaction.get(reportRef);
+    if (!snap.exists) return { skipped: true, reason: "report_not_found" };
+
+    const current = snap.data() || {};
+    const currentScore = clampNumber(current.intentScore, 0, 100, 0);
+    const nextScore = Math.max(currentScore, eventScore);
+    const update: Record<string, unknown> = {
+      lastActivityAt: timestamp,
+      lastReportActivityAt: timestamp,
+      lastEngagementEventName: eventName,
+      updatedAt: timestamp,
+    };
+
+    const visitorCountry = sanitizeParam(payload.visitorCountry || payload.visitor_country, 16).toUpperCase();
+    const visitorRegion = sanitizeParam(payload.visitorRegion || payload.visitor_region, 80);
+    const visitorCity = sanitizeParam(payload.visitorCity || payload.visitor_city, 120);
+    const reportSessionId = sanitizeParam(payload.reportSessionId || payload.report_session_id, 100);
+
+    if (visitorCountry) {
+      update.visitorCountry = visitorCountry;
+      update.lastVisitorCountry = visitorCountry;
+    }
+    if (visitorRegion) update.lastVisitorRegion = visitorRegion;
+    if (visitorCity) update.lastVisitorCity = visitorCity;
+    if (reportSessionId) update.lastReportSessionId = reportSessionId;
+
+    if (isReportViewEvent(eventName) || sessionStarted) {
+      update.reportPageViewed = true;
+      update.lastViewedAt = timestamp;
+      update.lastSeenAt = timestamp;
+      if (!current.firstViewedAt) update.firstViewedAt = timestamp;
+      if (sessionStarted) {
+        update.viewCount = increment(1);
+        update.viewedCount = increment(1);
+        update.sessionCount = increment(1);
+      }
+    }
+
+    if (activeDeltaSeconds > 0) {
+      update.lastSeenAt = timestamp;
+      update.estimatedActiveSeconds = increment(activeDeltaSeconds);
+    }
+
+    if (isPdfDownloadClickEvent(eventName)) {
+      update.pdfDownloadClicked = true;
+      update.lastPdfDownloadClickedAt = timestamp;
+    }
+
+    if (isPdfDownloadSuccessEvent(eventName)) {
+      update.pdfDownloaded = true;
+      update.lastDownloadedAt = timestamp;
+      update.lastPdfDownloadedAt = timestamp;
+      update.downloadCount = increment(1);
+      update.pdfDownloadCount = increment(1);
+    }
+
+    if (isPdfOpenEvent(eventName)) {
+      update.pdfOpened = true;
+      update.lastPdfOpenedAt = timestamp;
+      update.pdfOpenCount = increment(1);
+    }
+
+    if (isCtaEvent(eventName)) {
+      update.ctaClicked = true;
+      update.lastCtaClickedAt = timestamp;
+      update.ctaClickCount = increment(1);
+      update.lastCtaType = ctaType;
+      update.lastCtaLabel = sanitizeParam(payload.buttonLabel || payload.button_label || payload.clickText || payload.click_text, 180);
+      update.lastCtaHref = sanitizeParam(payload.clickHref || payload.click_href, 1200);
+    }
+
+    if (isChatOpenEvent(eventName)) {
+      update.chatOpened = true;
+      update.lastChatOpenedAt = timestamp;
+      update.chatOpenCount = increment(1);
+    }
+
+    if (isChatMessageEvent(eventName)) {
+      update.chatEngaged = true;
+      update.lastChatQuestionAt = timestamp;
+      // chatQuestionCount is incremented in /api/trackflow/report-chat after a real question is accepted,
+      // so analytics click/message events do not double-count the same visitor question.
+    }
+
+    if (nextScore > currentScore) {
+      update.intentScore = nextScore;
+      update.intentLabel = intentLabelForScore(nextScore);
+    } else if (!current.intentLabel && currentScore > 0) {
+      update.intentLabel = intentLabelForScore(currentScore);
+    }
+
+    transaction.set(reportRef, update, { merge: true });
+    return { skipped: false, token, eventName };
+  });
+}
+
 function isAnalyticsDebugEnabled(): boolean {
   return (
     process.env.TRACKFLOW_ANALYTICS_DEBUG === "true" ||
@@ -639,6 +856,12 @@ export async function POST(request: NextRequest) {
     const payload = normalizePayload(input, request);
     const ga4 = await sendGa4SecureReportEvent(payload);
 
+    try {
+      await updateReportEngagementSummary(payload);
+    } catch (summaryError) {
+      console.error("Report engagement summary update failed:", summaryError);
+    }
+
     if (isAnalyticsDebugEnabled()) {
       console.info("[trackflow-analytics] report_event_post", {
         eventName: payload.eventName,
@@ -667,6 +890,12 @@ export async function GET(request: NextRequest) {
 
     const payload = normalizePayload(queryPayload, request);
     const ga4 = await sendGa4SecureReportEvent(payload);
+
+    try {
+      await updateReportEngagementSummary(payload);
+    } catch (summaryError) {
+      console.error("Report engagement pixel summary update failed:", summaryError);
+    }
 
     if (isAnalyticsDebugEnabled()) {
       console.info("[trackflow-analytics] report_event_get", {
