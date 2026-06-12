@@ -32,7 +32,7 @@ import {
 } from "react-simple-wysiwyg";
 
 import type { Lead, ServiceId, StepConfig, StepId, TriggerMode, Variant } from "./types";
-import { STEPS } from "./constants";
+import { ACTIVE_FOLLOWUP_STEPS, MAX_AUTOMATED_FOLLOWUPS } from "./constants";
 import { countLinksFromHtml, countWordsFromHtml, getFollowupRiskLabel } from "./utils";
 
 const SERVICE_LIST: { id: ServiceId; icon: ReactNode }[] = [
@@ -141,7 +141,7 @@ export default function AutomationPanel({
 
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
-            {STEPS.map((step, idx) => (
+            {ACTIVE_FOLLOWUP_STEPS.map((step, idx) => (
               <button
                 key={step}
                 type="button"
@@ -236,11 +236,11 @@ export default function AutomationPanel({
 
         <div className="p-5 rounded-[28px] bg-white border border-gray-100 shadow-sm">
           <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
-            Eligible leads for {activeFollowupService} / {activeFollowupStep.toUpperCase()}:{" "}
+            Eligible leads for {activeFollowupService} / {activeFollowupStep.toUpperCase()} (max F-{MAX_AUTOMATED_FOLLOWUPS}):{" "}
             <span className="text-blue-600">{currentFollowupLeads.length}</span>
           </p>
           <p className="text-[11px] text-gray-400 mt-2 font-bold">
-            Current mode: Follow up only when the lead opened or clicked. Follow-ups are sent in the existing reply thread and do not add a report button or secure page link automatically.
+            Current mode: maximum 3 automated follow-ups per lead. Follow up only when the lead opened or clicked. Follow-ups are sent in the existing reply thread and do not add a report button or secure page link automatically.
           </p>
         </div>
 

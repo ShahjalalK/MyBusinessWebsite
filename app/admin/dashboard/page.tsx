@@ -87,7 +87,7 @@ import type {
   TriggerMode,
   Variant,
 } from "./types";
-import { OUTREACH_DRAFT_KEY, SERVICE_NAMES } from "./constants";
+import { ACTIVE_FOLLOWUP_STEPS, OUTREACH_DRAFT_KEY, SERVICE_NAMES } from "./constants";
 import {
   applyMergeTags,
   emailStatsDocId,
@@ -1086,6 +1086,14 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const safeActiveFollowupStep: StepId = ACTIVE_FOLLOWUP_STEPS.includes(activeFollowupStep) ? activeFollowupStep : "step1";
+
+  useEffect(() => {
+    if (activeFollowupStep === safeActiveFollowupStep) return;
+    setActiveFollowupStep(safeActiveFollowupStep);
+    setShowVariantLeads(null);
+  }, [activeFollowupStep, safeActiveFollowupStep, setActiveFollowupStep, setShowVariantLeads]);
+
   const loadFollowupCandidates = async () => {
     try {
       setFollowupCandidatesLoading(true);
@@ -1093,7 +1101,7 @@ export default function DashboardPage() {
 
       const params = new URLSearchParams({
         service: activeFollowupService,
-        step: activeFollowupStep,
+        step: safeActiveFollowupStep,
         limit: "100",
         scanLimit: "500",
       });
@@ -1123,7 +1131,7 @@ export default function DashboardPage() {
     if (activeTab !== "automation") return;
     loadFollowupCandidates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, activeFollowupService, activeFollowupStep]);
+  }, [activeTab, activeFollowupService, safeActiveFollowupStep]);
 
 
   const {
@@ -1345,7 +1353,7 @@ export default function DashboardPage() {
     return [...leads].filter((lead) => leadScore(lead) > 0).sort((a, b) => leadScore(b) - leadScore(a)).slice(0, 8);
   }, [leads]);
 
-  const currentStepData: StepConfig = followupConfig[activeFollowupService]?.[activeFollowupStep] || makeDefaultStep();
+  const currentStepData: StepConfig = followupConfig[activeFollowupService]?.[safeActiveFollowupStep] || makeDefaultStep();
   const currentVariants: Variant[] = currentStepData.variants || [];
   const validCurrentVariants = currentVariants.filter((variant: Variant) => stripHtml(variant.content));
   const days = Math.max(1, Math.floor((currentStepData.delay || 1440) / 1440));
@@ -1359,21 +1367,21 @@ export default function DashboardPage() {
     });
 
     leads
-      .filter((lead) => isLeadEligibleForStep(lead, activeFollowupService, activeFollowupStep, triggerMode))
+      .filter((lead) => isLeadEligibleForStep(lead, activeFollowupService, safeActiveFollowupStep, triggerMode))
       .forEach((lead) => {
         if (!lead?.id || byId.has(String(lead.id))) return;
         byId.set(String(lead.id), lead);
       });
 
     return Array.from(byId.values()).sort((a, b) => leadScore(b) - leadScore(a));
-  }, [followupCandidateLeads, leads, activeFollowupService, activeFollowupStep, triggerMode]);
+  }, [followupCandidateLeads, leads, activeFollowupService, safeActiveFollowupStep, triggerMode]);
 
   const updateCurrentStep = (newStepData: StepConfig) => {
     setFollowupConfig((prev: FollowupConfig) => ({
       ...prev,
       [activeFollowupService]: {
         ...(prev[activeFollowupService] || {}),
-        [activeFollowupStep]: newStepData,
+        [safeActiveFollowupStep]: newStepData,
       },
     }));
     setHasUnsavedChanges(true);
@@ -3514,7 +3522,7 @@ export default function DashboardPage() {
           headers,
           body: JSON.stringify({
             service: activeFollowupService,
-            step: activeFollowupStep,
+            step: safeActiveFollowupStep,
             updateMode: "recalculate_all",
           }),
         });
@@ -3524,7 +3532,7 @@ export default function DashboardPage() {
         }
         rescheduledCount = Number(rescheduleData.updated || 0);
         rescheduleChecked = Number(rescheduleData.checked || 0);
-        rescheduleMessage = ` Synced ${rescheduledCount} existing ${activeFollowupService} ${activeFollowupStep.toUpperCase()} lead schedule(s). Checked ${rescheduleChecked}.`;
+        rescheduleMessage = ` Synced ${rescheduledCount} existing ${activeFollowupService} ${safeActiveFollowupStep.toUpperCase()} lead schedule(s). Checked ${rescheduleChecked}.`;
       } catch (rescheduleError) {
         console.warn("Follow-up reschedule failed:", rescheduleError);
         rescheduleMessage = " Settings were saved, but existing scheduled leads could not be rescheduled automatically.";
@@ -3739,7 +3747,7 @@ export default function DashboardPage() {
   const renderFollowups = () => (
     <AutomationPanel
       activeFollowupService={activeFollowupService}
-      activeFollowupStep={activeFollowupStep}
+      activeFollowupStep={safeActiveFollowupStep}
       followupLoading={followupLoading}
       days={days}
       currentStepData={currentStepData}

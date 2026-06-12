@@ -1,5 +1,5 @@
 import type { FollowupConfig, Lead, ServiceId, StepConfig, StepId, TriggerMode } from "./types";
-import { ACTIVE_STATUSES, SERVICE_NAMES, STEPS } from "./constants";
+import { ACTIVE_FOLLOWUP_STEPS, ACTIVE_STATUSES, MAX_AUTOMATED_FOLLOWUPS, SERVICE_NAMES, STEPS } from "./constants";
 import { formatDate, toMillis } from "./utils";
 
 export function makeDefaultStep(): StepConfig {
@@ -74,7 +74,12 @@ export function getNextFollowUpStatus(lead: Lead, triggerMode: TriggerMode, conf
 
   const storedStatus = String(lead.nextFollowupStatus || "").toLowerCase();
   const storedTime = toMillis(lead.nextFollowupAt);
-  const nextNumber = Number(lead.nextFollowupStep || Number(lead.follow_up_count || 0) + 1);
+  const followUpCount = Number(lead.follow_up_count || 0);
+  const nextNumber = Number(lead.nextFollowupStep || followUpCount + 1);
+
+  if (followUpCount >= MAX_AUTOMATED_FOLLOWUPS || nextNumber > MAX_AUTOMATED_FOLLOWUPS) {
+    return { label: `Finished after F-${MAX_AUTOMATED_FOLLOWUPS}`, color: "text-slate-500", time: null };
+  }
 
   if (storedStatus === "scheduled" && storedTime) {
     const now = Date.now();
@@ -109,11 +114,8 @@ export function getNextFollowUpStatus(lead: Lead, triggerMode: TriggerMode, conf
     return { label: `Blocked: ${lead.nextFollowupReason || "automation stopped"}`, color: "text-red-600", time: null };
   }
 
-  const followUpCount = Number(lead.follow_up_count || 0);
-  if (followUpCount >= 5) return null;
-
   const service = (lead.service || "Email Signature") as ServiceId;
-  const nextStep = (STEPS[followUpCount] || "step1") as StepId;
+  const nextStep = (ACTIVE_FOLLOWUP_STEPS[followUpCount] || "step1") as StepId;
   const stepConfig = config?.[service]?.[nextStep];
   const delayMinutes = Number(stepConfig?.delay || 1440);
 
@@ -146,9 +148,13 @@ export function isLeadEligibleForStep(lead: Lead, service: ServiceId, step: Step
   if (!ACTIVE_STATUSES.has(String(lead.status || ""))) return false;
   if (String(lead.service || "").toLowerCase().trim() !== service.toLowerCase().trim()) return false;
 
+  if (!ACTIVE_FOLLOWUP_STEPS.includes(step)) return false;
+
   const followUpCount = Number(lead.follow_up_count || 0);
-  const currentStepIndex = STEPS.indexOf(step);
-  if (followUpCount !== currentStepIndex) return false;
+  if (followUpCount >= MAX_AUTOMATED_FOLLOWUPS) return false;
+
+  const currentStepIndex = ACTIVE_FOLLOWUP_STEPS.indexOf(step);
+  if (currentStepIndex < 0 || followUpCount !== currentStepIndex) return false;
 
   const lastSent = getLastSentMs(lead);
   const lastEngaged = getLastEngagedMs(lead);

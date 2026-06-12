@@ -232,6 +232,11 @@ const MAX_FOLLOWUP_BATCH_PER_RUN = 20;
 const MAX_FOLLOWUP_RETRIES = 3;
 const STALE_LOCK_MINUTES = 30;
 
+// Follow-up safety cap: one initial email + F-1/F-2/F-3 only.
+// step4/step5 remain in saved config for backward compatibility, but automation must never send them.
+const MAX_AUTOMATED_FOLLOWUPS = 3;
+const MAX_CONFIGURED_FOLLOWUP_STEPS = 5;
+
 // Serious cold-outreach safety policy:
 // - Never auto follow-up leads with zero open/click engagement.
 // - When engagement exists, send follow-ups 1 hour before the lead's last engagement time + configured delay.
@@ -3544,7 +3549,7 @@ function buildNextFollowupSchedule(
 
   const followUpCount = Number(lead.follow_up_count || 0);
   if (!Number.isFinite(followUpCount) || followUpCount < 0) blockers.push("invalid_follow_up_count");
-  if (followUpCount >= 5) blockers.push("max_followups_reached");
+  if (followUpCount >= MAX_AUTOMATED_FOLLOWUPS) blockers.push("max_followups_reached");
 
   const lastSentMs = toMillis(lead.lastFollowUp || lead.lastSentAt || lead.sentAt || lead.createdAt);
   if (!lastSentMs) blockers.push("missing_last_sent_time");
@@ -3598,9 +3603,22 @@ function hasTemplateOrConfigBlocker(blockers: string[]) {
 }
 
 function blockedFollowupUpdate(blockers: string[], extra: Record<string, any> = {}) {
+  if (blockers.includes("max_followups_reached")) {
+    return {
+      status: "finished",
+      nextFollowupStatus: "finished",
+      nextFollowupReason: blockers.join(",") || "max_followups_reached",
+      nextFollowupAt: admin.firestore.FieldValue.delete(),
+      nextFollowupStep: admin.firestore.FieldValue.delete(),
+      lastFollowupEvaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      automationLock: admin.firestore.FieldValue.delete(),
+      ...extra,
+    };
+  }
+
   const hardBlocked = blockers.some((blocker) =>
     blocker.startsWith("hard_stop_status") ||
-    ["automation_stopped", "max_followups_reached", "invalid_email"].includes(blocker)
+    ["automation_stopped", "invalid_email"].includes(blocker)
   );
   const templateBlocked = hasTemplateOrConfigBlocker(blockers);
 
@@ -3669,7 +3687,7 @@ function evaluateFollowupCandidate(
 
   const followUpCount = Number(lead.follow_up_count || 0);
   if (!Number.isFinite(followUpCount) || followUpCount < 0) blockers.push("invalid_follow_up_count");
-  if (followUpCount >= 5) blockers.push("max_followups_reached");
+  if (followUpCount >= MAX_AUTOMATED_FOLLOWUPS) blockers.push("max_followups_reached");
 
   const nextFollowupNumber = Math.max(0, followUpCount) + 1;
   const configStepKey = `step${nextFollowupNumber}`;
@@ -4442,12 +4460,12 @@ async function handleCronFollowups(req: Request) {
       const sentAt = admin.firestore.Timestamp.now();
       const nextFollowupNumber = Number(lockedDecision.nextFollowupNumber || 0);
       await docSnap.ref.update({
-        status: nextFollowupNumber >= 5 ? "finished" : "sent",
+        status: nextFollowupNumber >= MAX_AUTOMATED_FOLLOWUPS ? "finished" : "sent",
         follow_up_count: nextFollowupNumber,
         lastFollowUp: sentAt,
         lastSentAt: sentAt,
-        nextFollowupStatus: nextFollowupNumber >= 5 ? "finished" : "waiting_for_new_engagement",
-        nextFollowupReason: nextFollowupNumber >= 5 ? "max_followups_sent" : "followup_sent_waiting_for_new_open_or_click",
+        nextFollowupStatus: nextFollowupNumber >= MAX_AUTOMATED_FOLLOWUPS ? "finished" : "waiting_for_new_engagement",
+        nextFollowupReason: nextFollowupNumber >= MAX_AUTOMATED_FOLLOWUPS ? "max_followups_sent" : "followup_sent_waiting_for_new_open_or_click",
         nextFollowupAt: admin.firestore.FieldValue.delete(),
         nextFollowupStep: admin.firestore.FieldValue.delete(),
         retryCount: 0,
@@ -9327,17 +9345,38 @@ async function handleReleaseTemplateBlockedFollowups(req: Request) {
     .get();
 
   const batch = adminDb.batch();
+  let requeuedCount = 0;
+  let finishedCount = 0;
+
   snap.docs.forEach((docSnap: any) => {
+    const lead = docSnap.data() || {};
+    const followUpCount = Number(lead.follow_up_count || 0);
+
+    if (Number.isFinite(followUpCount) && followUpCount >= MAX_AUTOMATED_FOLLOWUPS) {
+      batch.update(docSnap.ref, {
+        status: "finished",
+        nextFollowupStatus: "finished",
+        nextFollowupReason: "max_followups_reached",
+        nextFollowupAt: admin.firestore.FieldValue.delete(),
+        nextFollowupStep: admin.firestore.FieldValue.delete(),
+        lastFollowupEvaluatedAt: nowTs,
+        automationLock: admin.firestore.FieldValue.delete(),
+      });
+      finishedCount += 1;
+      return;
+    }
+
     batch.update(docSnap.ref, {
       nextFollowupStatus: "scheduled",
       nextFollowupReason: "template_settings_updated_requeued",
       lastFollowupEvaluatedAt: nowTs,
       automationLock: admin.firestore.FieldValue.delete(),
     });
+    requeuedCount += 1;
   });
 
   if (!snap.empty) await batch.commit();
-  return json({ success: true, requeuedCount: snap.size });
+  return json({ success: true, requeuedCount, finishedCount });
 }
 
 function validateSheetQueuedSendReadiness(row: AnyRecord): string[] {
@@ -11659,7 +11698,7 @@ function normalizeFollowupConfigForSave(body: any): Record<string, any> {
     if (!serviceConfig || typeof serviceConfig !== "object") continue;
 
     payload[service] = {};
-    for (let stepNumber = 1; stepNumber <= 5; stepNumber += 1) {
+    for (let stepNumber = 1; stepNumber <= MAX_CONFIGURED_FOLLOWUP_STEPS; stepNumber += 1) {
       const stepKey = `step${stepNumber}`;
       const stepConfig = serviceConfig?.[stepKey] || {};
       const variantsRaw = Array.isArray(stepConfig.variants) ? stepConfig.variants : [];
@@ -11700,7 +11739,7 @@ function preserveExistingFollowupTemplatesWhenIncomingIsBlank(payload: Record<st
     const serviceExisting = existingData?.[service];
     if (!servicePayload || typeof servicePayload !== "object" || !serviceExisting || typeof serviceExisting !== "object") continue;
 
-    for (let stepNumber = 1; stepNumber <= 5; stepNumber += 1) {
+    for (let stepNumber = 1; stepNumber <= MAX_CONFIGURED_FOLLOWUP_STEPS; stepNumber += 1) {
       const stepKey = `step${stepNumber}`;
       const incomingStep = servicePayload?.[stepKey];
       const existingStep = serviceExisting?.[stepKey];
@@ -11881,7 +11920,8 @@ async function handleSaveFollowupConfig(req: Request) {
 function normalizeRescheduleStep(value: any): { stepKey: string; stepNumber: number } {
   const raw = String(value || "step1").trim().toLowerCase();
   const match = raw.match(/^step([1-5])$/);
-  const stepNumber = match ? Number(match[1]) : 1;
+  const parsedStepNumber = match ? Number(match[1]) : 1;
+  const stepNumber = Math.max(1, Math.min(parsedStepNumber, MAX_AUTOMATED_FOLLOWUPS));
   return { stepKey: `step${stepNumber}`, stepNumber };
 }
 
