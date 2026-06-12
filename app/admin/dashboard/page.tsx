@@ -277,14 +277,23 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
 
   if (mode === "compact") {
     return `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:18px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:18px;max-width:560px;">
         <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;padding:12px 0 0 0;border-top:1px solid #e5e7eb;">
-            <div style="margin:0 0 2px 0;color:#111827;font-weight:bold;">${sender.name}</div>
-            <div style="margin:0;color:#6b7280;">TrackFlowPro · Conversion Tracking Audit</div>
-            <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;">
-              ${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL} | Unsubscribe${MAILING_ADDRESS ? ` | ${MAILING_ADDRESS}` : ""}
-            </div>
+          <td style="font-family:Arial,Helvetica,sans-serif;padding:12px 0 0 0;border-top:1px solid #e5e7eb;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+              <tr>
+                <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+                  <div style="margin:0 0 1px 0;color:#111827;font-weight:bold;font-size:14px;line-height:19px;">${sender.name}</div>
+                  <div style="margin:0;color:#4b5563;font-size:12px;line-height:18px;font-weight:bold;">TrackFlowPro · Conversion Tracking Audit</div>
+                  <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;overflow-wrap:break-word;word-break:normal;">
+                    ${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL}
+                  </div>
+                  <div style="margin:7px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;overflow-wrap:break-word;word-break:normal;">
+                    Reference: ${tag} | Unsubscribe${MAILING_ADDRESS ? ` | ${MAILING_ADDRESS}` : ""}
+                  </div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>
@@ -301,7 +310,7 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
               <td style="padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;">
                 <div style="font-size:15px;line-height:20px;font-weight:bold;color:#111827;margin:0;">${sender.name}</div>
                 <div style="font-size:13px;line-height:19px;color:#4b5563;font-weight:bold;margin:0;">Founder, TrackFlowPro</div>
-                <div style="font-size:12px;line-height:18px;color:#6b7280;margin:3px 0 0 0;">Google Ads Tracking · Server-Side Tracking · Conversion Audit</div>
+                <div style="font-size:12px;line-height:18px;color:#6b7280;margin:3px 0 0 0;">Google Ads Conversion Tracking · GA4/GTM Audit · Server-Side Tracking</div>
                 <div style="font-size:12px;line-height:18px;color:#374151;margin:8px 0 0 0;">${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL}</div>
                 <div style="font-size:10px;line-height:15px;color:#9ca3af;margin:8px 0 0 0;">Ref: ${tag} | Unsubscribe${MAILING_ADDRESS ? ` | ${MAILING_ADDRESS}` : ""}</div>
               </td>

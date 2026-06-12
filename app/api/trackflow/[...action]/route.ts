@@ -431,7 +431,7 @@ const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
         {
           id: "code-default-email-signature-step1",
           content:
-            "<p>Hi {name}, just checking if you saw my note about the email signature tracking issue I noticed for {company}.</p><p>If helpful, I can point out the exact area to verify—no pitch, just a quick check.</p>",
+            "<p>Hi {name}, just checking if you had a chance to look at the email signature tracking note I sent for {company}.</p><p>It was not a final diagnosis — just a browser-visible signal worth checking so outbound email clicks and enquiry-path visits are measured clearly.</p><p>If helpful, I can point out the first area I would verify so you do not have to dig through everything.</p>",
         },
       ],
     },
@@ -441,13 +441,13 @@ const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
         {
           id: "code-default-email-signature-step2",
           content:
-            "<p>Hi {name}, one last quick note on this.</p><p>If signature clicks are not being tracked cleanly, replies and website visits from outbound emails can be hard to measure. Worth checking when you have a minute.</p>",
+            "<p>Hi {name}, quick second follow-up on the email signature tracking note for {company}.</p><p>If this is not a priority right now, no worries. I just wanted to make sure the note did not get buried.</p>",
         },
       ],
     },
-    step3: { delay: 4320, variants: [{ id: "code-default-email-signature-step3", content: "<p>Hi {name}, should I close the loop on this for now?</p>" }] },
-    step4: { delay: 7200, variants: [{ id: "code-default-email-signature-step4", content: "<p>Hi {name}, no worries if this is not a priority right now. I can leave this with you.</p>" }] },
-    step5: { delay: 10080, variants: [{ id: "code-default-email-signature-step5", content: "<p>Hi {name}, closing this out. If email tracking becomes relevant later, feel free to revisit the note.</p>" }] },
+    step3: { delay: 4320, variants: [{ id: "code-default-email-signature-step3", content: "<p>Hi {name}, should I leave this tracking note for now, or would a quick verification be useful?</p>" }] },
+    step4: { delay: 7200, variants: [{ id: "code-default-email-signature-step4", content: "<p>Hi {name}, no worries if this is not relevant right now. I will leave the note with you.</p>" }] },
+    step5: { delay: 10080, variants: [{ id: "code-default-email-signature-step5", content: "<p>Hi {name}, closing the loop here. If email tracking verification becomes useful later, feel free to revisit the note.</p>" }] },
   },
   "Google Ads": {
     step1: {
@@ -456,7 +456,7 @@ const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
         {
           id: "code-default-google-ads-step1",
           content:
-            "<p>Hi {name}, just following up on the tracking note I sent for {company}.</p><p>The main point was about whether important lead actions are clearly visible from the browser side and then confirmed inside Google Ads or GA4.</p>",
+            "<p>Hi {name}, just checking if you had a chance to look at the tracking note I sent for {company}.</p><p>It was not a final diagnosis — just a browser-visible signal worth checking inside Google Ads, GA4, or GTM.</p><p>If helpful, I can point out the first area I would verify so you do not have to dig through everything.</p>",
         },
       ],
     },
@@ -466,13 +466,13 @@ const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
         {
           id: "code-default-google-ads-step2",
           content:
-            "<p>Hi {name}, quick second follow-up.</p><p>If Google Ads is spending but lead actions are not recorded consistently, it can quietly make campaign decisions less reliable. Worth a quick check before changing budgets.</p>",
+            "<p>Hi {name}, quick second follow-up on the tracking note for {company}.</p><p>If Google Ads is spending and key lead actions are not recorded cleanly, it can make campaign decisions less reliable. Worth checking before changing budgets.</p>",
         },
       ],
     },
-    step3: { delay: 4320, variants: [{ id: "code-default-google-ads-step3", content: "<p>Hi {name}, should I leave this for now, or would a quick tracking check be useful?</p>" }] },
-    step4: { delay: 7200, variants: [{ id: "code-default-google-ads-step4", content: "<p>Hi {name}, I will not keep chasing. Just wanted to make sure the tracking note did not get buried.</p>" }] },
-    step5: { delay: 10080, variants: [{ id: "code-default-google-ads-step5", content: "<p>Hi {name}, closing the loop here. Hope the note was useful as a quick tracking sanity check.</p>" }] },
+    step3: { delay: 4320, variants: [{ id: "code-default-google-ads-step3", content: "<p>Hi {name}, should I leave this tracking note for now, or would a quick verification be useful?</p>" }] },
+    step4: { delay: 7200, variants: [{ id: "code-default-google-ads-step4", content: "<p>Hi {name}, no worries if this is not relevant right now. I will leave the note with you.</p>" }] },
+    step5: { delay: 10080, variants: [{ id: "code-default-google-ads-step5", content: "<p>Hi {name}, closing the loop here. If conversion tracking becomes a priority later, feel free to revisit the note.</p>" }] },
   },
   "Server Side Tracking": {
     step1: {
@@ -481,7 +481,7 @@ const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
         {
           id: "code-default-sst-step1",
           content:
-            "<p>Hi {name}, following up on the server-side tracking note for {company}.</p><p>I only checked public browser-visible signals, so the next step would be confirming the setup inside GTM/GA4/server logs.</p>",
+            "<p>Hi {name}, just checking if you had a chance to look at the server-side tracking note I sent for {company}.</p><p>It was not a final diagnosis — just a browser-visible signal worth checking inside GA4, GTM, or the server-side setup.</p><p>If helpful, I can point out the first area I would verify so you do not have to dig through everything.</p>",
         },
       ],
     },
@@ -491,18 +491,64 @@ const CODE_DEFAULT_FOLLOWUP_CONFIG: AnyRecord = {
         {
           id: "code-default-sst-step2",
           content:
-            "<p>Hi {name}, quick reminder on this.</p><p>If browser-side signals are unclear, server-side tracking can help, but only if events are being forwarded and deduplicated correctly. That is the part worth verifying.</p>",
+            "<p>Hi {name}, quick second follow-up on the server-side tracking note for {company}.</p><p>If browser-side signals are unclear, server-side tracking can help only when events are forwarded and deduplicated correctly. That is the part worth verifying.</p>",
         },
       ],
     },
-    step3: { delay: 4320, variants: [{ id: "code-default-sst-step3", content: "<p>Hi {name}, should I close this out, or is tracking verification something you want to revisit?</p>" }] },
-    step4: { delay: 7200, variants: [{ id: "code-default-sst-step4", content: "<p>Hi {name}, no pressure. I will leave the note with you in case it becomes useful later.</p>" }] },
-    step5: { delay: 10080, variants: [{ id: "code-default-sst-step5", content: "<p>Hi {name}, closing the loop here. If server-side tracking becomes a priority, the report should give you a starting point.</p>" }] },
+    step3: { delay: 4320, variants: [{ id: "code-default-sst-step3", content: "<p>Hi {name}, should I leave this tracking note for now, or would a quick verification be useful?</p>" }] },
+    step4: { delay: 7200, variants: [{ id: "code-default-sst-step4", content: "<p>Hi {name}, no worries if this is not relevant right now. I will leave the note with you.</p>" }] },
+    step5: { delay: 10080, variants: [{ id: "code-default-sst-step5", content: "<p>Hi {name}, closing the loop here. If server-side tracking becomes a priority later, feel free to revisit the note.</p>" }] },
   },
 };
-
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
+}
+
+const LEGACY_CODE_DEFAULT_FOLLOWUP_CONTENT: Record<string, string> = {
+  "code-default-email-signature-step1": "<p>Hi {name}, just checking if you saw my note about the email signature tracking issue I noticed for {company}.</p><p>If helpful, I can point out the exact area to verify—no pitch, just a quick check.</p>",
+  "code-default-email-signature-step2": "<p>Hi {name}, one last quick note on this.</p><p>If signature clicks are not being tracked cleanly, replies and website visits from outbound emails can be hard to measure. Worth checking when you have a minute.</p>",
+  "code-default-email-signature-step3": "<p>Hi {name}, should I close the loop on this for now?</p>",
+  "code-default-email-signature-step4": "<p>Hi {name}, no worries if this is not a priority right now. I can leave this with you.</p>",
+  "code-default-email-signature-step5": "<p>Hi {name}, closing this out. If email tracking becomes relevant later, feel free to revisit the note.</p>",
+  "code-default-google-ads-step1": "<p>Hi {name}, just following up on the tracking note I sent for {company}.</p><p>The main point was about whether important lead actions are clearly visible from the browser side and then confirmed inside Google Ads or GA4.</p>",
+  "code-default-google-ads-step2": "<p>Hi {name}, quick second follow-up.</p><p>If Google Ads is spending but lead actions are not recorded consistently, it can quietly make campaign decisions less reliable. Worth a quick check before changing budgets.</p>",
+  "code-default-google-ads-step3": "<p>Hi {name}, should I leave this for now, or would a quick tracking check be useful?</p>",
+  "code-default-google-ads-step4": "<p>Hi {name}, I will not keep chasing. Just wanted to make sure the tracking note did not get buried.</p>",
+  "code-default-google-ads-step5": "<p>Hi {name}, closing the loop here. Hope the note was useful as a quick tracking sanity check.</p>",
+  "code-default-sst-step1": "<p>Hi {name}, following up on the server-side tracking note for {company}.</p><p>I only checked public browser-visible signals, so the next step would be confirming the setup inside GTM/GA4/server logs.</p>",
+  "code-default-sst-step2": "<p>Hi {name}, quick reminder on this.</p><p>If browser-side signals are unclear, server-side tracking can help, but only if events are being forwarded and deduplicated correctly. That is the part worth verifying.</p>",
+  "code-default-sst-step3": "<p>Hi {name}, should I close this out, or is tracking verification something you want to revisit?</p>",
+  "code-default-sst-step4": "<p>Hi {name}, no pressure. I will leave the note with you in case it becomes useful later.</p>",
+  "code-default-sst-step5": "<p>Hi {name}, closing the loop here. If server-side tracking becomes a priority, the report should give you a starting point.</p>",
+};
+
+function normalizeFollowupTemplateForCompare(value: any): string {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+</g, "<")
+    .replace(/>\s+/g, ">")
+    .trim();
+}
+
+function upgradeLegacyDefaultFollowupVariant(service: string, step: string, variant: AnyRecord, safeContent: string): AnyRecord {
+  const variantId = String(variant?.id || "").slice(0, 80);
+  const recommended = CODE_DEFAULT_FOLLOWUP_CONFIG?.[service]?.[step]?.variants?.find((item: any) => item?.id === variantId);
+  const legacyContent = LEGACY_CODE_DEFAULT_FOLLOWUP_CONTENT[variantId];
+
+  if (!recommended?.content || !legacyContent) {
+    return { id: variantId || `${service}-${step}-variant`, content: safeContent };
+  }
+
+  // Only upgrade variants that are clearly the previous code-default copy.
+  // Custom edited follow-up copy is preserved.
+  const loaded = normalizeFollowupTemplateForCompare(safeContent);
+  const legacy = normalizeFollowupTemplateForCompare(legacyContent);
+  const sameLegacyContent = loaded === legacy;
+
+  return {
+    id: variantId,
+    content: sameLegacyContent ? recommended.content : safeContent,
+  };
 }
 
 function sanitizeFollowupRuntimeConfig(rawData: AnyRecord = {}) {
@@ -515,10 +561,14 @@ function sanitizeFollowupRuntimeConfig(rawData: AnyRecord = {}) {
 
       const safeVariants = Array.isArray(loadedStep.variants)
         ? loadedStep.variants
-            .map((variant: any, index: number) => ({
-              id: String(variant?.id || `${service}-${step}-variant-${index + 1}`).slice(0, 80),
-              content: stripDangerousHtml(String(variant?.content || "")),
-            }))
+            .map((variant: any, index: number) =>
+              upgradeLegacyDefaultFollowupVariant(
+                service,
+                step,
+                { ...variant, id: String(variant?.id || `${service}-${step}-variant-${index + 1}`).slice(0, 80) },
+                stripDangerousHtml(String(variant?.content || "")),
+              ),
+            )
             .filter((variant: any) => plainTextFromHtml(variant.content))
             .slice(0, 10)
         : [];
@@ -1786,7 +1836,7 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
 
   if (mode === "compact") {
     return `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
         <tr>
           <td height="16" style="height:16px;line-height:16px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
         </tr>
@@ -1794,29 +1844,35 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
           <td style="height:1px;line-height:1px;font-size:0;border-top:1px solid #e5e7eb;padding:0;mso-line-height-rule:exactly;">&nbsp;</td>
         </tr>
         <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#374151;mso-line-height-rule:exactly;padding:12px 0 0 0;overflow-wrap:break-word;word-break:normal;">
+          <td style="font-family:Arial,Helvetica,sans-serif;padding:12px 0 0 0;mso-line-height-rule:exactly;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
               <tr>
-                <td style="padding:0 0 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${senderName}</td>
-              </tr>
-              <tr>
-                <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;color:#6b7280;mso-line-height-rule:exactly;">TrackFlowPro · Conversion Tracking Audit</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
-                  <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
-                  <span style="color:#d1d5db;"> | </span>
-                  <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+                <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+                    <tr>
+                      <td style="padding:0 0 1px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:19px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${senderName}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#4b5563;font-weight:bold;mso-line-height-rule:exactly;">TrackFlowPro · Conversion Tracking Audit</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:6px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                        <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
+                        <span style="color:#d1d5db;"> | </span>
+                        <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                        Reference: ${visibleReference}
+                        <span style="color:#d1d5db;"> | </span>
+                        <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+                      </td>
+                    </tr>
+                    ${mailingAddressRow}
+                  </table>
                 </td>
               </tr>
-              <tr>
-                <td style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
-                  Reference: ${visibleReference}
-                  <span style="color:#d1d5db;"> | </span>
-                  <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
-                </td>
-              </tr>
-              ${mailingAddressRow}
             </table>
           </td>
         </tr>

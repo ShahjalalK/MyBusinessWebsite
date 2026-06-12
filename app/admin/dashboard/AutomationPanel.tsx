@@ -240,7 +240,7 @@ export default function AutomationPanel({
             <span className="text-blue-600">{currentFollowupLeads.length}</span>
           </p>
           <p className="text-[11px] text-gray-400 mt-2 font-bold">
-            Current mode: Follow up only when the lead opened or clicked. No-reply-only follow-up is disabled by safety policy.
+            Current mode: Follow up only when the lead opened or clicked. Follow-ups are sent in the existing reply thread and do not add a report button or secure page link automatically.
           </p>
         </div>
 
@@ -340,7 +340,7 @@ export default function AutomationPanel({
                       {getFollowupRiskLabel(variant.content).label}
                     </span>
                     <span className="px-2 py-1 rounded-lg bg-slate-50 text-slate-500 border border-slate-100">
-                      Compact signature auto-added
+                      Compact signature auto-added · no report link
                     </span>
                   </div>
 
