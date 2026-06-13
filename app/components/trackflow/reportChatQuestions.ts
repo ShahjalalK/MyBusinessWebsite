@@ -174,6 +174,24 @@ function pushQuestion(rules: QuestionRule[], condition: boolean, question: strin
   rules.push({ question, priority });
 }
 
+function isSafeReportQuestion(value: string): boolean {
+  const text = cleanText(value);
+  if (!text || text.length < 18 || text.length > 150) return false;
+  if (!/[?]$/.test(text)) return false;
+  if (/https?:\/\//i.test(text)) return false;
+  if (/\b(token|api key|secret|password|unsubscribe|raw link|private url)\b/i.test(text)) return false;
+  return true;
+}
+
+function getAuditSnapshotQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
+  const questions = uniqueQuestions(context?.auditSnapshotQuestions || []).filter(isSafeReportQuestion).slice(0, 4);
+
+  return questions.map((question, index) => ({
+    question,
+    priority: 140 - index,
+  }));
+}
+
 function getScoreQuestion(context?: ReportChatQuestionContext): QuestionRule[] {
   const hasScore =
     context?.score !== undefined ||
@@ -185,54 +203,57 @@ function getScoreQuestion(context?: ReportChatQuestionContext): QuestionRule[] {
 
 function buildContextQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
   const text = contextToSearchText(context);
-  const rules: QuestionRule[] = [...getScoreQuestion(context)];
+  const rules: QuestionRule[] = [
+    ...getAuditSnapshotQuestionRules(context),
+    ...getScoreQuestion(context),
+  ];
 
   pushQuestion(
     rules,
     hasAny(text, [/\bphone\b/, /\bcall\b/, /\bcall-click\b/, /\bclick[-\s]?to[-\s]?call\b/, /\bcall tracking\b/]),
-    "Are phone calls being tracked properly?",
+    "What does the phone call tracking finding mean?",
     98,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\blead form\b/, /\bform submission\b/, /\bcontact form\b/, /\benquiry\b/, /\binquiry\b/, /\bgenerate_lead\b/]),
-    "Are form submissions being tracked properly?",
+    "How should form lead tracking be verified?",
     96,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\bbooking\b/, /\bappointment\b/, /\breservation\b/, /\bschedule\b/]),
-    "Is booking or appointment tracking recorded clearly?",
+    "How should booking or appointment tracking be verified?",
     94,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\bpurchase\b/, /\bcheckout\b/, /\bcart\b/, /\becommerce\b/, /\badd_to_cart\b/]),
-    "Are checkout and purchase events tracked correctly?",
+    "What should be checked for checkout or purchase tracking?",
     94,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\bdemo\b/, /\bsignup\b/, /\bsign-up\b/, /\btrial\b/, /\bapplication\b/]),
-    "Are demo or signup actions tracked properly?",
+    "How should demo or signup tracking be verified?",
     91,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\bno clear\b.*\bconversion\b/, /\bno clear\b.*\bevent\b/, /\bnot clearly observed\b/, /\bno lead-related\b/]),
-    "What does no clear conversion event mean?",
+    "What does not clearly confirmed mean here?",
     93,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\bpage_view\b/, /\bpage view\b/]),
-    "Why was only page_view observed?",
+    "What does page_view observed mean for this review?",
     87,
   );
 
@@ -246,7 +267,7 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
   pushQuestion(
     rules,
     hasAny(text, [/\bgtm\b/, /\bgoogle tag manager\b/, /\btag manager\b/, /\bpreview\b/]),
-    "If GTM is found, why verify again?",
+    "What should be verified in GTM Preview?",
     85,
   );
 
@@ -567,22 +588,23 @@ export function buildReportChatQuestionSuggestions({
   const starterLimit = Math.max(1, Math.min(5, limits?.starter || 4));
   const followUpLimit = Math.max(1, Math.min(4, limits?.followUp || 3));
 
+  const snapshotQuestions = getAuditSnapshotQuestionRules(context).map((rule) => rule.question);
   const contextQuestions = buildContextQuestionRules(context).map((rule) => rule.question);
   const followUpQuestions = buildFollowUpRules(latestAssistantContent, context).map((rule) => rule.question);
 
   return {
     closedQuestions: getUnaskedQuestions({
-      candidates: [...contextQuestions, ...DEFAULT_CLOSED_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...snapshotQuestions, ...contextQuestions, ...DEFAULT_CLOSED_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: closedLimit,
     }),
     starterQuestions: getUnaskedQuestions({
-      candidates: [...contextQuestions, ...DEFAULT_STARTER_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...snapshotQuestions, ...contextQuestions, ...DEFAULT_STARTER_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: starterLimit,
     }),
     followUpQuestions: getUnaskedQuestions({
-      candidates: [...followUpQuestions, ...contextQuestions, ...DEFAULT_FOLLOW_UP_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...followUpQuestions, ...snapshotQuestions, ...contextQuestions, ...DEFAULT_FOLLOW_UP_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: followUpLimit,
     }),
