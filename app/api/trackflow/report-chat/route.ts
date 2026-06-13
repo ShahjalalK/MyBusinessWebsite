@@ -43,7 +43,26 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 const TRACKFLOW_CONTACT_EMAIL = "shahjalal@trackflowpro.com";
-const TRACKFLOW_CALENDLY_URL = "https://calendly.com/webanalystshahjalal/freeconsultation";
+const DEFAULT_TRACKFLOW_CALENDLY_URL = "https://calendly.com/trackflowpro/tracking-verification-call";
+
+function normalizePublicHttpsUrl(value: unknown, fallback: string): string {
+  const raw = String(value || "").trim();
+
+  if (!raw) return fallback;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return fallback;
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return fallback;
+  }
+}
+
+const TRACKFLOW_CALENDLY_URL = normalizePublicHttpsUrl(
+  process.env.TRACKFLOW_CALENDLY_URL || process.env.NEXT_PUBLIC_TRACKFLOW_CALENDLY_URL,
+  DEFAULT_TRACKFLOW_CALENDLY_URL,
+);
 
 const PREMIUM_CHAT_FORMAT_INSTRUCTIONS = `
 Premium chat formatting rules:
@@ -526,29 +545,47 @@ Avoid campaign optimization or budget decisions until the conversion path is con
 `.trim();
 }
 
+function isTrackingReviewIntentQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+
+  if (!text) return false;
+
+  const hasTrackingSubject = /\b(tracking|tracked|conversion|conversions|event|events|ga4|gtm|google ads|debugview|diagnostics|crm|server logs?|call-tracking|call tracking|evidence|signals?|visible|browser-side|browser visible|public review|reviewed safely|reviewed|main finding|lead reporting|attribution)\b/.test(text);
+  const hasConversionPath = /\b(phone|phone call|call click|phone click|click[-\s]?to[-\s]?call|calls?|form|lead|enquiry|inquiry|contact form|booking|appointment|registration|event form|checkout|purchase|cart|demo|signup|sign up|customer action|lead path|journey)\b/.test(text);
+  const asksAboutVerification = /\b(was|were|is|are|what|which|why|how|should|reviewed|verified|verify|confirmed|confirm|checked|check|observed|mean|means|properly|clearly|safely)\b/.test(text);
+
+  // Examples that must stay in the tracking answer path, not the booking/contact path:
+  // "Was the Phone call click journey reviewed safely on the Contact Us page?"
+  // "Are phone calls being tracked properly?"
+  // "How should contact form tracking be verified?"
+  return Boolean((hasTrackingSubject && hasConversionPath) || (hasConversionPath && asksAboutVerification && /\b(review|reviewed|tracking|tracked|conversion|event|journey|signals?|evidence|verified|confirmed|observed)\b/.test(text)));
+}
+
 function isContactBookingQuestion(question: string): boolean {
   const text = normalizeIntentText(question);
 
   if (!text) return false;
 
-  // Do not confuse tracking questions about phone calls with contact/booking intent.
-  if (/\b(phone call tracking|call tracking|click[-\s]?to[-\s]?call|calls? being tracked|calls? tracking|test calls?)\b/.test(text)) {
-    return false;
-  }
-
-  const asksContact =
-    /\b(contact|reach you|reach trackflow|email|mail|message you|talk to you|talk to someone|speak to you|speak with|human|support)\b/.test(text);
-
-  const asksBooking =
-    /\b(book|booking|schedule|calendly|calendar|call|meeting|consultation|consult|demo|appointment|free consultation|verification call)\b/.test(text);
+  const asksMarketplace =
+    /\b(fiverr|upwork|marketplace|freelance platform|platform-based|platform based)\b/.test(text);
 
   const asksHiring =
     /\b(hire|work with you|work together|get started|start working|continue with you|can you fix this for us|can you verify this for us|can trackflow pro verify this for us|want to proceed|next step to work)\b/.test(text);
 
-  const asksMarketplace =
-    /\b(fiverr|upwork|marketplace|freelance platform|platform-based|platform based)\b/.test(text);
+  const asksDirectContact =
+    /\b(contact trackflow|reach trackflow|reach you|email you|contact email|mail you|message you|talk to you|talk to someone|speak to you|speak with|human support|how can we contact|how do we contact|how to contact|contact you)\b/.test(text);
 
-  return asksContact || asksBooking || asksHiring || asksMarketplace;
+  const asksDirectBooking =
+    /\b(book a|book the|book your|booking link|schedule a|schedule the|schedule your|calendly|calendar|meeting|consultation|consult|appointment|free consultation|verification call)\b/.test(text);
+
+  // "call", "contact", and "booking" often appear in report evidence (phone call tracking,
+  // contact form, booking path). Keep those in the tracking/review answer path unless the
+  // visitor is clearly asking to contact, hire, or schedule TrackFlow Pro.
+  if (isTrackingReviewIntentQuestion(question) && !asksDirectContact && !asksDirectBooking && !asksHiring && !asksMarketplace) {
+    return false;
+  }
+
+  return asksDirectContact || asksDirectBooking || asksHiring || asksMarketplace;
 }
 
 function buildContactBookingAnswer(context: AnyRecord, question: string): string {
