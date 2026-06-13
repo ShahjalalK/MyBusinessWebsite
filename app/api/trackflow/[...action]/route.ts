@@ -1014,6 +1014,98 @@ function firstCleanString(...values: any[]): string {
   return "";
 }
 
+function isGenericServerSideReportHeadline(value: any): boolean {
+  const text = cleanCell(value || "").toLowerCase();
+  if (!text) return false;
+  return (
+    text === "server-side tracking should be verified" ||
+    text === "server side tracking should be verified" ||
+    text.includes("server-side tracking signal was observed") ||
+    text.includes("server side tracking signal was observed") ||
+    text.includes("first-party tracking-like request")
+  );
+}
+
+function titleCaseReportFocus(value: string): string {
+  const clean = cleanCell(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return "";
+
+  const known: Record<string, string> = {
+    phone: "Phone Call",
+    call: "Phone Call",
+    "phone call": "Phone Call",
+    "phone call tracking": "Phone Call",
+    "contact form": "Contact Form Submission",
+    "contact form submission": "Contact Form Submission",
+    "form submission": "Contact Form Submission",
+    booking: "Booking / Appointment",
+    appointment: "Booking / Appointment",
+    checkout: "Checkout / Purchase",
+    purchase: "Checkout / Purchase",
+    ecommerce: "Ecommerce Conversion",
+  };
+  const lower = clean.toLowerCase().replace(/\btracking\b/g, "").replace(/\s+/g, " ").trim();
+  if (known[lower]) return known[lower];
+
+  return clean.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function deriveReportFocusHeadlineFromCopy(privatePage: AnyRecord = {}, body: AnyRecord = {}): string {
+  const candidates = [
+    privatePage.primaryConversionFocus,
+    privatePage.primary_conversion_focus,
+    privatePage.primaryConversionLabel,
+    privatePage.primary_conversion_label,
+    body.primaryConversionFocus,
+    body.primary_conversion_focus,
+    body.primaryConversionLabel,
+    body.primary_conversion_label,
+  ];
+
+  for (const candidate of candidates) {
+    const label = titleCaseReportFocus(cleanCell(candidate || ""));
+    if (label) return /\btracking\b/i.test(label) ? `${label} should be verified` : `${label} tracking should be verified`;
+  }
+
+  const snapshotTitle = firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title);
+  const titleMatch = snapshotTitle.match(/^(.+?)\s+tracking\s+snapshot$/i);
+  if (titleMatch?.[1]) {
+    const label = titleCaseReportFocus(titleMatch[1]);
+    if (label) return `${label} tracking should be verified`;
+  }
+
+  const rawQuestions = [
+    privatePage.auditSnapshotQuestions,
+    privatePage.audit_snapshot_questions,
+    privatePage.snapshotQuestions,
+    body.auditSnapshotQuestions,
+    body.audit_snapshot_questions,
+  ];
+  for (const raw of rawQuestions) {
+    const questions = normalizeStringArray(raw, 4);
+    for (const question of questions) {
+      const journeyMatch = question.match(/\b(?:the\s+)?(.+?)\s+journey\b/i);
+      if (journeyMatch?.[1]) {
+        const label = titleCaseReportFocus(journeyMatch[1]);
+        if (label) return `${label} tracking should be verified`;
+      }
+    }
+  }
+
+  const privateHeadline = firstCleanString(privatePage.headline, privatePage.privatePageHeadline, body.privatePageHeadline, body.private_page_headline);
+  return isGenericServerSideReportHeadline(privateHeadline) ? "" : privateHeadline;
+}
+
+function chooseSecureReportHeadline(bodyHeadline: string, privatePage: AnyRecord = {}, body: AnyRecord = {}): string {
+  const focusHeadline = deriveReportFocusHeadlineFromCopy(privatePage, body);
+  if (isGenericServerSideReportHeadline(bodyHeadline) && focusHeadline) return focusHeadline;
+  if (bodyHeadline) return bodyHeadline;
+  return focusHeadline || "Private tracking audit note";
+}
+
 function normalizeStringArray(value: any, maxItems = 8): string[] {
   const rawItems = Array.isArray(value)
     ? value
@@ -1563,7 +1655,7 @@ function normalizeReportPayload(body: AnyRecord = {}) {
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
   const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
 
-  const headline = firstCleanString(
+  const incomingHeadline = firstCleanString(
     body.headline,
     privatePage.headline,
     privatePage.privatePageHeadline,
@@ -1571,8 +1663,9 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     body.client_message_headline,
     body.mainIssue,
     body.main_issue,
-    "Private tracking audit note",
+    "",
   );
+  const headline = chooseSecureReportHeadline(incomingHeadline, privatePage, body);
 
   const subheadline = firstCleanString(
     body.subheadline,
