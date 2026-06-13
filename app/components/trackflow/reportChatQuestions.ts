@@ -201,9 +201,94 @@ function getScoreQuestion(context?: ReportChatQuestionContext): QuestionRule[] {
   return hasScore ? [{ question: "What does this review score mean?", priority: 96 }] : [];
 }
 
+function headlineFindingText(context?: ReportChatQuestionContext): string {
+  return [context?.headline, context?.mainFinding]
+    .map((item) => cleanText(item))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function getHeadlineFindingQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
+  const text = headlineFindingText(context);
+  const rules: QuestionRule[] = [];
+
+  if (!text) return rules;
+
+  // Highest-priority report-title questions. These make the first suggested
+  // question match the visible review headline instead of falling back to a
+  // generic “what should we verify first?” card.
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bduplicate\b.*\bconversion\b/, /\bconversion\b.*\bduplicate\b/]),
+    "What does duplicate conversion tracking mean?",
+    160,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bduplicate\b.*\bconversion\b/, /\bconversion\b.*\bduplicate\b/]),
+    "Could duplicate conversions affect Google Ads reporting?",
+    157,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bphone\b/, /\bcall\b/, /\bclick[-\s]?to[-\s]?call\b/]),
+    "What does the phone call tracking finding mean?",
+    158,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bcontact form\b/, /\blead form\b/, /\bform submission\b/, /\bgenerate_lead\b/, /\benquiry\b/, /\binquiry\b/]),
+    "How should form lead tracking be verified?",
+    156,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bcheckout\b/, /\bpurchase\b/, /\bcart\b/, /\becommerce\b/, /\badd[-_\s]?to[-_\s]?cart\b/]),
+    "What should be checked for checkout or purchase tracking?",
+    154,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bbooking\b/, /\bappointment\b/, /\bevent form\b/, /\bregistration\b/, /\breservation\b/]),
+    "How should booking or event form tracking be verified?",
+    152,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bserver[-\s]?side\b/, /\bserver logs?\b/, /\bfirst[-\s]?party\b/]),
+    "What does the server-side tracking finding mean?",
+    150,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bga4\b/, /\bgoogle analytics\b/, /\bform_submit\b/, /\bpage_view\b/]),
+    "What does the GA4 event finding mean?",
+    148,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bgoogle ads\b/, /\bads reporting\b/, /\bconversion diagnostics\b/]) && !hasAny(text, [/\bduplicate\b.*\bconversion\b/, /\bconversion\b.*\bduplicate\b/]),
+    "How could this affect Google Ads reporting?",
+    146,
+  );
+
+  return rules.sort((a, b) => b.priority - a.priority);
+}
+
+
 function buildContextQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
   const text = contextToSearchText(context);
   const rules: QuestionRule[] = [
+    ...getHeadlineFindingQuestionRules(context),
     ...getAuditSnapshotQuestionRules(context),
     ...getScoreQuestion(context),
   ];
@@ -594,12 +679,12 @@ export function buildReportChatQuestionSuggestions({
 
   return {
     closedQuestions: getUnaskedQuestions({
-      candidates: [...snapshotQuestions, ...contextQuestions, ...DEFAULT_CLOSED_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...contextQuestions, ...snapshotQuestions, ...DEFAULT_CLOSED_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: closedLimit,
     }),
     starterQuestions: getUnaskedQuestions({
-      candidates: [...snapshotQuestions, ...contextQuestions, ...DEFAULT_STARTER_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...contextQuestions, ...snapshotQuestions, ...DEFAULT_STARTER_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: starterLimit,
     }),
