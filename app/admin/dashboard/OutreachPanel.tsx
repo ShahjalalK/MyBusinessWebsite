@@ -49,6 +49,36 @@ type SetState<T> = (value: T | ((current: T) => T)) => void;
 
 type MergeTag = "{name}" | "{company}" | "{website}" | "{service}";
 
+const isPreviewSystemClosingBlock = (html: string) => {
+  const plain = stripHtml(String(html || ""))
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!plain) return true;
+  if (plain.length > 220) return false;
+
+  const normalized = plain.toLowerCase().replace(/[,.!]+$/g, "").trim();
+  if (/^(best|best regards|regards|kind regards|thanks|thank you)$/i.test(normalized)) return true;
+  if (/^(best regards|kind regards|regards|thanks|thank you)\b/i.test(plain) && /(shahjalal|trackflowpro|trackflow pro|founder|unsubscribe|reference|ref:)/i.test(plain)) return true;
+  if (/^(shahjalal(?:\s+khan)?|trackflowpro|trackflow pro|founder,?\s*trackflowpro)$/i.test(normalized)) return true;
+  if (/^(reference|ref:)\b/i.test(plain) && /unsubscribe/i.test(plain)) return true;
+  if (/^(unsubscribe|mailing address)\b/i.test(plain)) return true;
+  return false;
+};
+
+const stripPreviewComposerClosingBlocks = (html: string) => {
+  let output = String(html || "").trim();
+
+  for (let index = 0; index < 6; index += 1) {
+    const match = output.match(/<(p|div)\b[^>]*>[\s\S]*?<\/\1>\s*$/i);
+    if (!match || !isPreviewSystemClosingBlock(match[0])) break;
+    output = output.slice(0, match.index).trim();
+  }
+
+  return output;
+};
+
 type OutreachPanelProps = {
   activeSender?: SenderAccount;
   senderCounts: Record<string, number>;
@@ -176,6 +206,8 @@ export default function OutreachPanel({
       service: selectedService || undefined,
     });
     const sanitizedPreviewMessage = sanitizePreviewHtml(previewMessage);
+    const previewBodyHtml = includeSignature ? stripPreviewComposerClosingBlocks(sanitizedPreviewMessage) : sanitizedPreviewMessage;
+    const showPreviewClosing = includeSignature && Boolean(stripHtml(previewMessage) || safeReportUrl);
 
     const qualityChecks = [
       { label: "Valid recipient email", ok: isEmailPatternValid(email) },
@@ -782,7 +814,7 @@ export default function OutreachPanel({
 
                 <div className="p-5 text-sm leading-[22px] text-gray-800">
                   {stripHtml(previewMessage) ? (
-                    <div dangerouslySetInnerHTML={{ __html: sanitizedPreviewMessage }} />
+                    <div dangerouslySetInnerHTML={{ __html: previewBodyHtml }} />
                   ) : (
                     <p className="text-gray-400 italic">Write your email body to preview here...</p>
                   )}
@@ -803,8 +835,12 @@ export default function OutreachPanel({
                     </div>
                   )}
 
+                  {showPreviewClosing ? (
+                    <p className="mt-4 mb-0 text-sm leading-[22px] text-gray-800">Best regards,</p>
+                  ) : null}
+
                   {includeSignature ? (
-                    <div className={safeReportUrl ? "mt-2" : ""} dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "full") }} />
+                    <div className="mt-0" dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "full") }} />
                   ) : (
                     <p className="mt-5 text-[10px] font-black text-gray-400 uppercase">Signature hidden</p>
                   )}

@@ -1960,6 +1960,48 @@ function removeEmptyEmailBlocks(html: string): string {
   return output.trim();
 }
 
+function isSystemClosingOrSignatureBlock(html: string): boolean {
+  const plain = plainTextFromHtml(html || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!plain) return true;
+  if (plain.length > 220) return false;
+
+  const normalized = plain.toLowerCase().replace(/[,.!]+$/g, "").trim();
+
+  if (/^(best|best regards|regards|kind regards|thanks|thank you)$/i.test(normalized)) return true;
+  if (/^(best regards|kind regards|regards|thanks|thank you)\b/i.test(plain) && /(shahjalal|trackflowpro|trackflow pro|founder|unsubscribe|reference|ref:)/i.test(plain)) return true;
+  if (/^(shahjalal(?:\s+khan)?|trackflowpro|trackflow pro|founder,?\s*trackflowpro)$/i.test(normalized)) return true;
+  if (/^(reference|ref:)\b/i.test(plain) && /unsubscribe/i.test(plain)) return true;
+  if (/^(unsubscribe|mailing address)\b/i.test(plain)) return true;
+
+  return false;
+}
+
+function removeTrailingComposerClosingBlocks(html: string): string {
+  let output = String(html || "").trim();
+
+  for (let index = 0; index < 6; index += 1) {
+    const match = output.match(/<(p|div)\b[^>]*>[\s\S]*?<\/\1>\s*$/i);
+    if (!match || !isSystemClosingOrSignatureBlock(match[0])) break;
+    output = output.slice(0, match.index).trim();
+  }
+
+  return removeEmptyEmailBlocks(output);
+}
+
+function buildEmailClosingBlock(): string {
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:10px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+      <tr>
+        <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#1f2937;mso-line-height-rule:exactly;padding:0;margin:0;">Best regards,</td>
+      </tr>
+    </table>
+  `;
+}
+
 function normalizeEmailBodyHtml(input: string): string {
   const cleanMessage = stripDangerousHtml(input || "").replace(/\u00a0/g, " ").trim();
   if (!cleanMessage) return "";
@@ -2011,11 +2053,13 @@ function buildEmailHtml(
     tag,
     emailLower,
   };
-  const cleanMessage = normalizeEmailBodyHtml(message);
-  const trackedMessage = rewriteHtmlLinksForTracking(cleanMessage, trackingContext);
   const includeSignature = options.includeSignature !== false;
+  const cleanMessage = normalizeEmailBodyHtml(message);
+  const messageBody = includeSignature ? removeTrailingComposerClosingBlocks(cleanMessage) : cleanMessage;
+  const trackedMessage = rewriteHtmlLinksForTracking(messageBody, trackingContext);
   const signatureMode = includeSignature ? normalizeSignatureMode(options.signatureMode, "full") : "none";
   const reportBlock = options.includeReportLink === false ? "" : buildReportLinkBlock(options.reportUrl, options.reportButtonText || "View short audit note", trackingContext);
+  const closingBlock = includeSignature ? buildEmailClosingBlock() : "";
   const signatureBlock = includeSignature ? buildSignature(emailLower, tag, options.sender, signatureMode) : "";
   const openPixel = buildOpenTrackingPixel(trackingContext);
 
@@ -2042,6 +2086,7 @@ function buildEmailHtml(
               <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;mso-line-height-rule:exactly;color:#1f2937;padding:0;margin:0;overflow-wrap:break-word;word-break:normal;">
                 ${trackedMessage}
                 ${reportBlock}
+                ${closingBlock}
                 ${signatureBlock}
                 ${openPixel}
               </td>
