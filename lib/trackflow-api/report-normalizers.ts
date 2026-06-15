@@ -1196,7 +1196,43 @@ export function getReportTimestamp(value: any, fallbackDays = 30) {
 export function normalizeReportPayload(body: AnyRecord = {}) {
   const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
-  const companyName = cleanReportCompanyName(firstCleanString(body.companyName, body.company_name, body.businessName, body.business_name, body.preparedFor, body.prepared_for, domain), domain);
+  const manualContact = getObjectCandidate(body.manualContact, body.manual_contact, body.manual_contact_update, body.manualContactUpdate);
+  const manualBusiness = getObjectCandidate(body.manualBusiness, body.manual_business, body.manual_business_update, body.manualBusinessUpdate, body.manual_client_update, body.manualClientUpdate);
+  const reportOverrides = getObjectCandidate(body.reportOverrides, body.report_overrides);
+  const pdfOverrides = getObjectCandidate(body.pdfManualOverrides, body.pdf_manual_overrides, body.pdfOverrides, body.pdf_overrides);
+  const companyName = cleanReportCompanyName(firstCleanString(
+    manualContact.businessName,
+    manualContact.business_name,
+    manualContact.companyName,
+    manualContact.company_name,
+    manualBusiness.businessName,
+    manualBusiness.business_name,
+    manualBusiness.companyName,
+    manualBusiness.company_name,
+    reportOverrides.companyName,
+    reportOverrides.company_name,
+    reportOverrides.businessName,
+    reportOverrides.business_name,
+    reportOverrides.preparedFor,
+    reportOverrides.prepared_for,
+    pdfOverrides.companyName,
+    pdfOverrides.company_name,
+    pdfOverrides.businessName,
+    pdfOverrides.business_name,
+    pdfOverrides.preparedFor,
+    pdfOverrides.prepared_for,
+    body.manualBusinessName,
+    body.manual_business_name,
+    body.confirmedBusinessName,
+    body.confirmed_business_name,
+    body.companyName,
+    body.company_name,
+    body.businessName,
+    body.business_name,
+    body.preparedFor,
+    body.prepared_for,
+    domain,
+  ), domain);
   const domainSlug = normalizeReportSlug(body.domainSlug || body.domain_slug || body.reportSlug || body.report_slug || domain || companyName || "website");
   const pdfViewUrl = sanitizeOptionalUrl(
     body.pdfViewUrl ||
