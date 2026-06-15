@@ -2280,7 +2280,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
-                    Full PDF report
+                    Secure review access
                   </p>
 
                   <h2 className="mt-3 break-words text-2xl font-black tracking-[-0.04em] text-slate-950">
@@ -2288,13 +2288,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   </h2>
 
                   <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-                    Preview the audit document directly on this page, or download it securely without leaving the review.
+                    This private review page includes the PDF report, evidence video, and assistant notes during the access window.
                   </p>
                 </div>
 
                 {expiresLabel ? (
                   <p className="max-w-full shrink-0 break-words rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase leading-5 tracking-[0.14em] text-slate-500 shadow-sm">
-                    Available until {expiresLabel}
+                    Access until {expiresLabel}
                   </p>
                 ) : null}
               </div>
