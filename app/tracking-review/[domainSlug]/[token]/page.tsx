@@ -1983,9 +1983,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 variant="primary"
                 analyticsEvent="secure_report_assistant_open"
                 analyticsSection="hero"
-                analyticsLabel="Ask the assistant"
+                analyticsLabel="Ask about this review"
               >
-                Ask the assistant
+                Ask about this review
               </LinkButton>
 
               <LinkButton
@@ -2004,10 +2004,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 href="#pdf-report"
                 data-trackflow-analytics-event="secure_report_pdf_anchor_click"
                 data-trackflow-analytics-section="hero"
-                data-trackflow-analytics-label="Full PDF report available"
+                data-trackflow-analytics-label="Secure review access available"
                 className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 transition hover:border-blue-200 hover:text-blue-700 sm:px-4"
               >
-                Full PDF report available
+                Secure review access available
               </a>
               {evidenceVideo ? (
                 <a
@@ -2022,7 +2022,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </a>
               ) : null}
               <span className="max-w-full break-words rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-emerald-700 sm:px-4">
-                Report-aware assistant included
+                Review assistant included
               </span>
             </div>
 
@@ -2068,7 +2068,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   >
                     <span>{item}</span>
                     <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
-                      Ask the assistant
+                      Ask about this point
                     </span>
                   </a>
                 ))}
@@ -2099,10 +2099,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
             <div className="mt-4 hidden rounded-[1.5rem] border border-blue-100 bg-blue-50 p-5 sm:block">
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
-                Evidence-safe assistant
+                Private review assistant
               </p>
               <p className="mt-3 text-sm font-bold leading-7 text-blue-950">
-                The assistant explains the saved review context in plain English. Final confirmation still requires approved access to the actual tracking accounts and lead records.
+                The assistant can explain this saved review in plain English. Final confirmation still requires approved access to the actual tracking accounts and lead records.
               </p>
             </div>
           </div>
@@ -2170,7 +2170,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   Watch the evidence before reading the PDF.
                 </h2>
                 <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">
-                  {evidenceVideo.description} The walkthrough shows the reviewed page context and visible signals before the PDF details.
+                  {evidenceVideo.description} The walkthrough shows the reviewed page context and visible signals before the full PDF details.
                 </p>
 
                 {reviewedPageBadges.length ? (
@@ -2288,7 +2288,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   </h2>
 
                   <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-                    This private review page includes the PDF report, evidence video, and assistant notes during the access window.
+                    This private review page keeps the PDF report and related review materials available during the access window.
                   </p>
                 </div>
 
@@ -2301,10 +2301,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
               <div className="mt-5 grid min-w-0 gap-2 text-xs font-black uppercase leading-5 tracking-[0.12em] text-slate-500 sm:grid-cols-3 sm:gap-3 sm:tracking-[0.14em]">
                 <span className="break-words rounded-2xl border border-blue-100 bg-white px-4 py-3 text-center text-blue-700 shadow-sm sm:text-left">
-                  Secure PDF stream
+                  Secure PDF preview
                 </span>
                 <span className="break-words rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-center text-emerald-700 shadow-sm sm:text-left">
-                  Download stays on page
+                  Download stays here
                 </span>
                 <span className="break-words rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm sm:text-left">
                   Account access not used
@@ -2340,7 +2340,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 md:hidden">
                   <p className="text-sm font-black text-slate-950">PDF preview is ready</p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                    Mobile browsers display PDFs differently. Use Open full screen or Download PDF for the best reading experience.
+                    Mobile browsers display PDFs differently. Use Open full PDF or Download PDF for the best reading experience.
                   </p>
                 </div>
 
@@ -2366,7 +2366,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     Ready
                   </span>
                   <span data-trackflow-pdf-status-message className="min-w-0 break-words text-sm font-bold leading-6">
-                    Click Download PDF — the file will prepare here without leaving this secure page.
+                    Click Download PDF. The file will prepare here without leaving this secure page.
                   </span>
                 </div>
               </div>
@@ -2379,9 +2379,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   rel="noopener noreferrer"
                   analyticsEvent="secure_report_pdf_open_click"
                   analyticsSection="pdf"
-                  analyticsLabel="Open PDF"
+                  analyticsLabel="Open full PDF"
                 >
-                  Open PDF
+                  Open full PDF
                 </LinkButton>
 
                 <a
@@ -2485,10 +2485,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   href="#ask-this-review"
                   data-trackflow-analytics-event="secure_report_assistant_open"
                   data-trackflow-analytics-section="booking"
-                  data-trackflow-analytics-label="Ask the assistant first"
+                  data-trackflow-analytics-label="Ask about this review first"
                   className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.08] focus:outline-none focus:ring-4 focus:ring-blue-500/20"
                 >
-                  Ask the assistant first
+                  Ask about this review first
                 </a>
 
                 <a
