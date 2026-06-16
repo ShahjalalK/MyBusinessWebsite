@@ -3579,19 +3579,21 @@ export default function DashboardPage() {
     ];
 
     return (
-      <div className="flex gap-2 overflow-x-auto bg-white border border-gray-100 shadow-sm rounded-[28px] p-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-[10px] font-black uppercase whitespace-nowrap transition-all ${
-              activeTab === tab.id ? "bg-black text-white shadow-lg" : "text-gray-400 hover:bg-gray-50"
-            }`}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
+      <div className="w-full min-w-0 xl:w-auto" aria-label="Dashboard sections">
+        <div className="flex w-full max-w-full gap-2 overflow-x-auto overscroll-x-contain rounded-[24px] border border-gray-100 bg-white p-2 shadow-sm touch-pan-x xl:rounded-[28px]" tabIndex={0}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex shrink-0 items-center gap-2 rounded-2xl px-3 py-3 text-[9px] font-black uppercase tracking-wide whitespace-nowrap transition-all sm:px-5 sm:text-[10px] ${
+                activeTab === tab.id ? "bg-black text-white shadow-lg" : "text-gray-400 hover:bg-gray-50"
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
     );
   };
@@ -3799,7 +3801,7 @@ export default function DashboardPage() {
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-[101] overflow-y-auto shadow-2xl"
+            className="fixed inset-y-0 right-0 z-[101] h-full w-full max-w-lg overflow-y-auto bg-white shadow-2xl"
           >
             <div className="p-8 border-b sticky top-0 bg-white/80 backdrop-blur-md z-10 flex justify-between items-center">
               <h2 className="text-xl font-black uppercase italic tracking-tighter text-gray-900">Lead Intelligence</h2>
@@ -4004,7 +4006,7 @@ export default function DashboardPage() {
               </section>
             </div>
 
-            <div className="fixed bottom-0 w-full max-w-lg p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-3">
+            <div className="fixed bottom-0 right-0 w-full max-w-lg border-t border-gray-100 bg-white/80 p-4 backdrop-blur-md sm:p-6 flex gap-3">
               {selectedLead.status !== "replied" && (
                 <button
                   type="button"
@@ -4037,11 +4039,11 @@ export default function DashboardPage() {
     <>
       <Navbar />
       <AdminGuard>
-        <div data-no-track="true" className="min-h-screen bg-[#FAFBFF] px-4 pb-4 pt-24 lg:px-10 lg:pb-10 lg:pt-28">
-          <div className="flex flex-col xl:flex-row justify-between mb-8 gap-6 items-start xl:items-end">
-            <div>
-              <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter italic">TrackFlowPro Command Center</h1>
-              <div className="flex flex-wrap gap-4 mt-2">
+        <div data-no-track="true" data-tfp-dashboard-shell="true" className="min-h-screen max-w-full overflow-x-hidden bg-[#FAFBFF] px-3 pb-4 pt-24 sm:px-4 lg:px-10 lg:pb-10 lg:pt-28">
+          <div className="mb-6 flex w-full min-w-0 flex-col items-start gap-5 xl:mb-8 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0 max-w-full">
+              <h1 className="break-words text-2xl font-black uppercase italic tracking-tighter text-gray-900 sm:text-4xl">TrackFlowPro Command Center</h1>
+              <div className="mt-2 flex max-w-full flex-wrap gap-2 sm:gap-4">
                 <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Active Leads: {filteredLeads.length}</span>
                 <span className="text-orange-500 font-bold text-[10px] uppercase tracking-widest flex items-center gap-1">
                   <Flame size={12} /> Hot Leads: {analytics.hot}
@@ -4069,6 +4071,7 @@ export default function DashboardPage() {
             {renderTopTabs()}
           </div>
 
+          <div className="tfp-dashboard-content min-w-0 max-w-full overflow-x-hidden">
           {activeTab === "overview" && (
             <OverviewPanel
               analytics={analytics}
@@ -4156,9 +4159,41 @@ export default function DashboardPage() {
             />
           )}
 
+          </div>
+
           {renderLeadDrawer()}
 
           <style jsx global>{`
+
+            [data-tfp-dashboard-shell="true"] {
+              -webkit-text-size-adjust: 100%;
+            }
+            [data-tfp-dashboard-shell="true"] .tfp-dashboard-content,
+            [data-tfp-dashboard-shell="true"] .tfp-dashboard-content > * {
+              min-width: 0;
+              max-width: 100%;
+            }
+            [data-tfp-dashboard-shell="true"] button,
+            [data-tfp-dashboard-shell="true"] a,
+            [data-tfp-dashboard-shell="true"] input,
+            [data-tfp-dashboard-shell="true"] select,
+            [data-tfp-dashboard-shell="true"] textarea {
+              max-width: 100%;
+            }
+            @media (max-width: 640px) {
+              [data-tfp-dashboard-shell="true"] input,
+              [data-tfp-dashboard-shell="true"] select,
+              [data-tfp-dashboard-shell="true"] textarea {
+                font-size: 16px !important;
+              }
+              [data-tfp-dashboard-shell="true"] .rsw-editor {
+                max-width: 100%;
+              }
+              [data-tfp-dashboard-shell="true"] .rsw-ce {
+                overflow-wrap: anywhere;
+                word-break: break-word;
+              }
+            }
             .rsw-editor {
               border: none !important;
               background: transparent !important;

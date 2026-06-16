@@ -82,9 +82,9 @@ function StatCard({
   note?: string;
 }) {
   return (
-    <div className="bg-white rounded-[30px] border border-gray-100 p-6 shadow-sm">
+    <div className="bg-white rounded-[24px] sm:rounded-[30px] border border-gray-100 p-4 sm:p-6 shadow-sm">
       <div className={`w-12 h-12 rounded-2xl border ${toneClasses(tone)} flex items-center justify-center mb-5`}>{icon}</div>
-      <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
+      <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter break-words">{value}</p>
       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</p>
       {note ? <p className="mt-2 text-[10px] font-bold text-gray-400 leading-relaxed">{note}</p> : null}
     </div>
@@ -260,7 +260,7 @@ export default function OverviewPanel({
     : "Click Refresh Usage to check the latest Firestore safety estimate.";
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 max-w-full space-y-6 sm:space-y-8">
       <div className="rounded-[35px] bg-slate-950 text-white p-6 shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div>
@@ -307,7 +307,7 @@ export default function OverviewPanel({
         <div className="absolute -right-16 -bottom-20 h-56 w-56 rounded-full bg-blue-500/30 blur-[90px]" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Firestore Leads" value={analytics.total} icon={<Database size={22} />} note="Cached outreach records" />
         <StatCard label="Opened Leads" value={firestoreTracking.opened} icon={<Mail size={22} />} tone="green" note={`${firestoreTracking.openedToday} opened today in cached data`} />
         <StatCard label="Clicked Leads" value={firestoreTracking.clicked} icon={<MousePointer2 size={22} />} tone="orange" note={`${firestoreTracking.clickedToday} clicked today in cached data`} />

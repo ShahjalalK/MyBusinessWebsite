@@ -83,9 +83,9 @@ function StatCard({
           : "bg-blue-50 text-blue-600";
 
   return (
-    <div className="bg-white rounded-[30px] border border-gray-100 p-6 shadow-sm">
+    <div className="bg-white rounded-[24px] sm:rounded-[30px] border border-gray-100 p-4 sm:p-6 shadow-sm">
       <div className={`w-12 h-12 rounded-2xl ${toneClass} flex items-center justify-center mb-5`}>{icon}</div>
-      <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
+      <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter break-words">{value}</p>
       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</p>
     </div>
   );
@@ -175,7 +175,7 @@ export default function LeadsPanel({
   const selectedSheetCount = selectedLeads.filter(isSheetAuditLead).length;
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6">
       <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-center">
         <div>
           <h1 className="text-3xl font-black tracking-tighter text-gray-900">Lead Management</h1>
@@ -207,7 +207,7 @@ export default function LeadsPanel({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Loaded" value={leads.length} icon={<Mail size={22} />} />
         <StatCard label="Filtered" value={filteredLeads.length} icon={<Database size={22} />} tone="blue" />
         <StatCard label="Selected" value={selectedCount} icon={<CheckCircle2 size={22} />} tone="green" />
@@ -259,7 +259,7 @@ export default function LeadsPanel({
               {bulkActionStatus ? ` ${bulkActionStatus}` : ""}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             <button disabled={!selectedCount || bulkActionLoading} onClick={() => applyLeadBulkAction("archive")} className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 text-[9px] font-black uppercase disabled:opacity-40">Hide from Active</button>
             <button disabled={!selectedCount || bulkActionLoading} onClick={() => applyLeadBulkAction("restore")} className="px-4 py-2 rounded-xl bg-green-50 text-green-600 text-[9px] font-black uppercase disabled:opacity-40">Show in Active</button>
             <button disabled={!selectedManualCount || bulkActionLoading} onClick={() => applyLeadBulkAction("delete_manual_keep_memory")} className="px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-[9px] font-black uppercase disabled:opacity-40">Delete Manual — Keep Memory</button>
@@ -269,8 +269,8 @@ export default function LeadsPanel({
       </div>
 
       <div className="bg-white rounded-[30px] shadow-xl border border-gray-50 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="max-w-full overflow-x-auto overscroll-x-contain touch-pan-x">
+          <table className="w-full min-w-[980px] text-left">
             <thead className="bg-gray-50/50">
               <tr>
                 <th className="p-5 text-[9px] font-black text-gray-400 uppercase tracking-widest">

@@ -58,9 +58,9 @@ function StatCard({
           : "bg-blue-50 text-blue-600";
 
   return (
-    <div className="bg-white rounded-[30px] border border-gray-100 p-6 shadow-sm">
+    <div className="bg-white rounded-[24px] sm:rounded-[30px] border border-gray-100 p-4 sm:p-6 shadow-sm">
       <div className={`w-12 h-12 rounded-2xl ${toneClass} flex items-center justify-center mb-5`}>{icon}</div>
-      <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
+      <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter break-words">{value}</p>
       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</p>
     </div>
   );
@@ -92,8 +92,8 @@ export default function AnalyticsPanel({
   }, [leads]);
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="min-w-0 max-w-full space-y-6 sm:space-y-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Open Rate" value={`${analytics.openRate}%`} icon={<Activity size={22} />} />
         <StatCard label="Click Rate" value={`${analytics.clickRate}%`} icon={<MousePointer2 size={22} />} tone="orange" />
         <StatCard label="Reply Rate" value={`${analytics.replyRate}%`} icon={<MessageSquare size={22} />} tone="green" />

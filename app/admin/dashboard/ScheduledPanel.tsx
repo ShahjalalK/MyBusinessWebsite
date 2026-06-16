@@ -61,7 +61,7 @@ export default function ScheduledPanel({
   saveScheduledEdit,
 }: ScheduledPanelProps) {
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6">
       <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-5 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
         <div>
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
@@ -89,7 +89,7 @@ export default function ScheduledPanel({
       )}
 
       <div className="bg-white rounded-[35px] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="max-w-full overflow-x-auto overscroll-x-contain touch-pan-x">
           <table className="w-full text-left min-w-[980px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
@@ -188,7 +188,7 @@ export default function ScheduledPanel({
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 250 }}
-              className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white z-50 shadow-2xl overflow-y-auto"
+              className="fixed inset-y-0 right-0 z-50 h-full w-full max-w-2xl overflow-y-auto bg-white shadow-2xl"
             >
               <div className="p-6 border-b border-gray-100 sticky top-0 bg-white/90 backdrop-blur z-10 flex items-center justify-between gap-3">
                 <div>
@@ -242,7 +242,7 @@ export default function ScheduledPanel({
                 </div>
               </div>
 
-              <div className="fixed bottom-0 right-0 w-full max-w-2xl p-5 bg-white/90 backdrop-blur border-t border-gray-100 grid grid-cols-3 gap-3">
+              <div className="fixed bottom-0 right-0 grid w-full max-w-2xl grid-cols-1 gap-2 border-t border-gray-100 bg-white/90 p-4 backdrop-blur sm:grid-cols-3 sm:p-5">
                 <button type="button" onClick={() => cancelScheduledEmail(scheduledEdit.leadId)} disabled={scheduledSaving} className="py-4 rounded-2xl bg-red-50 text-red-600 text-xs font-black uppercase disabled:opacity-60">
                   Cancel
                 </button>

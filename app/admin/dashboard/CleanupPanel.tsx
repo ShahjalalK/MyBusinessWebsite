@@ -572,9 +572,9 @@ function StatCard({
           : "bg-blue-50 text-blue-600";
 
   return (
-    <div className="bg-white rounded-[30px] border border-gray-100 p-6 shadow-sm">
+    <div className="bg-white rounded-[24px] sm:rounded-[30px] border border-gray-100 p-4 sm:p-6 shadow-sm">
       <div className={`w-12 h-12 rounded-2xl ${toneClass} flex items-center justify-center mb-5`}>{icon}</div>
-      <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
+      <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter break-words">{value}</p>
       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</p>
     </div>
   );
@@ -659,7 +659,7 @@ export default function CleanupPanel({
 
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6">
       <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-center">
         <div>
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
@@ -699,7 +699,7 @@ export default function CleanupPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
         <StatCard label="Old daily stats" value={dailySendingStatsCleanup.oldDocs} icon={<Database size={22} />} tone="orange" />
         <StatCard label="Today stats" value={dailySendingStatsCleanup.todayDocs} icon={<CheckCircle2 size={22} />} tone="green" />
         <StatCard label="Secure reports" value={secureReports.rows.length} icon={<FileText size={22} />} />
@@ -1160,7 +1160,7 @@ export default function CleanupPanel({
               </div>
               <details className="text-[10px] font-black text-gray-500 uppercase">
                 <summary className="cursor-pointer">Show technical details</summary>
-                <div className="mt-3 max-w-full overflow-x-auto rounded-2xl bg-white border border-gray-100 p-3 text-left normal-case font-mono text-[10px] text-gray-500">
+                <div className="mt-3 max-w-full overflow-x-auto overscroll-x-contain touch-pan-x rounded-2xl bg-white border border-gray-100 p-3 text-left normal-case font-mono text-[10px] text-gray-500">
                   {reportAssetCleanup.steps.map((step, index) => (
                     <div key={`${step.service}-${step.action}-technical-${index}`} className="py-1 border-b border-gray-50 last:border-0">
                       {step.service} · {step.action} · {step.status} · {formatCleanupTarget(step)}
@@ -1226,7 +1226,7 @@ export default function CleanupPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total records</p>
             <p className="text-2xl font-black text-gray-900 mt-1">{dailySendingStatsCleanup.totalDocs}</p>
@@ -1474,8 +1474,8 @@ export default function CleanupPanel({
       </div>
 
       <div className="bg-white border border-gray-100 rounded-[35px] shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="max-w-full overflow-x-auto overscroll-x-contain touch-pan-x">
+          <table className="w-full min-w-[1040px] text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest w-12">

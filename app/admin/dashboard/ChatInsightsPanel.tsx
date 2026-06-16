@@ -515,7 +515,7 @@ export default function ChatInsightsPanel({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(620px,1fr)_520px] 2xl:grid-cols-[minmax(760px,1fr)_560px]">
+    <div className="grid min-w-0 max-w-full grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,560px)]">
       <div className="space-y-6">
         <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -561,7 +561,7 @@ export default function ChatInsightsPanel({
           </div>
 
           <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <label className="relative block w-full lg:max-w-md">
+            <label className="relative block w-full min-w-0 lg:max-w-md">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={chatInsights.search}

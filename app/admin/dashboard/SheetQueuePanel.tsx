@@ -82,9 +82,9 @@ function StatCard({
             : "bg-blue-50 text-blue-600";
 
   return (
-    <div className="bg-white rounded-[30px] border border-gray-100 p-6 shadow-sm">
+    <div className="bg-white rounded-[24px] sm:rounded-[30px] border border-gray-100 p-4 sm:p-6 shadow-sm">
       <div className={`w-12 h-12 rounded-2xl ${toneClass} flex items-center justify-center mb-5`}>{icon}</div>
-      <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
+      <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter break-words">{value}</p>
       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</p>
     </div>
   );
@@ -268,8 +268,8 @@ export default function SheetQueuePanel({
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="min-w-0 max-w-full space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Email Leads" value={stats.email} icon={<Mail size={22} />} />
         <StatCard label="LinkedIn Leads" value={stats.linkedin} icon={<MessageSquare size={22} />} tone="indigo" />
         <StatCard label="Report Ready" value={stats.reportReady} icon={<FileText size={22} />} tone="green" />
@@ -361,7 +361,7 @@ export default function SheetQueuePanel({
             ))}
           </div>
 
-          <label className="relative block min-w-[260px]">
+          <label className="relative block w-full min-w-0 lg:min-w-[260px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -385,8 +385,8 @@ export default function SheetQueuePanel({
               {sheetLoading ? <Loader2 size={18} className="animate-spin text-blue-600" /> : null}
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="max-w-full overflow-x-auto overscroll-x-contain touch-pan-x">
+              <table className="w-full min-w-[1120px] text-left">
                 <thead className="bg-white border-b border-gray-100">
                   <tr>
                     <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead</th>

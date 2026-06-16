@@ -109,9 +109,9 @@ export default function AutomationPanel({
   saveFollowupSettings,
 }: AutomationPanelProps) {
   return (
-      <div className="space-y-8">
+      <div className="min-w-0 max-w-full space-y-6 sm:space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2 bg-white p-2 rounded-[25px] shadow-sm border border-gray-100">
+          <div className="flex w-full max-w-full gap-2 overflow-x-auto overscroll-x-contain touch-pan-x rounded-[25px] border border-gray-100 bg-white p-2 shadow-sm md:w-auto">
             {SERVICE_LIST.map((service) => (
               <button
                 key={service.id}
@@ -121,7 +121,7 @@ export default function AutomationPanel({
                   setActiveFollowupStep("step1");
                   setShowVariantLeads(null);
                 }}
-                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs transition-all ${
+                className={`flex shrink-0 items-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-black transition-all sm:px-6 sm:text-xs ${
                   activeFollowupService === service.id ? "bg-black text-white" : "text-gray-400 hover:bg-gray-50"
                 }`}
               >
@@ -133,14 +133,14 @@ export default function AutomationPanel({
           <button
             type="button"
             onClick={() => loadFollowupConfig(true)}
-            className="flex items-center gap-2 px-5 py-4 bg-white text-gray-500 rounded-[22px] font-black text-xs hover:bg-gray-50 shadow-sm active:scale-95 transition-all border border-gray-100"
+            className="flex w-full items-center justify-center gap-2 rounded-[22px] border border-gray-100 bg-white px-5 py-4 text-xs font-black text-gray-500 shadow-sm transition-all hover:bg-gray-50 active:scale-95 md:w-auto"
           >
             {followupLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} REFRESH CONFIG
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-x-auto">
+          <div className="flex items-center gap-2 bg-white p-2 rounded-3xl border border-gray-100 shadow-sm max-w-full overflow-x-auto overscroll-x-contain touch-pan-x">
             {ACTIVE_FOLLOWUP_STEPS.map((step, idx) => (
               <button
                 key={step}
@@ -149,7 +149,7 @@ export default function AutomationPanel({
                   setActiveFollowupStep(step);
                   setShowVariantLeads(null);
                 }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[10px] tracking-tighter transition-all ${
+                className={`flex shrink-0 items-center gap-2 rounded-2xl px-5 py-2.5 text-[10px] font-black tracking-tighter transition-all ${
                   activeFollowupStep === step ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:bg-gray-50"
                 }`}
               >

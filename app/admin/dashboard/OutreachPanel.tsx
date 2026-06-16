@@ -276,7 +276,7 @@ export default function OutreachPanel({
     };
 
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 max-w-full space-y-6">
         <button
           type="button"
           onClick={openDrawer}
@@ -293,7 +293,7 @@ export default function OutreachPanel({
         </button>
 
         {drawerOpen && (
-          <aside className="fixed bottom-4 right-4 top-20 z-50 flex w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+          <aside className="fixed inset-x-3 bottom-3 top-20 z-50 flex max-w-[430px] flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[min(430px,calc(100vw-2rem))] sm:rounded-[28px]">
               <div className="border-b border-slate-100 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
