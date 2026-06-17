@@ -1465,6 +1465,288 @@ function getReportTimestamp(value: any, fallbackDays = 30) {
   return admin.firestore.Timestamp.fromMillis(Date.now() + fallbackDays * 24 * 60 * 60 * 1000);
 }
 
+
+// TrackFlow Pro v27.63 - Manual evidence secure-page hero support
+// Narrow register-layer support only. Does not touch secure page analytics,
+// PDF open/download tracking, video tracking, email automation, or cleanup logic.
+function tfpV2763CleanSentence(value: any, limit = 520): string {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return limit && text.length > limit ? `${text.slice(0, Math.max(0, limit - 3)).trim()}...` : text;
+}
+
+function tfpV2763ActionType(value: any, fallback = "form_submission"): string {
+  const raw = String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const aliases: Record<string, string> = {
+    auto: fallback,
+    unknown: fallback,
+    form: "form_submission",
+    contact_form: "form_submission",
+    contact_form_submission: "form_submission",
+    lead_form: "form_submission",
+    lead_form_submission: "form_submission",
+    submit_form: "form_submission",
+    form_submit: "form_submission",
+    generate_lead: "form_submission",
+    phone: "phone_call",
+    call: "phone_call",
+    phone_click: "phone_call",
+    call_click: "phone_call",
+    click_to_call: "phone_call",
+    booking: "booking_appointment",
+    appointment: "booking_appointment",
+    book_appointment: "booking_appointment",
+    schedule: "booking_appointment",
+    cart: "add_to_cart",
+    add_cart: "add_to_cart",
+    checkout: "begin_checkout",
+    email: "email_click",
+    whatsapp: "whatsapp_click",
+  };
+  return aliases[raw] || raw || fallback;
+}
+
+function tfpV2763DefaultLabel(actionType: any): string {
+  const labels: Record<string, string> = {
+    form_submission: "Contact Form Submission",
+    phone_call: "Phone Call",
+    booking_appointment: "Booking / Appointment",
+    add_to_cart: "Add to Cart",
+    begin_checkout: "Begin Checkout",
+    purchase: "Purchase / Checkout",
+    email_click: "Email Click",
+    whatsapp_click: "WhatsApp Click",
+  };
+  return labels[tfpV2763ActionType(actionType)] || "Selected Conversion Action";
+}
+
+function tfpV2763Status(value: any, fallback = "not_sure"): string {
+  const raw = String(value === undefined || value === null || value === "" ? fallback : value).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const aliases: Record<string, string> = {
+    true: "yes", "1": "yes", yes_observed: "yes", observed: "yes", found: "yes", fired: "yes", confirmed: "yes", completed: "yes", passed: "yes",
+    false: "no", "0": "no", no_not_observed: "no", not_observed: "no", not_found: "no", not_fired: "no", failed: "no",
+    unclear: "not_sure", not_clear: "not_sure", not_sure_unclear: "not_sure", unknown: "not_sure", maybe: "not_sure",
+    untested: "not_tested",
+  };
+  const normalized = aliases[raw] || raw;
+  return ["yes", "no", "not_sure", "not_tested"].includes(normalized) ? normalized : fallback;
+}
+
+function tfpV2763StatusLabel(value: any): string {
+  const status = tfpV2763Status(value);
+  if (status === "yes") return "Observed";
+  if (status === "no") return "Not clearly observed";
+  if (status === "not_tested") return "Not tested";
+  return "Unclear / needs verification";
+}
+
+function tfpV2763DefaultExpectedEvent(actionType: any): string {
+  const defaults: Record<string, string> = {
+    form_submission: "form_submit / generate_lead",
+    phone_call: "phone_click",
+    booking_appointment: "booking_search / begin_checkout / generate_lead",
+    add_to_cart: "add_to_cart",
+    begin_checkout: "begin_checkout",
+    purchase: "purchase",
+    email_click: "email_click",
+    whatsapp_click: "whatsapp_click",
+  };
+  return defaults[tfpV2763ActionType(actionType)] || "generate_lead";
+}
+
+function tfpV2763ExpectedLooksResultLike(value: any): boolean {
+  const text = tfpV2763CleanSentence(value, 180).toLowerCase();
+  if (!text) return false;
+  return /\b(no|not|nothing|none)\b.*\b(event|observed|found|fired|visible)\b|\bpage[_\s-]*view\s+only\b|\bonly\s+page[_\s-]*view\b|\bnot\s+clearly\b|\bno\s+clear\b/i.test(text);
+}
+
+function tfpV2763ExpectedObserved(actionType: string, expected: any, observed: any): { expectedEvent: string; observedEventName: string } {
+  let expectedEvent = tfpV2763CleanSentence(expected, 140);
+  let observedEventName = tfpV2763CleanSentence(observed, 180);
+  if (tfpV2763ExpectedLooksResultLike(expectedEvent)) {
+    if (!observedEventName) observedEventName = expectedEvent;
+    expectedEvent = tfpV2763DefaultExpectedEvent(actionType);
+  }
+  if (!expectedEvent) expectedEvent = tfpV2763DefaultExpectedEvent(actionType);
+  return { expectedEvent, observedEventName };
+}
+
+function tfpV2763NormalizeAction(rawValue: any, slot: "primary" | "secondary", fallbackActionType = "form_submission"): AnyRecord {
+  const raw = getObjectCandidate(rawValue);
+  const actionType = tfpV2763ActionType(firstCleanString(raw.actionType, raw.action_type, raw.type, raw.action, raw.conversionAction, raw.conversion_action), fallbackActionType);
+  const label = tfpV2763CleanSentence(firstCleanString(raw.label, raw.actionLabel, raw.action_label, raw.name), 120) || tfpV2763DefaultLabel(actionType);
+  const { expectedEvent, observedEventName } = tfpV2763ExpectedObserved(
+    actionType,
+    firstCleanString(raw.expectedEvent, raw.expected_event, raw.expected, raw.expectedEventName, raw.expected_event_name),
+    firstCleanString(raw.observedEventName, raw.observed_event_name, raw.observedEvent, raw.observed_event, raw.eventName, raw.event_name),
+  );
+  const actionCompleted = tfpV2763Status(firstCleanString(raw.actionCompleted, raw.action_completed, raw.completed), "not_tested");
+  const ga4EventObserved = tfpV2763Status(firstCleanString(raw.ga4EventObserved, raw.ga4_event_observed, raw.ga4Event, raw.ga4_event, raw.eventObserved, raw.event_observed), "not_sure");
+  const googleAdsConversionObserved = tfpV2763Status(firstCleanString(raw.googleAdsConversionObserved, raw.google_ads_conversion_observed, raw.googleAdsObserved, raw.google_ads_observed, raw.googleAdsConversion, raw.google_ads_conversion), "not_sure");
+  const gtmTriggerObserved = tfpV2763Status(firstCleanString(raw.gtmTriggerObserved, raw.gtm_trigger_observed, raw.gtmObserved, raw.gtm_observed, raw.gtmTrigger, raw.gtm_trigger), "not_sure");
+  const trackingObserved = ga4EventObserved === "yes" || googleAdsConversionObserved === "yes" || gtmTriggerObserved === "yes";
+  const testUrl = sanitizeOptionalUrl(firstCleanString(raw.testUrl, raw.test_url, raw.url, raw.pageUrl, raw.page_url));
+  const evidenceNote = tfpV2763CleanSentence(firstCleanString(raw.evidenceNote, raw.evidence_note, raw.operatorNote, raw.operator_note, raw.note, raw.notes), 520);
+  return {
+    slot,
+    label,
+    actionType,
+    action_type: actionType,
+    tool: tfpV2763CleanSentence(firstCleanString(raw.tool, raw.toolUsed, raw.tool_used, "Tag Assistant"), 90),
+    actionCompleted,
+    action_completed: actionCompleted,
+    ga4EventObserved,
+    ga4_event_observed: ga4EventObserved,
+    googleAdsConversionObserved,
+    google_ads_conversion_observed: googleAdsConversionObserved,
+    gtmTriggerObserved,
+    gtm_trigger_observed: gtmTriggerObserved,
+    testUrl,
+    test_url: testUrl,
+    expectedEvent,
+    expected_event: expectedEvent,
+    observedEventName,
+    observed_event_name: observedEventName,
+    evidenceNote,
+    evidence_note: evidenceNote,
+    trackingObserved,
+    tracking_observed: trackingObserved,
+  };
+}
+
+function tfpV2763ActionHasEvidence(action: AnyRecord, slot: "primary" | "secondary"): boolean {
+  if (!action) return false;
+  if (slot === "primary" && action.actionType) return true;
+  if (["yes", "no"].includes(tfpV2763Status(action.actionCompleted || action.action_completed, "not_tested"))) return true;
+  return Boolean(action.testUrl || action.test_url || action.observedEventName || action.observed_event_name || action.evidenceNote || action.evidence_note);
+}
+
+function tfpV2763NormalizeManualEvidence(body: AnyRecord = {}, privatePage: AnyRecord = {}): AnyRecord {
+  const manual = getObjectCandidate(
+    body.manualConversionEvidence,
+    body.manual_conversion_evidence,
+    body.manualTrackingEvidence,
+    body.manual_tracking_evidence,
+    body.operatorManualEvidence,
+    body.operator_manual_evidence,
+    privatePage.manualConversionEvidence,
+    privatePage.manual_conversion_evidence,
+    privatePage.manualTrackingEvidence,
+    privatePage.manual_tracking_evidence,
+  );
+  if (!Object.keys(manual).length || manual.enabled === false) {
+    const nowIso = new Date().toISOString();
+    return {
+      enabled: false,
+      source: "operator_manual_tracking_review",
+      primaryAction: {},
+      primary_action: {},
+      secondaryEnabled: false,
+      secondary_enabled: false,
+      secondaryAction: {},
+      secondary_action: {},
+      updatedAt: nowIso,
+      updated_at: nowIso,
+    };
+  }
+  const primaryRaw = getObjectCandidate(manual.primary_action, manual.primaryAction, manual.primary, manual);
+  const primary = tfpV2763NormalizeAction(primaryRaw, "primary", firstCleanString(manual.actionType, manual.action_type, "form_submission"));
+  const secondaryRaw = getObjectCandidate(manual.secondary_action, manual.secondaryAction, manual.secondary);
+  const secondary = tfpV2763NormalizeAction(secondaryRaw, "secondary", "phone_call");
+  const secondaryEnabled = Boolean(manual.secondary_enabled || manual.secondaryEnabled) && tfpV2763ActionHasEvidence(secondary, "secondary");
+  const enabled = tfpV2763ActionHasEvidence(primary, "primary") || secondaryEnabled;
+  const nowIso = new Date().toISOString();
+  return {
+    enabled,
+    source: tfpV2763CleanSentence(firstCleanString(manual.source, "operator_manual_tracking_review"), 90),
+    primaryAction: primary,
+    primary_action: primary,
+    secondaryEnabled,
+    secondary_enabled: secondaryEnabled,
+    secondaryAction: secondaryEnabled ? secondary : {},
+    secondary_action: secondaryEnabled ? secondary : {},
+    updatedAt: firstCleanString(manual.updatedAt, manual.updated_at, nowIso),
+    updated_at: firstCleanString(manual.updatedAt, manual.updated_at, nowIso),
+  };
+}
+
+function tfpV2763ActionPhrase(actionType: string): string {
+  if (actionType === "phone_call") return "phone click action";
+  if (actionType === "booking_appointment") return "booking journey";
+  if (actionType === "add_to_cart") return "add-to-cart action";
+  if (actionType === "begin_checkout") return "checkout-start action";
+  if (actionType === "purchase") return "purchase / checkout action";
+  if (actionType === "email_click") return "email click action";
+  if (actionType === "whatsapp_click") return "WhatsApp click action";
+  return "contact form action";
+}
+
+function tfpV2763BusinessRisk(actionType: string): string {
+  if (actionType === "phone_call") return "If calls are an important lead source, Google Ads and GA4 may need a clear phone-click or call-tracking conversion signal.";
+  if (actionType === "booking_appointment") return "If bookings are the main revenue action, campaigns may need a clear booking, begin-checkout, or lead event to optimize reliably.";
+  if (["add_to_cart", "begin_checkout", "purchase"].includes(actionType)) return "If paid traffic depends on ecommerce optimization, the selected cart, checkout, or purchase event should be confirmed before relying on campaign reporting.";
+  if (actionType === "email_click") return "If email clicks are a lead source, the event should be confirmed before using it for reporting or campaign optimization.";
+  if (actionType === "whatsapp_click") return "If WhatsApp enquiries are a lead source, the click event should be confirmed before using it for reporting or campaign optimization.";
+  return "If this form is the main lead source, Google Ads optimization may rely on weaker signals unless the lead event is confirmed inside the tracking accounts.";
+}
+
+function tfpV2763BuildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | null {
+  if (!manualEvidence.enabled) return null;
+  const primary = getObjectCandidate(manualEvidence.primaryAction, manualEvidence.primary_action);
+  const actionType = tfpV2763ActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = tfpV2763CleanSentence(primary.label, 120) || tfpV2763DefaultLabel(actionType);
+  const actionCompleted = tfpV2763Status(primary.actionCompleted || primary.action_completed, "not_tested");
+  const ga4Status = tfpV2763Status(primary.ga4EventObserved || primary.ga4_event_observed, "not_sure");
+  const adsStatus = tfpV2763Status(primary.googleAdsConversionObserved || primary.google_ads_conversion_observed, "not_sure");
+  const gtmStatus = tfpV2763Status(primary.gtmTriggerObserved || primary.gtm_trigger_observed, "not_sure");
+  const expectedEvent = tfpV2763CleanSentence(primary.expectedEvent || primary.expected_event || tfpV2763DefaultExpectedEvent(actionType), 140);
+  const observedEvent = tfpV2763CleanSentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed", 180);
+  const actionWasCompleted = actionCompleted === "yes";
+  const conversionNotClear = actionWasCompleted && (adsStatus === "no" || ga4Status === "no" || (!primary.trackingObserved && !primary.tracking_observed));
+  const title = conversionNotClear
+    ? `${label} conversion signal was not clearly observed`
+    : actionCompleted === "not_tested"
+      ? `${label} still needs a controlled verification test`
+      : `${label} conversion signal should be verified`;
+  const summary = conversionNotClear
+    ? `The selected ${tfpV2763ActionPhrase(actionType)} was completed from the browser side. During this manual review, no matching ${expectedEvent} event was clearly observed as a reliable conversion signal.`
+    : actionCompleted === "not_tested"
+      ? `The selected ${tfpV2763ActionPhrase(actionType)} is the main review target, but the action has not been completed in a controlled manual test yet.`
+      : `The selected ${tfpV2763ActionPhrase(actionType)} was reviewed from the browser side. The visible result should still be confirmed inside the actual tracking accounts before making final decisions.`;
+  return {
+    enabled: true,
+    source: manualEvidence.source || "operator_manual_tracking_review",
+    label,
+    actionLabel: label,
+    action_label: label,
+    actionType,
+    action_type: actionType,
+    title,
+    headline: title,
+    summary,
+    businessImpact: tfpV2763BusinessRisk(actionType),
+    expectedEvent,
+    expected_event: expectedEvent,
+    observedEvent,
+    observed_event: observedEvent,
+    tool: tfpV2763CleanSentence(primary.tool || "Tag Assistant", 90),
+    actionCompleted: tfpV2763StatusLabel(actionCompleted),
+    action_completed: tfpV2763StatusLabel(actionCompleted),
+    ga4Status: tfpV2763StatusLabel(ga4Status),
+    ga4_status: tfpV2763StatusLabel(ga4Status),
+    googleAdsStatus: adsStatus === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(adsStatus),
+    google_ads_status: adsStatus === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(adsStatus),
+    gtmStatus: tfpV2763StatusLabel(gtmStatus),
+    gtm_status: tfpV2763StatusLabel(gtmStatus),
+    testUrl: primary.testUrl || primary.test_url || "",
+    test_url: primary.testUrl || primary.test_url || "",
+    operatorNote: tfpV2763CleanSentence(primary.evidenceNote || primary.evidence_note, 520),
+    operator_note: tfpV2763CleanSentence(primary.evidenceNote || primary.evidence_note, 520),
+    disclaimer: "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records.",
+    severity: conversionNotClear ? "high" : "medium",
+  };
+}
+
 function normalizeReportPayload(body: AnyRecord = {}) {
   const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
@@ -1562,6 +1844,8 @@ function normalizeReportPayload(body: AnyRecord = {}) {
   const privatePage = sanitizePublicReportCopyObject(getObjectCandidate(rawSecurePageCopy, privateReportCopy), 40);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
   const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
+  const manualConversionEvidence = tfpV2763NormalizeManualEvidence(body, privatePage);
+  const manualEvidenceHero = tfpV2763BuildManualEvidenceHero(manualConversionEvidence);
 
   const headline = firstCleanString(
     body.headline,
@@ -1708,6 +1992,10 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     ctaText,
     manualAdsTransparency,
     manual_ads_transparency: manualAdsTransparency,
+    manualConversionEvidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manual_conversion_evidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manualEvidenceHero: manualEvidenceHero || undefined,
+    manual_evidence_hero: manualEvidenceHero || undefined,
     evidenceVideo: evidenceVideo.enabled ? evidenceVideo : undefined,
     evidence_video: evidenceVideo.enabled ? evidenceVideo : undefined,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
@@ -1754,6 +2042,10 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     privateReportVersion: normalizedPrivateReportCopy.privateReportVersion,
     manualAdsTransparency,
     manual_ads_transparency: manualAdsTransparency,
+    manualConversionEvidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manual_conversion_evidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manualEvidenceHero: manualEvidenceHero || undefined,
+    manual_evidence_hero: manualEvidenceHero || undefined,
     manual_ads_checked: manualAdsTransparency.checked,
     manual_ads_found: manualAdsTransparency.adsFound,
     manual_ads_source: manualAdsTransparency.source,
@@ -7938,6 +8230,10 @@ async function handleReportRegister(req: Request) {
     howToReadTitle: report.howToReadTitle,
     howToReadParagraphs: report.howToReadParagraphs,
     ctaHeadline: report.ctaHeadline,
+    manualConversionEvidence: report.manualConversionEvidence || null,
+    manual_conversion_evidence: deleteField,
+    manualEvidenceHero: report.manualEvidenceHero || null,
+    manual_evidence_hero: deleteField,
     previewImageUrl,
     ogImagePathname: report.ogImagePathname,
     pdfViewUrl: report.pdfViewUrl,

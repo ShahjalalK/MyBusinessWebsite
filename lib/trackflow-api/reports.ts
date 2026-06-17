@@ -620,6 +620,8 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       "evidence_video_id",
       "evidence_video_title",
       "evidence_video_description",
+      "manual_conversion_evidence",
+      "manual_evidence_hero",
     ];
 
     const cleanProblemCards = normalizeProblemCardsForFirestore(report.problemCards);
@@ -647,6 +649,10 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       primaryPageUrl: report.primaryPageUrl || "",
       reviewedPageUrls: Array.isArray(report.reviewedPageUrls) ? report.reviewedPageUrls : [],
       trackingSignalCards: cleanTrackingSignalCards,
+      manualConversionEvidence: report.manualConversionEvidence || null,
+      manual_conversion_evidence: deleteField,
+      manualEvidenceHero: report.manualEvidenceHero || null,
+      manual_evidence_hero: deleteField,
       auditSnapshotTitle: report.auditSnapshotTitle,
       auditSnapshotQuestions: report.auditSnapshotQuestions,
       trustNotes: report.trustNotes,

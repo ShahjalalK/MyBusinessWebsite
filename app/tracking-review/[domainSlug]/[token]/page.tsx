@@ -210,6 +210,81 @@ function getPrivateReportCopy(report: Record<string, any>): Record<string, any> 
   );
 }
 
+type ManualEvidenceHero = {
+  enabled: boolean;
+  title: string;
+  summary: string;
+  businessImpact: string;
+  actionLabel: string;
+  expectedEvent: string;
+  observedEvent: string;
+  tool: string;
+  actionCompleted: string;
+  ga4Status: string;
+  googleAdsStatus: string;
+  gtmStatus: string;
+  testUrl: string;
+  operatorNote: string;
+  disclaimer: string;
+  severity: "high" | "medium" | "low" | string;
+};
+
+function normalizeManualHeroUrl(value: unknown): string {
+  const raw = cleanText(value, "");
+  if (!raw) return "";
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return `${url.protocol}//${url.hostname}${url.pathname === "/" ? "" : url.pathname}`;
+  } catch {
+    return raw.length > 120 ? `${raw.slice(0, 117)}...` : raw;
+  }
+}
+
+function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: Record<string, any>): ManualEvidenceHero | null {
+  const raw = getObjectCandidate(
+    privateReportCopy.manualEvidenceHero,
+    privateReportCopy.manual_evidence_hero,
+    report.manualEvidenceHero,
+    report.manual_evidence_hero,
+  );
+
+  if (!raw.enabled) return null;
+
+  const title = cleanText(raw.title || raw.headline, "");
+  const summary = cleanText(raw.summary || raw.description, "");
+  const expectedEvent = cleanText(raw.expectedEvent || raw.expected_event, "");
+  const observedEvent = cleanText(raw.observedEvent || raw.observed_event || raw.observedEventName || raw.observed_event_name, "");
+  const actionLabel = cleanText(raw.actionLabel || raw.action_label || raw.label, "Selected conversion action");
+
+  if (!title || !summary) return null;
+
+  return {
+    enabled: true,
+    title,
+    summary,
+    businessImpact: cleanText(
+      raw.businessImpact || raw.business_impact,
+      "If this is a key customer action, the tracking setup should be verified before relying on campaign optimization or reporting.",
+    ),
+    actionLabel,
+    expectedEvent,
+    observedEvent: observedEvent || "Not clearly observed",
+    tool: cleanText(raw.tool, "Manual Tag Assistant / GA4 / GTM review"),
+    actionCompleted: cleanText(raw.actionCompleted || raw.action_completed, "Unclear / needs verification"),
+    ga4Status: cleanText(raw.ga4Status || raw.ga4_status, "Unclear / needs verification"),
+    googleAdsStatus: cleanText(raw.googleAdsStatus || raw.google_ads_status, "Unclear / needs verification"),
+    gtmStatus: cleanText(raw.gtmStatus || raw.gtm_status, "Unclear / needs verification"),
+    testUrl: normalizeManualHeroUrl(raw.testUrl || raw.test_url),
+    operatorNote: cleanText(raw.operatorNote || raw.operator_note, ""),
+    disclaimer: cleanText(
+      raw.disclaimer,
+      "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records.",
+    ),
+    severity: cleanText(raw.severity, "medium"),
+  };
+}
+
 function cleanListItemText(item: unknown): string {
   if (item && typeof item === "object" && !Array.isArray(item)) {
     const record = item as Record<string, any>;
@@ -1800,6 +1875,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const manualAdsSummary = getManualAdsSummary(manualAds);
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
   const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
+  const manualEvidenceHero = getManualEvidenceHero(report, privateReportCopy);
   const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
     .join(" ")
     .toLowerCase()
@@ -1952,6 +2028,79 @@ export default async function ReportPage({ params }: ReportPageProps) {
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
               {domain ? <span className="break-all"> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
             </p>
+
+            {manualEvidenceHero ? (
+              <div
+                data-trackflow-manual-evidence-hero
+                className="mt-6 overflow-hidden rounded-[1.5rem] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-blue-50 p-4 shadow-xl shadow-amber-950/10 sm:mt-7 sm:rounded-[2rem] sm:p-5 lg:p-6"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700 sm:text-[11px]">
+                      Manual conversion test result
+                    </p>
+                    <h2 className="mt-3 break-words text-2xl font-black leading-tight tracking-[-0.04em] text-slate-950 sm:text-3xl lg:text-4xl">
+                      {manualEvidenceHero.title}
+                    </h2>
+                  </div>
+                  <span className="inline-flex shrink-0 rounded-full border border-amber-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 shadow-sm">
+                    Browser-side manual evidence
+                  </span>
+                </div>
+
+                <p className="mt-4 break-words text-base font-bold leading-8 text-slate-700 sm:text-lg sm:leading-9">
+                  {manualEvidenceHero.summary}
+                </p>
+
+                {manualEvidenceHero.businessImpact ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:text-base">
+                    <span className="font-black">Why this matters: </span>
+                    {manualEvidenceHero.businessImpact}
+                  </div>
+                ) : null}
+
+                <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2">
+                  {[
+                    ["Action tested", manualEvidenceHero.actionLabel],
+                    ["Expected event", manualEvidenceHero.expectedEvent],
+                    ["Observed result", manualEvidenceHero.observedEvent],
+                    ["Google Ads conversion", manualEvidenceHero.googleAdsStatus],
+                    ["GA4 event", manualEvidenceHero.ga4Status],
+                    ["GTM trigger", manualEvidenceHero.gtmStatus],
+                    ["Action completed", manualEvidenceHero.actionCompleted],
+                    ["Tool used", manualEvidenceHero.tool],
+                  ]
+                    .filter(([, value]) => Boolean(value))
+                    .map(([label, value]) => (
+                      <div key={label} className="min-w-0 rounded-2xl border border-white bg-white/85 p-3 shadow-sm shadow-slate-950/5">
+                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                        <p className="mt-2 break-words text-sm font-black leading-6 text-slate-950">{value}</p>
+                      </div>
+                    ))}
+                </div>
+
+                {manualEvidenceHero.testUrl || manualEvidenceHero.operatorNote ? (
+                  <div className="mt-4 grid gap-3">
+                    {manualEvidenceHero.testUrl ? (
+                      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-bold leading-6 text-blue-950 sm:text-sm">
+                        <span className="font-black uppercase tracking-[0.14em] text-blue-700">Test URL: </span>
+                        <span className="break-all">{manualEvidenceHero.testUrl}</span>
+                      </div>
+                    ) : null}
+                    {manualEvidenceHero.operatorNote ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold leading-6 text-slate-600 sm:text-sm">
+                        <span className="font-black text-slate-900">Operator note: </span>
+                        {manualEvidenceHero.operatorNote}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 text-xs font-bold leading-6 text-slate-200 sm:text-sm">
+                  {manualEvidenceHero.disclaimer}
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-5 grid min-w-0 gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
               {heroSummaryCards.map((item) => (

@@ -459,6 +459,338 @@ function buildActionAwareSnapshotQuestions(actionLabel: string, pageLabel: strin
   ];
 }
 
+
+// TrackFlow Pro v27.63 - Manual evidence secure-page hero support
+// This keeps operator-provided manual conversion evidence safe and structured
+// for the secure report page. It does not change visitor tracking, PDF storage,
+// video tracking, email automation, or cleanup behavior.
+type ManualEvidenceNormalizedAction = {
+  slot: "primary" | "secondary";
+  label: string;
+  actionType: string;
+  action_type: string;
+  tool: string;
+  actionCompleted: string;
+  action_completed: string;
+  ga4EventObserved: string;
+  ga4_event_observed: string;
+  googleAdsConversionObserved: string;
+  google_ads_conversion_observed: string;
+  gtmTriggerObserved: string;
+  gtm_trigger_observed: string;
+  testUrl: string;
+  test_url: string;
+  expectedEvent: string;
+  expected_event: string;
+  observedEventName: string;
+  observed_event_name: string;
+  evidenceNote: string;
+  evidence_note: string;
+  trackingObserved: boolean;
+  tracking_observed: boolean;
+};
+
+function normalizeManualEvidenceActionType(value: any, fallback = "form_submission"): string {
+  const raw = String(value || fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const aliases: Record<string, string> = {
+    auto: fallback,
+    unknown: fallback,
+    form: "form_submission",
+    contact_form: "form_submission",
+    contact_form_submission: "form_submission",
+    lead_form: "form_submission",
+    lead_form_submission: "form_submission",
+    submit_form: "form_submission",
+    form_submit: "form_submission",
+    generate_lead: "form_submission",
+    phone: "phone_call",
+    call: "phone_call",
+    phone_click: "phone_call",
+    call_click: "phone_call",
+    click_to_call: "phone_call",
+    booking: "booking_appointment",
+    appointment: "booking_appointment",
+    book_appointment: "booking_appointment",
+    schedule: "booking_appointment",
+    cart: "add_to_cart",
+    add_cart: "add_to_cart",
+    checkout: "begin_checkout",
+    email: "email_click",
+    whatsapp: "whatsapp_click",
+  };
+  return aliases[raw] || raw || fallback;
+}
+
+function defaultManualEvidenceLabel(actionType: any): string {
+  const labels: Record<string, string> = {
+    form_submission: "Contact Form Submission",
+    phone_call: "Phone Call",
+    booking_appointment: "Booking / Appointment",
+    add_to_cart: "Add to Cart",
+    begin_checkout: "Begin Checkout",
+    purchase: "Purchase / Checkout",
+    email_click: "Email Click",
+    whatsapp_click: "WhatsApp Click",
+  };
+  return labels[normalizeManualEvidenceActionType(actionType)] || "Selected Conversion Action";
+}
+
+function normalizeManualEvidenceStatus(value: any, fallback = "not_sure"): string {
+  const raw = String(value === undefined || value === null || value === "" ? fallback : value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const aliases: Record<string, string> = {
+    true: "yes",
+    "1": "yes",
+    yes_observed: "yes",
+    observed: "yes",
+    found: "yes",
+    fired: "yes",
+    confirmed: "yes",
+    completed: "yes",
+    passed: "yes",
+    false: "no",
+    "0": "no",
+    no_not_observed: "no",
+    not_observed: "no",
+    not_found: "no",
+    not_fired: "no",
+    failed: "no",
+    unclear: "not_sure",
+    not_clear: "not_sure",
+    not_sure_unclear: "not_sure",
+    unknown: "not_sure",
+    maybe: "not_sure",
+    untested: "not_tested",
+  };
+  const normalized = aliases[raw] || raw;
+  return ["yes", "no", "not_sure", "not_tested"].includes(normalized) ? normalized : fallback;
+}
+
+function manualEvidenceStatusLabel(value: any): string {
+  const status = normalizeManualEvidenceStatus(value);
+  if (status === "yes") return "Observed";
+  if (status === "no") return "Not clearly observed";
+  if (status === "not_tested") return "Not tested";
+  return "Unclear / needs verification";
+}
+
+function defaultManualExpectedEvent(actionType: any): string {
+  const defaults: Record<string, string> = {
+    form_submission: "form_submit / generate_lead",
+    phone_call: "phone_click",
+    booking_appointment: "booking_search / begin_checkout / generate_lead",
+    add_to_cart: "add_to_cart",
+    begin_checkout: "begin_checkout",
+    purchase: "purchase",
+    email_click: "email_click",
+    whatsapp_click: "whatsapp_click",
+  };
+  return defaults[normalizeManualEvidenceActionType(actionType)] || "generate_lead";
+}
+
+function manualExpectedEventLooksLikeResult(value: any): boolean {
+  const text = normalizeDisplaySentence(value).toLowerCase();
+  if (!text) return false;
+  return /\b(no|not|nothing|none)\b.*\b(event|observed|found|fired|visible)\b|\bpage[_\s-]*view\s+only\b|\bonly\s+page[_\s-]*view\b|\bnot\s+clearly\b|\bno\s+clear\b/i.test(text);
+}
+
+function sanitizeManualExpectedObserved(actionType: string, expected: any, observed: any): { expectedEvent: string; observedEventName: string } {
+  let expectedEvent = normalizeDisplaySentence(expected).slice(0, 140);
+  let observedEventName = normalizeDisplaySentence(observed).slice(0, 180);
+  if (manualExpectedEventLooksLikeResult(expectedEvent)) {
+    if (!observedEventName) observedEventName = expectedEvent;
+    expectedEvent = defaultManualExpectedEvent(actionType);
+  }
+  if (!expectedEvent) expectedEvent = defaultManualExpectedEvent(actionType);
+  return { expectedEvent, observedEventName };
+}
+
+function normalizeManualActionEvidence(rawValue: any, slot: "primary" | "secondary", fallbackActionType = "form_submission"): ManualEvidenceNormalizedAction {
+  const raw = getObjectCandidate(rawValue);
+  const actionType = normalizeManualEvidenceActionType(
+    firstCleanString(raw.actionType, raw.action_type, raw.type, raw.action, raw.conversionAction, raw.conversion_action),
+    fallbackActionType,
+  );
+  const label = cleanActionLabel(firstCleanString(raw.label, raw.actionLabel, raw.action_label, raw.name)) || defaultManualEvidenceLabel(actionType);
+  const { expectedEvent, observedEventName } = sanitizeManualExpectedObserved(
+    actionType,
+    firstCleanString(raw.expectedEvent, raw.expected_event, raw.expected, raw.expectedEventName, raw.expected_event_name),
+    firstCleanString(raw.observedEventName, raw.observed_event_name, raw.observedEvent, raw.observed_event, raw.eventName, raw.event_name),
+  );
+  const actionCompleted = normalizeManualEvidenceStatus(firstCleanString(raw.actionCompleted, raw.action_completed, raw.completed), "not_tested");
+  const ga4EventObserved = normalizeManualEvidenceStatus(firstCleanString(raw.ga4EventObserved, raw.ga4_event_observed, raw.ga4Event, raw.ga4_event, raw.eventObserved, raw.event_observed), "not_sure");
+  const googleAdsConversionObserved = normalizeManualEvidenceStatus(firstCleanString(raw.googleAdsConversionObserved, raw.google_ads_conversion_observed, raw.googleAdsObserved, raw.google_ads_observed, raw.googleAdsConversion, raw.google_ads_conversion), "not_sure");
+  const gtmTriggerObserved = normalizeManualEvidenceStatus(firstCleanString(raw.gtmTriggerObserved, raw.gtm_trigger_observed, raw.gtmObserved, raw.gtm_observed, raw.gtmTrigger, raw.gtm_trigger), "not_sure");
+  const testUrl = sanitizeOptionalUrl(firstCleanString(raw.testUrl, raw.test_url, raw.url, raw.pageUrl, raw.page_url));
+  const evidenceNote = normalizeDisplaySentence(firstCleanString(raw.evidenceNote, raw.evidence_note, raw.operatorNote, raw.operator_note, raw.note, raw.notes)).slice(0, 520);
+  const trackingObserved = ga4EventObserved === "yes" || googleAdsConversionObserved === "yes" || gtmTriggerObserved === "yes";
+
+  return {
+    slot,
+    label,
+    actionType,
+    action_type: actionType,
+    tool: normalizeDisplaySentence(firstCleanString(raw.tool, raw.toolUsed, raw.tool_used, "Tag Assistant")).slice(0, 90),
+    actionCompleted,
+    action_completed: actionCompleted,
+    ga4EventObserved,
+    ga4_event_observed: ga4EventObserved,
+    googleAdsConversionObserved,
+    google_ads_conversion_observed: googleAdsConversionObserved,
+    gtmTriggerObserved,
+    gtm_trigger_observed: gtmTriggerObserved,
+    testUrl,
+    test_url: testUrl,
+    expectedEvent,
+    expected_event: expectedEvent,
+    observedEventName,
+    observed_event_name: observedEventName,
+    evidenceNote,
+    evidence_note: evidenceNote,
+    trackingObserved,
+    tracking_observed: trackingObserved,
+  };
+}
+
+function manualActionHasMeaningfulEvidence(action: ManualEvidenceNormalizedAction, slot: "primary" | "secondary"): boolean {
+  if (slot === "primary" && action.actionType) return true;
+  if (["yes", "no"].includes(action.actionCompleted)) return true;
+  return Boolean(action.testUrl || action.observedEventName || action.evidenceNote);
+}
+
+function normalizeManualConversionEvidenceForReport(body: AnyRecord = {}, privatePage: AnyRecord = {}): AnyRecord {
+  const manual = getObjectCandidate(
+    body.manualConversionEvidence,
+    body.manual_conversion_evidence,
+    body.manualTrackingEvidence,
+    body.manual_tracking_evidence,
+    body.operatorManualEvidence,
+    body.operator_manual_evidence,
+    privatePage.manualConversionEvidence,
+    privatePage.manual_conversion_evidence,
+    privatePage.manualTrackingEvidence,
+    privatePage.manual_tracking_evidence,
+  );
+  if (!Object.keys(manual).length || manual.enabled === false) {
+    return {
+      enabled: false,
+      source: "operator_manual_tracking_review",
+      primaryAction: {},
+      primary_action: {},
+      secondaryEnabled: false,
+      secondary_enabled: false,
+      secondaryAction: {},
+      secondary_action: {},
+      updatedAt: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  const primaryRaw = getObjectCandidate(manual.primary_action, manual.primaryAction, manual.primary, manual);
+  const primary = normalizeManualActionEvidence(primaryRaw, "primary", firstCleanString(manual.actionType, manual.action_type, "form_submission"));
+  const secondaryRaw = getObjectCandidate(manual.secondary_action, manual.secondaryAction, manual.secondary);
+  const secondary = normalizeManualActionEvidence(secondaryRaw, "secondary", "phone_call");
+  const secondaryEnabled = Boolean(manual.secondary_enabled || manual.secondaryEnabled) && manualActionHasMeaningfulEvidence(secondary, "secondary");
+  const enabled = manualActionHasMeaningfulEvidence(primary, "primary") || secondaryEnabled;
+
+  return {
+    enabled,
+    source: normalizeDisplaySentence(firstCleanString(manual.source, "operator_manual_tracking_review")).slice(0, 90),
+    primaryAction: primary,
+    primary_action: primary,
+    secondaryEnabled,
+    secondary_enabled: secondaryEnabled,
+    secondaryAction: secondaryEnabled ? secondary : {},
+    secondary_action: secondaryEnabled ? secondary : {},
+    updatedAt: firstCleanString(manual.updatedAt, manual.updated_at, new Date().toISOString()),
+    updated_at: firstCleanString(manual.updatedAt, manual.updated_at, new Date().toISOString()),
+  };
+}
+
+function manualEvidenceActionPhrase(actionType: string): string {
+  if (actionType === "phone_call") return "phone click action";
+  if (actionType === "booking_appointment") return "booking journey";
+  if (actionType === "add_to_cart") return "add-to-cart action";
+  if (actionType === "begin_checkout") return "checkout-start action";
+  if (actionType === "purchase") return "purchase / checkout action";
+  if (actionType === "email_click") return "email click action";
+  if (actionType === "whatsapp_click") return "WhatsApp click action";
+  return "contact form action";
+}
+
+function manualEvidenceBusinessRiskPhrase(actionType: string): string {
+  if (actionType === "phone_call") return "If calls are an important lead source, Google Ads and GA4 may need a clear phone-click or call-tracking conversion signal.";
+  if (actionType === "booking_appointment") return "If bookings are the main revenue action, campaigns may need a clear booking, begin-checkout, or lead event to optimize reliably.";
+  if (["add_to_cart", "begin_checkout", "purchase"].includes(actionType)) return "If paid traffic depends on ecommerce optimization, the selected cart, checkout, or purchase event should be confirmed before relying on campaign reporting.";
+  if (actionType === "email_click") return "If email clicks are a lead source, the event should be confirmed before using it for reporting or campaign optimization.";
+  if (actionType === "whatsapp_click") return "If WhatsApp enquiries are a lead source, the click event should be confirmed before using it for reporting or campaign optimization.";
+  return "If this form is the main lead source, Google Ads optimization may rely on weaker signals unless the lead event is confirmed inside the tracking accounts.";
+}
+
+function buildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | null {
+  if (!manualEvidence.enabled) return null;
+  const primary = getObjectCandidate(manualEvidence.primaryAction, manualEvidence.primary_action);
+  const actionType = normalizeManualEvidenceActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = cleanActionLabel(primary.label) || defaultManualEvidenceLabel(actionType);
+  const actionCompleted = normalizeManualEvidenceStatus(primary.actionCompleted || primary.action_completed, "not_tested");
+  const ga4Status = normalizeManualEvidenceStatus(primary.ga4EventObserved || primary.ga4_event_observed, "not_sure");
+  const adsStatus = normalizeManualEvidenceStatus(primary.googleAdsConversionObserved || primary.google_ads_conversion_observed, "not_sure");
+  const gtmStatus = normalizeManualEvidenceStatus(primary.gtmTriggerObserved || primary.gtm_trigger_observed, "not_sure");
+  const expectedEvent = normalizeDisplaySentence(primary.expectedEvent || primary.expected_event || defaultManualExpectedEvent(actionType));
+  const observedEvent = normalizeDisplaySentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed");
+  const actionWasCompleted = actionCompleted === "yes";
+  const conversionNotClear = actionWasCompleted && (adsStatus === "no" || ga4Status === "no" || (!primary.trackingObserved && !primary.tracking_observed));
+  const title = conversionNotClear
+    ? `${label} conversion signal was not clearly observed`
+    : actionCompleted === "not_tested"
+      ? `${label} still needs a controlled verification test`
+      : `${label} conversion signal should be verified`;
+  const summary = conversionNotClear
+    ? `The selected ${manualEvidenceActionPhrase(actionType)} was completed from the browser side. During this manual review, no matching ${expectedEvent} event was clearly observed as a reliable conversion signal.`
+    : actionCompleted === "not_tested"
+      ? `The selected ${manualEvidenceActionPhrase(actionType)} is the main review target, but the action has not been completed in a controlled manual test yet.`
+      : `The selected ${manualEvidenceActionPhrase(actionType)} was reviewed from the browser side. The visible result should still be confirmed inside the actual tracking accounts before making final decisions.`;
+
+  return {
+    enabled: true,
+    source: manualEvidence.source || "operator_manual_tracking_review",
+    label,
+    actionLabel: label,
+    action_label: label,
+    actionType,
+    action_type: actionType,
+    title,
+    headline: title,
+    summary,
+    businessImpact: manualEvidenceBusinessRiskPhrase(actionType),
+    expectedEvent,
+    expected_event: expectedEvent,
+    observedEvent,
+    observed_event: observedEvent,
+    tool: normalizeDisplaySentence(primary.tool || "Tag Assistant"),
+    actionCompleted: manualEvidenceStatusLabel(actionCompleted),
+    action_completed: manualEvidenceStatusLabel(actionCompleted),
+    ga4Status: manualEvidenceStatusLabel(ga4Status),
+    ga4_status: manualEvidenceStatusLabel(ga4Status),
+    googleAdsStatus: adsStatus === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(adsStatus),
+    google_ads_status: adsStatus === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(adsStatus),
+    gtmStatus: manualEvidenceStatusLabel(gtmStatus),
+    gtm_status: manualEvidenceStatusLabel(gtmStatus),
+    testUrl: primary.testUrl || primary.test_url || "",
+    test_url: primary.testUrl || primary.test_url || "",
+    operatorNote: normalizeDisplaySentence(primary.evidenceNote || primary.evidence_note).slice(0, 520),
+    operator_note: normalizeDisplaySentence(primary.evidenceNote || primary.evidence_note).slice(0, 520),
+    disclaimer: "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records.",
+    severity: conversionNotClear ? "high" : "medium",
+  };
+}
+
 function buildReportAwareSecureFields(params: {
   body: AnyRecord;
   privatePage: AnyRecord;
@@ -1300,6 +1632,8 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
   const alertSignupContext = isAlertSignupReportPayload(body, privatePage);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
   const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
+  const manualConversionEvidence = normalizeManualConversionEvidenceForReport(body, privatePage);
+  const manualEvidenceHero = buildManualEvidenceHero(manualConversionEvidence);
 
   const headline = firstCleanString(
     body.headline,
@@ -1503,6 +1837,10 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaHeadline: firstCleanString(privatePage.ctaHeadline, privatePage.cta_headline, body.ctaHeadline, body.cta_headline, "Want this verified inside your actual accounts?"),
     ctaText,
     manualAdsTransparency,
+    manualConversionEvidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manual_conversion_evidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manualEvidenceHero: manualEvidenceHero || undefined,
+    manual_evidence_hero: manualEvidenceHero || undefined,
     evidenceVideo: evidenceVideo.enabled ? evidenceVideo : undefined,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
   };
@@ -1557,6 +1895,10 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     secure_page_copy: normalizedPrivateReportCopy,
     privateReportVersion: normalizedPrivateReportCopy.privateReportVersion,
     manualAdsTransparency,
+    manualConversionEvidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manual_conversion_evidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manualEvidenceHero: manualEvidenceHero || undefined,
+    manual_evidence_hero: manualEvidenceHero || undefined,
     manual_ads_checked: manualAdsTransparency.checked,
     manual_ads_found: manualAdsTransparency.adsFound,
     manual_ads_source: manualAdsTransparency.source,
