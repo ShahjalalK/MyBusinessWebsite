@@ -747,15 +747,20 @@ function buildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | nu
   const actionWasCompleted = actionCompleted === "yes";
   const conversionNotClear = actionWasCompleted && (adsStatus === "no" || ga4Status === "no" || (!primary.trackingObserved && !primary.tracking_observed));
   const title = conversionNotClear
-    ? `${label} conversion signal was not clearly observed`
+    ? `${label} expected event was not clearly observed`
     : actionCompleted === "not_tested"
       ? `${label} still needs a controlled verification test`
       : `${label} conversion signal should be verified`;
   const summary = conversionNotClear
-    ? `The selected ${manualEvidenceActionPhrase(actionType)} was completed from the browser side. During this manual review, no matching ${expectedEvent} event was clearly observed as a reliable conversion signal.`
+    ? `The selected ${manualEvidenceActionPhrase(actionType)} was completed from the browser side. The expected event (${expectedEvent}) was not clearly found during the manual review.`
     : actionCompleted === "not_tested"
       ? `The selected ${manualEvidenceActionPhrase(actionType)} is the main review target, but the action has not been completed in a controlled manual test yet.`
       : `The selected ${manualEvidenceActionPhrase(actionType)} was reviewed from the browser side. The visible result should still be confirmed inside the actual tracking accounts before making final decisions.`;
+  const verificationMessage = conversionNotClear
+    ? `Expected event to verify: ${expectedEvent}. Observed result: ${observedEvent}. This does not prove final tracking failure, but it should be checked inside GA4, GTM, Google Ads, and the relevant CRM, booking engine, call-tracking, or server records.`
+    : actionCompleted === "not_tested"
+      ? `Expected event to verify: ${expectedEvent}. Complete one controlled manual test, then compare the observed result inside Tag Assistant, GTM Preview, GA4 DebugView, and Google Ads diagnostics.`
+      : `Expected event to verify: ${expectedEvent}. Compare the browser-visible result with GA4, GTM, Google Ads, and backend/account-side records before making final decisions.`;
 
   return {
     enabled: true,
@@ -768,6 +773,8 @@ function buildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | nu
     title,
     headline: title,
     summary,
+    verificationMessage,
+    verification_message: verificationMessage,
     businessImpact: manualEvidenceBusinessRiskPhrase(actionType),
     expectedEvent,
     expected_event: expectedEvent,

@@ -214,6 +214,7 @@ type ManualEvidenceHero = {
   enabled: boolean;
   title: string;
   summary: string;
+  verificationMessage: string;
   businessImpact: string;
   actionLabel: string;
   expectedEvent: string;
@@ -263,6 +264,12 @@ function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: R
     enabled: true,
     title,
     summary,
+    verificationMessage: cleanText(
+      raw.verificationMessage || raw.verification_message,
+      expectedEvent
+        ? `Expected event to verify: ${expectedEvent}. Observed result: ${observedEvent || "Not clearly observed"}. This should be confirmed inside GA4, GTM, Google Ads, and the relevant backend/account systems.`
+        : "The selected conversion action should be verified inside GA4, GTM, Google Ads, and the relevant backend/account systems.",
+    ),
     businessImpact: cleanText(
       raw.businessImpact || raw.business_impact,
       "If this is a key customer action, the tracking setup should be verified before relying on campaign optimization or reporting.",
@@ -2052,6 +2059,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   {manualEvidenceHero.summary}
                 </p>
 
+                {manualEvidenceHero.verificationMessage ? (
+                  <div className="mt-4 rounded-[1.25rem] border border-amber-300 bg-amber-100/80 px-4 py-4 text-base font-black leading-8 text-amber-950 shadow-sm sm:px-5 sm:py-5 sm:text-lg sm:leading-9">
+                    {manualEvidenceHero.verificationMessage}
+                  </div>
+                ) : null}
+
                 {manualEvidenceHero.businessImpact ? (
                   <div className="mt-4 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:text-base">
                     <span className="font-black">Why this matters: </span>
@@ -2062,7 +2075,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2">
                   {[
                     ["Action tested", manualEvidenceHero.actionLabel],
-                    ["Expected event", manualEvidenceHero.expectedEvent],
+                    ["Expected event to verify", manualEvidenceHero.expectedEvent],
                     ["Observed result", manualEvidenceHero.observedEvent],
                     ["Google Ads conversion", manualEvidenceHero.googleAdsStatus],
                     ["GA4 event", manualEvidenceHero.ga4Status],
