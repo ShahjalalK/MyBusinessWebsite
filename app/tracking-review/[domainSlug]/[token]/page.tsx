@@ -1946,9 +1946,18 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
   const evidenceVideo = getEvidenceVideoDisplay(report);
   const heroHeadline = companyName === "this website" ? "Private tracking review" : `Private tracking review for ${companyName}`;
-  const heroContextLine = primaryConversionFocus
+  const manualReviewContextLine = manualEvidenceHero
+    ? [
+        manualEvidenceHero.actionLabel ? `Manual review focus: ${manualEvidenceHero.actionLabel}.` : "",
+        manualEvidenceHero.expectedEvent ? `Expected event: ${manualEvidenceHero.expectedEvent}.` : "",
+        manualEvidenceHero.observedEvent ? `Observed result: ${manualEvidenceHero.observedEvent}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  const heroContextLine = manualReviewContextLine || (primaryConversionFocus
     ? `${primaryConversionFocus} reviewed on the selected conversion path.`
-    : pageSubheadline;
+    : pageSubheadline);
   const evidenceSignalBadges = cleanList(
     [
       ...trackingSignalItems,
@@ -1965,20 +1974,35 @@ export default async function ReportPage({ params }: ReportPageProps) {
     3,
   );
   const verificationPreviewItems = recommendations.slice(0, 3);
-  const heroSummaryCards = [
-    {
-      label: "Review focus",
-      value: reviewFocusLabel,
-    },
-    {
-      label: "Evidence type",
-      value: "Browser-visible signals",
-    },
-    {
-      label: "Best next action",
-      value: "Controlled test + account check",
-    },
-  ];
+  const heroSummaryCards = manualEvidenceHero
+    ? [
+        {
+          label: "Reviewed action",
+          value: manualEvidenceHero.actionLabel || reviewFocusLabel,
+        },
+        {
+          label: "Expected event",
+          value: manualEvidenceHero.expectedEvent || "Needs account confirmation",
+        },
+        {
+          label: "Observed result",
+          value: manualEvidenceHero.observedEvent || "Not clearly observed",
+        },
+      ]
+    : [
+        {
+          label: "Review focus",
+          value: reviewFocusLabel,
+        },
+        {
+          label: "Evidence type",
+          value: "Browser-visible signals",
+        },
+        {
+          label: "Best next action",
+          value: "Controlled test + account check",
+        },
+      ];
 
   const chatQuestionContext: ReportChatQuestionContext = {
     companyName,
@@ -1988,8 +2012,16 @@ export default async function ReportPage({ params }: ReportPageProps) {
     scoreLabel: getReportScoreLabel(report),
     mainFinding,
     businessImpact,
-    primaryConversionFocus,
+    primaryConversionFocus: manualEvidenceHero?.actionLabel || primaryConversionFocus,
     businessType: businessTypeLabel,
+    manualActionLabel: manualEvidenceHero?.actionLabel || "",
+    manualExpectedEvent: manualEvidenceHero?.expectedEvent || "",
+    manualObservedEvent: manualEvidenceHero?.observedEvent || "",
+    manualTool: manualEvidenceHero?.tool || "",
+    manualGa4Status: manualEvidenceHero?.ga4Status || "",
+    manualGoogleAdsStatus: manualEvidenceHero?.googleAdsStatus || "",
+    manualGtmStatus: manualEvidenceHero?.gtmStatus || "",
+    manualVerificationMessage: manualEvidenceHero?.verificationMessage || "",
     whatChecked,
     proofPoints: clientFacingProofPoints,
     recommendations,

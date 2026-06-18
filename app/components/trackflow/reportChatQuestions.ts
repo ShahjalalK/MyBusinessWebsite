@@ -20,6 +20,14 @@ export type ReportChatQuestionContext = {
   recommendations?: string[];
   auditSnapshotQuestions?: string[];
   manualAdsSummary?: string;
+  manualActionLabel?: string;
+  manualExpectedEvent?: string;
+  manualObservedEvent?: string;
+  manualTool?: string;
+  manualGa4Status?: string;
+  manualGoogleAdsStatus?: string;
+  manualGtmStatus?: string;
+  manualVerificationMessage?: string;
 };
 
 export type ReportChatQuestionSuggestionSet = {
@@ -156,6 +164,14 @@ function contextToSearchText(context?: ReportChatQuestionContext): string {
     context.primaryConversionFocus,
     context.businessType,
     context.manualAdsSummary,
+    context.manualActionLabel,
+    context.manualExpectedEvent,
+    context.manualObservedEvent,
+    context.manualTool,
+    context.manualGa4Status,
+    context.manualGoogleAdsStatus,
+    context.manualGtmStatus,
+    context.manualVerificationMessage,
     ...(context.whatChecked || []),
     ...(context.proofPoints || []),
     ...(context.recommendations || []),
@@ -188,8 +204,45 @@ function getAuditSnapshotQuestionRules(context?: ReportChatQuestionContext): Que
 
   return questions.map((question, index) => ({
     question,
-    priority: 140 - index,
+    priority: 190 - index,
   }));
+}
+
+function getManualEvidenceQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
+  const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "the selected action");
+  const expected = cleanText(context?.manualExpectedEvent || "");
+  const observed = cleanText(context?.manualObservedEvent || "");
+  const rules: QuestionRule[] = [];
+
+  pushQuestion(
+    rules,
+    Boolean(action && expected),
+    `Was ${expected} observed after the ${action} review?`,
+    188,
+  );
+
+  pushQuestion(
+    rules,
+    Boolean(observed),
+    `Why does the observed result (${observed}) matter for Google Ads reporting?`,
+    187,
+  );
+
+  pushQuestion(
+    rules,
+    Boolean(action),
+    `What should be checked inside GA4, GTM, and Google Ads for this ${action}?`,
+    186,
+  );
+
+  pushQuestion(
+    rules,
+    Boolean(context?.manualGoogleAdsStatus || context?.businessImpact),
+    "Could this affect optimization if ads are active?",
+    185,
+  );
+
+  return rules.filter((rule) => isSafeReportQuestion(rule.question));
 }
 
 function getScoreQuestion(context?: ReportChatQuestionContext): QuestionRule[] {
@@ -288,8 +341,9 @@ function getHeadlineFindingQuestionRules(context?: ReportChatQuestionContext): Q
 function buildContextQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
   const text = contextToSearchText(context);
   const rules: QuestionRule[] = [
-    ...getHeadlineFindingQuestionRules(context),
     ...getAuditSnapshotQuestionRules(context),
+    ...getManualEvidenceQuestionRules(context),
+    ...getHeadlineFindingQuestionRules(context),
     ...getScoreQuestion(context),
   ];
 
@@ -674,22 +728,24 @@ export function buildReportChatQuestionSuggestions({
   const followUpLimit = Math.max(1, Math.min(4, limits?.followUp || 3));
 
   const snapshotQuestions = getAuditSnapshotQuestionRules(context).map((rule) => rule.question);
+  const manualEvidenceQuestions = getManualEvidenceQuestionRules(context).map((rule) => rule.question);
   const contextQuestions = buildContextQuestionRules(context).map((rule) => rule.question);
   const followUpQuestions = buildFollowUpRules(latestAssistantContent, context).map((rule) => rule.question);
+  const reportSpecificQuestions = [...snapshotQuestions, ...manualEvidenceQuestions];
 
   return {
     closedQuestions: getUnaskedQuestions({
-      candidates: [...contextQuestions, ...snapshotQuestions, ...DEFAULT_CLOSED_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...reportSpecificQuestions, ...contextQuestions, ...DEFAULT_CLOSED_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: closedLimit,
     }),
     starterQuestions: getUnaskedQuestions({
-      candidates: [...contextQuestions, ...snapshotQuestions, ...DEFAULT_STARTER_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...reportSpecificQuestions, ...contextQuestions, ...DEFAULT_STARTER_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: starterLimit,
     }),
     followUpQuestions: getUnaskedQuestions({
-      candidates: [...followUpQuestions, ...snapshotQuestions, ...contextQuestions, ...DEFAULT_FOLLOW_UP_QUESTIONS, ...BROAD_FALLBACK_POOL],
+      candidates: [...followUpQuestions, ...reportSpecificQuestions, ...contextQuestions, ...DEFAULT_FOLLOW_UP_QUESTIONS, ...BROAD_FALLBACK_POOL],
       askedKeys,
       limit: followUpLimit,
     }),

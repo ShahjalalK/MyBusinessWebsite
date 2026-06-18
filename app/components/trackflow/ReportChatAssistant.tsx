@@ -1167,6 +1167,8 @@ export default function ReportChatAssistant({
                                 type="button"
                                 onClick={() => void submitQuestion(item, "follow_up")}
                                 disabled={isSending || isDisabled}
+                                data-trackflow-chat-suggestion="follow_up"
+                                data-trackflow-chat-question={item}
                                 className="min-h-10 rounded-full border border-blue-100 bg-white px-3 py-2 text-left text-[11px] font-bold leading-4 text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {item}
@@ -1198,7 +1200,7 @@ export default function ReportChatAssistant({
                   <div className="mb-2 flex items-center gap-2">
                     <Sparkles className="h-4 w-4 shrink-0 text-blue-600" />
                     <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 sm:tracking-[0.18em]">
-                      Start with one question
+                      Suggested questions for this review
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1208,6 +1210,8 @@ export default function ReportChatAssistant({
                         type="button"
                         onClick={() => void submitQuestion(item, "starter")}
                         disabled={isSending || isDisabled}
+                        data-trackflow-chat-suggestion="starter"
+                        data-trackflow-chat-question={item}
                         className="min-h-11 rounded-2xl border border-blue-100 bg-white px-3 py-2.5 text-left text-[11px] font-bold leading-4 text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {item}

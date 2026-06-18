@@ -737,6 +737,221 @@ async function loadReportByToken(token: string): Promise<AnyRecord | null> {
 }
 
 
+function getObjectCandidate(...values: unknown[]): AnyRecord {
+  for (const value of values) {
+    if (value && typeof value === "object" && !Array.isArray(value)) return value as AnyRecord;
+  }
+  return {};
+}
+
+function cleanContextText(value: unknown, fallback = ""): string {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text || fallback;
+}
+
+function getManualEvidenceChatContext(report: AnyRecord = {}): AnyRecord {
+  const manualHero = getObjectCandidate(report.manualEvidenceHero, report.manual_evidence_hero);
+  const manual = getObjectCandidate(report.manualConversionEvidence, report.manual_conversion_evidence);
+  const primary = getObjectCandidate(
+    manual.primaryAction,
+    manual.primary_action,
+    manual.primary,
+    manualHero,
+  );
+
+  const actionLabel = cleanContextText(
+    manualHero.actionLabel ||
+      manualHero.action_label ||
+      manualHero.label ||
+      primary.label ||
+      primary.actionLabel ||
+      primary.action_label,
+  );
+  const expectedEvent = cleanContextText(
+    manualHero.expectedEvent ||
+      manualHero.expected_event ||
+      primary.expectedEvent ||
+      primary.expected_event,
+  );
+  const observedEvent = cleanContextText(
+    manualHero.observedEvent ||
+      manualHero.observed_event ||
+      primary.observedEventName ||
+      primary.observed_event_name ||
+      primary.observedEvent ||
+      primary.observed_event,
+  );
+  const tool = cleanContextText(manualHero.tool || primary.tool || primary.toolUsed || primary.tool_used);
+  const ga4Status = cleanContextText(
+    manualHero.ga4Status ||
+      manualHero.ga4_status ||
+      primary.ga4EventObserved ||
+      primary.ga4_event_observed ||
+      primary.ga4Event ||
+      primary.ga4_event,
+  );
+  const googleAdsStatus = cleanContextText(
+    manualHero.googleAdsStatus ||
+      manualHero.google_ads_status ||
+      primary.googleAdsConversionObserved ||
+      primary.google_ads_conversion_observed ||
+      primary.googleAdsConversion ||
+      primary.google_ads_conversion,
+  );
+  const gtmStatus = cleanContextText(
+    manualHero.gtmStatus ||
+      manualHero.gtm_status ||
+      primary.gtmTriggerObserved ||
+      primary.gtm_trigger_observed ||
+      primary.gtmTrigger ||
+      primary.gtm_trigger,
+  );
+
+  if (!actionLabel && !expectedEvent && !observedEvent && !manualHero.summary && !manualHero.verificationMessage) {
+    return {};
+  }
+
+  return {
+    manualActionLabel: actionLabel,
+    manualExpectedEvent: expectedEvent,
+    manualObservedEvent: observedEvent,
+    manualTool: tool,
+    manualGa4Status: ga4Status,
+    manualGoogleAdsStatus: googleAdsStatus,
+    manualGtmStatus: gtmStatus,
+    manualSummary: cleanContextText(manualHero.summary),
+    manualBusinessImpact: cleanContextText(manualHero.businessImpact || manualHero.business_impact || report.businessImpact),
+    manualVerificationMessage: cleanContextText(manualHero.verificationMessage || manualHero.verification_message),
+    manualDisclaimer: cleanContextText(manualHero.disclaimer),
+    manualOperatorNote: cleanContextText(
+      manualHero.operatorNote ||
+        manualHero.operator_note ||
+        primary.evidenceNote ||
+        primary.evidence_note ||
+        primary.operatorNote ||
+        primary.operator_note,
+    ),
+  };
+}
+
+function enhanceReportChatContextWithManualEvidence(context: AnyRecord, report: AnyRecord = {}): AnyRecord {
+  const manual = getManualEvidenceChatContext(report);
+  if (!Object.keys(manual).length) return context;
+
+  const actionLabel = cleanContextText(manual.manualActionLabel);
+  const expectedEvent = cleanContextText(manual.manualExpectedEvent);
+  const observedEvent = cleanContextText(manual.manualObservedEvent);
+  const snapshotQuestions = Array.isArray(report.auditSnapshotQuestions)
+    ? report.auditSnapshotQuestions
+    : Array.isArray(report.audit_snapshot_questions)
+      ? report.audit_snapshot_questions
+      : [];
+
+  return {
+    ...context,
+    ...manual,
+    primaryConversionFocus: actionLabel || context.primaryConversionFocus,
+    mainFinding: cleanContextText(report.mainFinding || report.main_finding || context.mainFinding),
+    businessImpact: cleanContextText(manual.manualBusinessImpact || context.businessImpact),
+    auditSnapshotQuestions: snapshotQuestions.slice(0, 4),
+    manualEvidenceLine: [
+      actionLabel ? `Action reviewed: ${actionLabel}.` : "",
+      expectedEvent ? `Expected event: ${expectedEvent}.` : "",
+      observedEvent ? `Observed result: ${observedEvent}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  };
+}
+
+function manualStatusNeedsVerification(value: unknown): boolean {
+  const text = normalizeIntentText(value);
+  if (!text) return true;
+  return /\b(no|not|unclear|needs|verify|verification|not clearly|not observed)\b/.test(text);
+}
+
+function buildManualEvidenceAnswer(context: AnyRecord, question: string): string {
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
+  const expectedEvent = cleanContextText(context.manualExpectedEvent);
+  const observedEvent = cleanContextText(context.manualObservedEvent);
+  const businessImpact = cleanContextText(context.manualBusinessImpact || context.businessImpact);
+  const verificationMessage = cleanContextText(context.manualVerificationMessage);
+  const tool = cleanContextText(context.manualTool, "manual browser-side review");
+  const ga4Status = cleanContextText(context.manualGa4Status, "Unclear / needs verification");
+  const googleAdsStatus = cleanContextText(context.manualGoogleAdsStatus, "Unclear / needs verification");
+  const gtmStatus = cleanContextText(context.manualGtmStatus, "Unclear / needs verification");
+  const operatorNote = cleanContextText(context.manualOperatorNote);
+  const q = normalizeIntentText(question);
+
+  if (!expectedEvent && !observedEvent && !context.manualEvidenceLine) return "";
+
+  const asksObserved =
+    /\b(was|did|observed|found|show|appear|fire|fired|event)\b/.test(q) ||
+    (expectedEvent && q.includes(expectedEvent.toLowerCase())) ||
+    (observedEvent && q.includes(observedEvent.toLowerCase()));
+
+  const asksGoogleAds =
+    /\bgoogle ads|ads reporting|ad reporting|optimization|optimisation|optimize|optimise|campaign|conversion diagnostics\b/.test(q);
+  const asksVerification =
+    /\bwhat should|check|verify|verified|confirm|inside ga4|inside gtm|gtm preview|ga4 debugview|next step|first\b/.test(q);
+
+  if (!asksObserved && !asksGoogleAds && !asksVerification) return "";
+
+  if (asksObserved && !asksVerification && !asksGoogleAds) {
+    return `
+Short answer:
+During the manual ${actionLabel} review, ${expectedEvent ? `${expectedEvent} was the expected event.` : "a matching conversion event was expected."} The browser-visible observed result was ${observedEvent || "not clearly confirmed"}.
+
+What this means:
+This does not prove final account-side tracking failure. It means the expected conversion signal was not clearly visible from the manual browser-side review.
+
+Evidence to review:
+- Tool/source: ${tool}.
+- GA4 event: ${ga4Status}.
+- Google Ads conversion: ${googleAdsStatus}.
+- GTM trigger: ${gtmStatus}.${operatorNote ? `\n- Operator note: ${operatorNote}` : ""}
+
+Important note:
+Final confirmation still requires GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server-side records.
+`.trim();
+  }
+
+  if (asksGoogleAds) {
+    return `
+Short answer:
+Yes, this can matter if ${actionLabel} is used as a Google Ads lead or conversion action.
+
+What this means:
+The review expected ${expectedEvent || "a matching conversion event"}, but the browser-visible observed result was ${observedEvent || "not clearly confirmed"}. If Google Ads depends on this action, reporting and optimization may be less reliable until the final conversion action is confirmed inside the actual accounts.
+
+Why it matters:
+${businessImpact || "Google Ads optimization works best when the selected conversion action is recorded clearly and consistently."}
+
+Important note:
+This is not a final claim that Google Ads is missing conversions. It is a browser-visible and operator-provided signal that should be verified inside Google Ads conversion diagnostics, GA4, GTM, and the relevant backend lead records.
+`.trim();
+  }
+
+  if (asksVerification || manualStatusNeedsVerification(ga4Status) || manualStatusNeedsVerification(googleAdsStatus) || manualStatusNeedsVerification(gtmStatus)) {
+    return `
+Short answer:
+The safest next step is to repeat one controlled ${actionLabel} test and compare the same action across GA4, GTM, Google Ads, and the backend lead record.
+
+What to verify next:
+- In GTM Preview, confirm whether a matching trigger fires for ${actionLabel}.
+- In GA4 DebugView, confirm whether ${expectedEvent || "the expected conversion event"} appears, not only ${observedEvent || "a generic page event"}.
+- In Google Ads, check whether a matching conversion action receives the same test.
+- In the CRM, form inbox, booking system, call-tracking platform, or server logs, match the submitted test lead.
+
+Important note:
+${verificationMessage || "Browser-visible evidence is useful context, but final recording still requires account/server access."}
+`.trim();
+  }
+
+  return "";
+}
+
+
 function clampIntentScore(value: unknown, fallback = 0): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -999,7 +1214,7 @@ async function handlePdfDownloadRedirect(req: NextRequest) {
     });
   }
 
-  const context = extractReportChatContext(report, token);
+  const context = enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report);
 
   try {
     await markReportPdfDownloaded({
@@ -1206,7 +1421,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const context = extractReportChatContext(report, token);
+  const context = enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report);
 
   if (domainSlug && context.domainSlug && domainSlug !== context.domainSlug) {
     return jsonError("This chat request does not match the private report URL.", 403, {
@@ -1278,7 +1493,7 @@ export async function POST(req: NextRequest) {
     return jsonError("This private tracking review could not be found.", 404, { disableChat: true });
   }
 
-  const context = extractReportChatContext(report, token);
+  const context = enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report);
 
   if (domainSlug && context.domainSlug && domainSlug !== context.domainSlug) {
     return jsonError("This chat request does not match the private report URL.", 403, { disableChat: true });
@@ -1375,6 +1590,32 @@ export async function POST(req: NextRequest) {
         });
       }),
       "access_security_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const manualEvidenceAnswer = buildManualEvidenceAnswer(context, question);
+
+  if (manualEvidenceAnswer) {
+    const answer = validateAssistantAnswer(manualEvidenceAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "manual_evidence_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "manual_evidence_answer",
       sessionCookieHeaders,
     );
   }
