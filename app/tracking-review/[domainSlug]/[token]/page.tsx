@@ -1115,6 +1115,15 @@ main[data-trackflow-secure-report] iframe {
   main[data-trackflow-secure-report] {
     text-rendering: optimizeLegibility;
   }
+  main[data-trackflow-secure-report] section {
+    scroll-margin-top: 5.25rem;
+  }
+  main[data-trackflow-secure-report] [data-trackflow-video-shell] {
+    contain: layout paint;
+  }
+  main[data-trackflow-secure-report] .break-all {
+    overflow-wrap: anywhere;
+  }
 }
 [data-trackflow-sticky-assistant-shell] {
   opacity: 0;
@@ -2085,7 +2094,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   };
 
   return (
-    <main data-trackflow-secure-report className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900">
+    <main data-trackflow-secure-report className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 antialiased">
       <ReportViewBeacon token={token} />
       <ReportServedPixel token={token} domainSlug={domainSlug} primaryActionLabel={ctaText} />
       <SecureReportAnalytics
@@ -2108,17 +2117,17 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="absolute bottom-[-10rem] left-[-8rem] h-80 w-80 rounded-full bg-slate-100 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto grid max-w-7xl gap-5 px-4 pb-8 pt-5 sm:gap-8 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:pb-16 lg:pt-12">
+        <div className="relative mx-auto grid max-w-7xl gap-4 px-4 pb-7 pt-5 sm:gap-8 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:pb-16 lg:pt-12">
           <div className="min-w-0">
             <div className="inline-flex max-w-full items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase leading-5 tracking-[0.18em] text-blue-700 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
               Private tracking review
             </div>
 
-            <h1 className="mt-4 max-w-3xl break-words text-[2rem] font-black leading-[1.03] tracking-[-0.045em] text-slate-950 sm:mt-6 sm:text-5xl sm:leading-[0.98] lg:text-6xl">
+            <h1 className="mt-4 max-w-3xl break-words text-[1.9rem] font-black leading-[1.06] tracking-[-0.045em] text-slate-950 sm:mt-6 sm:text-5xl sm:leading-[0.98] lg:text-6xl">
               {heroHeadline}
             </h1>
 
-            <p className="mt-4 max-w-2xl break-words text-sm font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
+            <p className="mt-4 max-w-2xl break-words text-[0.95rem] font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
               {domain ? <span className="break-all"> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
             </p>
@@ -2126,7 +2135,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             {manualEvidenceHero ? (
               <div
                 data-trackflow-manual-evidence-hero
-                className="mt-6 overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white p-4 shadow-lg shadow-slate-950/8 sm:mt-7 sm:rounded-[1.75rem] sm:p-5 lg:p-6"
+                className="mt-5 overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white p-4 shadow-lg shadow-slate-950/8 sm:mt-7 sm:rounded-[1.75rem] sm:p-5 lg:p-6"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -2159,7 +2168,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   </div>
                 ) : null}
 
-                <div className="mt-5 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-5 grid min-w-0 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
                   {[
                     ["Action tested", manualEvidenceHero.actionLabel],
                     ["Expected event to verify", manualEvidenceHero.expectedEvent],
@@ -2216,7 +2225,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               ))}
             </div>
 
-            <div className="mt-6 grid min-w-0 gap-3 sm:mt-7 sm:flex sm:flex-wrap">
+            <div className="mt-5 grid min-w-0 gap-3 sm:mt-7 sm:flex sm:flex-wrap">
               <LinkButton
                 href="#findings"
                 variant="dark"
@@ -2247,6 +2256,29 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 Book verification
               </LinkButton>
             </div>
+
+            {evidenceVideo ? (
+              <a
+                href="#evidence-video"
+                data-trackflow-analytics-event="secure_report_evidence_video_mobile_cta_click"
+                data-trackflow-analytics-section="hero"
+                data-trackflow-analytics-label="Watch evidence video mobile CTA"
+                data-trackflow-video-id={evidenceVideo.videoId}
+                className="mt-4 flex min-w-0 items-center gap-3 rounded-[1.25rem] border border-blue-100 bg-blue-50/90 p-3 text-left shadow-sm shadow-blue-950/5 transition hover:border-blue-200 hover:bg-white sm:hidden"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-black text-white shadow-lg shadow-blue-600/25">
+                  ▶
+                </span>
+                <span className="min-w-0">
+                  <span className="block break-words text-sm font-black leading-5 text-slate-950">
+                    Watch the short evidence video
+                  </span>
+                  <span className="mt-1 block break-words text-xs font-bold leading-5 text-blue-800">
+                    See the browser-visible review before the PDF.
+                  </span>
+                </span>
+              </a>
+            ) : null}
 
             <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2 text-xs font-bold text-slate-500 sm:gap-3">
               <a
@@ -2367,7 +2399,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+      <section className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
         <div className="grid min-w-0 gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3 sm:rounded-[2rem] sm:p-4 lg:p-5">
           {trustSignals.map((item, index) => (
             <div key={item} className="flex min-w-0 items-start gap-3 rounded-[1.25rem] border border-slate-100 bg-slate-50 p-3 sm:rounded-[1.35rem] sm:p-4">
@@ -2387,17 +2419,17 @@ export default async function ReportPage({ params }: ReportPageProps) {
           data-trackflow-analytics-section="evidence_video"
           data-trackflow-analytics-label="Evidence video visible"
           data-trackflow-video-id={evidenceVideo.videoId}
-          className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8"
+          className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:pb-10 sm:pt-2 lg:px-8"
         >
-          <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
+          <div className="min-w-0 overflow-hidden rounded-[1.35rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
             <div className="grid min-w-0 items-start gap-0 lg:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
-              <div className="bg-slate-950 p-2 sm:p-4 lg:self-start lg:p-5">
+              <div className="bg-slate-950 p-2.5 sm:p-4 lg:self-start lg:p-5">
                 <div
                   data-trackflow-video-shell="true"
                   data-trackflow-video-id={evidenceVideo.videoId}
                   data-trackflow-video-embed-url={evidenceVideo.embedUrl}
                   data-trackflow-video-title={evidenceVideo.title}
-                  className="relative aspect-video w-full max-w-full overflow-hidden rounded-[1.1rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20 sm:rounded-[1.35rem]"
+                  className="relative aspect-video w-full max-w-full overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-950/20 sm:rounded-[1.35rem]"
                 >
                   <button
                     type="button"
@@ -2427,26 +2459,26 @@ export default async function ReportPage({ params }: ReportPageProps) {
                       <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,.55),transparent_32%),radial-gradient(circle_at_80%_15%,rgba(14,165,233,.28),transparent_28%),linear-gradient(135deg,#020617_0%,#0f172a_55%,#1e3a8a_100%)]" />
                     )}
 
-                    <span className="relative grid h-16 w-16 place-items-center rounded-full bg-blue-600 shadow-2xl shadow-blue-600/40 ring-4 ring-white/20 transition hover:scale-105 sm:h-20 sm:w-20">
-                      <span className="ml-1 block h-0 w-0 border-y-[12px] border-l-[20px] border-y-transparent border-l-white sm:border-y-[15px] sm:border-l-[25px]" />
+                    <span className="relative grid h-14 w-14 place-items-center rounded-full bg-blue-600 shadow-2xl shadow-blue-600/40 ring-4 ring-white/20 transition hover:scale-105 sm:h-20 sm:w-20">
+                      <span className="ml-1 block h-0 w-0 border-y-[10px] border-l-[17px] border-y-transparent border-l-white sm:border-y-[15px] sm:border-l-[25px]" />
                     </span>
 
-                    <span className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-950/80 px-4 py-3 text-left text-xs font-black leading-5 shadow-lg shadow-slate-950/30 backdrop-blur sm:text-sm">
+                    <span className="absolute bottom-3 left-3 right-3 rounded-xl bg-slate-950/80 px-3 py-2.5 text-left text-[11px] font-black leading-4 shadow-lg shadow-slate-950/30 backdrop-blur sm:bottom-4 sm:left-4 sm:right-4 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5">
                       <span className="block text-white">Browser-side evidence walkthrough</span>
-                      <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-blue-200">Tap to watch the audit video</span>
+                      <span className="mt-1 block text-[9px] font-bold uppercase tracking-[0.13em] text-blue-200 sm:text-[10px] sm:tracking-[0.16em]">Tap to watch the audit video</span>
                     </span>
                   </button>
                 </div>
               </div>
 
-              <div className="min-w-0 border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
+              <div className="min-w-0 border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-4 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
                   Browser-side evidence walkthrough
                 </p>
-                <h2 className="mt-3 break-words text-2xl font-black leading-tight tracking-[-0.045em] text-slate-950 sm:mt-4 sm:text-4xl">
+                <h2 className="mt-3 break-words text-xl font-black leading-tight tracking-[-0.045em] text-slate-950 sm:mt-4 sm:text-4xl">
                   Watch the evidence before reading the PDF.
                 </h2>
-                <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">
+                <p className="mt-3 text-sm font-semibold leading-7 text-slate-600 sm:mt-4">
                   {evidenceVideo.description} The walkthrough shows the reviewed page context and visible signals before the full PDF details.
                 </p>
 
@@ -2480,7 +2512,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   </div>
                 ) : null}
 
-                <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <div className="mt-6 grid gap-3 sm:mt-7 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   <LinkButton href="#ask-this-review" variant="primary">
                     Ask about this video
                   </LinkButton>
