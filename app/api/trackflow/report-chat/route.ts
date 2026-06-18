@@ -64,6 +64,14 @@ const TRACKFLOW_CALENDLY_URL = normalizePublicHttpsUrl(
   DEFAULT_TRACKFLOW_CALENDLY_URL,
 );
 
+// Keep the enriched manual-evidence context compatible with the strict
+// report-chat validator type without changing runtime behavior.
+type ValidatedReportChatContext = Parameters<typeof validateAssistantAnswer>[1] & AnyRecord;
+
+function asValidatedReportChatContext(context: AnyRecord): ValidatedReportChatContext {
+  return context as ValidatedReportChatContext;
+}
+
 const PREMIUM_CHAT_FORMAT_INSTRUCTIONS = `
 Premium chat formatting rules:
 - Answer in polished English only.
@@ -1214,7 +1222,9 @@ async function handlePdfDownloadRedirect(req: NextRequest) {
     });
   }
 
-  const context = enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report);
+  const context = asValidatedReportChatContext(
+    enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report),
+  );
 
   try {
     await markReportPdfDownloaded({
@@ -1421,7 +1431,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const context = enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report);
+  const context = asValidatedReportChatContext(
+    enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report),
+  );
 
   if (domainSlug && context.domainSlug && domainSlug !== context.domainSlug) {
     return jsonError("This chat request does not match the private report URL.", 403, {
@@ -1493,7 +1505,9 @@ export async function POST(req: NextRequest) {
     return jsonError("This private tracking review could not be found.", 404, { disableChat: true });
   }
 
-  const context = enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report);
+  const context = asValidatedReportChatContext(
+    enhanceReportChatContextWithManualEvidence(extractReportChatContext(report, token), report),
+  );
 
   if (domainSlug && context.domainSlug && domainSlug !== context.domainSlug) {
     return jsonError("This chat request does not match the private report URL.", 403, { disableChat: true });
