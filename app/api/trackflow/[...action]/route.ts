@@ -1542,7 +1542,7 @@ function tfpV2763StatusLabel(value: any): string {
 
 function tfpV2763DefaultExpectedEvent(actionType: any): string {
   const defaults: Record<string, string> = {
-    form_submission: "form_submit / generate_lead",
+    form_submission: "generate_lead / form_submit",
     phone_call: "phone_click",
     booking_appointment: "booking_search / begin_checkout / generate_lead",
     add_to_cart: "add_to_cart",
@@ -1590,6 +1590,8 @@ function tfpV2763NormalizeAction(rawValue: any, slot: "primary" | "secondary", f
   return {
     slot,
     label,
+    actionLabel: label,
+    action_label: label,
     actionType,
     action_type: actionType,
     tool: tfpV2763CleanSentence(firstCleanString(raw.tool, raw.toolUsed, raw.tool_used, "Tag Assistant"), 90),
@@ -1736,15 +1738,23 @@ function tfpV2763BuildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRec
     expected_event: expectedEvent,
     observedEvent,
     observed_event: observedEvent,
+    observedEventName: observedEvent,
+    observed_event_name: observedEvent,
     tool: tfpV2763CleanSentence(primary.tool || "Tag Assistant", 90),
     actionCompleted: tfpV2763StatusLabel(actionCompleted),
     action_completed: tfpV2763StatusLabel(actionCompleted),
     ga4Status: tfpV2763StatusLabel(ga4Status),
     ga4_status: tfpV2763StatusLabel(ga4Status),
+    ga4EventStatus: tfpV2763StatusLabel(ga4Status),
+    ga4_event_status: tfpV2763StatusLabel(ga4Status),
     googleAdsStatus: adsStatus === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(adsStatus),
     google_ads_status: adsStatus === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(adsStatus),
+    googleAdsConversionStatus: adsStatus === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(adsStatus),
+    google_ads_conversion_status: adsStatus === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(adsStatus),
     gtmStatus: tfpV2763StatusLabel(gtmStatus),
     gtm_status: tfpV2763StatusLabel(gtmStatus),
+    gtmTriggerStatus: tfpV2763StatusLabel(gtmStatus),
+    gtm_trigger_status: tfpV2763StatusLabel(gtmStatus),
     testUrl: primary.testUrl || primary.test_url || "",
     test_url: primary.testUrl || primary.test_url || "",
     operatorNote: tfpV2763CleanSentence(primary.evidenceNote || primary.evidence_note, 520),
@@ -1752,6 +1762,92 @@ function tfpV2763BuildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRec
     disclaimer: "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records.",
     severity: conversionNotClear ? "high" : "medium",
   };
+}
+
+
+function tfpV2763PrimaryAction(manualEvidence: AnyRecord = {}): AnyRecord {
+  if (!manualEvidence.enabled) return {};
+  return getObjectCandidate(manualEvidence.primaryAction, manualEvidence.primary_action, manualEvidence.primary);
+}
+
+function tfpV2763DisplayStatus(rawStatus: any, ads = false): string {
+  const normalized = tfpV2763Status(rawStatus);
+  return ads && normalized === "yes" ? "Observed (verify conversion label)" : tfpV2763StatusLabel(normalized);
+}
+
+function tfpV2763ManualQuestions(manualEvidence: AnyRecord = {}): string[] {
+  const primary = tfpV2763PrimaryAction(manualEvidence);
+  if (!Object.keys(primary).length) return [];
+  const actionType = tfpV2763ActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = tfpV2763CleanSentence(firstCleanString(primary.label, primary.actionLabel, primary.action_label), 120) || tfpV2763DefaultLabel(actionType);
+  const expectedEvent = tfpV2763CleanSentence(primary.expectedEvent || primary.expected_event || tfpV2763DefaultExpectedEvent(actionType), 140);
+  const observedEvent = tfpV2763CleanSentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed", 180);
+  return normalizeStringArray([
+    `Was ${expectedEvent} observed after the ${label} review?`,
+    observedEvent
+      ? `Why does the observed result (${observedEvent}) matter for Google Ads reporting?`
+      : `What result was actually visible after the ${label} review?`,
+    `What should be checked inside GA4, GTM, and Google Ads for this ${label}?`,
+    `Could this affect optimisation if ads are active?`,
+  ], 4);
+}
+
+function tfpV2763ManualVerificationPlan(manualEvidence: AnyRecord = {}): AnyRecord[] {
+  const primary = tfpV2763PrimaryAction(manualEvidence);
+  if (!Object.keys(primary).length) return [];
+  const actionType = tfpV2763ActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = tfpV2763CleanSentence(firstCleanString(primary.label, primary.actionLabel, primary.action_label), 120) || tfpV2763DefaultLabel(actionType);
+  const expectedEvent = tfpV2763CleanSentence(primary.expectedEvent || primary.expected_event || tfpV2763DefaultExpectedEvent(actionType), 140);
+  const observedEvent = tfpV2763CleanSentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed", 180);
+  const testUrl = sanitizeOptionalUrl(primary.testUrl || primary.test_url || "");
+  const testLocation = testUrl ? ` on ${testUrl}` : " on the reviewed page";
+  return normalizeVerificationPlan([
+    `Run one controlled ${label} test${testLocation}.`,
+    `Confirm whether ${expectedEvent} appears in GA4 DebugView after the action, not only ${observedEvent}.`,
+    `Confirm whether a matching GTM trigger fires for the same ${label}.`,
+    `Review Google Ads conversion diagnostics for a matching lead/conversion action.`,
+  ], [], 4);
+}
+
+function tfpV2763ManualWhatChecked(manualEvidence: AnyRecord = {}, existing: string[] = []): string[] {
+  const primary = tfpV2763PrimaryAction(manualEvidence);
+  if (!Object.keys(primary).length) return normalizeStringArray(existing, 8);
+  const actionType = tfpV2763ActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = tfpV2763CleanSentence(firstCleanString(primary.label, primary.actionLabel, primary.action_label), 120) || tfpV2763DefaultLabel(actionType);
+  const expectedEvent = tfpV2763CleanSentence(primary.expectedEvent || primary.expected_event || tfpV2763DefaultExpectedEvent(actionType), 140);
+  const observedEvent = tfpV2763CleanSentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed", 180);
+  const tool = tfpV2763CleanSentence(primary.tool || "Tag Assistant", 90);
+  return normalizeStringArray([
+    `Manual ${label} journey reviewed using ${tool}.`,
+    `Expected event: ${expectedEvent}.`,
+    `Observed event: ${observedEvent}.`,
+    `GA4 event status: ${tfpV2763DisplayStatus(primary.ga4EventObserved || primary.ga4_event_observed)}.`,
+    `Google Ads conversion status: ${tfpV2763DisplayStatus(primary.googleAdsConversionObserved || primary.google_ads_conversion_observed, true)}.`,
+    `GTM trigger status: ${tfpV2763DisplayStatus(primary.gtmTriggerObserved || primary.gtm_trigger_observed)}.`,
+    ...existing.filter((item) => item),
+  ], 8);
+}
+
+function hasIncomingManualEvidenceField(body: AnyRecord = {}): boolean {
+  const securePageCopy = body.securePageCopy || body.secure_page_copy || body.privateReportPage || body.private_report_page || {};
+  const privateReportCopy = body.privateReportCopy || body.private_report_copy || body.aiPrivateReportCopy || body.ai_private_report_copy || {};
+  return Boolean(
+    Object.prototype.hasOwnProperty.call(body, "manualConversionEvidence") ||
+      Object.prototype.hasOwnProperty.call(body, "manual_conversion_evidence") ||
+      Object.prototype.hasOwnProperty.call(body, "manualTrackingEvidence") ||
+      Object.prototype.hasOwnProperty.call(body, "manual_tracking_evidence") ||
+      Object.prototype.hasOwnProperty.call(securePageCopy || {}, "manualConversionEvidence") ||
+      Object.prototype.hasOwnProperty.call(securePageCopy || {}, "manual_conversion_evidence") ||
+      Object.prototype.hasOwnProperty.call(privateReportCopy || {}, "manualConversionEvidence") ||
+      Object.prototype.hasOwnProperty.call(privateReportCopy || {}, "manual_conversion_evidence")
+  );
+}
+
+function isManualEvidenceClearRequest(body: AnyRecord = {}): boolean {
+  return body.clearManualConversionEvidence === true ||
+    body.clear_manual_conversion_evidence === true ||
+    body.manualConversionEvidence === null ||
+    body.manual_conversion_evidence === null;
 }
 
 function normalizeReportPayload(body: AnyRecord = {}) {
@@ -1903,12 +1999,12 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     8,
   );
 
-  const whatChecked = normalizeStringArray(
+  let whatChecked = normalizeStringArray(
     privatePage.whatChecked || privatePage.what_checked || privatePage.checks || body.whatChecked || body.what_checked || body.auditScope || body.audit_scope,
     8,
   );
 
-  const auditSnapshotQuestions = normalizeStringArray(
+  let auditSnapshotQuestions = normalizeStringArray(
     privatePage.auditSnapshotQuestions || privatePage.audit_snapshot_questions || privatePage.snapshotQuestions || body.auditSnapshotQuestions || body.audit_snapshot_questions,
     4,
   );
@@ -1929,7 +2025,7 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     4,
   );
 
-  const verificationPlan = normalizeVerificationPlan(
+  let verificationPlan = normalizeVerificationPlan(
     privatePage.verificationPlan ||
       privatePage.verification_plan ||
       privatePage.recommendedFixPlan ||
@@ -1940,6 +2036,27 @@ function normalizeReportPayload(body: AnyRecord = {}) {
       body.recommended_fix_plan,
     recommendations,
     4,
+  );
+
+  if (manualConversionEvidence.enabled) {
+    whatChecked = tfpV2763ManualWhatChecked(manualConversionEvidence, whatChecked);
+    const manualQuestions = tfpV2763ManualQuestions(manualConversionEvidence);
+    if (manualQuestions.length) auditSnapshotQuestions = manualQuestions;
+    const manualPlan = tfpV2763ManualVerificationPlan(manualConversionEvidence);
+    if (manualPlan.length) verificationPlan = manualPlan;
+  }
+
+  const manualPrimaryForCopy = tfpV2763PrimaryAction(manualConversionEvidence);
+  const manualActionTypeForCopy = tfpV2763ActionType(manualPrimaryForCopy.actionType || manualPrimaryForCopy.action_type, "form_submission");
+  const manualActionLabelForCopy = manualConversionEvidence.enabled
+    ? tfpV2763CleanSentence(firstCleanString(manualPrimaryForCopy.label, manualPrimaryForCopy.actionLabel, manualPrimaryForCopy.action_label), 120) || tfpV2763DefaultLabel(manualActionTypeForCopy)
+    : "";
+  const auditSnapshotTitle = firstCleanString(
+    privatePage.auditSnapshotTitle,
+    privatePage.audit_snapshot_title,
+    body.auditSnapshotTitle,
+    body.audit_snapshot_title,
+    manualActionLabelForCopy ? `${manualActionLabelForCopy} tracking snapshot` : "What this review is designed to clarify",
   );
 
   const websiteSpeed = normalizeWebsiteSpeedSnapshot(
@@ -1990,7 +2107,7 @@ function normalizeReportPayload(body: AnyRecord = {}) {
     ctaInteractionTest,
     cta_interaction_test: ctaInteractionTest,
     whatChecked,
-    auditSnapshotTitle: firstCleanString(privatePage.auditSnapshotTitle, privatePage.audit_snapshot_title, body.auditSnapshotTitle, body.audit_snapshot_title, "What this review is designed to clarify"),
+    auditSnapshotTitle,
     auditSnapshotQuestions,
     trustNotes,
     howToReadTitle: firstCleanString(privatePage.howToReadTitle, privatePage.how_to_read_title, body.howToReadTitle, body.how_to_read_title, "How to read this review"),
@@ -8215,6 +8332,20 @@ async function handleReportRegister(req: Request) {
     "report_email_status",
   ];
 
+  const incomingManualEvidenceProvided = hasIncomingManualEvidenceField(body || {});
+  const clearManualEvidence = isManualEvidenceClearRequest(body || {});
+  const preserveExistingManualEvidence = !clearManualEvidence && !report.manualConversionEvidence && !incomingManualEvidenceProvided && Boolean(existingData.manualConversionEvidence);
+  const effectiveManualConversionEvidence = clearManualEvidence
+    ? null
+    : report.manualConversionEvidence || (preserveExistingManualEvidence ? existingData.manualConversionEvidence : null);
+  const effectiveManualEvidenceHero = clearManualEvidence
+    ? null
+    : report.manualEvidenceHero || (preserveExistingManualEvidence ? existingData.manualEvidenceHero : null);
+  const effectiveWhatChecked = preserveExistingManualEvidence && Array.isArray(existingData.whatChecked) ? existingData.whatChecked : report.whatChecked;
+  const effectiveVerificationPlan = preserveExistingManualEvidence && Array.isArray(existingData.verificationPlan) ? existingData.verificationPlan : report.verificationPlan;
+  const effectiveAuditSnapshotTitle = preserveExistingManualEvidence && existingData.auditSnapshotTitle ? existingData.auditSnapshotTitle : report.auditSnapshotTitle;
+  const effectiveAuditSnapshotQuestions = preserveExistingManualEvidence && Array.isArray(existingData.auditSnapshotQuestions) ? existingData.auditSnapshotQuestions : report.auditSnapshotQuestions;
+
   const payload: AnyRecord = {
     token: report.token,
     domainSlug: report.domainSlug,
@@ -8229,17 +8360,17 @@ async function handleReportRegister(req: Request) {
     businessImpact: report.businessImpact,
     proofPoints: report.proofPoints,
     problemCards: report.problemCards,
-    verificationPlan: report.verificationPlan,
-    whatChecked: report.whatChecked,
-    auditSnapshotTitle: report.auditSnapshotTitle,
-    auditSnapshotQuestions: report.auditSnapshotQuestions,
+    verificationPlan: effectiveVerificationPlan,
+    whatChecked: effectiveWhatChecked,
+    auditSnapshotTitle: effectiveAuditSnapshotTitle,
+    auditSnapshotQuestions: effectiveAuditSnapshotQuestions,
     trustNotes: report.trustNotes,
     howToReadTitle: report.howToReadTitle,
     howToReadParagraphs: report.howToReadParagraphs,
     ctaHeadline: report.ctaHeadline,
-    manualConversionEvidence: report.manualConversionEvidence || null,
+    manualConversionEvidence: effectiveManualConversionEvidence,
     manual_conversion_evidence: deleteField,
-    manualEvidenceHero: report.manualEvidenceHero || null,
+    manualEvidenceHero: effectiveManualEvidenceHero,
     manual_evidence_hero: deleteField,
     previewImageUrl,
     ogImagePathname: report.ogImagePathname,

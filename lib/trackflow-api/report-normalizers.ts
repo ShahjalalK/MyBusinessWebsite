@@ -467,6 +467,8 @@ function buildActionAwareSnapshotQuestions(actionLabel: string, pageLabel: strin
 type ManualEvidenceNormalizedAction = {
   slot: "primary" | "secondary";
   label: string;
+  actionLabel: string;
+  action_label: string;
   actionType: string;
   action_type: string;
   tool: string;
@@ -583,7 +585,7 @@ function manualEvidenceStatusLabel(value: any): string {
 
 function defaultManualExpectedEvent(actionType: any): string {
   const defaults: Record<string, string> = {
-    form_submission: "form_submit / generate_lead",
+    form_submission: "generate_lead / form_submit",
     phone_call: "phone_click",
     booking_appointment: "booking_search / begin_checkout / generate_lead",
     add_to_cart: "add_to_cart",
@@ -635,6 +637,8 @@ function normalizeManualActionEvidence(rawValue: any, slot: "primary" | "seconda
   return {
     slot,
     label,
+    actionLabel: label,
+    action_label: label,
     actionType,
     action_type: actionType,
     tool: normalizeDisplaySentence(firstCleanString(raw.tool, raw.toolUsed, raw.tool_used, "Tag Assistant")).slice(0, 90),
@@ -780,15 +784,23 @@ function buildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | nu
     expected_event: expectedEvent,
     observedEvent,
     observed_event: observedEvent,
+    observedEventName: observedEvent,
+    observed_event_name: observedEvent,
     tool: normalizeDisplaySentence(primary.tool || "Tag Assistant"),
     actionCompleted: manualEvidenceStatusLabel(actionCompleted),
     action_completed: manualEvidenceStatusLabel(actionCompleted),
     ga4Status: manualEvidenceStatusLabel(ga4Status),
     ga4_status: manualEvidenceStatusLabel(ga4Status),
+    ga4EventStatus: manualEvidenceStatusLabel(ga4Status),
+    ga4_event_status: manualEvidenceStatusLabel(ga4Status),
     googleAdsStatus: adsStatus === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(adsStatus),
     google_ads_status: adsStatus === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(adsStatus),
+    googleAdsConversionStatus: adsStatus === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(adsStatus),
+    google_ads_conversion_status: adsStatus === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(adsStatus),
     gtmStatus: manualEvidenceStatusLabel(gtmStatus),
     gtm_status: manualEvidenceStatusLabel(gtmStatus),
+    gtmTriggerStatus: manualEvidenceStatusLabel(gtmStatus),
+    gtm_trigger_status: manualEvidenceStatusLabel(gtmStatus),
     testUrl: primary.testUrl || primary.test_url || "",
     test_url: primary.testUrl || primary.test_url || "",
     operatorNote: normalizeDisplaySentence(primary.evidenceNote || primary.evidence_note).slice(0, 520),
@@ -796,6 +808,70 @@ function buildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | nu
     disclaimer: "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records.",
     severity: conversionNotClear ? "high" : "medium",
   };
+}
+
+
+function getPrimaryManualEvidenceAction(manualEvidence: AnyRecord = {}): AnyRecord {
+  if (!manualEvidence.enabled) return {};
+  return getObjectCandidate(manualEvidence.primaryAction, manualEvidence.primary_action, manualEvidence.primary);
+}
+
+function getManualEvidenceDisplayStatus(rawStatus: any, ads = false): string {
+  const normalized = normalizeManualEvidenceStatus(rawStatus);
+  return ads && normalized === "yes" ? "Observed (verify conversion label)" : manualEvidenceStatusLabel(normalized);
+}
+
+function buildManualEvidenceSnapshotQuestions(manualEvidence: AnyRecord = {}): string[] {
+  const primary = getPrimaryManualEvidenceAction(manualEvidence);
+  if (!Object.keys(primary).length) return [];
+  const actionType = normalizeManualEvidenceActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = cleanActionLabel(firstCleanString(primary.label, primary.actionLabel, primary.action_label)) || defaultManualEvidenceLabel(actionType);
+  const expectedEvent = normalizeDisplaySentence(primary.expectedEvent || primary.expected_event || defaultManualExpectedEvent(actionType));
+  const observedEvent = normalizeDisplaySentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed");
+  return normalizeStringArray([
+    `Was ${expectedEvent} observed after the ${label} review?`,
+    observedEvent
+      ? `Why does the observed result (${observedEvent}) matter for Google Ads reporting?`
+      : `What result was actually visible after the ${label} review?`,
+    `What should be checked inside GA4, GTM, and Google Ads for this ${label}?`,
+    `Could this affect optimisation if ads are active?`,
+  ], 4);
+}
+
+function buildManualEvidenceVerificationPlan(manualEvidence: AnyRecord = {}): AnyRecord[] {
+  const primary = getPrimaryManualEvidenceAction(manualEvidence);
+  if (!Object.keys(primary).length) return [];
+  const actionType = normalizeManualEvidenceActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = cleanActionLabel(firstCleanString(primary.label, primary.actionLabel, primary.action_label)) || defaultManualEvidenceLabel(actionType);
+  const expectedEvent = normalizeDisplaySentence(primary.expectedEvent || primary.expected_event || defaultManualExpectedEvent(actionType));
+  const observedEvent = normalizeDisplaySentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed");
+  const testUrl = sanitizeOptionalUrl(primary.testUrl || primary.test_url || "");
+  const testLocation = testUrl ? ` on ${testUrl}` : " on the reviewed page";
+  return normalizeVerificationPlan([
+    `Run one controlled ${label} test${testLocation}.`,
+    `Confirm whether ${expectedEvent} appears in GA4 DebugView after the action, not only ${observedEvent}.`,
+    `Confirm whether a matching GTM trigger fires for the same ${label}.`,
+    `Review Google Ads conversion diagnostics for a matching lead/conversion action.`,
+  ], [], 4);
+}
+
+function buildManualEvidenceWhatChecked(manualEvidence: AnyRecord = {}, existing: string[] = []): string[] {
+  const primary = getPrimaryManualEvidenceAction(manualEvidence);
+  if (!Object.keys(primary).length) return normalizeStringArray(existing, 8);
+  const actionType = normalizeManualEvidenceActionType(primary.actionType || primary.action_type, "form_submission");
+  const label = cleanActionLabel(firstCleanString(primary.label, primary.actionLabel, primary.action_label)) || defaultManualEvidenceLabel(actionType);
+  const expectedEvent = normalizeDisplaySentence(primary.expectedEvent || primary.expected_event || defaultManualExpectedEvent(actionType));
+  const observedEvent = normalizeDisplaySentence(primary.observedEventName || primary.observed_event_name || "Not clearly observed");
+  const tool = normalizeDisplaySentence(primary.tool || "Tag Assistant");
+  return normalizeStringArray([
+    `Manual ${label} journey reviewed using ${tool}.`,
+    `Expected event: ${expectedEvent}.`,
+    `Observed event: ${observedEvent}.`,
+    `GA4 event status: ${getManualEvidenceDisplayStatus(primary.ga4EventObserved || primary.ga4_event_observed)}.`,
+    `Google Ads conversion status: ${getManualEvidenceDisplayStatus(primary.googleAdsConversionObserved || primary.google_ads_conversion_observed, true)}.`,
+    `GTM trigger status: ${getManualEvidenceDisplayStatus(primary.gtmTriggerObserved || primary.gtm_trigger_observed)}.`,
+    ...existing.filter((item) => item && !isGenericReportText(item)),
+  ], 8);
 }
 
 function buildReportAwareSecureFields(params: {
@@ -809,6 +885,7 @@ function buildReportAwareSecureFields(params: {
   auditSnapshotQuestions: string[];
   verificationPlan: AnyRecord[];
   problemCards: AnyRecord[];
+  manualConversionEvidence?: AnyRecord;
 }): AnyRecord {
   const { body, privatePage } = params;
   const sourceBlob = [
@@ -820,7 +897,13 @@ function buildReportAwareSecureFields(params: {
     ...(params.verificationPlan || []).map((item) => JSON.stringify(item)),
     ...(params.problemCards || []).map((item) => JSON.stringify(item)),
   ];
-  const actionLabel = cleanActionLabel(firstCleanString(
+  const manualEvidence = getObjectCandidate(params.manualConversionEvidence);
+  const manualPrimary = getPrimaryManualEvidenceAction(manualEvidence);
+  const manualActionType = normalizeManualEvidenceActionType(manualPrimary.actionType || manualPrimary.action_type, "form_submission");
+  const manualActionLabel = manualEvidence.enabled
+    ? cleanActionLabel(firstCleanString(manualPrimary.label, manualPrimary.actionLabel, manualPrimary.action_label)) || defaultManualEvidenceLabel(manualActionType)
+    : "";
+  const actionLabel = manualActionLabel || cleanActionLabel(firstCleanString(
     body.primaryActionLabel,
     body.primary_action_label,
     body.customConversionLabel,
@@ -879,11 +962,14 @@ function buildReportAwareSecureFields(params: {
     actionLabel,
   );
 
-  const cleanedWhatChecked = buildActionAwareWhatChecked(actionLabel, pageLabel, trackingSignalCards, params.whatChecked || []);
+  const actionAwareWhatChecked = buildActionAwareWhatChecked(actionLabel, pageLabel, trackingSignalCards, params.whatChecked || []);
+  const cleanedWhatChecked = manualEvidence.enabled ? buildManualEvidenceWhatChecked(manualEvidence, actionAwareWhatChecked) : actionAwareWhatChecked;
+  const manualQuestions = buildManualEvidenceSnapshotQuestions(manualEvidence);
   const cleanedQuestions = (params.auditSnapshotQuestions || []).filter((item) => !isGenericReportText(item));
-  const auditSnapshotQuestions = cleanedQuestions.length >= 2 ? cleanedQuestions.slice(0, 3) : buildActionAwareSnapshotQuestions(actionLabel, pageLabel);
+  const auditSnapshotQuestions = manualQuestions.length ? manualQuestions : cleanedQuestions.length >= 2 ? cleanedQuestions.slice(0, 4) : buildActionAwareSnapshotQuestions(actionLabel, pageLabel);
+  const manualVerificationPlan = buildManualEvidenceVerificationPlan(manualEvidence);
   const needsPlan = !(params.verificationPlan || []).length || (params.verificationPlan || []).every((item) => isGenericReportText(item?.title || item?.description || item));
-  const verificationPlan = needsPlan ? buildActionAwareVerificationPlan(actionLabel, pageLabel, trackingSignalCards) : params.verificationPlan;
+  const verificationPlan = manualVerificationPlan.length ? manualVerificationPlan : needsPlan ? buildActionAwareVerificationPlan(actionLabel, pageLabel, trackingSignalCards) : params.verificationPlan;
   const auditSnapshotTitle = firstCleanString(
     privatePage.auditSnapshotTitle && !isGenericReportText(privatePage.auditSnapshotTitle) ? privatePage.auditSnapshotTitle : "",
     body.auditSnapshotTitle && !isGenericReportText(body.auditSnapshotTitle) ? body.auditSnapshotTitle : "",
@@ -1776,6 +1862,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     auditSnapshotQuestions,
     verificationPlan,
     problemCards,
+    manualConversionEvidence,
   });
 
   whatChecked = reportAwareFields.whatChecked;
