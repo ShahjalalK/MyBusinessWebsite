@@ -48,6 +48,7 @@ type EvidenceVideoDisplay = {
   description: string;
   watchUrl: string;
   embedUrl: string;
+  thumbnailUrl: string;
   videoId: string;
   provider: "youtube";
 };
@@ -152,6 +153,15 @@ function extractYouTubeId(value: unknown): string {
   return normalizeYouTubeId(raw);
 }
 
+function getYouTubeThumbnailUrl(videoId: string): string {
+  const cleanId = normalizeYouTubeId(videoId);
+  if (!cleanId) return "";
+
+  // hqdefault is more reliable than maxresdefault because not every YouTube upload
+  // has a generated max-resolution thumbnail. This keeps the audit video preview visible.
+  return `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`;
+}
+
 function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisplay | null {
   const raw = getObjectCandidate(report.evidenceVideo, report.evidence_video, report.videoEvidence, report.video_evidence, report.video);
   const status = cleanText(report.evidenceVideoStatus || report.evidence_video_status || raw.status, "").toLowerCase();
@@ -168,6 +178,7 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
     videoId,
     watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
     embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`,
+    thumbnailUrl: getYouTubeThumbnailUrl(videoId),
     title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short browser-side evidence walkthrough"),
     description: cleanText(
       report.evidenceVideoDescription || report.evidence_video_description || raw.description,
@@ -242,6 +253,52 @@ function normalizeManualHeroUrl(value: unknown): string {
   }
 }
 
+function normalizeManualEvidenceActionKey(actionType: unknown, actionLabel: unknown): string {
+  const text = `${cleanText(actionType, "")} ${cleanText(actionLabel, "")}`
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+
+  if (/phone|call|click to call/.test(text)) return "phone_call";
+  if (/booking|appointment|reservation|schedule/.test(text)) return "booking";
+  if (/purchase|checkout|begin checkout|cart|add to cart|order|ecommerce|shop/.test(text)) return "ecommerce";
+  if (/whatsapp/.test(text)) return "whatsapp";
+  if (/email click|mailto|email enquiry/.test(text)) return "email_click";
+  return "form_submission";
+}
+
+function isGenericManualEvidenceDisclaimer(value: string): boolean {
+  const text = cleanText(value, "").toLowerCase();
+  if (!text) return true;
+
+  return (
+    /browser-visible manual evidence only/.test(text) ||
+    /call-tracking/.test(text) ||
+    /booking engine/.test(text) ||
+    /crm, call-tracking, booking engine/.test(text) ||
+    /actual tracking accounts/.test(text)
+  );
+}
+
+function getActionSpecificManualDisclaimer(rawDisclaimer: unknown, actionKey: string): string {
+  const provided = cleanText(rawDisclaimer, "");
+
+  const dynamicDisclaimer =
+    actionKey === "phone_call"
+      ? "This is browser-visible manual evidence only. Final call tracking should be confirmed inside GA4, GTM, Google Ads call conversions, the call-tracking platform, CRM, or server records."
+      : actionKey === "booking"
+        ? "This is browser-visible manual evidence only. Final booking recording should be confirmed inside GA4, GTM, Google Ads, the booking platform, CRM, or server records."
+        : actionKey === "ecommerce"
+          ? "This is browser-visible manual evidence only. Final cart, checkout, or purchase recording should be confirmed inside GA4, GTM, Google Ads, the ecommerce platform, order records, or server records."
+          : actionKey === "whatsapp"
+            ? "This is browser-visible manual evidence only. Final WhatsApp enquiry recording should be confirmed inside GA4, GTM, Google Ads, WhatsApp or CRM records, and server records where relevant."
+            : actionKey === "email_click"
+              ? "This is browser-visible manual evidence only. Final email enquiry recording should be confirmed inside GA4, GTM, Google Ads, the CRM, inbox records, or server records."
+              : "This is browser-visible manual evidence only. Final lead/form submission recording should be confirmed inside GA4, GTM, Google Ads, the CRM, form inbox, email notification records, or server records.";
+
+  if (provided && !isGenericManualEvidenceDisclaimer(provided)) return provided;
+  return dynamicDisclaimer;
+}
+
 function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: Record<string, any>): ManualEvidenceHero | null {
   const raw = getObjectCandidate(
     privateReportCopy.manualEvidenceHero,
@@ -257,6 +314,7 @@ function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: R
   const expectedEvent = cleanText(raw.expectedEvent || raw.expected_event, "");
   const observedEvent = cleanText(raw.observedEvent || raw.observed_event || raw.observedEventName || raw.observed_event_name, "");
   const actionLabel = cleanText(raw.actionLabel || raw.action_label || raw.label, "Selected conversion action");
+  const actionKey = normalizeManualEvidenceActionKey(raw.actionType || raw.action_type, actionLabel);
 
   if (!title || !summary) return null;
 
@@ -284,10 +342,7 @@ function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: R
     gtmStatus: cleanText(raw.gtmStatus || raw.gtm_status, "Unclear / needs verification"),
     testUrl: normalizeManualHeroUrl(raw.testUrl || raw.test_url),
     operatorNote: cleanText(raw.operatorNote || raw.operator_note, ""),
-    disclaimer: cleanText(
-      raw.disclaimer,
-      "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records.",
-    ),
+    disclaimer: getActionSpecificManualDisclaimer(raw.disclaimer, actionKey),
     severity: cleanText(raw.severity, "medium"),
   };
 }
@@ -2355,11 +2410,30 @@ export default async function ReportPage({ params }: ReportPageProps) {
                       backgroundSize: "cover",
                     }}
                   >
-                    <span className="grid h-16 w-16 place-items-center rounded-full bg-blue-600 shadow-2xl shadow-blue-600/40 transition hover:scale-105 sm:h-20 sm:w-20">
+                    {evidenceVideo.thumbnailUrl ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={evidenceVideo.thumbnailUrl}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="absolute inset-0 h-full w-full object-cover opacity-95"
+                        />
+                        <span className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-slate-950/10" />
+                        <span className="absolute inset-0 bg-blue-950/10" />
+                      </>
+                    ) : (
+                      <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,.55),transparent_32%),radial-gradient(circle_at_80%_15%,rgba(14,165,233,.28),transparent_28%),linear-gradient(135deg,#020617_0%,#0f172a_55%,#1e3a8a_100%)]" />
+                    )}
+
+                    <span className="relative grid h-16 w-16 place-items-center rounded-full bg-blue-600 shadow-2xl shadow-blue-600/40 ring-4 ring-white/20 transition hover:scale-105 sm:h-20 sm:w-20">
                       <span className="ml-1 block h-0 w-0 border-y-[12px] border-l-[20px] border-y-transparent border-l-white sm:border-y-[15px] sm:border-l-[25px]" />
                     </span>
-                    <span className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-950/75 px-4 py-3 text-left text-xs font-black leading-5 backdrop-blur sm:text-sm">
-                      Browser-side evidence walkthrough
+
+                    <span className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-950/80 px-4 py-3 text-left text-xs font-black leading-5 shadow-lg shadow-slate-950/30 backdrop-blur sm:text-sm">
+                      <span className="block text-white">Browser-side evidence walkthrough</span>
+                      <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-blue-200">Tap to watch the audit video</span>
                     </span>
                   </button>
                 </div>
