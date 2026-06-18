@@ -1815,7 +1815,7 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     body.problem_summary,
   );
 
-  const businessImpact = firstCleanString(
+  let businessImpact = firstCleanString(
     body.businessImpact,
     body.business_impact,
     privatePage.businessImpact,
