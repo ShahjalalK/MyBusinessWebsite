@@ -32,6 +32,23 @@ export type ReportHandlerDeps = {
 };
 
 
+function pickManualEvidenceDebugFields(value: AnyRecord = {}): AnyRecord {
+  const manual = (value?.manualConversionEvidence || value?.manual_conversion_evidence || {}) as AnyRecord;
+  const hero = (value?.manualEvidenceHero || value?.manual_evidence_hero || {}) as AnyRecord;
+  const primary = (manual?.primaryAction || manual?.primary_action || manual?.primary || {}) as AnyRecord;
+
+  return {
+    hasManualConversionEvidence: Boolean(manual && typeof manual === "object" && Object.keys(manual).length),
+    manualEvidenceEnabled: Boolean(manual?.enabled || manual?.manualEvidenceProvided || manual?.manual_evidence_provided || manual?.primaryAction || manual?.primary_action || manual?.primary),
+    manualActionLabel: String(primary?.label || hero?.actionLabel || hero?.action_label || hero?.label || ""),
+    manualExpectedEvent: String(primary?.expectedEvent || primary?.expected_event || hero?.expectedEvent || hero?.expected_event || ""),
+    manualObservedEvent: String(primary?.observedEventName || primary?.observed_event_name || primary?.observedEvent || primary?.observed_event || hero?.observedEvent || hero?.observed_event || ""),
+    manualHeroTitle: String(hero?.title || hero?.headline || ""),
+    auditSnapshotTitle: String(value?.auditSnapshotTitle || value?.audit_snapshot_title || ""),
+    auditSnapshotQuestionsCount: Array.isArray(value?.auditSnapshotQuestions) ? value.auditSnapshotQuestions.length : 0,
+  };
+}
+
 function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
   const raw = value || {};
   return {
@@ -56,6 +73,7 @@ function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
     leadSource: String(raw.leadSource || raw.lead_source || ""),
     emailOutreachAllowed: raw.emailOutreachAllowed ?? raw.email_outreach_allowed,
     linkedinOutreachAllowed: raw.linkedinOutreachAllowed ?? raw.linkedin_outreach_allowed,
+    ...pickManualEvidenceDebugFields(raw),
   };
 }
 
@@ -492,6 +510,10 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     logModularReportDebug("normalized_report", {
       normalized: pickModularReportDebugFields(report || {}),
       hasOgImageUrl: Boolean(report.ogImageUrl),
+      manualEvidence: {
+        incoming: pickManualEvidenceDebugFields(body || {}),
+        normalized: pickManualEvidenceDebugFields(report || {}),
+      },
     });
   
     if (!report.domain && !report.websiteUrl) {
@@ -516,6 +538,47 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const normalizedDomain = normalizeDomainKey(report.domain, report.websiteUrl);
     const previewImageUrl = report.previewImageUrl || report.ogImageUrl || report.openGraphImageUrl || report.homepageScreenshotUrl || "";
     const pdfStorageKey = report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId;
+    const existingManualConversionEvidence = existingData.manualConversionEvidence && typeof existingData.manualConversionEvidence === "object"
+      ? existingData.manualConversionEvidence
+      : null;
+    const existingManualEvidenceHero = existingData.manualEvidenceHero && typeof existingData.manualEvidenceHero === "object"
+      ? existingData.manualEvidenceHero
+      : null;
+    const rawIncomingManualConversionEvidence =
+      report.manualConversionEvidence ||
+      body?.manualConversionEvidence ||
+      body?.manual_conversion_evidence ||
+      report.privateReportCopy?.manualConversionEvidence ||
+      report.privateReportCopy?.manual_conversion_evidence ||
+      null;
+    const rawIncomingManualEvidenceHero =
+      report.manualEvidenceHero ||
+      body?.manualEvidenceHero ||
+      body?.manual_evidence_hero ||
+      report.privateReportCopy?.manualEvidenceHero ||
+      report.privateReportCopy?.manual_evidence_hero ||
+      null;
+    const incomingManualConversionEvidence = rawIncomingManualConversionEvidence && typeof rawIncomingManualConversionEvidence === "object"
+      ? rawIncomingManualConversionEvidence
+      : null;
+    const incomingManualEvidenceHero = rawIncomingManualEvidenceHero && typeof rawIncomingManualEvidenceHero === "object"
+      ? rawIncomingManualEvidenceHero
+      : null;
+    const sourceText = String(report.source || body?.source || "").toLowerCase();
+    const shouldPreserveExistingManualEvidence = Boolean(
+      !incomingManualConversionEvidence &&
+        existingManualConversionEvidence &&
+        /(manual|linkedin|video|youtube|secure_page_update|metadata)/.test(sourceText),
+    );
+    const resolvedManualConversionEvidence = incomingManualConversionEvidence || (shouldPreserveExistingManualEvidence ? existingManualConversionEvidence : null);
+    const resolvedManualEvidenceHero = incomingManualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingManualEvidenceHero : null);
+    logModularReportDebug("manual_evidence_firestore_resolution", {
+      source: sourceText,
+      incoming: pickManualEvidenceDebugFields({ manualConversionEvidence: incomingManualConversionEvidence, manualEvidenceHero: incomingManualEvidenceHero }),
+      existing: pickManualEvidenceDebugFields({ manualConversionEvidence: existingManualConversionEvidence, manualEvidenceHero: existingManualEvidenceHero }),
+      resolved: pickManualEvidenceDebugFields({ manualConversionEvidence: resolvedManualConversionEvidence, manualEvidenceHero: resolvedManualEvidenceHero }),
+      preservedExistingManualEvidence: shouldPreserveExistingManualEvidence,
+    });
     const legacyReportFieldsToDelete = [
       "domain_slug",
       "normalized_domain",
@@ -628,14 +691,6 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const cleanVerificationPlan = normalizeVerificationPlanForFirestore(report.verificationPlan);
     const cleanTrackingSignalCards = normalizeTrackingSignalCardsForFirestore(report.trackingSignalCards);
 
-    const sourceText = String(report.source || body?.source || "").toLowerCase();
-    const shouldPreserveExistingManualEvidence =
-      !report.manualConversionEvidence &&
-      Boolean(existingData.manualConversionEvidence || existingData.manualEvidenceHero) &&
-      /video|youtube|evidence_video|attach/.test(sourceText);
-    const nextManualConversionEvidence = report.manualConversionEvidence || (shouldPreserveExistingManualEvidence ? existingData.manualConversionEvidence : null);
-    const nextManualEvidenceHero = report.manualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingData.manualEvidenceHero : null);
-
     const payload: AnyRecord = {
       token: report.token,
       domainSlug: report.domainSlug,
@@ -657,9 +712,9 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       primaryPageUrl: report.primaryPageUrl || "",
       reviewedPageUrls: Array.isArray(report.reviewedPageUrls) ? report.reviewedPageUrls : [],
       trackingSignalCards: cleanTrackingSignalCards,
-      manualConversionEvidence: nextManualConversionEvidence || null,
+      manualConversionEvidence: resolvedManualConversionEvidence || null,
       manual_conversion_evidence: deleteField,
-      manualEvidenceHero: nextManualEvidenceHero || null,
+      manualEvidenceHero: resolvedManualEvidenceHero || null,
       manual_evidence_hero: deleteField,
       auditSnapshotTitle: report.auditSnapshotTitle,
       auditSnapshotQuestions: report.auditSnapshotQuestions,

@@ -1690,6 +1690,64 @@ function tfpV2763BusinessRisk(actionType: string): string {
   return "If this form is the main lead source, Google Ads optimization may rely on weaker signals unless the lead event is confirmed inside the tracking accounts.";
 }
 
+
+function tfpV2763NormalizeIncomingManualEvidenceHero(rawValue: any): AnyRecord | null {
+  const raw = getObjectCandidate(rawValue);
+  if (!Object.keys(raw).length || raw.enabled === false) return null;
+
+  const actionType = tfpV2763ActionType(firstCleanString(raw.actionType, raw.action_type), "form_submission");
+  const label = tfpV2763CleanSentence(firstCleanString(raw.actionLabel, raw.action_label, raw.label, tfpV2763DefaultLabel(actionType)), 120) || tfpV2763DefaultLabel(actionType);
+  const expectedEvent = tfpV2763CleanSentence(firstCleanString(raw.expectedEvent, raw.expected_event, tfpV2763DefaultExpectedEvent(actionType)), 140);
+  const observedEvent = tfpV2763CleanSentence(firstCleanString(raw.observedEvent, raw.observed_event, "Not clearly observed"), 180);
+  const title = tfpV2763CleanSentence(firstCleanString(raw.title, raw.headline, `${label} tracking should be verified`), 180);
+  const summary = tfpV2763CleanSentence(firstCleanString(
+    raw.summary,
+    `The selected ${label.toLowerCase()} was reviewed from the browser side. The visible result should still be confirmed inside the actual tracking accounts before making final decisions.`,
+  ), 520);
+  const businessImpact = tfpV2763CleanSentence(firstCleanString(raw.businessImpact, raw.business_impact, tfpV2763BusinessRisk(actionType)), 420);
+  const tool = tfpV2763CleanSentence(firstCleanString(raw.tool, "Tag Assistant"), 90);
+  const testUrl = sanitizeOptionalUrl(firstCleanString(raw.testUrl, raw.test_url));
+  const operatorNote = tfpV2763CleanSentence(firstCleanString(raw.operatorNote, raw.operator_note, raw.note), 520);
+
+  if (!label && !expectedEvent && !observedEvent && !title && !summary) return null;
+
+  return {
+    enabled: true,
+    source: tfpV2763CleanSentence(firstCleanString(raw.source, "operator_manual_tracking_review"), 90),
+    label,
+    actionLabel: label,
+    action_label: label,
+    actionType,
+    action_type: actionType,
+    title,
+    headline: firstCleanString(raw.headline, title),
+    summary,
+    verificationMessage: tfpV2763CleanSentence(firstCleanString(raw.verificationMessage, raw.verification_message, `Expected event to verify: ${expectedEvent}. Observed result: ${observedEvent}. Final account-side confirmation is still required.`), 520),
+    verification_message: tfpV2763CleanSentence(firstCleanString(raw.verificationMessage, raw.verification_message, `Expected event to verify: ${expectedEvent}. Observed result: ${observedEvent}. Final account-side confirmation is still required.`), 520),
+    businessImpact,
+    business_impact: businessImpact,
+    expectedEvent,
+    expected_event: expectedEvent,
+    observedEvent,
+    observed_event: observedEvent,
+    tool,
+    actionCompleted: firstCleanString(raw.actionCompleted, raw.action_completed, "Unclear / needs verification"),
+    action_completed: firstCleanString(raw.actionCompleted, raw.action_completed, "Unclear / needs verification"),
+    ga4Status: firstCleanString(raw.ga4Status, raw.ga4_status, "Unclear / needs verification"),
+    ga4_status: firstCleanString(raw.ga4Status, raw.ga4_status, "Unclear / needs verification"),
+    googleAdsStatus: firstCleanString(raw.googleAdsStatus, raw.google_ads_status, "Unclear / needs verification"),
+    google_ads_status: firstCleanString(raw.googleAdsStatus, raw.google_ads_status, "Unclear / needs verification"),
+    gtmStatus: firstCleanString(raw.gtmStatus, raw.gtm_status, "Unclear / needs verification"),
+    gtm_status: firstCleanString(raw.gtmStatus, raw.gtm_status, "Unclear / needs verification"),
+    testUrl,
+    test_url: testUrl,
+    operatorNote,
+    operator_note: operatorNote,
+    disclaimer: firstCleanString(raw.disclaimer, "This is browser-visible manual evidence only. Final recording must be confirmed inside GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server records."),
+    severity: firstCleanString(raw.severity, "medium"),
+  };
+}
+
 function tfpV2763BuildManualEvidenceHero(manualEvidence: AnyRecord = {}): AnyRecord | null {
   if (!manualEvidence.enabled) return null;
   const primary = getObjectCandidate(manualEvidence.primaryAction, manualEvidence.primary_action);
@@ -1889,7 +1947,15 @@ function normalizeReportPayload(body: AnyRecord = {}) {
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
   const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
   const manualConversionEvidence = tfpV2763NormalizeManualEvidence(body, privatePage);
-  const manualEvidenceHero = tfpV2763BuildManualEvidenceHero(manualConversionEvidence);
+  const incomingManualEvidenceHero = tfpV2763NormalizeIncomingManualEvidenceHero(
+    getObjectCandidate(
+      body.manualEvidenceHero,
+      body.manual_evidence_hero,
+      privatePage.manualEvidenceHero,
+      privatePage.manual_evidence_hero,
+    ),
+  );
+  const manualEvidenceHero = tfpV2763BuildManualEvidenceHero(manualConversionEvidence) || incomingManualEvidenceHero;
 
   const headline = firstCleanString(
     manualEvidenceHero?.headline,
@@ -8130,6 +8196,18 @@ async function handleReportRegister(req: Request) {
     hasOgImageUrl: Boolean(report.ogImageUrl),
     hasHomepageScreenshotUrl: Boolean(report.homepageScreenshotUrl),
     hasPdfViewUrl: Boolean(report.pdfViewUrl),
+    manualEvidence: {
+      incoming: {
+        hasManualConversionEvidence: Boolean(body?.manualConversionEvidence || body?.manual_conversion_evidence),
+        hasManualEvidenceHero: Boolean(body?.manualEvidenceHero || body?.manual_evidence_hero),
+      },
+      normalized: {
+        hasManualConversionEvidence: Boolean(report.manualConversionEvidence),
+        hasManualEvidenceHero: Boolean(report.manualEvidenceHero),
+        auditSnapshotTitle: String(report.auditSnapshotTitle || ""),
+        auditSnapshotQuestionsCount: Array.isArray(report.auditSnapshotQuestions) ? report.auditSnapshotQuestions.length : 0,
+      },
+    },
   });
 
   if (!report.domain && !report.websiteUrl) {
@@ -8269,12 +8347,50 @@ async function handleReportRegister(req: Request) {
   ];
 
   const sourceText = String(report.source || body?.source || "").toLowerCase();
+  const rawIncomingManualConversionEvidence =
+    report.manualConversionEvidence ||
+    body?.manualConversionEvidence ||
+    body?.manual_conversion_evidence ||
+    report.privateReportCopy?.manualConversionEvidence ||
+    report.privateReportCopy?.manual_conversion_evidence ||
+    null;
+  const rawIncomingManualEvidenceHero =
+    report.manualEvidenceHero ||
+    body?.manualEvidenceHero ||
+    body?.manual_evidence_hero ||
+    report.privateReportCopy?.manualEvidenceHero ||
+    report.privateReportCopy?.manual_evidence_hero ||
+    null;
+  const incomingManualConversionEvidence = rawIncomingManualConversionEvidence && typeof rawIncomingManualConversionEvidence === "object"
+    ? rawIncomingManualConversionEvidence
+    : null;
+  const incomingManualEvidenceHero = rawIncomingManualEvidenceHero && typeof rawIncomingManualEvidenceHero === "object"
+    ? rawIncomingManualEvidenceHero
+    : null;
   const shouldPreserveExistingManualEvidence =
-    !report.manualConversionEvidence &&
+    !incomingManualConversionEvidence &&
     Boolean(existingData.manualConversionEvidence || existingData.manualEvidenceHero) &&
     /video|youtube|evidence_video|attach/.test(sourceText);
-  const nextManualConversionEvidence = report.manualConversionEvidence || (shouldPreserveExistingManualEvidence ? existingData.manualConversionEvidence : null);
-  const nextManualEvidenceHero = report.manualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingData.manualEvidenceHero : null);
+  const nextManualConversionEvidence = incomingManualConversionEvidence || (shouldPreserveExistingManualEvidence ? existingData.manualConversionEvidence : null);
+  const nextManualEvidenceHero = incomingManualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingData.manualEvidenceHero : null);
+  logReportRegisterDebug("manual_evidence_firestore_resolution", {
+    source: sourceText,
+    incoming: {
+      hasManualConversionEvidence: Boolean(incomingManualConversionEvidence),
+      hasManualEvidenceHero: Boolean(incomingManualEvidenceHero),
+    },
+    existing: {
+      hasManualConversionEvidence: Boolean(existingData.manualConversionEvidence),
+      hasManualEvidenceHero: Boolean(existingData.manualEvidenceHero),
+    },
+    resolved: {
+      hasManualConversionEvidence: Boolean(nextManualConversionEvidence),
+      hasManualEvidenceHero: Boolean(nextManualEvidenceHero),
+      auditSnapshotTitle: String(report.auditSnapshotTitle || ""),
+      auditSnapshotQuestionsCount: Array.isArray(report.auditSnapshotQuestions) ? report.auditSnapshotQuestions.length : 0,
+    },
+    preservedExistingManualEvidence: shouldPreserveExistingManualEvidence,
+  });
 
   const payload: AnyRecord = {
     token: report.token,
