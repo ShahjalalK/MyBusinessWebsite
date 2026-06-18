@@ -184,29 +184,6 @@ function normalizeEvidenceVideoForFirestore(value: any, report: AnyRecord = {}):
 }
 
 
-
-function hasIncomingManualEvidenceField(body: AnyRecord = {}): boolean {
-  const securePageCopy = body.securePageCopy || body.secure_page_copy || body.privateReportPage || body.private_report_page || {};
-  const privateReportCopy = body.privateReportCopy || body.private_report_copy || body.aiPrivateReportCopy || body.ai_private_report_copy || {};
-  return Boolean(
-    Object.prototype.hasOwnProperty.call(body, "manualConversionEvidence") ||
-      Object.prototype.hasOwnProperty.call(body, "manual_conversion_evidence") ||
-      Object.prototype.hasOwnProperty.call(body, "manualTrackingEvidence") ||
-      Object.prototype.hasOwnProperty.call(body, "manual_tracking_evidence") ||
-      Object.prototype.hasOwnProperty.call(securePageCopy || {}, "manualConversionEvidence") ||
-      Object.prototype.hasOwnProperty.call(securePageCopy || {}, "manual_conversion_evidence") ||
-      Object.prototype.hasOwnProperty.call(privateReportCopy || {}, "manualConversionEvidence") ||
-      Object.prototype.hasOwnProperty.call(privateReportCopy || {}, "manual_conversion_evidence")
-  );
-}
-
-function isManualEvidenceClearRequest(body: AnyRecord = {}): boolean {
-  return body.clearManualConversionEvidence === true ||
-    body.clear_manual_conversion_evidence === true ||
-    body.manualConversionEvidence === null ||
-    body.manual_conversion_evidence === null;
-}
-
 export function createReportHandlers(deps: ReportHandlerDeps) {
   const {
     ApiError,
@@ -650,19 +627,14 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const cleanProblemCards = normalizeProblemCardsForFirestore(report.problemCards);
     const cleanVerificationPlan = normalizeVerificationPlanForFirestore(report.verificationPlan);
     const cleanTrackingSignalCards = normalizeTrackingSignalCardsForFirestore(report.trackingSignalCards);
-    const incomingManualEvidenceProvided = hasIncomingManualEvidenceField(body || {});
-    const clearManualEvidence = isManualEvidenceClearRequest(body || {});
-    const preserveExistingManualEvidence = !clearManualEvidence && !report.manualConversionEvidence && !incomingManualEvidenceProvided && Boolean(existingData.manualConversionEvidence);
-    const effectiveManualConversionEvidence = clearManualEvidence
-      ? null
-      : report.manualConversionEvidence || (preserveExistingManualEvidence ? existingData.manualConversionEvidence : null);
-    const effectiveManualEvidenceHero = clearManualEvidence
-      ? null
-      : report.manualEvidenceHero || (preserveExistingManualEvidence ? existingData.manualEvidenceHero : null);
-    const effectiveWhatChecked = preserveExistingManualEvidence && Array.isArray(existingData.whatChecked) ? existingData.whatChecked : report.whatChecked;
-    const effectiveVerificationPlan = preserveExistingManualEvidence && Array.isArray(existingData.verificationPlan) ? existingData.verificationPlan : cleanVerificationPlan;
-    const effectiveAuditSnapshotTitle = preserveExistingManualEvidence && existingData.auditSnapshotTitle ? existingData.auditSnapshotTitle : report.auditSnapshotTitle;
-    const effectiveAuditSnapshotQuestions = preserveExistingManualEvidence && Array.isArray(existingData.auditSnapshotQuestions) ? existingData.auditSnapshotQuestions : report.auditSnapshotQuestions;
+
+    const sourceText = String(report.source || body?.source || "").toLowerCase();
+    const shouldPreserveExistingManualEvidence =
+      !report.manualConversionEvidence &&
+      Boolean(existingData.manualConversionEvidence || existingData.manualEvidenceHero) &&
+      /video|youtube|evidence_video|attach/.test(sourceText);
+    const nextManualConversionEvidence = report.manualConversionEvidence || (shouldPreserveExistingManualEvidence ? existingData.manualConversionEvidence : null);
+    const nextManualEvidenceHero = report.manualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingData.manualEvidenceHero : null);
 
     const payload: AnyRecord = {
       token: report.token,
@@ -678,19 +650,19 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       businessImpact: report.businessImpact,
       proofPoints: report.proofPoints,
       problemCards: cleanProblemCards,
-      verificationPlan: effectiveVerificationPlan,
-      whatChecked: effectiveWhatChecked,
+      verificationPlan: cleanVerificationPlan,
+      whatChecked: report.whatChecked,
       primaryActionLabel: report.primaryActionLabel || "",
       primaryPageLabel: report.primaryPageLabel || "",
       primaryPageUrl: report.primaryPageUrl || "",
       reviewedPageUrls: Array.isArray(report.reviewedPageUrls) ? report.reviewedPageUrls : [],
       trackingSignalCards: cleanTrackingSignalCards,
-      manualConversionEvidence: effectiveManualConversionEvidence,
+      manualConversionEvidence: nextManualConversionEvidence || null,
       manual_conversion_evidence: deleteField,
-      manualEvidenceHero: effectiveManualEvidenceHero,
+      manualEvidenceHero: nextManualEvidenceHero || null,
       manual_evidence_hero: deleteField,
-      auditSnapshotTitle: effectiveAuditSnapshotTitle,
-      auditSnapshotQuestions: effectiveAuditSnapshotQuestions,
+      auditSnapshotTitle: report.auditSnapshotTitle,
+      auditSnapshotQuestions: report.auditSnapshotQuestions,
       trustNotes: report.trustNotes,
       howToReadTitle: report.howToReadTitle,
       howToReadParagraphs: report.howToReadParagraphs,
