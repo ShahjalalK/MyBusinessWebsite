@@ -2071,40 +2071,40 @@ export default async function ReportPage({ params }: ReportPageProps) {
             {manualEvidenceHero ? (
               <div
                 data-trackflow-manual-evidence-hero
-                className="mt-6 overflow-hidden rounded-[1.5rem] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-blue-50 p-4 shadow-xl shadow-amber-950/10 sm:mt-7 sm:rounded-[2rem] sm:p-5 lg:p-6"
+                className="mt-6 overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white p-4 shadow-lg shadow-slate-950/8 sm:mt-7 sm:rounded-[1.75rem] sm:p-5 lg:p-6"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700 sm:text-[11px]">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 sm:text-[11px]">
                       Manual conversion test result
                     </p>
-                    <h2 className="mt-3 break-words text-2xl font-black leading-tight tracking-[-0.04em] text-slate-950 sm:text-3xl lg:text-4xl">
+                    <h2 className="mt-3 max-w-2xl break-words text-2xl font-black leading-tight tracking-[-0.04em] text-slate-950 sm:text-3xl">
                       {manualEvidenceHero.title}
                     </h2>
                   </div>
-                  <span className="inline-flex shrink-0 rounded-full border border-amber-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 shadow-sm">
+                  <span className="inline-flex shrink-0 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 shadow-sm">
                     Browser-side manual evidence
                   </span>
                 </div>
 
-                <p className="mt-4 break-words text-base font-bold leading-8 text-slate-700 sm:text-lg sm:leading-9">
+                <p className="mt-4 max-w-3xl break-words text-sm font-bold leading-7 text-slate-700 sm:text-base sm:leading-8">
                   {manualEvidenceHero.summary}
                 </p>
 
                 {manualEvidenceHero.verificationMessage ? (
-                  <div className="mt-4 rounded-[1.25rem] border border-amber-300 bg-amber-100/80 px-4 py-4 text-base font-black leading-8 text-amber-950 shadow-sm sm:px-5 sm:py-5 sm:text-lg sm:leading-9">
+                  <div className="mt-4 rounded-[1.1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black leading-7 text-amber-950 shadow-sm sm:px-5 sm:py-4 sm:text-base sm:leading-8">
                     {manualEvidenceHero.verificationMessage}
                   </div>
                 ) : null}
 
                 {manualEvidenceHero.businessImpact ? (
-                  <div className="mt-4 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:text-base">
+                  <div className="mt-4 rounded-[1.1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold leading-7 text-slate-700 sm:text-base">
                     <span className="font-black">Why this matters: </span>
                     {manualEvidenceHero.businessImpact}
                   </div>
                 ) : null}
 
-                <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2">
+                <div className="mt-5 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {[
                     ["Action tested", manualEvidenceHero.actionLabel],
                     ["Expected event to verify", manualEvidenceHero.expectedEvent],
@@ -2117,7 +2117,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   ]
                     .filter(([, value]) => Boolean(value))
                     .map(([label, value]) => (
-                      <div key={label} className="min-w-0 rounded-2xl border border-white bg-white/85 p-3 shadow-sm shadow-slate-950/5">
+                      <div key={label} className="min-w-0 rounded-[1rem] border border-slate-100 bg-slate-50 p-3 shadow-sm shadow-slate-950/5">
                         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
                         <p className="mt-2 break-words text-sm font-black leading-6 text-slate-950">{value}</p>
                       </div>
@@ -2141,7 +2141,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   </div>
                 ) : null}
 
-                <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 text-xs font-bold leading-6 text-slate-200 sm:text-sm">
+                <p className="mt-4 rounded-[1rem] border border-slate-200 bg-slate-950 px-4 py-3 text-xs font-bold leading-6 text-slate-200">
                   {manualEvidenceHero.disclaimer}
                 </p>
               </div>
@@ -2243,22 +2243,31 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </div>
 
-          <div className="min-w-0 max-w-full rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-950/10 sm:rounded-[2rem] sm:p-4 lg:p-5">
-            <div className="min-w-0 rounded-[1.35rem] border border-slate-200 bg-slate-950 p-4 text-white sm:rounded-[1.5rem] sm:p-6">
+          <div className="min-w-0 max-w-full rounded-[1.35rem] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-950/10 sm:rounded-[1.75rem] sm:p-4 lg:p-5">
+            <div className="min-w-0 rounded-[1.2rem] border border-slate-200 bg-slate-950 p-4 text-white sm:rounded-[1.5rem] sm:p-5">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 Private review snapshot
               </p>
 
-              <p className="mt-4 break-words text-xl font-black tracking-[-0.04em] sm:text-2xl">
+              <p className="mt-3 break-words text-xl font-black tracking-[-0.04em] sm:text-2xl">
                 {auditSnapshotTitle}
               </p>
 
-              <div className="mt-6 grid gap-3">
-                {auditSnapshotQuestions.map((item) => (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                {heroSummaryCards.map((item) => (
+                  <div key={`snapshot-${item.label}`} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-200/80">{item.label}</p>
+                    <p className="mt-1.5 break-words text-xs font-black leading-5 text-white">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-2">
+                {auditSnapshotQuestions.slice(0, 3).map((item) => (
                   <a
                     key={item}
                     href="#ask-this-review"
-                    className="group min-w-0 break-words rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 text-xs font-bold leading-5 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white sm:p-4 sm:text-sm sm:leading-6"
+                    className="group min-w-0 break-words rounded-2xl border border-white/10 bg-white/[0.05] p-3 text-xs font-bold leading-5 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white sm:p-3.5"
                   >
                     <span>{item}</span>
                     <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
@@ -2269,7 +2278,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </div>
 
               {verificationPreviewItems.length ? (
-                <div className="mt-5 hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:block">
+                <div className="mt-5 hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 xl:block">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">
                     What usually happens next
                   </p>
@@ -2341,7 +2350,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     className="absolute inset-0 grid h-full w-full place-items-center overflow-hidden text-white focus:outline-none focus:ring-4 focus:ring-blue-400/40"
                     aria-label={`Play ${evidenceVideo.title}`}
                     style={{
-                      backgroundImage: `linear-gradient(135deg,rgba(2,6,23,.24),rgba(2,6,23,.76)),url(https://i.ytimg.com/vi/${evidenceVideo.videoId}/hqdefault.jpg)`,
+                      backgroundImage: "radial-gradient(circle at 30% 20%, rgba(59,130,246,.55), transparent 32%), radial-gradient(circle at 80% 15%, rgba(14,165,233,.28), transparent 28%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #1e3a8a 100%)",
                       backgroundPosition: "center",
                       backgroundSize: "cover",
                     }}
@@ -2350,7 +2359,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                       <span className="ml-1 block h-0 w-0 border-y-[12px] border-l-[20px] border-y-transparent border-l-white sm:border-y-[15px] sm:border-l-[25px]" />
                     </span>
                     <span className="absolute bottom-4 left-4 right-4 rounded-2xl bg-slate-950/75 px-4 py-3 text-left text-xs font-black leading-5 backdrop-blur sm:text-sm">
-                      Tap to load evidence video
+                      Browser-side evidence walkthrough
                     </span>
                   </button>
                 </div>
