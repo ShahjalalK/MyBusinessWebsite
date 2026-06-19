@@ -1851,6 +1851,21 @@ function joinUniqueSentences(parts: string[]): string {
   return output.join(" ").replace(/\s+/g, " ").trim();
 }
 
+function polishReviewExplainerText(value: unknown): string {
+  const text = cleanText(value, "");
+  if (!text) return "";
+
+  if (/TrackFlow Pro is not affiliated with Google,\s*Meta,\s*or/i.test(text)) {
+    return "TrackFlow Pro is not affiliated with Google, Meta, or the reviewed business.";
+  }
+
+  return text
+    .replace(/This page summarizes the most important browser-visible tracking evidence before any account-level review\.?/gi, "This private review summarizes browser-visible tracking evidence before account-level confirmation.")
+    .replace(/This private page summarizes the browser-visible tracking setup before account-level access or final conversion confirmation\.?/gi, "This private review summarizes browser-visible tracking setup before account-level confirmation.")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 
 
 export async function generateMetadata({ params }: ReportPageProps): Promise<Metadata> {
@@ -1949,7 +1964,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   ));
   const ctaText = getDisplayCtaText(privateReportCopy.ctaText || report.ctaText || report.cta_text);
   const setupPageSubheadline = isSetupFirst
-    ? 'This private page summarizes the browser-visible tracking setup before account-level access or final conversion confirmation.'
+    ? 'This private review summarizes browser-visible tracking setup before account-level confirmation.'
     : pageSubheadline;
 
   let mainFinding = sentenceCaseFirst(cleanText(
@@ -2034,10 +2049,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
     privateReportCopy.howToReadParagraphs || report.howToReadParagraphs || report.how_to_read_paragraphs || report.howToReadThisReview,
     [
       "This is an initial tracking review, not an account audit. It highlights what can be seen from the website/browser side and where account-level verification should be done.",
-      `TrackFlow Pro is not affiliated with Google, Meta, or ${companyName}.`,
+      "TrackFlow Pro is not affiliated with Google, Meta, or the reviewed business.",
     ],
     3,
-  );
+  )
+    .map(polishReviewExplainerText)
+    .filter(Boolean);
   const expiresLabel = formatDate(report.pdfExpiresAt || report.expiresAt);
   const previewHref = `/api/trackflow/reports/preview?token=${encodeURIComponent(token)}`;
   const downloadHref = `/api/trackflow/reports/download?token=${encodeURIComponent(token)}`;
@@ -2081,7 +2098,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = isSetupFirst ? "Tracking setup readiness" : (primaryConversionFocus || businessTypeLabel || "Conversion path review");
   const evidenceVideo = getEvidenceVideoDisplay(report);
-  const heroHeadline = companyName === "this website" ? "Private tracking review" : `Private tracking review for ${companyName}`;
+  const heroHeadline = isSetupFirst
+    ? "Private tracking readiness review"
+    : companyName === "this website"
+      ? "Private tracking review"
+      : `Private tracking review for ${companyName}`;
+  const preparedForLabel = companyName === "this website" ? "the reviewed website" : companyName;
   const manualReviewContextLine = manualEvidenceHero
     ? [
         manualEvidenceHero.actionLabel ? `Manual review focus: ${manualEvidenceHero.actionLabel}.` : "",
@@ -2094,6 +2116,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const heroContextLine = manualReviewContextLine || (isSetupFirst
     ? setupPageSubheadline
     : (primaryConversionFocus ? `${primaryConversionFocus} reviewed on the selected conversion path.` : pageSubheadline));
+  const heroIntroLine = polishReviewExplainerText(
+    isSetupFirst ? setupPageSubheadline : joinUniqueSentences([heroContextLine, setupPageSubheadline]),
+  );
   const evidenceSignalBadges = cleanList(
     [
       ...trackingSignalItems,
@@ -2209,7 +2234,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
         <div className="relative mx-auto grid max-w-7xl gap-4 px-4 pb-7 pt-5 sm:gap-8 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:pb-16 lg:pt-12">
           <div className="min-w-0">
             <div className="inline-flex max-w-full items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase leading-5 tracking-[0.18em] text-blue-700 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
-              Private tracking review
+              {isSetupFirst ? "Private tracking readiness review" : "Private tracking review"}
             </div>
 
             <h1 className="mt-4 max-w-3xl break-words text-[1.9rem] font-black leading-[1.06] tracking-[-0.045em] text-slate-950 sm:mt-6 sm:text-5xl sm:leading-[0.98] lg:text-6xl">
@@ -2217,8 +2242,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </h1>
 
             <p className="mt-4 max-w-2xl break-words text-[0.95rem] font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
-              Prepared for <span className="font-black text-slate-950">{companyName}</span>
-              {domain ? <span className="break-all"> · {domain}</span> : null}. {joinUniqueSentences([heroContextLine, isSetupFirst ? '' : setupPageSubheadline])}
+              Prepared for <span className="font-black text-slate-950">{preparedForLabel}</span>. {heroIntroLine}
             </p>
 
             {manualEvidenceHero ? (
@@ -2403,6 +2427,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                 Browser-visible evidence
               </span>
+              {domain ? (
+                <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
+                  Website reviewed: {domain}
+                </span>
+              ) : null}
               {reportDate ? (
                 <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                   {reportDate}
