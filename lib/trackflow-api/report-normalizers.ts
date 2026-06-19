@@ -2186,6 +2186,74 @@ function tfpV2749FirstString(...values: any[]): string {
   return "";
 }
 
+
+// v27.50 Press-3.2: fallback report-mode inference when local export did not pass trackingCase.
+// This is intentionally conservative: text markers may infer setup-first, but manual not_sure statuses alone do not.
+function tfpV2750StringifyForMode(value: any, depth = 0): string {
+  if (value === null || value === undefined || depth > 3) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => tfpV2750StringifyForMode(item, depth + 1)).filter(Boolean).join(" ");
+  if (typeof value === "object") {
+    const obj = value as AnyRecord;
+    const keys = [
+      "mode", "reportMode", "report_mode", "title", "headline", "mainFinding", "main_finding",
+      "auditSnapshotTitle", "audit_snapshot_title", "auditPrimaryClaim", "audit_primary_claim",
+      "safePrimaryClaim", "safe_primary_claim", "businessImpact", "business_impact", "whatChecked",
+      "what_checked", "proofPoints", "proof_points", "recommendations", "verificationPlan",
+      "verification_plan", "privateReportCopy", "private_report_copy", "securePageCopy", "secure_page_copy",
+      "trackingCase", "tracking_case", "clientCopyContext", "client_copy_context",
+    ];
+    return keys.map((key) => tfpV2750StringifyForMode(obj[key], depth + 1)).filter(Boolean).join(" ");
+  }
+  return "";
+}
+
+function tfpV2750InferModeFromTextMarkers(...values: any[]): string {
+  const blob = values.map((value) => tfpV2750StringifyForMode(value)).filter(Boolean).join(" ").toLowerCase();
+  if (!blob) return "";
+
+  if (
+    blob.includes("website tracking readiness review") ||
+    blob.includes("private website tracking readiness review") ||
+    blob.includes("tracking foundation setup") ||
+    blob.includes("ga4/gtm tracking foundation was not clearly detected") ||
+    blob.includes("ga4 and gtm tracking foundation was not clearly detected") ||
+    (blob.includes("analytics foundation") && blob.includes("setup first"))
+  ) {
+    return "tracking_foundation_setup";
+  }
+
+  if (
+    blob.includes("ga4 setup readiness review") ||
+    blob.includes("private ga4 setup readiness review") ||
+    (blob.includes("gtm/container path may exist") && blob.includes("ga4 tracking was not clearly detected"))
+  ) {
+    return "ga4_setup_needed";
+  }
+
+  if (blob.includes("ecommerce tracking readiness review") || blob.includes("private ecommerce tracking readiness review")) {
+    return "ecommerce_measurement_readiness";
+  }
+
+  if (blob.includes("google ads conversion tracking review") || blob.includes("private google ads conversion tracking review")) {
+    return "ads_conversion_verification";
+  }
+
+  if (blob.includes("browser-side tracking snapshot") || blob.includes("controlled action test was not completed")) {
+    return "limited_evidence_review";
+  }
+
+  if (blob.includes("was completed manually") && blob.includes("expected event") && blob.includes("not clearly observed")) {
+    return "ga4_event_verification";
+  }
+
+  if (blob.includes("appears to trigger the expected") || blob.includes("expected event was observed")) {
+    return "event_positive_snapshot";
+  }
+
+  return "";
+}
+
 function tfpV2749TrackingCaseFrom(body: AnyRecord = {}, normalized: AnyRecord = {}): AnyRecord {
   const privateCopy = tfpV2749Object(body.privateReportCopy || body.private_report_copy || body.securePageCopy || body.secure_page_copy);
   const normalizedPrivateCopy = tfpV2749Object(normalized.privateReportCopy || normalized.private_report_copy || normalized.securePageCopy || normalized.secure_page_copy);
@@ -2201,7 +2269,7 @@ function tfpV2749TrackingCaseFrom(body: AnyRecord = {}, normalized: AnyRecord = 
     privateCopy.trackingCase,
     privateCopy.tracking_case,
   );
-  const mode = tfpV2749FirstString(
+  let mode = tfpV2749FirstString(
     rawCase.mode,
     rawCase.reportMode,
     rawCase.report_mode,
@@ -2214,9 +2282,27 @@ function tfpV2749TrackingCaseFrom(body: AnyRecord = {}, normalized: AnyRecord = 
     privateCopy.reportMode,
     privateCopy.report_mode,
   );
+
+  // v27.50 Press-3.2: when local export missed trackingCase/reportMode, recover from setup-first text markers.
+  if (!mode) {
+    mode = tfpV2750InferModeFromTextMarkers(body, normalized, privateCopy, normalizedPrivateCopy, rawCase);
+  }
+
   if (!mode && !Object.keys(rawCase).length) return {};
-  const title = tfpV2749FirstString(rawCase.title, rawCase.reportTitle, rawCase.report_title);
-  const mainFinding = tfpV2749FirstString(rawCase.mainFinding, rawCase.main_finding, rawCase.safePrimaryClaim, rawCase.safe_primary_claim);
+  const title = tfpV2749FirstString(
+    rawCase.title, rawCase.reportTitle, rawCase.report_title,
+    normalized.auditSnapshotTitle, normalized.audit_snapshot_title, normalized.headline,
+    normalizedPrivateCopy.auditSnapshotTitle, normalizedPrivateCopy.audit_snapshot_title, normalizedPrivateCopy.title,
+    body.auditSnapshotTitle, body.audit_snapshot_title, body.headline,
+    privateCopy.auditSnapshotTitle, privateCopy.audit_snapshot_title, privateCopy.title,
+  );
+  const mainFinding = tfpV2749FirstString(
+    rawCase.mainFinding, rawCase.main_finding, rawCase.safePrimaryClaim, rawCase.safe_primary_claim,
+    normalized.mainFinding, normalized.main_finding,
+    normalizedPrivateCopy.mainFinding, normalizedPrivateCopy.main_finding,
+    body.mainFinding, body.main_finding,
+    privateCopy.mainFinding, privateCopy.main_finding,
+  );
   return {
     ...rawCase,
     mode,
@@ -2345,6 +2431,8 @@ function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCa
     primaryPageUrl: "",
     ctaHeadline: "Ready to verify this tracking setup live?",
     ctaText: "Request tracking setup review",
+    setupFirstOverrideApplied: true,
+    setup_first_override_applied: true,
     manualEvidenceHero: null,
     manual_evidence_hero: null,
   };
