@@ -22,6 +22,33 @@ export type LinkedInKeywordGroup = {
   rows: LinkedInKeywordRow[];
 };
 
+export type LinkedInKeywordSubcategory = {
+  id: string;
+  label: string;
+  keywords: string[];
+  relatedKeywords?: string[];
+};
+
+export type LinkedInKeywordCategory = {
+  id: string;
+  label: string;
+  description: string;
+  subcategories: LinkedInKeywordSubcategory[];
+};
+
+export type LinkedInKeywordDataset = {
+  defaultTitles: string[];
+  titlePresets: string[];
+  categories: LinkedInKeywordCategory[];
+};
+
+export type LinkedInKeywordGeneratedQuery = {
+  id: string;
+  label: string;
+  query: string;
+  note: string;
+};
+
 export type ServiceId = "Email Signature" | "Google Ads" | "Server Side Tracking";
 export type StepId = "step1" | "step2" | "step3" | "step4" | "step5";
 

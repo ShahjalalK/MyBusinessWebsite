@@ -1,0 +1,572 @@
+{
+  "defaultTitles": [
+    "Owner",
+    "Founder",
+    "CEO"
+  ],
+  "titlePresets": [
+    "Owner",
+    "Founder",
+    "CEO",
+    "Co-Founder",
+    "President",
+    "Managing Director",
+    "Principal",
+    "Practice Owner",
+    "Marketing Director",
+    "Head of Growth"
+  ],
+  "categories": [
+    {
+      "id": "pet-services",
+      "label": "Pet Services",
+      "description": "Pet, animal care, boarding, and training businesses where local bookings and calls matter.",
+      "subcategories": [
+        {
+          "id": "dog-training",
+          "label": "Dog Training",
+          "keywords": [
+            "dog training",
+            "dog trainer",
+            "pet training",
+            "puppy training"
+          ],
+          "relatedKeywords": [
+            "obedience training",
+            "dog behaviorist"
+          ]
+        },
+        {
+          "id": "pet-grooming",
+          "label": "Pet Grooming",
+          "keywords": [
+            "pet grooming",
+            "dog grooming",
+            "grooming salon"
+          ],
+          "relatedKeywords": [
+            "mobile dog grooming",
+            "cat grooming"
+          ]
+        },
+        {
+          "id": "veterinary-clinic",
+          "label": "Veterinary Clinic",
+          "keywords": [
+            "veterinary clinic",
+            "veterinarian",
+            "animal hospital"
+          ],
+          "relatedKeywords": [
+            "vet clinic",
+            "pet clinic"
+          ]
+        },
+        {
+          "id": "pet-boarding",
+          "label": "Pet Boarding",
+          "keywords": [
+            "pet boarding",
+            "dog boarding",
+            "pet hotel"
+          ],
+          "relatedKeywords": [
+            "kennel",
+            "dog kennel"
+          ]
+        },
+        {
+          "id": "dog-daycare",
+          "label": "Dog Daycare",
+          "keywords": [
+            "dog daycare",
+            "dog day care",
+            "pet daycare"
+          ],
+          "relatedKeywords": [
+            "dog camp",
+            "puppy daycare"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "home-services",
+      "label": "Home Services",
+      "description": "Local contractors and home-service companies that depend on calls, quote forms, and service-area leads.",
+      "subcategories": [
+        {
+          "id": "hvac",
+          "label": "HVAC",
+          "keywords": [
+            "HVAC company",
+            "HVAC contractor",
+            "air conditioning repair"
+          ],
+          "relatedKeywords": [
+            "heating and cooling",
+            "AC repair"
+          ]
+        },
+        {
+          "id": "plumbing",
+          "label": "Plumbing",
+          "keywords": [
+            "plumbing company",
+            "plumber",
+            "plumbing contractor"
+          ],
+          "relatedKeywords": [
+            "emergency plumber",
+            "drain cleaning"
+          ]
+        },
+        {
+          "id": "roofing",
+          "label": "Roofing",
+          "keywords": [
+            "roofing company",
+            "roofer",
+            "roofing contractor"
+          ],
+          "relatedKeywords": [
+            "roof repair",
+            "roof replacement"
+          ]
+        },
+        {
+          "id": "pest-control",
+          "label": "Pest Control",
+          "keywords": [
+            "pest control",
+            "exterminator",
+            "pest control company"
+          ],
+          "relatedKeywords": [
+            "termite control",
+            "rodent control"
+          ]
+        },
+        {
+          "id": "cleaning-service",
+          "label": "Cleaning Service",
+          "keywords": [
+            "cleaning service",
+            "commercial cleaning",
+            "house cleaning"
+          ],
+          "relatedKeywords": [
+            "maid service",
+            "janitorial service"
+          ]
+        },
+        {
+          "id": "garage-door",
+          "label": "Garage Door",
+          "keywords": [
+            "garage door repair",
+            "garage door company",
+            "garage door service"
+          ],
+          "relatedKeywords": [
+            "garage door installer",
+            "overhead door"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "healthcare",
+      "label": "Healthcare & Clinics",
+      "description": "Appointment-based clinics and practices where conversion tracking can support booking visibility.",
+      "subcategories": [
+        {
+          "id": "dental-clinic",
+          "label": "Dental Clinic",
+          "keywords": [
+            "dental clinic",
+            "dentist",
+            "dental practice"
+          ],
+          "relatedKeywords": [
+            "cosmetic dentistry",
+            "family dentist"
+          ]
+        },
+        {
+          "id": "med-spa",
+          "label": "Med Spa",
+          "keywords": [
+            "med spa",
+            "medical spa",
+            "aesthetic clinic"
+          ],
+          "relatedKeywords": [
+            "botox clinic",
+            "laser clinic"
+          ]
+        },
+        {
+          "id": "chiropractic",
+          "label": "Chiropractic Clinic",
+          "keywords": [
+            "chiropractic clinic",
+            "chiropractor",
+            "chiropractic care"
+          ],
+          "relatedKeywords": [
+            "spine clinic",
+            "back pain clinic"
+          ]
+        },
+        {
+          "id": "physical-therapy",
+          "label": "Physical Therapy",
+          "keywords": [
+            "physical therapy clinic",
+            "physiotherapy clinic",
+            "physical therapist"
+          ],
+          "relatedKeywords": [
+            "rehab clinic",
+            "sports therapy"
+          ]
+        },
+        {
+          "id": "mental-health-clinic",
+          "label": "Mental Health Clinic",
+          "keywords": [
+            "mental health clinic",
+            "therapy clinic",
+            "counseling practice"
+          ],
+          "relatedKeywords": [
+            "therapist",
+            "counselor"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legal-professional",
+      "label": "Legal & Professional",
+      "description": "Consultation or lead-form businesses where one qualified enquiry can be high value.",
+      "subcategories": [
+        {
+          "id": "law-firm",
+          "label": "Law Firm",
+          "keywords": [
+            "law firm",
+            "attorney",
+            "legal services"
+          ],
+          "relatedKeywords": [
+            "law office",
+            "legal consultation"
+          ]
+        },
+        {
+          "id": "immigration-law",
+          "label": "Immigration Law",
+          "keywords": [
+            "immigration law firm",
+            "immigration lawyer",
+            "immigration attorney"
+          ],
+          "relatedKeywords": [
+            "visa lawyer",
+            "green card attorney"
+          ]
+        },
+        {
+          "id": "personal-injury-law",
+          "label": "Personal Injury Law",
+          "keywords": [
+            "personal injury lawyer",
+            "personal injury attorney",
+            "injury law firm"
+          ],
+          "relatedKeywords": [
+            "accident lawyer",
+            "car accident attorney"
+          ]
+        },
+        {
+          "id": "accounting-firm",
+          "label": "Accounting Firm",
+          "keywords": [
+            "accounting firm",
+            "CPA firm",
+            "tax advisor"
+          ],
+          "relatedKeywords": [
+            "bookkeeping firm",
+            "tax preparation"
+          ]
+        },
+        {
+          "id": "financial-advisor",
+          "label": "Financial Advisor",
+          "keywords": [
+            "financial advisor",
+            "wealth management",
+            "financial planner"
+          ],
+          "relatedKeywords": [
+            "investment advisor",
+            "retirement planning"
+          ]
+        },
+        {
+          "id": "insurance-agency",
+          "label": "Insurance Agency",
+          "keywords": [
+            "insurance agency",
+            "insurance broker",
+            "insurance agent"
+          ],
+          "relatedKeywords": [
+            "auto insurance agency",
+            "business insurance"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "real-estate",
+      "label": "Real Estate",
+      "description": "Property, home-buying, mortgage, and local real-estate companies with lead or booking funnels.",
+      "subcategories": [
+        {
+          "id": "real-estate-agency",
+          "label": "Real Estate Agency",
+          "keywords": [
+            "real estate agency",
+            "realtor",
+            "real estate broker"
+          ],
+          "relatedKeywords": [
+            "real estate team",
+            "property agent"
+          ]
+        },
+        {
+          "id": "property-management",
+          "label": "Property Management",
+          "keywords": [
+            "property management",
+            "property manager",
+            "rental management"
+          ],
+          "relatedKeywords": [
+            "HOA management",
+            "apartment management"
+          ]
+        },
+        {
+          "id": "mortgage-broker",
+          "label": "Mortgage Broker",
+          "keywords": [
+            "mortgage broker",
+            "mortgage lender",
+            "home loan advisor"
+          ],
+          "relatedKeywords": [
+            "loan officer",
+            "mortgage company"
+          ]
+        },
+        {
+          "id": "home-builder",
+          "label": "Home Builder",
+          "keywords": [
+            "home builder",
+            "custom home builder",
+            "construction company"
+          ],
+          "relatedKeywords": [
+            "new homes",
+            "residential builder"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hospitality",
+      "label": "Hotel & Hospitality",
+      "description": "Businesses where bookings, reservations, event enquiries, and redirect journeys can complicate tracking.",
+      "subcategories": [
+        {
+          "id": "hotel",
+          "label": "Hotel",
+          "keywords": [
+            "hotel",
+            "boutique hotel",
+            "hotel booking"
+          ],
+          "relatedKeywords": [
+            "hospitality",
+            "booking engine"
+          ]
+        },
+        {
+          "id": "resort",
+          "label": "Resort",
+          "keywords": [
+            "resort",
+            "hotel resort",
+            "vacation resort"
+          ],
+          "relatedKeywords": [
+            "luxury resort",
+            "resort booking"
+          ]
+        },
+        {
+          "id": "restaurant",
+          "label": "Restaurant",
+          "keywords": [
+            "restaurant",
+            "restaurant owner",
+            "restaurant group"
+          ],
+          "relatedKeywords": [
+            "reservation",
+            "online ordering"
+          ]
+        },
+        {
+          "id": "catering",
+          "label": "Catering",
+          "keywords": [
+            "catering company",
+            "event catering",
+            "caterer"
+          ],
+          "relatedKeywords": [
+            "wedding catering",
+            "corporate catering"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ecommerce-saas",
+      "label": "Ecommerce & SaaS",
+      "description": "Digital businesses where purchase events, demo requests, trial signups, and attribution matter.",
+      "subcategories": [
+        {
+          "id": "shopify-store",
+          "label": "Shopify Store",
+          "keywords": [
+            "Shopify store",
+            "Shopify brand",
+            "ecommerce brand"
+          ],
+          "relatedKeywords": [
+            "DTC brand",
+            "online store"
+          ]
+        },
+        {
+          "id": "woocommerce-store",
+          "label": "WooCommerce Store",
+          "keywords": [
+            "WooCommerce store",
+            "WordPress ecommerce",
+            "online store"
+          ],
+          "relatedKeywords": [
+            "ecommerce website",
+            "shopping cart"
+          ]
+        },
+        {
+          "id": "saas-company",
+          "label": "SaaS Company",
+          "keywords": [
+            "SaaS company",
+            "software company",
+            "B2B SaaS"
+          ],
+          "relatedKeywords": [
+            "demo request",
+            "free trial"
+          ]
+        },
+        {
+          "id": "b2b-service",
+          "label": "B2B Service Business",
+          "keywords": [
+            "B2B service company",
+            "B2B consulting",
+            "business services"
+          ],
+          "relatedKeywords": [
+            "lead generation",
+            "consultation request"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agencies",
+      "label": "Agencies",
+      "description": "Marketing and web agencies that may need tracking support for their own leads or client reporting.",
+      "subcategories": [
+        {
+          "id": "marketing-agency",
+          "label": "Marketing Agency",
+          "keywords": [
+            "marketing agency",
+            "digital marketing agency",
+            "growth agency"
+          ],
+          "relatedKeywords": [
+            "client reporting",
+            "conversion tracking"
+          ]
+        },
+        {
+          "id": "ppc-agency",
+          "label": "PPC Agency",
+          "keywords": [
+            "PPC agency",
+            "Google Ads agency",
+            "paid search agency"
+          ],
+          "relatedKeywords": [
+            "paid media",
+            "performance marketing"
+          ]
+        },
+        {
+          "id": "lead-generation-agency",
+          "label": "Lead Generation Agency",
+          "keywords": [
+            "lead generation agency",
+            "lead gen agency",
+            "appointment setting agency"
+          ],
+          "relatedKeywords": [
+            "lead tracking",
+            "CRM tracking"
+          ]
+        },
+        {
+          "id": "web-design-agency",
+          "label": "Web Design Agency",
+          "keywords": [
+            "web design agency",
+            "website design company",
+            "WordPress agency"
+          ],
+          "relatedKeywords": [
+            "landing pages",
+            "form tracking"
+          ]
+        }
+      ]
+    }
+  ]
+}
