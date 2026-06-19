@@ -73,6 +73,7 @@ import type {
   FollowupConfig,
   FollowupSummaryState,
   Lead,
+  LinkedInKeywordGroup,
   MainTab,
   ReportAssetCleanupState,
   ReportChatMessageRow,
@@ -484,6 +485,207 @@ function trackflowFrontendDebugLog(label: string, payload: Record<string, any> =
   } catch {
     console.log(`[TRACKFLOW_EMAIL_DEBUG_UI] ${label}`, payload);
   }
+}
+
+
+const LINKEDIN_KEYWORD_GROUPS: LinkedInKeywordGroup[] = [
+  {
+    id: "tracking-intent",
+    title: "Tracking / Attribution Intent",
+    description: "Prospects already talking about tracking, reporting, attribution, or conversion data.",
+    goal: "Best for soft audit outreach because the problem is already on their mind.",
+    rows: [
+      {
+        id: "li-track-01",
+        query: '"conversion tracking" "Google Ads"',
+        audience: "Founders, marketers, PPC managers",
+        useCase: "Find posts where people mention Google Ads conversion tracking directly.",
+        note: "Use a verification-first angle, not a broken-tracking claim.",
+        priority: "A",
+        tags: ["Google Ads", "Tracking", "High intent"],
+      },
+      {
+        id: "li-track-02",
+        query: '"GA4" "conversion tracking"',
+        audience: "Marketing teams and analytics users",
+        useCase: "Find GA4 event/conversion tracking discussions.",
+        note: "Good for explaining browser-visible evidence plus account-side verification.",
+        priority: "A",
+        tags: ["GA4", "Events", "Audit"],
+      },
+      {
+        id: "li-track-03",
+        query: '"GTM" "Google Ads" "conversion"',
+        audience: "Performance marketers and agencies",
+        useCase: "Find posts about GTM + Google Ads conversion setups.",
+        note: "Best when outreach mentions GTM/Google Ads verification checklist.",
+        priority: "A",
+        tags: ["GTM", "Google Ads", "Debug"],
+      },
+      {
+        id: "li-track-04",
+        query: '"lead tracking" "Google Ads"',
+        audience: "Lead-generation businesses",
+        useCase: "Find companies worried about lead attribution.",
+        note: "Use for form, call, booking, and CRM verification angles.",
+        priority: "A",
+        tags: ["Lead gen", "Attribution", "CRM"],
+      },
+    ],
+  },
+  {
+    id: "buyer-roles",
+    title: "Buyer Role Keywords",
+    description: "People likely to care about ad spend, lead quality, reporting, and tracking confidence.",
+    goal: "Useful for LinkedIn people/content search before manual prospect review.",
+    rows: [
+      {
+        id: "li-role-01",
+        query: '"Head of Growth" "Google Ads"',
+        audience: "Growth leaders",
+        useCase: "Find decision makers managing paid acquisition.",
+        note: "Strong fit for concise business-risk outreach.",
+        priority: "A",
+        tags: ["Growth", "Decision maker"],
+      },
+      {
+        id: "li-role-02",
+        query: '"Performance Marketing Manager" "GA4"',
+        audience: "Performance marketers",
+        useCase: "Find operators who understand tracking problems.",
+        note: "Can mention a short private review without overexplaining basics.",
+        priority: "A",
+        tags: ["Performance marketing", "GA4"],
+      },
+      {
+        id: "li-role-03",
+        query: '"PPC Manager" "conversion tracking"',
+        audience: "PPC managers and paid media specialists",
+        useCase: "Find people directly responsible for ad tracking.",
+        note: "Best for technical-but-short messages.",
+        priority: "A",
+        tags: ["PPC", "Google Ads"],
+      },
+      {
+        id: "li-role-04",
+        query: '"Founder" "Google Ads" "leads"',
+        audience: "Small-business founders",
+        useCase: "Find owners spending on ads for leads.",
+        note: "Keep email/DM simple and owner-friendly.",
+        priority: "B",
+        tags: ["Founder", "Lead gen"],
+      },
+    ],
+  },
+  {
+    id: "business-models",
+    title: "Business Model / Niche Keywords",
+    description: "High-value service businesses where one missed lead or booking can matter.",
+    goal: "Use these to identify niche-specific audit prospects without touching Search API.",
+    rows: [
+      {
+        id: "li-niche-01",
+        query: '"law firm" "Google Ads" "leads"',
+        audience: "Law firms and legal marketers",
+        useCase: "Find legal-service advertisers with lead tracking needs.",
+        note: "Avoid legal-result claims; focus only on tracking verification.",
+        priority: "A",
+        tags: ["Legal", "High value leads"],
+      },
+      {
+        id: "li-niche-02",
+        query: '"dental clinic" "Google Ads" "appointments"',
+        audience: "Dental clinics and healthcare marketers",
+        useCase: "Find appointment-based businesses.",
+        note: "Booking/call tracking angle usually fits well.",
+        priority: "A",
+        tags: ["Healthcare", "Booking"],
+      },
+      {
+        id: "li-niche-03",
+        query: '"hotel" "booking engine" "Google Ads"',
+        audience: "Hotels and hospitality marketers",
+        useCase: "Find hotel booking journeys where redirects may complicate tracking.",
+        note: "Good for safe SynXis/booking-engine style verification language.",
+        priority: "A",
+        tags: ["Hotel", "Booking engine"],
+      },
+      {
+        id: "li-niche-04",
+        query: '"SaaS" "demo request" "Google Ads"',
+        audience: "B2B SaaS teams",
+        useCase: "Find demo/lead-form conversion journeys.",
+        note: "Use generate_lead / demo request verification wording.",
+        priority: "B",
+        tags: ["SaaS", "Demo"],
+      },
+    ],
+  },
+  {
+    id: "problem-signals",
+    title: "Problem Signal Keywords",
+    description: "Posts where people complain about reporting gaps, attribution issues, or unreliable data.",
+    goal: "Use these when you want warmer manual LinkedIn conversations.",
+    rows: [
+      {
+        id: "li-problem-01",
+        query: '"Google Ads" "not tracking"',
+        audience: "Advertisers asking for help",
+        useCase: "Find explicit tracking problem posts.",
+        note: "Still avoid saying their tracking is broken unless they say it themselves.",
+        priority: "A",
+        tags: ["Problem aware", "Urgent"],
+      },
+      {
+        id: "li-problem-02",
+        query: '"GA4" "missing conversions"',
+        audience: "Analytics users",
+        useCase: "Find posts about missing conversion visibility.",
+        note: "Frame as verification and event review.",
+        priority: "A",
+        tags: ["GA4", "Missing data"],
+      },
+      {
+        id: "li-problem-03",
+        query: '"attribution" "Google Ads" "leads"',
+        audience: "Growth teams and agencies",
+        useCase: "Find attribution concerns around lead generation.",
+        note: "Good for server-side or CRM verification checklist angles.",
+        priority: "B",
+        tags: ["Attribution", "Lead quality"],
+      },
+      {
+        id: "li-problem-04",
+        query: '"form submissions" "GA4" "Google Ads"',
+        audience: "Web teams and marketers",
+        useCase: "Find form-event tracking conversations.",
+        note: "Best for contact form / generate_lead evidence summaries.",
+        priority: "B",
+        tags: ["Forms", "Events"],
+      },
+    ],
+  },
+];
+
+const LINKEDIN_KEYWORD_TOTAL = LINKEDIN_KEYWORD_GROUPS.reduce((total, group) => total + group.rows.length, 0);
+const LINKEDIN_KEYWORD_PRIORITY_TOTALS = LINKEDIN_KEYWORD_GROUPS.reduce(
+  (totals, group) => {
+    group.rows.forEach((row) => {
+      totals[row.priority] += 1;
+    });
+    return totals;
+  },
+  { A: 0, B: 0, C: 0 } as Record<"A" | "B" | "C", number>,
+);
+
+function getLinkedInSearchUrl(queryText: string) {
+  return `https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent(queryText)}`;
+}
+
+function getLinkedInPriorityClass(priority: "A" | "B" | "C") {
+  if (priority === "A") return "bg-emerald-50 text-emerald-700 border-emerald-100";
+  if (priority === "B") return "bg-blue-50 text-blue-700 border-blue-100";
+  return "bg-slate-50 text-slate-600 border-slate-100";
 }
 
 export default function DashboardPage() {
@@ -3575,6 +3777,7 @@ export default function DashboardPage() {
       { id: "cleanup", label: "Cleanup", icon: <Trash2 size={16} /> },
       { id: "automation", label: "Automation", icon: <Settings2 size={16} /> },
       { id: "analytics", label: "Analytics", icon: <BarChart3 size={16} /> },
+      { id: "linkedin-keywords", label: "LinkedIn Keywords", icon: <Link2 size={16} /> },
       { id: "chat-insights", label: "Chat Insights", icon: <MessageSquare size={16} /> },
     ];
 
@@ -3738,6 +3941,118 @@ export default function DashboardPage() {
       handleDelete={handleDelete}
       handlePermanentDeleteLead={handlePermanentDeleteLead}
     />
+  );
+
+  const renderLinkedInKeywords = () => (
+    <section className="space-y-6">
+      <div className="rounded-[32px] border border-blue-100 bg-gradient-to-br from-white via-blue-50/50 to-white p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-blue-600">
+              <Link2 size={14} /> Static Prospecting Dataset
+            </p>
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-gray-950 sm:text-3xl">LinkedIn Keywords</h2>
+            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-gray-500">
+              Static keyword ideas for manually finding LinkedIn posts, people, and businesses that may need conversion tracking verification. This tab does not call Firebase, Search API, Python, Gemini, audit, PDF, video, email, or automation systems.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 text-center shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Keywords</p>
+              <p className="mt-1 text-2xl font-black text-gray-950">{LINKEDIN_KEYWORD_TOTAL}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Priority A</p>
+              <p className="mt-1 text-2xl font-black text-emerald-700">{LINKEDIN_KEYWORD_PRIORITY_TOTALS.A}</p>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-center shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-widest text-blue-600">Priority B</p>
+              <p className="mt-1 text-2xl font-black text-blue-700">{LINKEDIN_KEYWORD_PRIORITY_TOTALS.B}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        {LINKEDIN_KEYWORD_GROUPS.map((group) => (
+          <section key={group.id} className="rounded-[30px] border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-lg font-black uppercase italic tracking-tight text-gray-900">{group.title}</h3>
+                <p className="mt-2 text-xs font-semibold leading-5 text-gray-500">{group.description}</p>
+              </div>
+              <span className="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-blue-700">
+                {group.rows.length} queries
+              </span>
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
+              Goal: {group.goal}
+            </div>
+
+            <div className="space-y-3">
+              {group.rows.map((row) => (
+                <article key={row.id} className="rounded-3xl border border-gray-100 bg-gray-50/60 p-4 transition hover:border-blue-100 hover:bg-white">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-widest ${getLinkedInPriorityClass(row.priority)}`}>
+                          Priority {row.priority}
+                        </span>
+                        {row.tags.map((tag) => (
+                          <span key={tag} className="rounded-full bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-gray-400 ring-1 ring-gray-100">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-3 break-words rounded-2xl bg-white px-4 py-3 font-mono text-xs font-black text-gray-900 ring-1 ring-gray-100">
+                        {row.query}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof navigator !== "undefined" && navigator.clipboard) {
+                            void navigator.clipboard.writeText(row.query);
+                          }
+                        }}
+                        className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-gray-600 transition hover:border-blue-200 hover:text-blue-700"
+                      >
+                        Copy
+                      </button>
+                      <a
+                        href={getLinkedInSearchUrl(row.query)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-2xl bg-gray-950 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white transition hover:bg-blue-700"
+                      >
+                        Search <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl bg-white p-3 ring-1 ring-gray-100">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Audience</p>
+                      <p className="mt-1 text-xs font-bold leading-5 text-gray-700">{row.audience}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white p-3 ring-1 ring-gray-100">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Use Case</p>
+                      <p className="mt-1 text-xs font-bold leading-5 text-gray-700">{row.useCase}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white p-3 ring-1 ring-gray-100">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Safe Note</p>
+                      <p className="mt-1 text-xs font-bold leading-5 text-gray-700">{row.note}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
   );
 
   const followupPanelStatus = followupCandidatesLoading
@@ -4144,6 +4459,7 @@ export default function DashboardPage() {
               loadPostmasterHealth={loadPostmasterHealth}
             />
           )}
+          {activeTab === "linkedin-keywords" && renderLinkedInKeywords()}
           {activeTab === "chat-insights" && (
             <ChatInsightsPanel
               chatInsights={chatInsights}

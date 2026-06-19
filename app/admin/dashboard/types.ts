@@ -1,6 +1,26 @@
-export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights";
+export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
 export type LeadSourceFilter = "all" | "manual" | "manual_report_linked" | "sheet" | "sheet_primary" | "sheet_additional" | "test";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
+
+export type LinkedInKeywordPriority = "A" | "B" | "C";
+
+export type LinkedInKeywordRow = {
+  id: string;
+  query: string;
+  audience: string;
+  useCase: string;
+  note: string;
+  priority: LinkedInKeywordPriority;
+  tags: string[];
+};
+
+export type LinkedInKeywordGroup = {
+  id: string;
+  title: string;
+  description: string;
+  goal: string;
+  rows: LinkedInKeywordRow[];
+};
 
 export type ServiceId = "Email Signature" | "Google Ads" | "Server Side Tracking";
 export type StepId = "step1" | "step2" | "step3" | "step4" | "step5";
