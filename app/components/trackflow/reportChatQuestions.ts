@@ -15,6 +15,8 @@ export type ReportChatQuestionContext = {
   businessImpact?: string;
   primaryConversionFocus?: string;
   businessType?: string;
+  reportMode?: string;
+  isSetupFirst?: boolean;
   whatChecked?: string[];
   proofPoints?: string[];
   recommendations?: string[];
@@ -163,6 +165,8 @@ function contextToSearchText(context?: ReportChatQuestionContext): string {
     context.businessImpact,
     context.primaryConversionFocus,
     context.businessType,
+    context.reportMode,
+    context.isSetupFirst ? 'setup-first' : '',
     context.manualAdsSummary,
     context.manualActionLabel,
     context.manualExpectedEvent,
@@ -199,6 +203,28 @@ function isSafeReportQuestion(value: string): boolean {
   return true;
 }
 
+
+function isSetupFirstContext(context?: ReportChatQuestionContext): boolean {
+  const mode = cleanText(context?.reportMode || "").toLowerCase();
+  if (context?.isSetupFirst) return true;
+  if (mode === "tracking_foundation_setup" || mode === "ga4_setup_needed") return true;
+  const text = contextToSearchText(context);
+  return /tracking foundation|setup readiness|ga4\/gtm tracking foundation|analytics foundation/.test(text);
+}
+
+function getSetupFirstQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
+  if (!isSetupFirstContext(context)) return [];
+  const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "");
+  const rules: QuestionRule[] = [
+    { question: "What needs to be installed before event testing?", priority: 205 },
+    { question: "Why should setup come before conversion testing?", priority: 202 },
+    { question: action ? `How should ${action} be configured after setup?` : "Which customer action should be configured after setup?", priority: 199 },
+    { question: "Where should final recording be confirmed after setup?", priority: 196 },
+    { question: "What is the safest next step for this review?", priority: 190 },
+  ];
+  return rules.filter((rule) => isSafeReportQuestion(rule.question));
+}
+
 function getAuditSnapshotQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
   const questions = uniqueQuestions(context?.auditSnapshotQuestions || []).filter(isSafeReportQuestion).slice(0, 4);
 
@@ -209,6 +235,7 @@ function getAuditSnapshotQuestionRules(context?: ReportChatQuestionContext): Que
 }
 
 function getManualEvidenceQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
+  if (isSetupFirstContext(context)) return [];
   const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "the selected action");
   const expected = cleanText(context?.manualExpectedEvent || "");
   const observed = cleanText(context?.manualObservedEvent || "");
@@ -341,6 +368,7 @@ function getHeadlineFindingQuestionRules(context?: ReportChatQuestionContext): Q
 function buildContextQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
   const text = contextToSearchText(context);
   const rules: QuestionRule[] = [
+    ...getSetupFirstQuestionRules(context),
     ...getAuditSnapshotQuestionRules(context),
     ...getManualEvidenceQuestionRules(context),
     ...getHeadlineFindingQuestionRules(context),
@@ -727,11 +755,12 @@ export function buildReportChatQuestionSuggestions({
   const starterLimit = Math.max(1, Math.min(5, limits?.starter || 4));
   const followUpLimit = Math.max(1, Math.min(4, limits?.followUp || 3));
 
+  const setupFirstQuestions = getSetupFirstQuestionRules(context).map((rule) => rule.question);
   const snapshotQuestions = getAuditSnapshotQuestionRules(context).map((rule) => rule.question);
   const manualEvidenceQuestions = getManualEvidenceQuestionRules(context).map((rule) => rule.question);
   const contextQuestions = buildContextQuestionRules(context).map((rule) => rule.question);
   const followUpQuestions = buildFollowUpRules(latestAssistantContent, context).map((rule) => rule.question);
-  const reportSpecificQuestions = [...snapshotQuestions, ...manualEvidenceQuestions];
+  const reportSpecificQuestions = [...setupFirstQuestions, ...snapshotQuestions, ...manualEvidenceQuestions];
 
   return {
     closedQuestions: getUnaskedQuestions({

@@ -1618,6 +1618,12 @@ function isBadReportCompanyName(value: string, domain = ""): boolean {
 function cleanReportCompanyName(value: any, domain = ""): string {
   const fallback = displayNameFromDomainValue(domain) || "Website";
   let text = firstCleanString(value);
+  const exactInput = text.replace(/\s+/g, " ").trim();
+  if (exactInput && !/^https?:\/\//i.test(exactInput) && !/^www\./i.test(exactInput) && exactInput.length <= 90) {
+    if (/\.[a-z]{2,}$/i.test(exactInput) || /^[A-Z0-9][A-Z0-9 .&'’.-]{1,90}$/i.test(exactInput)) {
+      return exactInput;
+    }
+  }
   text = text
     .replace(/https?:\/\/\S+|www\.\S+/gi, " ")
     .replace(/\bhttps?\b/gi, " ")
@@ -2014,6 +2020,8 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     manualAdsTransparency,
     manualConversionEvidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
     manual_conversion_evidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manualActionContext: tfpV2751ManualActionContext({ manualConversionEvidence }, body) || undefined,
+    manual_action_context: tfpV2751ManualActionContext({ manualConversionEvidence }, body) || undefined,
     manualEvidenceHero: manualEvidenceHero || undefined,
     manual_evidence_hero: manualEvidenceHero || undefined,
     evidenceVideo: evidenceVideo.enabled ? evidenceVideo : undefined,
@@ -2038,6 +2046,11 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     domain,
     websiteUrl,
     companyName,
+    company_name: companyName,
+    displayCompanyName: companyName,
+    display_company_name: companyName,
+    preparedFor: companyName,
+    prepared_for: companyName,
     email,
     headline,
     subheadline,
@@ -2072,6 +2085,8 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     manualAdsTransparency,
     manualConversionEvidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
     manual_conversion_evidence: manualConversionEvidence.enabled ? manualConversionEvidence : undefined,
+    manualActionContext: tfpV2751ManualActionContext({ manualConversionEvidence }, body) || undefined,
+    manual_action_context: tfpV2751ManualActionContext({ manualConversionEvidence }, body) || undefined,
     manualEvidenceHero: manualEvidenceHero || undefined,
     manual_evidence_hero: manualEvidenceHero || undefined,
     manual_ads_checked: manualAdsTransparency.checked,
@@ -2329,11 +2344,55 @@ function tfpV2749ManualPrimaryAction(report: AnyRecord = {}, body: AnyRecord = {
   return tfpV2749FirstObject(manual.primaryAction, manual.primary_action, manual.primary);
 }
 
+
+function tfpV2751CleanManualActionLabel(value: any): string {
+  const text = tfpV2749CleanString(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "";
+  if (/^(main business action|selected conversion action|tracking foundation setup|ga4 setup readiness|website tracking foundation|conversion path review)$/i.test(text)) return "";
+  if (/^browser-visible signals?$/i.test(text)) return "";
+  return text.length > 90 ? text.slice(0, 87).replace(/\s+\S*$/, "").trim() : text;
+}
+
+function tfpV2751CleanExpectedEvent(value: any): string {
+  const text = tfpV2749CleanString(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (/^(the selected business event|selected business event|browser-visible signal|controlled test|account check)$/i.test(text)) return "";
+  return text.length > 120 ? text.slice(0, 117).replace(/\s+\S*$/, "").trim() : text;
+}
+
+function tfpV2751ManualActionContext(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord | null {
+  const primary = tfpV2749ManualPrimaryAction(report, body);
+  const label = tfpV2751CleanManualActionLabel(primary.label || primary.actionLabel || primary.action_label || body.primaryActionLabel || body.primary_action_label);
+  const expectedEvent = tfpV2751CleanExpectedEvent(primary.expectedEvent || primary.expected_event || primary.expected || body.manualExpectedEvent || body.manual_expected_event);
+  const actionCompleted = tfpV2749CleanString(primary.actionCompleted || primary.action_completed || primary.completed || "");
+  const observedEvent = tfpV2749CleanString(primary.observedEventName || primary.observed_event_name || primary.observedEvent || primary.observed_event || "");
+  const tool = tfpV2749CleanString(primary.tool || primary.toolUsed || primary.tool_used || "");
+  if (!label && !expectedEvent && !actionCompleted && !observedEvent && !tool) return null;
+  return {
+    label: label || "Selected customer action",
+    expectedEvent,
+    expected_event: expectedEvent,
+    actionCompleted,
+    action_completed: actionCompleted,
+    observedEvent,
+    observed_event: observedEvent,
+    tool,
+    displayMode: "context_only_after_foundation_setup",
+    display_mode: "context_only_after_foundation_setup",
+    heroEnabled: false,
+    hero_enabled: false,
+  };
+}
+
 function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCase: AnyRecord): AnyRecord {
   const mode = tfpV2749FirstString(trackingCase.mode, report.reportMode, report.report_mode);
   const primary = tfpV2749ManualPrimaryAction(report, body);
-  const actionLabel = tfpV2749FirstString(primary.label, primary.actionLabel, primary.action_label, report.primaryActionLabel, "main business action");
-  const expectedEvent = tfpV2749FirstString(primary.expectedEvent, primary.expected_event, "the selected business event");
+  const actionLabel = tfpV2751CleanManualActionLabel(tfpV2749FirstString(primary.label, primary.actionLabel, primary.action_label));
+  const expectedEvent = tfpV2751CleanExpectedEvent(tfpV2749FirstString(primary.expectedEvent, primary.expected_event));
+  const manualActionContext = tfpV2751ManualActionContext(report, body);
   const foundationLabel = mode === "ga4_setup_needed" ? "GA4 setup readiness" : "Tracking foundation setup";
   const mainFinding = mode === "ga4_setup_needed"
     ? "A GTM/container path may exist, but GA4 tracking was not clearly detected from the browser-visible review."
@@ -2342,14 +2401,14 @@ function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCa
   const whatChecked = [
     "Public browser-visible GA4/GTM foundation signals.",
     "Whether a clear analytics foundation was visible before event-level verification.",
-    actionLabel ? `Manual target selected for future event setup: ${actionLabel}.` : "The main business event to configure after setup.",
+    actionLabel ? `Manual target selected for future event setup: ${actionLabel}.` : "A future customer action should be configured after GA4/GTM setup.",
     "Final conversion recording was not claimed because setup/account-side confirmation is still required.",
   ].filter(Boolean);
 
   const auditSnapshotQuestions = [
     "Was a GA4 or GTM tracking foundation clearly visible from the public browser-side review?",
-    actionLabel ? `Which main business action should be configured after setup (${actionLabel})?` : "Which main business action should be configured after setup?",
-    expectedEvent ? `After setup, should ${expectedEvent} be tested in GTM Preview and GA4 DebugView?` : "After setup, which event should be tested in GTM Preview and GA4 DebugView?",
+    actionLabel ? `Which customer action should be configured after setup (${actionLabel})?` : "Which customer action should be configured after setup?",
+    expectedEvent ? `After setup, should ${expectedEvent} be tested in GTM Preview and GA4 DebugView?` : "What event should be tested after GA4/GTM setup?",
     "Where should final recording be confirmed — GA4, GTM, CRM, form inbox, or server logs?",
   ];
 
@@ -2368,8 +2427,8 @@ function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCa
     },
     {
       priority: "Priority 3",
-      title: actionLabel ? `Define the main business event for ${actionLabel}.` : "Define the main business event to track.",
-      description: expectedEvent ? `Use an appropriate event such as ${expectedEvent}, then map it consistently in GTM/GA4.` : "Choose the correct event name for the selected customer action.",
+      title: actionLabel ? `Define the main business event for ${actionLabel}.` : "Define the main business event after GA4/GTM setup.",
+      description: expectedEvent ? `Use an appropriate event such as ${expectedEvent}, then map it consistently in GTM/GA4.` : "Choose the correct event name after the tracking foundation is installed.",
       estimatedEffort: "Short review",
     },
     {
@@ -2383,7 +2442,7 @@ function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCa
   const proofPoints = [
     "The review is based on public browser-visible evidence.",
     mainFinding,
-    actionLabel ? `Manual conversion context was kept as secondary context: ${actionLabel}.` : "Manual conversion context was kept as secondary context.",
+    actionLabel ? `Manual conversion context was kept as secondary context: ${actionLabel}.` : "Event-level testing should happen after the tracking foundation is installed.",
     "Final account-side confirmation still requires GA4, GTM, CRM, form inbox, or server/server-log access.",
   ];
 
@@ -2396,7 +2455,7 @@ function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCa
     },
     {
       title: "Conversion-event verification should come after setup",
-      finding: actionLabel ? `${actionLabel} can be configured and tested after the tracking foundation is in place.` : "The selected business event can be configured and tested after the tracking foundation is in place.",
+      finding: actionLabel ? `${actionLabel} can be configured and tested after the tracking foundation is in place.` : "The selected customer action can be configured and tested after the tracking foundation is in place.",
       businessMeaning: "A missing event should not be presented as the primary issue until the base tracking setup is visible.",
       nextCheck: "After setup, run one controlled action test in GTM Preview and GA4 DebugView.",
     },
@@ -2418,18 +2477,20 @@ function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCa
     recommendations: [
       "Set up GTM or Google tag first.",
       "Install/configure GA4 and confirm page_view tracking.",
-      actionLabel ? `Configure the selected business event: ${actionLabel}.` : "Configure the selected main business event.",
+      actionLabel ? `Configure the selected business event: ${actionLabel}.` : "Configure the selected customer action after GA4/GTM setup.",
       "Run one controlled conversion test after setup and confirm it in GA4/GTM plus backend records.",
     ],
     verificationPlan,
     verification_plan: verificationPlan,
     whatChecked,
+    manualActionContext: manualActionContext || undefined,
+    manual_action_context: manualActionContext || undefined,
     auditSnapshotTitle: "Website Tracking Readiness Snapshot",
     auditSnapshotQuestions,
     primaryActionLabel: foundationLabel,
     primaryPageLabel: "Website tracking foundation",
     primaryPageUrl: "",
-    ctaHeadline: "Ready to verify this tracking setup live?",
+    ctaHeadline: "Ready to set up and verify tracking live?",
     ctaText: "Request tracking setup review",
     setupFirstOverrideApplied: true,
     setup_first_override_applied: true,

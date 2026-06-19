@@ -549,6 +549,18 @@ function isMessyBusinessName(value: string, domain = ""): boolean {
   return false;
 }
 
+
+function preserveExactCompanyDisplayName(value: unknown): string {
+  const text = normalizeDisplayText(value)
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text || text.length < 2 || text.length > 90) return "";
+  if (/^https?:\/\//i.test(text) || /^www\./i.test(text)) return "";
+  if (/\b(homepage|official site|contact|services|privacy|terms)\b/i.test(text) && text.length < 30) return "";
+  if (/\.[a-z]{2,}$/i.test(text) || /^[A-Z0-9][A-Z0-9 .&'’.-]{1,90}$/i.test(text)) return text;
+  return "";
+}
+
 function cleanBusinessNameCandidate(value: unknown, domain = ""): string {
   let text = pickBestNameSegment(stripUrlNoise(normalizeDisplayText(value)));
   if (!text) return "";
@@ -582,6 +594,9 @@ function getDisplayCompanyName(report: Record<string, any>, domain: string): str
   ];
 
   for (const candidate of candidates) {
+    const exact = preserveExactCompanyDisplayName(candidate);
+    if (exact) return exact;
+
     const cleaned = cleanBusinessNameCandidate(candidate, domain);
     if (cleaned && !isMessyBusinessName(cleaned, domain)) return cleaned;
   }
@@ -1788,6 +1803,56 @@ function getReportPreviewImageUrl(report: Record<string, any>): string {
 }
 
 
+function getReportMode(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): string {
+  const trackingCase = getObjectCandidate(report.trackingCase, report.tracking_case, privateReportCopy.trackingCase, privateReportCopy.tracking_case);
+  return cleanText(
+    trackingCase.mode ||
+      trackingCase.reportMode ||
+      trackingCase.report_mode ||
+      report.reportMode ||
+      report.report_mode ||
+      privateReportCopy.reportMode ||
+      privateReportCopy.report_mode,
+    "",
+  ).toLowerCase();
+}
+
+function isSetupFirstReportMode(value: string): boolean {
+  return value === "tracking_foundation_setup" || value === "ga4_setup_needed";
+}
+
+function getManualActionContext(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Record<string, any> {
+  return getObjectCandidate(
+    privateReportCopy.manualActionContext,
+    privateReportCopy.manual_action_context,
+    report.manualActionContext,
+    report.manual_action_context,
+  );
+}
+
+function cleanSetupActionLabel(value: unknown): string {
+  const text = cleanText(value, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (/^(main business action|selected conversion action|tracking foundation setup|ga4 setup readiness|website tracking foundation|conversion path review)$/i.test(text)) return "";
+  return text.length > 90 ? `${text.slice(0, 87).replace(/\s+\S*$/, "").trim()}...` : text;
+}
+
+function joinUniqueSentences(parts: string[]): string {
+  const output: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const text = cleanText(part, "");
+    if (!text) continue;
+    const key = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(text.replace(/[.\s]+$/, "."));
+  }
+  return output.join(" ").replace(/\s+/g, " ").trim();
+}
+
+
+
 export async function generateMetadata({ params }: ReportPageProps): Promise<Metadata> {
   const resolvedParams = await params;
   const token = normalizeToken(resolvedParams.token);
@@ -1870,6 +1935,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const domain = getDomainLabel(report);
   const companyName = getDisplayCompanyName(report, domain);
   const privateReportCopy = getPrivateReportCopy(report);
+  const reportMode = getReportMode(report, privateReportCopy);
+  const isSetupFirst = isSetupFirstReportMode(reportMode);
+  const manualActionContext = getManualActionContext(report, privateReportCopy);
+  const setupActionLabel = cleanSetupActionLabel(manualActionContext.label || manualActionContext.actionLabel || manualActionContext.action_label);
   const headline = getDisplayHeadline(report, companyName, domain);
   const pageSubheadline = sentenceCaseFirst(cleanText(
     privateReportCopy.subheadline ||
@@ -1879,6 +1948,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
     "This page summarizes the most important browser-visible tracking evidence before any account-level review.",
   ));
   const ctaText = getDisplayCtaText(privateReportCopy.ctaText || report.ctaText || report.cta_text);
+  const setupPageSubheadline = isSetupFirst
+    ? 'This private page summarizes the browser-visible tracking setup before account-level access or final conversion confirmation.'
+    : pageSubheadline;
 
   let mainFinding = sentenceCaseFirst(cleanText(
     privateReportCopy.mainFinding || report.mainFinding || report.mainIssue,
@@ -1995,11 +2067,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
   });
   const bookingHeadline = cleanText(
     privateReportCopy.bookingHeadline || report.bookingHeadline || report.booking_headline,
-    "Ready to verify this tracking setup live?",
+    isSetupFirst ? "Ready to set up and verify tracking live?" : "Ready to verify this tracking setup live?",
   );
   const bookingDescription = cleanText(
     privateReportCopy.bookingDescription || report.bookingDescription || report.booking_description,
-    "Book a short verification call to review GA4, Google Ads, GTM, CRM, or server-side recording with approved account access.",
+    isSetupFirst ? "Book a setup review to confirm GA4/GTM, then define and test the next customer action with approved access." : "Book a short verification call to review GA4, Google Ads, GTM, CRM, or server-side recording with approved account access.",
   );
 
   const reportDate =
@@ -2007,7 +2079,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     formatDate(new Date().toISOString());
 
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
-  const reviewFocusLabel = primaryConversionFocus || businessTypeLabel || "Conversion path review";
+  const reviewFocusLabel = isSetupFirst ? "Tracking setup readiness" : (primaryConversionFocus || businessTypeLabel || "Conversion path review");
   const evidenceVideo = getEvidenceVideoDisplay(report);
   const heroHeadline = companyName === "this website" ? "Private tracking review" : `Private tracking review for ${companyName}`;
   const manualReviewContextLine = manualEvidenceHero
@@ -2019,9 +2091,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
         .filter(Boolean)
         .join(" ")
     : "";
-  const heroContextLine = manualReviewContextLine || (primaryConversionFocus
-    ? `${primaryConversionFocus} reviewed on the selected conversion path.`
-    : pageSubheadline);
+  const heroContextLine = manualReviewContextLine || (isSetupFirst
+    ? setupPageSubheadline
+    : (primaryConversionFocus ? `${primaryConversionFocus} reviewed on the selected conversion path.` : pageSubheadline));
   const evidenceSignalBadges = cleanList(
     [
       ...trackingSignalItems,
@@ -2053,20 +2125,35 @@ export default async function ReportPage({ params }: ReportPageProps) {
           value: manualEvidenceHero.observedEvent || "Not clearly observed",
         },
       ]
-    : [
-        {
-          label: "Review focus",
-          value: reviewFocusLabel,
-        },
-        {
-          label: "Evidence type",
-          value: "Browser-visible signals",
-        },
-        {
-          label: "Best next action",
-          value: "Controlled test + account check",
-        },
-      ];
+    : isSetupFirst
+      ? [
+          {
+            label: "Review focus",
+            value: "Tracking setup readiness",
+          },
+          {
+            label: "Setup signal",
+            value: "GA4/GTM foundation",
+          },
+          {
+            label: "Best next action",
+            value: "Set up GA4/GTM first",
+          },
+        ]
+      : [
+          {
+            label: "Review focus",
+            value: reviewFocusLabel,
+          },
+          {
+            label: "Evidence type",
+            value: "Browser-visible signals",
+          },
+          {
+            label: "Best next action",
+            value: "Controlled test + account check",
+          },
+        ];
 
   const chatQuestionContext: ReportChatQuestionContext = {
     companyName,
@@ -2076,9 +2163,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
     scoreLabel: getReportScoreLabel(report),
     mainFinding,
     businessImpact,
-    primaryConversionFocus: manualEvidenceHero?.actionLabel || primaryConversionFocus,
+    reportMode,
+    isSetupFirst,
+    primaryConversionFocus: manualEvidenceHero?.actionLabel || setupActionLabel || primaryConversionFocus,
     businessType: businessTypeLabel,
-    manualActionLabel: manualEvidenceHero?.actionLabel || "",
+    manualActionLabel: manualEvidenceHero?.actionLabel || setupActionLabel || "",
     manualExpectedEvent: manualEvidenceHero?.expectedEvent || "",
     manualObservedEvent: manualEvidenceHero?.observedEvent || "",
     manualTool: manualEvidenceHero?.tool || "",
@@ -2129,7 +2218,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
             <p className="mt-4 max-w-2xl break-words text-[0.95rem] font-semibold leading-7 text-slate-600 sm:mt-5 sm:text-base sm:leading-8 lg:text-lg">
               Prepared for <span className="font-black text-slate-950">{companyName}</span>
-              {domain ? <span className="break-all"> · {domain}</span> : null}. {heroContextLine} {pageSubheadline}
+              {domain ? <span className="break-all"> · {domain}</span> : null}. {joinUniqueSentences([heroContextLine, isSetupFirst ? '' : setupPageSubheadline])}
             </p>
 
             {manualEvidenceHero ? (
@@ -2358,7 +2447,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   >
                     <span>{item}</span>
                     <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
-                      Ask about this point
+                      Ask assistant
                     </span>
                   </a>
                 ))}
