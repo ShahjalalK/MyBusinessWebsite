@@ -1667,7 +1667,7 @@ export function getReportTimestamp(value: any, fallbackDays = 30) {
   return admin.firestore.Timestamp.fromMillis(Date.now() + fallbackDays * 24 * 60 * 60 * 1000);
 }
 
-export function normalizeReportPayload(body: AnyRecord = {}) {
+function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
   const token = normalizeReportToken(body.token || body.reportToken || body.report_token) || createReportToken();
   const domain = firstCleanString(body.domain, body.websiteUrl, body.website_url, body.website, body.url);
   const manualContact = getObjectCandidate(body.manualContact, body.manual_contact, body.manual_contact_update, body.manualContactUpdate);
@@ -2146,4 +2146,269 @@ export function normalizeReportPayload(body: AnyRecord = {}) {
     ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
     ctaText,
   };
+}
+
+
+// ============================================================
+// v27.49 Press-3.1: Firestore-safe report mode fields
+// Purpose:
+// - Preserve Press-1 tracking_case/reportMode fields through secure-page registration.
+// - For no-GA4/no-GTM setup-first reports, prevent manualEvidenceHero from becoming
+//   the Firestore/page hero while keeping manualConversionEvidence as context.
+// - Keep canonical camelCase fields plus small snake_case aliases to avoid field-name drift.
+// ============================================================
+
+const TFP_V2749_SETUP_FIRST_MODES = new Set(["tracking_foundation_setup", "ga4_setup_needed"]);
+
+function tfpV2749CleanString(value: any, fallback = ""): string {
+  if (value === null || value === undefined || value === "") return fallback;
+  const text = String(value).replace(/\s+/g, " ").trim();
+  return text || fallback;
+}
+
+function tfpV2749Object(value: any): AnyRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
+}
+
+function tfpV2749FirstObject(...values: any[]): AnyRecord {
+  for (const value of values) {
+    const obj = tfpV2749Object(value);
+    if (Object.keys(obj).length) return obj;
+  }
+  return {};
+}
+
+function tfpV2749FirstString(...values: any[]): string {
+  for (const value of values) {
+    const text = tfpV2749CleanString(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function tfpV2749TrackingCaseFrom(body: AnyRecord = {}, normalized: AnyRecord = {}): AnyRecord {
+  const privateCopy = tfpV2749Object(body.privateReportCopy || body.private_report_copy || body.securePageCopy || body.secure_page_copy);
+  const normalizedPrivateCopy = tfpV2749Object(normalized.privateReportCopy || normalized.private_report_copy || normalized.securePageCopy || normalized.secure_page_copy);
+  const rawCase = tfpV2749FirstObject(
+    normalized.trackingCase,
+    normalized.tracking_case,
+    normalizedPrivateCopy.trackingCase,
+    normalizedPrivateCopy.tracking_case,
+    body.trackingCase,
+    body.tracking_case,
+    body.reportTrackingCase,
+    body.report_tracking_case,
+    privateCopy.trackingCase,
+    privateCopy.tracking_case,
+  );
+  const mode = tfpV2749FirstString(
+    rawCase.mode,
+    rawCase.reportMode,
+    rawCase.report_mode,
+    normalized.reportMode,
+    normalized.report_mode,
+    normalizedPrivateCopy.reportMode,
+    normalizedPrivateCopy.report_mode,
+    body.reportMode,
+    body.report_mode,
+    privateCopy.reportMode,
+    privateCopy.report_mode,
+  );
+  if (!mode && !Object.keys(rawCase).length) return {};
+  const title = tfpV2749FirstString(rawCase.title, rawCase.reportTitle, rawCase.report_title);
+  const mainFinding = tfpV2749FirstString(rawCase.mainFinding, rawCase.main_finding, rawCase.safePrimaryClaim, rawCase.safe_primary_claim);
+  return {
+    ...rawCase,
+    mode,
+    reportMode: mode,
+    report_mode: mode,
+    ...(title ? { title } : {}),
+    ...(mainFinding ? { mainFinding, main_finding: mainFinding } : {}),
+  };
+}
+
+function tfpV2749IsSetupFirstMode(mode: any): boolean {
+  return TFP_V2749_SETUP_FIRST_MODES.has(String(mode || "").trim());
+}
+
+function tfpV2749ManualPrimaryAction(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord {
+  const manual = tfpV2749FirstObject(
+    report.manualConversionEvidence,
+    report.manual_conversion_evidence,
+    body.manualConversionEvidence,
+    body.manual_conversion_evidence,
+    tfpV2749Object(report.privateReportCopy || report.private_report_copy).manualConversionEvidence,
+    tfpV2749Object(report.privateReportCopy || report.private_report_copy).manual_conversion_evidence,
+  );
+  return tfpV2749FirstObject(manual.primaryAction, manual.primary_action, manual.primary);
+}
+
+function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCase: AnyRecord): AnyRecord {
+  const mode = tfpV2749FirstString(trackingCase.mode, report.reportMode, report.report_mode);
+  const primary = tfpV2749ManualPrimaryAction(report, body);
+  const actionLabel = tfpV2749FirstString(primary.label, primary.actionLabel, primary.action_label, report.primaryActionLabel, "main business action");
+  const expectedEvent = tfpV2749FirstString(primary.expectedEvent, primary.expected_event, "the selected business event");
+  const foundationLabel = mode === "ga4_setup_needed" ? "GA4 setup readiness" : "Tracking foundation setup";
+  const mainFinding = mode === "ga4_setup_needed"
+    ? "A GTM/container path may exist, but GA4 tracking was not clearly detected from the browser-visible review."
+    : "GA4/GTM tracking foundation was not clearly detected from the public browser-side review.";
+
+  const whatChecked = [
+    "Public browser-visible GA4/GTM foundation signals.",
+    "Whether a clear analytics foundation was visible before event-level verification.",
+    actionLabel ? `Manual target selected for future event setup: ${actionLabel}.` : "The main business event to configure after setup.",
+    "Final conversion recording was not claimed because setup/account-side confirmation is still required.",
+  ].filter(Boolean);
+
+  const auditSnapshotQuestions = [
+    "Was a GA4 or GTM tracking foundation clearly visible from the public browser-side review?",
+    actionLabel ? `Which main business action should be configured after setup (${actionLabel})?` : "Which main business action should be configured after setup?",
+    expectedEvent ? `After setup, should ${expectedEvent} be tested in GTM Preview and GA4 DebugView?` : "After setup, which event should be tested in GTM Preview and GA4 DebugView?",
+    "Where should final recording be confirmed — GA4, GTM, CRM, form inbox, or server logs?",
+  ];
+
+  const verificationPlan = [
+    {
+      priority: "Priority 1",
+      title: "Set up GTM or Google tag on the website.",
+      description: "Create a clear browser-visible analytics foundation before judging conversion events.",
+      estimatedEffort: "Setup review",
+    },
+    {
+      priority: "Priority 2",
+      title: "Install or configure GA4 page_view tracking.",
+      description: "Confirm GA4 is visible in Tag Assistant and available for DebugView testing.",
+      estimatedEffort: "Setup review",
+    },
+    {
+      priority: "Priority 3",
+      title: actionLabel ? `Define the main business event for ${actionLabel}.` : "Define the main business event to track.",
+      description: expectedEvent ? `Use an appropriate event such as ${expectedEvent}, then map it consistently in GTM/GA4.` : "Choose the correct event name for the selected customer action.",
+      estimatedEffort: "Short review",
+    },
+    {
+      priority: "Priority 4",
+      title: "Run one controlled test after setup.",
+      description: "Verify the event in GTM Preview, GA4 DebugView, and the relevant CRM/form inbox/server records.",
+      estimatedEffort: "Short review",
+    },
+  ];
+
+  const proofPoints = [
+    "The review is based on public browser-visible evidence.",
+    mainFinding,
+    actionLabel ? `Manual conversion context was kept as secondary context: ${actionLabel}.` : "Manual conversion context was kept as secondary context.",
+    "Final account-side confirmation still requires GA4, GTM, CRM, form inbox, or server/server-log access.",
+  ];
+
+  const problemCards = [
+    {
+      title: "GA4/GTM tracking foundation was not clearly detected",
+      finding: mainFinding,
+      businessMeaning: "Without a clear analytics foundation, traffic, enquiries, audiences, and future campaign reporting may be harder to measure.",
+      nextCheck: "Install or verify GTM/Google tag and GA4 first, then test the main business event.",
+    },
+    {
+      title: "Conversion-event verification should come after setup",
+      finding: actionLabel ? `${actionLabel} can be configured and tested after the tracking foundation is in place.` : "The selected business event can be configured and tested after the tracking foundation is in place.",
+      businessMeaning: "A missing event should not be presented as the primary issue until the base tracking setup is visible.",
+      nextCheck: "After setup, run one controlled action test in GTM Preview and GA4 DebugView.",
+    },
+    {
+      title: "Final recording requires account/server confirmation",
+      finding: "Browser-visible evidence cannot prove final account-side or server-side recording by itself.",
+      businessMeaning: "CRM, form inbox, booking/ecommerce records, or server logs should be compared with GA4/GTM events.",
+      nextCheck: "Confirm the same test action inside GA4, GTM, CRM/form inbox, or server logs.",
+    },
+  ];
+
+  return {
+    headline: mode === "ga4_setup_needed" ? "Private GA4 setup readiness review" : "Private website tracking readiness review",
+    mainFinding,
+    businessImpact: "Without a clear analytics foundation, website traffic, enquiries, audience building, and future campaign reporting may be harder to measure.",
+    proofPoints,
+    problemCards,
+    businessProblems: problemCards,
+    recommendations: [
+      "Set up GTM or Google tag first.",
+      "Install/configure GA4 and confirm page_view tracking.",
+      actionLabel ? `Configure the selected business event: ${actionLabel}.` : "Configure the selected main business event.",
+      "Run one controlled conversion test after setup and confirm it in GA4/GTM plus backend records.",
+    ],
+    verificationPlan,
+    verification_plan: verificationPlan,
+    whatChecked,
+    auditSnapshotTitle: "Website Tracking Readiness Snapshot",
+    auditSnapshotQuestions,
+    primaryActionLabel: foundationLabel,
+    primaryPageLabel: "Website tracking foundation",
+    primaryPageUrl: "",
+    ctaHeadline: "Ready to verify this tracking setup live?",
+    ctaText: "Request tracking setup review",
+    manualEvidenceHero: null,
+    manual_evidence_hero: null,
+  };
+}
+
+function tfpV2749ApplyReportModeFirestoreOverrides(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord {
+  const trackingCase = tfpV2749TrackingCaseFrom(body, report);
+  const mode = tfpV2749FirstString(trackingCase.mode, report.reportMode, report.report_mode);
+  if (!mode) return report;
+
+  const trackingCaseOut = {
+    ...trackingCase,
+    mode,
+    reportMode: mode,
+    report_mode: mode,
+  };
+
+  let output: AnyRecord = {
+    ...report,
+    trackingCase: trackingCaseOut,
+    tracking_case: trackingCaseOut,
+    reportMode: mode,
+    report_mode: mode,
+    privateReportCopy: {
+      ...(tfpV2749Object(report.privateReportCopy || report.private_report_copy)),
+      trackingCase: trackingCaseOut,
+      tracking_case: trackingCaseOut,
+      reportMode: mode,
+      report_mode: mode,
+    },
+  };
+
+  if (!tfpV2749IsSetupFirstMode(mode)) return output;
+
+  const setupFields = tfpV2749SetupFirstFields(output, body, trackingCaseOut);
+  const privateCopy = {
+    ...(tfpV2749Object(output.privateReportCopy || output.private_report_copy)),
+    ...setupFields,
+    trackingCase: trackingCaseOut,
+    tracking_case: trackingCaseOut,
+    reportMode: mode,
+    report_mode: mode,
+    manualEvidenceHero: null,
+    manual_evidence_hero: null,
+  };
+
+  output = {
+    ...output,
+    ...setupFields,
+    trackingCase: trackingCaseOut,
+    tracking_case: trackingCaseOut,
+    reportMode: mode,
+    report_mode: mode,
+    privateReportCopy: privateCopy,
+    securePageCopy: privateCopy,
+    secure_page_copy: privateCopy,
+    manualEvidenceHero: null,
+    manual_evidence_hero: null,
+  };
+
+  return output;
+}
+
+export function normalizeReportPayload(body: AnyRecord = {}) {
+  const report = tfpV2749NormalizeReportPayloadBase(body);
+  return tfpV2749ApplyReportModeFirestoreOverrides(report, body);
 }

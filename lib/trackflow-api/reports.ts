@@ -49,6 +49,40 @@ function pickManualEvidenceDebugFields(value: AnyRecord = {}): AnyRecord {
   };
 }
 
+
+const TFP_V2749_SETUP_FIRST_MODES = new Set(["tracking_foundation_setup", "ga4_setup_needed"]);
+
+function tfpV2749ReportModeForFirestore(report: AnyRecord = {}, body: AnyRecord = {}): string {
+  return String(
+    report.reportMode ||
+      report.report_mode ||
+      report.trackingCase?.mode ||
+      report.tracking_case?.mode ||
+      body.reportMode ||
+      body.report_mode ||
+      body.trackingCase?.mode ||
+      body.tracking_case?.mode ||
+      "",
+  ).trim();
+}
+
+function tfpV2749TrackingCaseForFirestore(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord | null {
+  const raw =
+    (report.trackingCase && typeof report.trackingCase === "object" ? report.trackingCase : null) ||
+    (report.tracking_case && typeof report.tracking_case === "object" ? report.tracking_case : null) ||
+    (body.trackingCase && typeof body.trackingCase === "object" ? body.trackingCase : null) ||
+    (body.tracking_case && typeof body.tracking_case === "object" ? body.tracking_case : null) ||
+    null;
+  const mode = tfpV2749ReportModeForFirestore(report, body);
+  if (!raw && !mode) return null;
+  return {
+    ...(raw || {}),
+    mode,
+    reportMode: mode,
+    report_mode: mode,
+  };
+}
+
 function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
   const raw = value || {};
   return {
@@ -544,6 +578,9 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const existingManualEvidenceHero = existingData.manualEvidenceHero && typeof existingData.manualEvidenceHero === "object"
       ? existingData.manualEvidenceHero
       : null;
+    const tfpV2749RegisterMode = tfpV2749ReportModeForFirestore(report, body || {});
+    const tfpV2749SetupFirstRegister = TFP_V2749_SETUP_FIRST_MODES.has(tfpV2749RegisterMode);
+    const tfpV2749TrackingCase = tfpV2749TrackingCaseForFirestore(report, body || {});
     const rawIncomingManualConversionEvidence =
       report.manualConversionEvidence ||
       body?.manualConversionEvidence ||
@@ -551,13 +588,16 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       report.privateReportCopy?.manualConversionEvidence ||
       report.privateReportCopy?.manual_conversion_evidence ||
       null;
-    const rawIncomingManualEvidenceHero =
-      report.manualEvidenceHero ||
-      body?.manualEvidenceHero ||
-      body?.manual_evidence_hero ||
-      report.privateReportCopy?.manualEvidenceHero ||
-      report.privateReportCopy?.manual_evidence_hero ||
-      null;
+    const rawIncomingManualEvidenceHero = tfpV2749SetupFirstRegister
+      ? null
+      : (
+        report.manualEvidenceHero ||
+        body?.manualEvidenceHero ||
+        body?.manual_evidence_hero ||
+        report.privateReportCopy?.manualEvidenceHero ||
+        report.privateReportCopy?.manual_evidence_hero ||
+        null
+      );
     const incomingManualConversionEvidence = rawIncomingManualConversionEvidence && typeof rawIncomingManualConversionEvidence === "object"
       ? rawIncomingManualConversionEvidence
       : null;
@@ -566,12 +606,13 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       : null;
     const sourceText = String(report.source || body?.source || "").toLowerCase();
     const shouldPreserveExistingManualEvidence = Boolean(
-      !incomingManualConversionEvidence &&
+      !tfpV2749SetupFirstRegister &&
+        !incomingManualConversionEvidence &&
         existingManualConversionEvidence &&
         /(manual|linkedin|video|youtube|secure_page_update|metadata)/.test(sourceText),
     );
     const resolvedManualConversionEvidence = incomingManualConversionEvidence || (shouldPreserveExistingManualEvidence ? existingManualConversionEvidence : null);
-    const resolvedManualEvidenceHero = incomingManualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingManualEvidenceHero : null);
+    const resolvedManualEvidenceHero = tfpV2749SetupFirstRegister ? null : (incomingManualEvidenceHero || (shouldPreserveExistingManualEvidence ? existingManualEvidenceHero : null));
     logModularReportDebug("manual_evidence_firestore_resolution", {
       source: sourceText,
       incoming: pickManualEvidenceDebugFields({ manualConversionEvidence: incomingManualConversionEvidence, manualEvidenceHero: incomingManualEvidenceHero }),
@@ -695,6 +736,11 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       token: report.token,
       domainSlug: report.domainSlug,
       reportUrl: report.reportUrl,
+      trackingCase: tfpV2749TrackingCase,
+      tracking_case: tfpV2749TrackingCase,
+      reportMode: tfpV2749RegisterMode,
+      report_mode: tfpV2749RegisterMode,
+      setupFirstOverrideApplied: Boolean(tfpV2749SetupFirstRegister),
       domain: normalizedDomain || report.domain,
       normalizedDomain,
       websiteUrl: report.websiteUrl,
@@ -812,6 +858,8 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
           token: report.token,
           reportToken: report.token,
           reportUrl: report.reportUrl,
+          reportMode: tfpV2749RegisterMode,
+          trackingCase: tfpV2749TrackingCase,
           domain: normalizedDomain,
           normalizedDomain,
           domainSlug: report.domainSlug,
