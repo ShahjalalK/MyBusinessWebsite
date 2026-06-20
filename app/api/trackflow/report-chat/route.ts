@@ -857,7 +857,21 @@ function defaultBusinessImpactForContext(context: AnyRecord = {}): string {
 
 function isSetupFirstQuestion(question: string): boolean {
   const text = normalizeIntentText(question);
-  return /\b(install|installed|setup|set up|foundation|before event|before conversion|event testing|conversion testing|configured after setup|after setup|ga4\/gtm|google tag|tracking foundation|analytics foundation|not clearly detected|not clearly observed|lead reporting|business impact|why does this matter|why it matters)\b/.test(text);
+  return /\b(install|installed|setup|set up|foundation|before event|before conversion|event testing|conversion testing|configured after setup|after setup|ga4\/gtm|google tag|tracking foundation|analytics foundation|not clearly detected|not clearly observed|clearly visible|visible from|public browser|customer action|which action|what action|lead reporting|business impact|why does this matter|why it matters)\b/.test(text);
+}
+
+function isSetupFoundationVisibilityQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+  const mentionsFoundation = /\b(ga4|gtm|google tag|tracking foundation|analytics foundation)\b/.test(text);
+  const asksVisibility = /\b(was|were|is|are|visible|clearly visible|detected|observed|found|seen|public browser|browser-side|review)\b/.test(text);
+  return mentionsFoundation && asksVisibility;
+}
+
+function isSetupActionSelectionQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+  const mentionsAction = /\b(customer action|business action|selected action|which action|what action|action should|configured after setup|tested after|test after|after ga4\/gtm setup|after setup)\b/.test(text);
+  const asksSelection = /\b(which|what|how should|should be|define|configured|tested|test)\b/.test(text);
+  return mentionsAction && asksSelection;
 }
 
 function buildSetupFirstAnswer(context: AnyRecord, question: string): string {
@@ -865,8 +879,56 @@ function buildSetupFirstAnswer(context: AnyRecord, question: string): string {
 
   const companyName = cleanContextText(context.companyName || context.company_name, "this website");
   const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
+  const hasSpecificAction = Boolean(cleanContextText(context.manualActionLabel || context.primaryConversionFocus));
   const impact = defaultBusinessImpactForContext(context);
   const q = normalizeIntentText(question);
+
+  if (isSetupFoundationVisibilityQuestion(question)) {
+    return `
+Short answer:
+No clear GA4 or GTM tracking foundation was visible from the public browser-side review for ${companyName}. The safe reading is that the setup needs to be confirmed or installed before judging conversion events.
+
+Business impact:
+${impact}
+
+Evidence to review:
+- Google tag / GTM: not clearly observed from the public browser-visible review.
+- GA4: not clearly observed as a reliable base setup from this review.
+- Other browser-visible requests may exist, but they do not prove GA4/GTM foundation or final event recording.
+
+What to verify next:
+- Confirm whether GTM or Google tag is installed on the website.
+- Confirm GA4 is configured and receiving normal page_view activity.
+- After that, define ${actionLabel} and run one controlled test.
+- Match final recording inside GA4, GTM, Google Ads, CRM, form/booking records, call-tracking, ecommerce records, or server logs.
+
+Important note:
+This is a setup-readiness finding, not a claim that ${actionLabel} failed.
+`.trim();
+  }
+
+  if (isSetupActionSelectionQuestion(question)) {
+    return `
+Short answer:
+${hasSpecificAction ? `${actionLabel} should be treated as the first customer action to test after GA4/GTM setup.` : `The first action to test should be the highest-value customer action on the website, such as a lead form, booking, phone call, enquiry, checkout, purchase, signup, or demo request.`}
+
+Business impact:
+${impact}
+
+What this means:
+Do not try to test every possible event first. Pick one primary business action, define the expected event for that action, and confirm it only after GTM or Google tag and GA4 page_view activity are working.
+
+What to verify next:
+- Choose one primary customer action for the first controlled test.
+- Define the expected GA4 event for that action.
+- Test the action in GTM Preview and GA4 DebugView after setup.
+- If Google Ads is active, check whether the same action maps to the intended conversion action.
+- Match the test with the CRM, form inbox, booking platform, call-tracking system, ecommerce record, or server logs.
+
+Important note:
+This keeps the review focused on business value instead of testing random clicks that may not matter for lead or revenue reporting.
+`.trim();
+  }
 
   if (/\b(where|final recording|confirmed|confirm|account|server|crm|google ads|debugview|gtm preview)\b/.test(q)) {
     return `
