@@ -80,7 +80,7 @@ const BROAD_FALLBACK_POOL = [
   "What should we check inside GA4?",
   "What should we check in GTM Preview?",
   "What should we check in Google Ads?",
-  "What should we test on the lead path?",
+  "Which lead path should we test first?",
   "Can this affect lead reporting?",
   "How could this affect business decisions?",
   "Why does this matter for future campaigns?",
@@ -244,11 +244,12 @@ function getSetupFirstQuestionRules(context?: ReportChatQuestionContext): Questi
   if (!isSetupFirstContext(context)) return [];
   const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "");
   const rules: QuestionRule[] = [
-    { question: "What needs to be installed before event testing?", priority: 212 },
-    { question: "Why should setup come before conversion testing?", priority: 209 },
-    { question: "How could this affect lead reporting?", priority: 206 },
-    { question: action ? `Which customer action should be tested after GA4/GTM setup?` : "Which customer action should be tested after GA4/GTM setup?", priority: 203 },
-    { question: "Where should final recording be confirmed after setup?", priority: 200 },
+    { question: "What needs to be set up before event testing?", priority: 214 },
+    { question: "Why should setup come before conversion testing?", priority: 211 },
+    { question: "How could this affect lead reporting?", priority: 208 },
+    { question: action ? `Which customer action should be tested after GA4/GTM setup?` : "Which customer action should be tested after GA4/GTM setup?", priority: 205 },
+    { question: "Which lead path should we test after setup?", priority: 202 },
+    { question: "Where should final recording be confirmed after setup?", priority: 199 },
     { question: "What is the safest next step for this review?", priority: 196 },
   ];
   return rules.filter((rule) => isSafeReportQuestion(rule.question));
@@ -274,7 +275,7 @@ function getManualEvidenceQuestionRules(context?: ReportChatQuestionContext): Qu
     pushQuestion(
       rules,
       Boolean(action),
-      `Which evidence suggests the event was observed for ${action}?`,
+      `What evidence suggests the event was observed for ${action}?`,
       198,
     );
     pushQuestion(
@@ -483,7 +484,7 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
   pushQuestion(
     rules,
     hasAny(text, [/\bno clear\b.*\bconversion\b/, /\bno clear\b.*\bevent\b/, /\bnot clearly observed\b/, /\bno lead-related\b/]),
-    "What does not clearly observed mean in this review?",
+    "What does “not clearly observed” mean in this review?",
     97,
   );
 
@@ -518,7 +519,7 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
   pushQuestion(
     rules,
     hasAny(text, [/\bgtm\b/, /\bgoogle tag manager\b/, /\btag manager\b/, /\bpreview\b/]),
-    "What should be verified in GTM Preview?",
+    "What should we check in GTM Preview?",
     85,
   );
 
@@ -749,7 +750,7 @@ function buildSafestNextStepFollowUpRules(_text: string): QuestionRule[] {
     { question: "What should we check inside GA4?", priority: 96 },
     { question: "What should we check in GTM Preview?", priority: 94 },
     { question: "What should we check in Google Ads?", priority: 92 },
-    { question: "What should we test on the lead path?", priority: 90 },
+    { question: "Which lead path should we test first?", priority: 90 },
     { question: "How could this affect lead reporting?", priority: 88 },
     { question: "Can we book a verification call?", priority: 86 },
   ];
@@ -808,7 +809,7 @@ function buildFollowUpRules(latestAssistantContent: string, context?: ReportChat
   pushQuestion(
     rules,
     hasAny(text, [/\bform\b/, /\blead\b/, /\benquiry\b/, /\binquiry\b/, /\bbooking\b/]),
-    "What should we test on the lead path?",
+    "Which lead path should we test first?",
     90,
   );
 

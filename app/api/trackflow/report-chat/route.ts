@@ -75,17 +75,23 @@ function asValidatedReportChatContext(context: AnyRecord): ValidatedReportChatCo
 const PREMIUM_CHAT_FORMAT_INSTRUCTIONS = `
 Premium chat formatting rules:
 - Answer in polished English only.
-- Keep the answer short, calm, and client-friendly.
-- Use clear spacing with short section labels when helpful:
+- Write like a calm tracking specialist speaking to a client, not like a rigid template.
+- Keep the answer short, human, and consultative.
+- Use clear spacing with short section labels when helpful, but do not repeat the exact same labels in every answer.
+- Good section labels include:
   Short answer:
+  Why this matters:
   What this means:
   Business impact:
+  What I would check next:
   What to verify next:
+  Quick note:
   Important note:
-- Use simple hyphen bullets or numbered steps when listing items.
+- Prefer one short explanatory paragraph plus 3-5 practical bullets when a checklist is needed.
 - Do not use Markdown bold markers, tables, code blocks, emojis, or long wall-of-text paragraphs.
 - Do not invent evidence. Do not claim final account-level truth without approved access.
 - When a finding affects reporting, leads, ads optimization, audience building, or business decisions, explain the practical business impact in safe language.
+- Avoid robotic phrases such as “This review points to one practical question.” Start with the client’s business action and the safest interpretation.
 
 Trust, access, security, and service-scope rules:
 - Never ask the client to share passwords.
@@ -540,9 +546,9 @@ function buildSafestNextStepAnswer(context: AnyRecord, question: string): string
   if (isSetupFirstReportContext(context)) {
     return `
 Short answer:
-The safest next step for ${target} is to confirm the GA4/GTM foundation first, then test ${actionLabel} after setup.
+For ${target}, I would first confirm the GA4/GTM foundation. After that, test ${actionLabel} as one clean business action.
 
-Business impact:
+Why this matters:
 ${impact}
 
 Recommended order:
@@ -559,9 +565,9 @@ Do not treat the selected action as a failed event before the tracking foundatio
 
   return `
 Short answer:
-The safest next step for ${target} is to verify one high-priority conversion path end to end before making final tracking or campaign decisions.
+For ${target}, the safest next step is one clean end-to-end test of the most important conversion path before making tracking or campaign decisions.
 
-Business impact:
+Why this matters:
 ${impact}
 
 Recommended order:
@@ -845,19 +851,19 @@ function defaultBusinessImpactForContext(context: AnyRecord = {}): string {
   if (existing) return existing;
 
   if (isSetupFirstReportContext(context)) {
-    return "Without a clear GA4/GTM foundation, the business may not know which pages, enquiries, forms, calls, bookings, or campaigns are actually producing leads. That can make reporting, remarketing audiences, and future Google Ads decisions less reliable.";
+    return "If the analytics foundation is not clear, the team may see website visits but still not know which visits became real enquiries, calls, bookings, or sales. That can weaken lead reporting, remarketing audiences, and future Google Ads decisions.";
   }
 
   if (isPositiveEventContext(context)) {
-    return "A positive event signal is helpful because it suggests the customer action may be measurable, but the business should still confirm account-side recording before relying on the data for reporting, bidding, or client decisions.";
+    return "A visible event signal is a good sign, but the business still needs to know whether that same action is counted correctly inside GA4, GTM, Google Ads, and the final lead or sale record before relying on it for decisions.";
   }
 
-  return "If the main customer action is not recorded clearly, the business may see website activity without knowing which enquiries, bookings, calls, or purchases are actually being generated. That can make lead reporting, attribution, and Google Ads optimization less reliable.";
+  return "If the main customer action is not recorded clearly, the business may have traffic data without a reliable view of which enquiries, calls, bookings, or purchases actually happened. That can make lead reporting, attribution, and Google Ads optimization less reliable.";
 }
 
 function isSetupFirstQuestion(question: string): boolean {
   const text = normalizeIntentText(question);
-  return /\b(install|installed|setup|set up|foundation|before event|before conversion|event testing|conversion testing|configured after setup|after setup|ga4\/gtm|google tag|tracking foundation|analytics foundation|not clearly detected|not clearly observed|clearly visible|visible from|public browser|customer action|which action|what action|lead reporting|business impact|why does this matter|why it matters)\b/.test(text);
+  return /\b(install|installed|setup|set up|foundation|before event|before conversion|event testing|conversion testing|configured after setup|after setup|ga4\/gtm|google tag|tracking foundation|analytics foundation|not clearly detected|not clearly observed|clearly visible|visible from|public browser|customer action|which action|what action|lead reporting|lead path|lead journey|business impact|why does this matter|why it matters)\b/.test(text);
 }
 
 function isSetupFoundationVisibilityQuestion(question: string): boolean {
@@ -883,68 +889,69 @@ function buildSetupFirstAnswer(context: AnyRecord, question: string): string {
   const impact = defaultBusinessImpactForContext(context);
   const q = normalizeIntentText(question);
 
+  if (isLeadPathQuestion(question)) {
+    return buildLeadPathAnswer(context, question);
+  }
+
   if (isSetupFoundationVisibilityQuestion(question)) {
     return `
 Short answer:
-No clear GA4 or GTM tracking foundation was visible from the public browser-side review for ${companyName}. The safe reading is that the setup needs to be confirmed or installed before judging conversion events.
+Not clearly. From the public browser-side review, I would treat ${companyName} as a setup-first case: confirm or install GTM / Google tag and GA4 before judging any conversion event.
 
-Business impact:
+Why this matters:
 ${impact}
 
 Evidence to review:
-- Google tag / GTM: not clearly observed from the public browser-visible review.
-- GA4: not clearly observed as a reliable base setup from this review.
-- Other browser-visible requests may exist, but they do not prove GA4/GTM foundation or final event recording.
+- Google tag / GTM was not clearly observed from the public browser-visible review.
+- GA4 was not clearly observed as a reliable base setup from this review.
+- Other browser-visible requests can exist, but they do not prove GA4/GTM foundation or final event recording.
 
-What to verify next:
+What I would check next:
 - Confirm whether GTM or Google tag is installed on the website.
 - Confirm GA4 is configured and receiving normal page_view activity.
 - After that, define ${actionLabel} and run one controlled test.
 - Match final recording inside GA4, GTM, Google Ads, CRM, form/booking records, call-tracking, ecommerce records, or server logs.
 
-Important note:
-This is a setup-readiness finding, not a claim that ${actionLabel} failed.
+Quick note:
+This is a setup-readiness finding, not a verdict that ${actionLabel} failed.
 `.trim();
   }
 
   if (isSetupActionSelectionQuestion(question)) {
     return `
 Short answer:
-${hasSpecificAction ? `${actionLabel} should be treated as the first customer action to test after GA4/GTM setup.` : `The first action to test should be the highest-value customer action on the website, such as a lead form, booking, phone call, enquiry, checkout, purchase, signup, or demo request.`}
+${hasSpecificAction ? `Start with ${actionLabel}, because that appears to be the main business action to confirm after GA4/GTM setup.` : `Start with the action that matters most to the business — usually a lead form, booking request, phone call, enquiry, checkout, purchase, signup, or demo request.`}
 
-Business impact:
-${impact}
+Why this matters:
+The goal is not to track every click first. The goal is to confirm whether the website records the action that could actually become a lead, booking, call, or sale.
 
-What this means:
-Do not try to test every possible event first. Pick one primary business action, define the expected event for that action, and confirm it only after GTM or Google tag and GA4 page_view activity are working.
-
-What to verify next:
+What I would check next:
+- First confirm GTM / Google tag and GA4 page_view activity.
 - Choose one primary customer action for the first controlled test.
 - Define the expected GA4 event for that action.
-- Test the action in GTM Preview and GA4 DebugView after setup.
-- If Google Ads is active, check whether the same action maps to the intended conversion action.
-- Match the test with the CRM, form inbox, booking platform, call-tracking system, ecommerce record, or server logs.
+- Test it in GTM Preview and GA4 DebugView after setup.
+- If Google Ads is active, confirm whether the same action maps to the intended conversion action.
 
-Important note:
-This keeps the review focused on business value instead of testing random clicks that may not matter for lead or revenue reporting.
+Quick note:
+This keeps the review focused on business value instead of random website activity.
 `.trim();
   }
 
   if (/\b(where|final recording|confirmed|confirm|account|server|crm|google ads|debugview|gtm preview)\b/.test(q)) {
     return `
 Short answer:
-For ${companyName}, final recording should be confirmed inside the actual tracking and business systems after GA4/GTM setup is in place.
+For ${companyName}, the final answer should come from the actual tracking and business systems — not only from the public browser view.
 
-Business impact:
+Why this matters:
 ${impact}
 
-What to verify next:
+What I would check next:
 - Confirm GTM or Google tag is installed correctly.
 - Confirm GA4 is configured and normal page_view activity is visible.
 - Configure ${actionLabel} as the business action to test after setup.
-- Verify the test in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics if ads are used, and the CRM, form inbox, booking system, call-tracking platform, ecommerce records, or server logs.
+- Verify the same test in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics if ads are used, and the CRM, form inbox, booking system, call-tracking platform, ecommerce records, or server logs.
 
-Important note:
+Quick note:
 This setup-first review should not be treated as a failed-event claim. Event testing comes after the tracking foundation is installed and visible.
 `.trim();
   }
@@ -954,15 +961,15 @@ This setup-first review should not be treated as a failed-event claim. Event tes
 Short answer:
 Setup should come before conversion testing because the tracking foundation needs to exist before a form, call, booking, or purchase event can be judged fairly.
 
-Business impact:
+Why this matters:
 ${impact}
 
 What this means:
-The public browser-side review did not clearly detect a GA4/GTM foundation. If the base setup is not visible, the next step is not to call ${actionLabel} a failed event. The next step is to install or confirm the foundation, then run a controlled event test.
+If GA4/GTM is not clearly visible yet, the safe next step is not to say ${actionLabel} failed. The safe next step is to confirm the foundation first, then test the selected action.
 
-Recommended order:
-- Set up GTM or Google tag first.
-- Install and configure GA4, including normal page_view activity.
+What I would check next:
+- Set up or confirm GTM / Google tag first.
+- Configure GA4 and confirm normal page_view activity.
 - Define ${actionLabel} as the business action to test.
 - Test the action in GTM Preview and GA4 DebugView.
 - Confirm final recording inside GA4, GTM, Google Ads, CRM, form or booking records, call-tracking, ecommerce records, or server logs.
@@ -971,20 +978,94 @@ Recommended order:
 
   return `
 Short answer:
-Before event testing, ${companyName} should have GTM or Google tag installed and GA4 configured with normal page_view activity.
+Before event testing, ${companyName} should first have GTM / Google tag installed and GA4 configured with normal page_view activity.
 
-Business impact:
+Why this matters:
 ${impact}
 
-What to verify next:
+What I would check next:
 - Install or confirm GTM / Google tag on the website.
 - Configure GA4 and confirm the base page_view signal.
 - Define ${actionLabel} as the business action to test after setup.
 - Run one controlled test only after the foundation is in place.
 - Confirm the result inside GA4, GTM, Google Ads, CRM, form or booking records, call-tracking, ecommerce records, or server logs.
 
-Important note:
+Quick note:
 This does not mean ${actionLabel} failed. It means event testing should happen after the GA4/GTM foundation is installed and confirmed.
+`.trim();
+}
+
+function isLeadPathQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+  return /\b(lead path|lead journey|lead flow|lead funnel|enquiry path|inquiry path|form path|customer journey|test on the lead|test the lead|what should we test on the lead|which lead path|main lead action)\b/.test(text);
+}
+
+function buildLeadPathAnswer(context: AnyRecord, question: string): string {
+  if (!isLeadPathQuestion(question)) return "";
+
+  const companyName = cleanContextText(context.companyName || context.company_name, "this website");
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the main lead action");
+  const expectedEvent = cleanContextText(context.manualExpectedEvent);
+  const observedEvent = cleanContextText(context.manualObservedEvent);
+  const impact = defaultBusinessImpactForContext(context);
+
+  if (isSetupFirstReportContext(context)) {
+    return `
+Short answer:
+For ${companyName}, test one main lead path first — but only after GTM / Google tag and GA4 page_view activity are confirmed.
+
+Why this matters:
+The lead path is usually the action closest to real business value. If it is not measured clearly, the team may see website traffic but still not know which visits became real enquiries.
+
+What I would check next:
+- Confirm GTM / Google tag is installed.
+- Confirm GA4 is receiving normal page_view activity.
+- Choose the main lead action to test, such as a form, enquiry, booking request, phone click, signup, or demo request.
+- Define the expected GA4 event for that action.
+- After setup, test it in GTM Preview and GA4 DebugView.
+- Match the same test with the CRM, form inbox, booking system, call-tracking platform, or server logs.
+
+Quick note:
+For this setup-first report, I would not call the lead path failed yet. I would confirm the foundation first, then test the lead path properly.
+`.trim();
+  }
+
+  if (isPositiveEventContext(context)) {
+    return `
+Short answer:
+Use the main lead path as a confirmation test. The visible event signal is useful, but the same action still needs to be matched inside the actual accounts and lead records.
+
+Why this matters:
+${impact}
+
+What I would check next:
+- Repeat one clean test on ${actionLabel}.
+- Confirm the expected event${expectedEvent ? ` (${expectedEvent})` : ""} inside GA4 DebugView or Realtime.
+- Confirm the matching GTM trigger and tag.
+- If Google Ads is active, confirm the conversion action receives the same test.
+- Match the test with the CRM, form inbox, booking platform, call-tracking system, ecommerce record, or server logs.
+
+Quick note:
+A positive event signal is a good sign, but the business still needs account-side confirmation before relying on it for reporting or ads optimization.
+`.trim();
+  }
+
+  return `
+Short answer:
+Test the lead path that matters most to the business — usually the form, call, booking, enquiry, signup, demo request, checkout, or purchase path that could become a real lead or sale.
+
+Why this matters:
+${impact}
+
+What I would check next:
+- Choose one primary lead action instead of testing random clicks.
+- Confirm the expected event${expectedEvent ? ` (${expectedEvent})` : ""} in GA4 DebugView or Realtime.
+- Confirm the matching trigger and tag in GTM Preview.
+- If Google Ads is active, check whether the same action maps to the intended conversion action.
+- Match the test with the CRM, form inbox, booking system, call-tracking platform, ecommerce record, or server logs.
+
+Quick note:
+${observedEvent ? `The browser-visible observed result was ${observedEvent}. ` : ""}That does not prove final account-side failure; it means the lead path should be verified end to end with approved access.
 `.trim();
 }
 
@@ -1004,9 +1085,9 @@ function buildBusinessImpactAnswer(context: AnyRecord, question: string): string
   if (isSetupFirstReportContext(context)) {
     return `
 Short answer:
-Yes. A missing or unclear GA4/GTM foundation can affect reporting because the business may not have a reliable base for measuring traffic and future conversion events.
+Yes. If GA4/GTM is not clearly set up, the business may have traffic but not a reliable way to connect that traffic with leads, calls, bookings, or sales.
 
-Business impact:
+Why this matters:
 ${impact}
 
 What this means:
@@ -1023,9 +1104,9 @@ What to verify next:
   if (isPositiveEventContext(context)) {
     return `
 Short answer:
-Yes. A clearly observed event can be a positive signal, but it still needs account-side confirmation before the business relies on it for reporting or ads optimization.
+Yes. A visible event signal is encouraging, but I would still confirm that it is counted correctly inside the actual accounts before using it for reporting or ads optimization.
 
-Business impact:
+Why this matters:
 ${impact}
 
 What this means:
@@ -1041,9 +1122,9 @@ What to verify next:
 
   return `
 Short answer:
-Yes. This can affect business reporting if ${actionLabel} is an important lead, booking, call, signup, checkout, or purchase action.
+Yes. If ${actionLabel} is a real lead, booking, call, signup, checkout, or purchase action, unclear tracking can affect the way the business reads performance.
 
-Business impact:
+Why this matters:
 ${impact}
 
 What this means:
@@ -1211,9 +1292,9 @@ function buildManualEvidenceAnswer(context: AnyRecord, question: string): string
   if (isPositiveEventContext(context)) {
     return `
 Short answer:
-The browser-visible/manual review suggests ${actionLabel} may have produced the expected event signal, but final account-side confirmation is still needed.
+The visible review suggests ${actionLabel} may be sending the expected event signal. That is a good sign, but I would still confirm it inside the actual accounts.
 
-Business impact:
+Why this matters:
 ${businessImpact || defaultBusinessImpactForContext(context)}
 
 What to verify next:
@@ -1230,12 +1311,12 @@ A positive browser-visible signal is helpful, but it should still be checked for
   if (asksObserved && !asksVerification && !asksGoogleAds) {
     return `
 Short answer:
-During the manual ${actionLabel} review, ${expectedEvent ? `${expectedEvent} was the expected event.` : "a matching conversion event was expected."} The browser-visible observed result was ${observedEvent || "not clearly observed"}.
+For ${actionLabel}, the review expected ${expectedEvent || "a matching conversion event"}. From the browser-visible/manual review, the observed result was ${observedEvent || "not clearly observed"}.
 
 What this means:
 This does not prove final account-side tracking failure. It means the expected conversion signal was not clearly visible from the manual browser-side review.
 
-Business impact:
+Why this matters:
 ${businessImpact || defaultBusinessImpactForContext(context)}
 
 Evidence to review:
@@ -1252,7 +1333,7 @@ Final confirmation still requires GA4, GTM, Google Ads, CRM, call-tracking, book
   if (asksGoogleAds) {
     return `
 Short answer:
-Yes, this can matter if ${actionLabel} is used as a Google Ads lead or conversion action.
+Yes. If ${actionLabel} is used for Google Ads reporting or optimization, this is worth checking carefully.
 
 What this means:
 The review expected ${expectedEvent || "a matching conversion event"}, but the browser-visible observed result was ${observedEvent || "not clearly observed"}. If Google Ads depends on this action, reporting and optimization may be less reliable until the final conversion action is confirmed inside the actual accounts.
@@ -1270,7 +1351,7 @@ This is not a final claim that Google Ads is missing conversions. It is a browse
 Short answer:
 The safest next step is to repeat one controlled ${actionLabel} test and compare the same action across GA4, GTM, Google Ads, and the backend lead record.
 
-Business impact:
+Why this matters:
 ${businessImpact || defaultBusinessImpactForContext(context)}
 
 What to verify next:
@@ -1958,6 +2039,32 @@ export async function POST(req: NextRequest) {
         });
       }),
       "setup_first_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const leadPathAnswer = buildLeadPathAnswer(context, question);
+
+  if (leadPathAnswer) {
+    const answer = validateAssistantAnswer(leadPathAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "lead_path_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "lead_path_answer",
       sessionCookieHeaders,
     );
   }

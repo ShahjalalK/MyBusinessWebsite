@@ -32,6 +32,25 @@ export type ReportChatContext = {
   manualAdsSummary: string;
   trackingScore: number | null;
   scoreLabel: string;
+
+  // Optional enriched context injected by the secure report route.
+  // These are intentionally optional so the base Gemini helper stays backward-compatible.
+  reportMode?: string;
+  report_mode?: string;
+  trackingCaseMode?: string;
+  isSetupFirst?: boolean;
+  is_setup_first?: boolean;
+  primaryConversionFocus?: string;
+  manualActionLabel?: string;
+  manualExpectedEvent?: string;
+  manualObservedEvent?: string;
+  manualTool?: string;
+  manualGa4Status?: string;
+  manualGoogleAdsStatus?: string;
+  manualGtmStatus?: string;
+  manualVerificationMessage?: string;
+  manualBusinessImpact?: string;
+  manualEvidenceLine?: string;
 };
 
 export class GeminiApiError extends Error {
@@ -56,6 +75,12 @@ const BLOCKED_PHRASES = [
   "server-side tracking is confirmed",
   "you are losing money",
   "revenue loss is proven",
+];
+
+const ROBOTIC_FALLBACK_PHRASES = [
+  "this review points to one practical question",
+  "marketing reports are only useful",
+  "verify one real test enquiry",
 ];
 
 const GENERIC_LEAD_PATH =
@@ -399,9 +424,28 @@ function formatList(title: string, items: string[]): string {
 }
 
 function contextToPromptBlock(context: ReportChatContext): string {
+  const anyContext = context as AnyRecord;
+  const reportMode = cleanClientText(anyContext.reportMode || anyContext.report_mode || anyContext.trackingCaseMode, "", 160);
+  const manualAction = cleanClientText(anyContext.manualActionLabel || anyContext.primaryConversionFocus, "", 220);
+  const manualExpected = cleanClientText(anyContext.manualExpectedEvent, "", 160);
+  const manualObserved = cleanClientText(anyContext.manualObservedEvent, "", 220);
+  const manualGa4 = cleanClientText(anyContext.manualGa4Status, "", 220);
+  const manualGtm = cleanClientText(anyContext.manualGtmStatus, "", 220);
+  const manualGoogleAds = cleanClientText(anyContext.manualGoogleAdsStatus, "", 220);
+  const manualVerification = cleanClientText(anyContext.manualVerificationMessage, "", 300);
+
   return [
     `Reviewed company/website: ${context.companyName}`,
     `Reviewed domain: ${context.domain || context.websiteUrl || "Not provided"}`,
+    reportMode ? `Report mode: ${reportMode}` : "",
+    anyContext.isSetupFirst || anyContext.is_setup_first ? "Report flag: setup-first tracking foundation review" : "",
+    manualAction ? `Manual action reviewed: ${manualAction}` : "",
+    manualExpected ? `Expected event: ${manualExpected}` : "",
+    manualObserved ? `Observed result: ${manualObserved}` : "",
+    manualGa4 ? `GA4 status: ${manualGa4}` : "",
+    manualGtm ? `GTM status: ${manualGtm}` : "",
+    manualGoogleAds ? `Google Ads status: ${manualGoogleAds}` : "",
+    manualVerification ? `Manual verification note: ${manualVerification}` : "",
     `Report headline: ${context.headline}`,
     context.trackingScore !== null
       ? `Tracking opportunity score: ${Math.round(context.trackingScore)}/100${context.scoreLabel ? ` (${context.scoreLabel})` : ""}`
@@ -518,6 +562,14 @@ function pickContextLine(context: ReportChatContext, pattern: RegExp, fallback =
   return fallback;
 }
 
+function humanSentence(value: string): string {
+  const text = cleanText(value, "", 900);
+  if (!text) return "";
+  const firstLetter = text.search(/[A-Za-z]/);
+  if (firstLetter < 0) return text;
+  return `${text.slice(0, firstLetter)}${text.charAt(firstLetter).toUpperCase()}${text.slice(firstLetter + 1)}`;
+}
+
 function buildStructuredAnswer({
   shortAnswer,
   whyItMatters,
@@ -532,15 +584,208 @@ function buildStructuredAnswer({
   importantNote?: string;
 }): string {
   return [
-    `Short answer: ${shortAnswer}`,
-    whyItMatters ? `Why it matters: ${whyItMatters}` : "",
-    evidence ? `Evidence to review: ${evidence}` : "",
-    nextStep ? `What to verify next: ${nextStep}` : "",
-    importantNote ? `Important note: ${importantNote}` : "",
+    shortAnswer ? `Short answer:\n${humanSentence(shortAnswer)}` : "",
+    whyItMatters ? `Why this matters:\n${humanSentence(whyItMatters)}` : "",
+    evidence ? `Evidence to review:\n${humanSentence(evidence)}` : "",
+    nextStep ? `What I would check next:\n${humanSentence(nextStep)}` : "",
+    importantNote ? `Quick note:\n${humanSentence(importantNote)}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 }
+
+function reportModeFromContext(context: ReportChatContext): string {
+  const anyContext = context as AnyRecord;
+  const trackingCase = getObjectCandidate(anyContext.trackingCase, anyContext.tracking_case);
+  return cleanText(
+    anyContext.reportMode ||
+      anyContext.report_mode ||
+      anyContext.trackingCaseMode ||
+      trackingCase.mode ||
+      trackingCase.reportMode ||
+      trackingCase.report_mode,
+    "",
+    160,
+  ).toLowerCase();
+}
+
+function isSetupFirstContext(context: ReportChatContext): boolean {
+  const anyContext = context as AnyRecord;
+  const mode = reportModeFromContext(context);
+  if (anyContext.isSetupFirst === true || anyContext.is_setup_first === true) return true;
+  if (mode === "tracking_foundation_setup" || mode === "ga4_setup_needed") return true;
+  return /tracking foundation|setup readiness|ga4\/gtm tracking foundation|analytics foundation|ga4\/gtm setup first/i.test(
+    getContextSearchText(context),
+  );
+}
+
+function isPositiveEventContext(context: ReportChatContext): boolean {
+  const anyContext = context as AnyRecord;
+  const mode = reportModeFromContext(context);
+  if (mode === "event_positive_snapshot") return true;
+
+  const expected = cleanText(anyContext.manualExpectedEvent, "", 180).toLowerCase();
+  const observed = cleanText(anyContext.manualObservedEvent, "", 220).toLowerCase();
+  const ga4Status = cleanText(anyContext.manualGa4Status, "", 220).toLowerCase();
+
+  if (expected && observed && observed.includes(expected)) return true;
+  return /\b(yes|observed|appears|clearly observed|event observed|received)\b/.test(ga4Status) &&
+    !/\b(no|not|unclear|missing)\b/.test(ga4Status);
+}
+
+function manualActionLabel(context: ReportChatContext, fallback = "the main customer action"): string {
+  const anyContext = context as AnyRecord;
+  return cleanClientText(anyContext.manualActionLabel || anyContext.primaryConversionFocus, fallback, 180);
+}
+
+function expectedEventLabel(context: ReportChatContext): string {
+  return cleanClientText((context as AnyRecord).manualExpectedEvent, "", 120);
+}
+
+function observedEventLabel(context: ReportChatContext): string {
+  return cleanClientText((context as AnyRecord).manualObservedEvent, "", 180);
+}
+
+function businessImpactForContext(context: ReportChatContext): string {
+  const anyContext = context as AnyRecord;
+  const existing = cleanClientText(anyContext.manualBusinessImpact || context.businessImpact || anyContext.business_impact, "", 520);
+  if (existing) return existing;
+
+  if (isSetupFirstContext(context)) {
+    return "If the analytics foundation is not clear, the team may see website visits but still not know which visits became real enquiries, calls, bookings, or sales.";
+  }
+
+  if (isPositiveEventContext(context)) {
+    return "A visible event signal is a good sign, but the business still needs to confirm whether the same action is counted correctly inside the actual accounts and final lead or sale record.";
+  }
+
+  return "If the main customer action is not recorded clearly, the business may have traffic data without a reliable view of which enquiries, calls, bookings, or purchases actually happened.";
+}
+
+function isLeadPathQuestion(question: string): boolean {
+  return /\b(lead path|lead journey|lead flow|lead funnel|enquiry path|inquiry path|form path|customer journey|test on the lead|test the lead|which lead path|main lead action)\b/i.test(
+    question,
+  );
+}
+
+function isSetupQuestion(question: string): boolean {
+  return /\b(install|installed|setup|set up|foundation|before event|before conversion|event testing|conversion testing|configured after setup|after setup|ga4\/gtm|google tag|tracking foundation|analytics foundation|clearly visible|visible from|public browser|customer action|which action|what action|lead reporting|lead path|why does this matter)\b/i.test(
+    question,
+  );
+}
+
+function isSetupFoundationVisibilityQuestion(question: string): boolean {
+  const mentionsFoundation = /\b(ga4|gtm|google tag|tracking foundation|analytics foundation)\b/i.test(question);
+  const asksVisibility = /\b(was|were|is|are|visible|clearly visible|detected|observed|found|seen|public browser|browser-side|review)\b/i.test(question);
+  return mentionsFoundation && asksVisibility;
+}
+
+function isSetupActionSelectionQuestion(question: string): boolean {
+  const mentionsAction = /\b(customer action|business action|selected action|which action|what action|action should|configured after setup|tested after|test after|after ga4\/gtm setup|after setup)\b/i.test(
+    question,
+  );
+  const asksSelection = /\b(which|what|how should|should be|define|configured|tested|test)\b/i.test(question);
+  return mentionsAction && asksSelection;
+}
+
+function buildLeadPathAnswer(context: ReportChatContext, question: string): string {
+  if (!isLeadPathQuestion(question)) return "";
+
+  const action = manualActionLabel(context, "the main lead action");
+  const expected = expectedEventLabel(context);
+  const observed = observedEventLabel(context);
+  const impact = businessImpactForContext(context);
+
+  if (isSetupFirstContext(context)) {
+    return buildStructuredAnswer({
+      shortAnswer: `For ${context.companyName}, test one main lead path first — but only after GTM / Google tag and GA4 page_view activity are confirmed.`,
+      whyItMatters: "The lead path is usually the action closest to real business value. If it is not measured clearly, the team may see traffic but still not know which visits became real enquiries.",
+      nextStep: "Confirm GTM / Google tag, confirm GA4 page_view activity, choose one main lead action, define the expected GA4 event, then test it in GTM Preview and GA4 DebugView.",
+      importantNote: "For a setup-first report, I would not call the lead path failed yet. I would confirm the foundation first, then test the lead path properly.",
+    });
+  }
+
+  if (isPositiveEventContext(context)) {
+    return buildStructuredAnswer({
+      shortAnswer: `Use ${action} as the confirmation test. The visible event signal is useful, but it still needs to match the actual account and lead records.`,
+      whyItMatters: impact,
+      nextStep: `Repeat one clean test, confirm the expected event${expected ? ` (${expected})` : ""} in GA4, confirm the GTM tag/trigger, check Google Ads if active, and match the same test with the CRM, form inbox, booking tool, call-tracking platform, ecommerce record, or server logs.`,
+      importantNote: "A positive event signal is encouraging, but the business should still confirm correct counting, deduplication, and conversion mapping.",
+    });
+  }
+
+  return buildStructuredAnswer({
+    shortAnswer: "Test the lead path that matters most to the business — usually the form, call, booking, enquiry, signup, demo request, checkout, or purchase path that could become a real lead or sale.",
+    whyItMatters: impact,
+    nextStep: `Choose one primary lead action, confirm the expected event${expected ? ` (${expected})` : ""} in GA4, confirm the matching trigger in GTM Preview, check Google Ads if active, and match the test with the final lead or sale record.`,
+    importantNote: `${observed ? `The browser-visible observed result was ${observed}. ` : ""}That does not prove final account-side failure; it means the lead path should be verified end to end with approved access.`,
+  });
+}
+
+function buildSetupFirstAnswer(context: ReportChatContext, question: string): string {
+  if (!isSetupFirstContext(context) || !isSetupQuestion(question)) return "";
+
+  if (isLeadPathQuestion(question)) return buildLeadPathAnswer(context, question);
+
+  const action = manualActionLabel(context, "the selected customer action");
+  const impact = businessImpactForContext(context);
+
+  if (isSetupFoundationVisibilityQuestion(question)) {
+    return buildStructuredAnswer({
+      shortAnswer: `Not clearly. I would treat ${context.companyName} as a setup-first case: confirm or install GTM / Google tag and GA4 before judging any conversion event.`,
+      whyItMatters: impact,
+      evidence: "GTM / Google tag and GA4 were not clearly proven as a reliable foundation from the public browser-visible review.",
+      nextStep: "Confirm GTM or Google tag, confirm GA4 is receiving normal page_view activity, then define the selected customer action and run one controlled test.",
+      importantNote: `This is a setup-readiness finding, not a verdict that ${action} failed.`,
+    });
+  }
+
+  if (isSetupActionSelectionQuestion(question)) {
+    return buildStructuredAnswer({
+      shortAnswer: `Start with the action that matters most to the business — usually the action that creates a real enquiry, booking, call, checkout, signup, demo request, or sale.`,
+      whyItMatters: "The goal is not to track every click first. The goal is to confirm the action that could become a real lead or revenue opportunity.",
+      nextStep: "Confirm GTM / Google tag and GA4 page_view activity, choose one primary customer action, define the expected GA4 event, then test it in GTM Preview and GA4 DebugView.",
+      importantNote: "This keeps the review focused on business value instead of random website activity.",
+    });
+  }
+
+  return buildStructuredAnswer({
+    shortAnswer: `Before event testing, ${context.companyName} should first have GTM / Google tag installed and GA4 configured with normal page_view activity.`,
+    whyItMatters: impact,
+    nextStep: `Confirm the foundation first, define ${action} as the business action to test, then run one controlled test across GTM Preview, GA4 DebugView, Google Ads if relevant, and the final lead or sale record.`,
+    importantNote: `This does not mean ${action} failed. It means event testing should happen after the GA4/GTM foundation is installed and confirmed.`,
+  });
+}
+
+function isBusinessImpactQuestion(question: string): boolean {
+  return /\b(business impact|impact|why it matters|why does this matter|affect lead|lead reporting|reporting|attribution|optimization|optimisation|campaign decisions|ads decisions|business risk|future campaigns|audience|remarketing|retargeting)\b/i.test(
+    question,
+  );
+}
+
+function buildBusinessImpactAnswer(context: ReportChatContext, question: string): string {
+  if (!isBusinessImpactQuestion(question)) return "";
+
+  const action = manualActionLabel(context, "the main customer action");
+  const impact = businessImpactForContext(context);
+
+  if (isSetupFirstContext(context)) {
+    return buildStructuredAnswer({
+      shortAnswer: "Yes. If GA4/GTM is not clearly set up, the business may have traffic data without a reliable way to connect that traffic with leads, calls, bookings, or sales.",
+      whyItMatters: impact,
+      nextStep: `Confirm GTM / Google tag, confirm GA4 page_view activity, then configure and test ${action}.`,
+      importantNote: "Until the foundation is confirmed, I would avoid judging whether the selected action succeeded or failed as a conversion event.",
+    });
+  }
+
+  return buildStructuredAnswer({
+    shortAnswer: "Yes. Tracking gaps can affect business decisions because the team may not know which visits became real enquiries, calls, bookings, purchases, or sales.",
+    whyItMatters: impact,
+    nextStep: `Verify ${action} end to end in GA4, GTM, Google Ads if relevant, and the final CRM, form, booking, call-tracking, ecommerce, or server record.`,
+    importantNote: "The safe goal is not to prove a dramatic problem from the public page; it is to confirm whether the business can trust the data before using it for reporting or campaign decisions.",
+  });
+}
+
 
 function buildMeaningAnswer(context: ReportChatContext): string {
   return buildStructuredAnswer({
@@ -555,7 +800,7 @@ function buildGoogleAdsImpactAnswer(context: ReportChatContext): string {
   return buildStructuredAnswer({
     shortAnswer: "yes, it can affect Google Ads reporting if the main enquiry or conversion path is not verified properly.",
     whyItMatters: "Google Ads optimisation depends on clean conversion signals. This public review does not prove conversions are missing; it shows that browser-visible evidence should be compared with Google Ads, GA4, GTM, and the final lead record.",
-    nextStep: "verify one real test enquiry from click or form action through to Google Ads/GA4 and the CRM, call-tracking, or server-side record.",
+    nextStep: "run one clean test on the main lead or conversion action, then compare that same action across GA4, GTM, Google Ads if relevant, and the CRM, call-tracking, or server-side record.",
   });
 }
 
@@ -819,6 +1064,16 @@ export function buildDeterministicAnswer(context: ReportChatContext, question = 
 
   if (hasLeadershipIntent(question)) return buildTrackFlowIdentityAnswer(context, question);
   if (/\b(score|rating|priority score|opportunity score|\d{1,3}\s*\/\s*100)\b/i.test(lower)) return buildScoreAnswer(context);
+
+  const setupFirstAnswer = buildSetupFirstAnswer(context, question);
+  if (setupFirstAnswer) return setupFirstAnswer;
+
+  const leadPathAnswer = buildLeadPathAnswer(context, question);
+  if (leadPathAnswer) return leadPathAnswer;
+
+  const businessImpactAnswer = buildBusinessImpactAnswer(context, question);
+  if (businessImpactAnswer) return businessImpactAnswer;
+
   if (/\b(no clear|not clearly observed|conversion event|lead-related event|clear event|safe interaction)\b/i.test(lower)) return buildNoClearConversionEventAnswer(context);
   if (/\b(phone|calls?|call[-\s]?click|click[-\s]?to[-\s]?call|phone_click|call_click)\b/i.test(lower)) return buildPhoneTrackingAnswer(context, question);
   if (/\b(form|forms?|submission|submissions|lead[-\s]?form|enquir|inquir|contact form|quote form|generate_lead|form_submit)\b/i.test(lower)) return buildFormTrackingAnswer(context, question);
@@ -868,12 +1123,17 @@ Your job:
 - Respect the exact question intent. Do not answer a phone-call question with a lead-form answer, and do not answer a form question with a phone-call answer.
 - If the question asks about a topic that is not clearly proven in the report, say what can and cannot be confirmed, then give the correct verification test.
 - Keep answers concise: usually 70-140 words, maximum 170 words.
-- Prefer this structure when useful: Short answer / Why it matters / Next step.
-- Use simple bullets only when helpful.
+- Write like a calm tracking specialist speaking to a client, not like a rigid template.
+- Prefer one short explanation plus a small checklist only when it helps.
+- Vary the labels naturally. Good labels include: Short answer / Why this matters / What I would check next / Quick note.
+- Do not use the same section labels in every answer if a natural paragraph would feel better.
 - Do not use markdown bold, markdown headings, or long lists.
 - Answer in English only. If a saved report field contains Bengali or mixed-language internal notes, rewrite it into polished English or omit it.
 - Do not expose raw internal notes or any non-English evidence phrase.
 - Do not start every answer with "Based on the browser-visible review".
+- Never use robotic fallback phrases like "This review points to one practical question".
+- If the report is setup-first, explain that GA4/GTM foundation should be confirmed before judging event success or failure.
+- If GA4 exists but the expected event is not clearly observed, explain that page activity and business-event tracking are different.
 - Explain browser-visible evidence only when it matters for the answer.
 - When final truth needs account/server access, say that clearly.
 
@@ -926,19 +1186,21 @@ export function buildSafeFallbackAnswer(context: ReportChatContext, question = "
     ? `Evidence to review: ${safeProof}`
     : "Evidence to review: the saved report highlights browser-visible tracking signals that should be checked against the actual account/backend records.";
 
-  return [
-    `This review points to one practical question for ${context.companyName}: ${context.mainFinding}`,
-    `Why it matters: marketing reports are only useful when the main enquiry path is recorded clearly across the website, analytics, ad platform, and final lead record.`,
-    evidenceLine,
-    `Next step: verify one real test enquiry in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics, and the CRM or server-side record.`,
-  ].join("\n\n");
+  return buildStructuredAnswer({
+    shortAnswer: `For ${context.companyName}, I would keep the review focused on the main customer action and the evidence needed to confirm it.`,
+    whyItMatters: businessImpactForContext(context),
+    evidence: evidenceLine.replace(/^Evidence to review:\s*/i, ""),
+    nextStep: "Confirm the main customer action in GTM Preview and GA4 DebugView, then match the same test with Google Ads if relevant and the final CRM, form, booking, call-tracking, ecommerce, or server record.",
+    importantNote: "This is a safe verification path. It should not be treated as proof that tracking is broken or that conversions are missing.",
+  });
 }
 
 export function filterUnsafeAnswer(answer: string, context: ReportChatContext, question = ""): string {
   const cleaned = stripMarkdownNoise(answer);
   const lower = cleaned.toLowerCase();
   const hasBlockedPhrase = BLOCKED_PHRASES.some((phrase) => lower.includes(phrase));
-  if (hasBlockedPhrase) return buildSafeFallbackAnswer(context, question);
+  const hasRoboticFallbackPhrase = ROBOTIC_FALLBACK_PHRASES.some((phrase) => lower.includes(phrase));
+  if (hasBlockedPhrase || hasRoboticFallbackPhrase) return buildSafeFallbackAnswer(context, question);
   return cleaned.trim();
 }
 
