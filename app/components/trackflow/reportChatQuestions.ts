@@ -255,8 +255,27 @@ function getSetupFirstQuestionRules(context?: ReportChatQuestionContext): Questi
   return rules.filter((rule) => isSafeReportQuestion(rule.question));
 }
 
+function humanizeAuditSnapshotQuestion(question: string, context?: ReportChatQuestionContext): string {
+  const clean = cleanText(question);
+  const observedMatch = clean.match(/^Was\s+(.+?)\s+observed\s+after\s+the\s+(.+?)\s+review\?$/i);
+  if (observedMatch) {
+    const expected = cleanText(context?.manualExpectedEvent || observedMatch[1]);
+    const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || observedMatch[2]);
+    if (expected && action) return `Was the expected ${expected} event clearly observed for ${action}?`;
+  }
+
+  if (/^What should we test on the lead path\?$/i.test(clean)) {
+    const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "");
+    return action ? `Should ${action} be the first lead path to verify?` : "Which lead path should we test first?";
+  }
+
+  return clean;
+}
+
 function getAuditSnapshotQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
-  const questions = uniqueQuestions(context?.auditSnapshotQuestions || []).filter(isSafeReportQuestion).slice(0, 4);
+  const questions = uniqueQuestions((context?.auditSnapshotQuestions || []).map((question) => humanizeAuditSnapshotQuestion(question, context)))
+    .filter(isSafeReportQuestion)
+    .slice(0, 4);
 
   return questions.map((question, index) => ({
     question,

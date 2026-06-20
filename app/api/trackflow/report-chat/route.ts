@@ -860,6 +860,148 @@ function defaultBusinessImpactForContext(context: AnyRecord = {}): string {
 
   return "If the main customer action is not recorded clearly, the business may have traffic data without a reliable view of which enquiries, calls, bookings, or purchases actually happened. That can make lead reporting, attribution, and Google Ads optimization less reliable.";
 }
+function manualEventSearchText(context: AnyRecord = {}): string {
+  return [
+    context.manualActionLabel,
+    context.primaryConversionFocus,
+    context.manualExpectedEvent,
+    context.manualObservedEvent,
+    context.manualGa4Status,
+    context.manualGoogleAdsStatus,
+    context.manualGtmStatus,
+    context.manualVerificationMessage,
+    context.manualOperatorNote,
+    context.manualEvidenceLine,
+  ]
+    .map((item) => cleanContextText(item))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function hasManualEventEvidence(context: AnyRecord = {}): boolean {
+  return Boolean(
+    cleanContextText(context.manualActionLabel || context.primaryConversionFocus) ||
+      cleanContextText(context.manualExpectedEvent) ||
+      cleanContextText(context.manualObservedEvent) ||
+      cleanContextText(context.manualGa4Status) ||
+      cleanContextText(context.manualGoogleAdsStatus) ||
+      cleanContextText(context.manualGtmStatus),
+  );
+}
+
+function isManualPhoneAction(context: AnyRecord = {}): boolean {
+  return /\b(phone|call|phone_call|phone click|call click|click_to_call|click-to-call|tel:|call-tracking|call tracking)\b/.test(
+    manualEventSearchText(context),
+  );
+}
+
+function isManualFormAction(context: AnyRecord = {}): boolean {
+  return /\b(form|lead form|contact|enquir|inquir|submit|submission|generate_lead|form_submit)\b/.test(manualEventSearchText(context));
+}
+
+function isManualBookingAction(context: AnyRecord = {}): boolean {
+  return /\b(booking|appointment|schedule|reservation|calendar)\b/.test(manualEventSearchText(context));
+}
+
+function isManualEcommerceAction(context: AnyRecord = {}): boolean {
+  return /\b(checkout|purchase|order|cart|transaction|ecommerce|e-commerce|add_to_cart|begin_checkout)\b/.test(
+    manualEventSearchText(context),
+  );
+}
+
+function manualFinalRecordTargets(context: AnyRecord = {}): string {
+  if (isManualPhoneAction(context)) return "call-tracking platform, CRM, Google Ads call conversion, or server logs";
+  if (isManualFormAction(context)) return "CRM, form inbox, marketing automation platform, or server logs";
+  if (isManualBookingAction(context)) return "booking platform, CRM, calendar/appointment record, or server logs";
+  if (isManualEcommerceAction(context)) return "ecommerce order record, payment/order system, Google Ads, or server logs";
+  return "CRM, form inbox, booking system, call-tracking platform, ecommerce record, or server logs";
+}
+
+function observedLooksLikePageViewOnly(context: AnyRecord = {}): boolean {
+  const observed = normalizeIntentText(context.manualObservedEvent);
+  const expected = normalizeIntentText(context.manualExpectedEvent);
+  return /\bpage[_\s-]?view\b/.test(observed) && (!expected || !observed.includes(expected));
+}
+
+function observedComparisonLabel(value: unknown): string {
+  const text = cleanContextText(value);
+  if (/^page[_\s-]?view\s+only$/i.test(text) || /^only\s+page[_\s-]?view$/i.test(text)) return "page_view";
+  return text;
+}
+
+function manualExpectedVsObservedLine(context: AnyRecord = {}): string {
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
+  const expectedEvent = cleanContextText(context.manualExpectedEvent, "the expected business event");
+  const observedEvent = cleanContextText(context.manualObservedEvent, "not clearly observed");
+
+  if (observedLooksLikePageViewOnly(context)) {
+    return `For ${actionLabel}, GA4/page activity was visible as ${observedEvent}, but the expected ${expectedEvent} event was not clearly observed from the browser-side review.`;
+  }
+
+  return `For ${actionLabel}, the expected event was ${expectedEvent}. The browser-visible observed result was ${observedEvent}.`;
+}
+
+function manualActionBusinessImpact(context: AnyRecord = {}): string {
+  const existing = cleanContextText(context.manualBusinessImpact || context.businessImpact || context.business_impact);
+  if (existing) return existing;
+
+  if (isManualPhoneAction(context)) {
+    return "If phone calls are a real lead source, page_view alone is not enough to understand call performance. GA4 and Google Ads need a clear phone-click or call-tracking signal before the data can be trusted for reporting or optimization.";
+  }
+
+  if (isManualFormAction(context)) {
+    return "If forms create real enquiries, the business needs more than page activity. The form action should create a clear event that can be matched with the final lead record.";
+  }
+
+  if (isManualBookingAction(context)) {
+    return "If bookings matter to the business, the booking action should be tracked as a clear event and matched with the actual booking record before reporting or ads decisions rely on it.";
+  }
+
+  if (isManualEcommerceAction(context)) {
+    return "If purchases or checkout actions matter, the business needs reliable event and order matching before using the data for revenue reporting or ad optimization.";
+  }
+
+  return defaultBusinessImpactForContext(context);
+}
+
+function manualActionSpecificLeadPathAnswer(context: AnyRecord): string {
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the main lead action");
+  const expectedEvent = cleanContextText(context.manualExpectedEvent);
+  const observedEvent = cleanContextText(context.manualObservedEvent);
+  const finalTargets = manualFinalRecordTargets(context);
+  const impact = manualActionBusinessImpact(context);
+  const observedLine = manualExpectedVsObservedLine(context);
+
+  const actionType = isManualPhoneAction(context)
+    ? "phone/call path"
+    : isManualFormAction(context)
+      ? "form/enquiry path"
+      : isManualBookingAction(context)
+        ? "booking path"
+        : isManualEcommerceAction(context)
+          ? "checkout or purchase path"
+          : "lead path";
+
+  return `
+Short answer:
+For this report, I would test ${actionLabel} first because that is the ${actionType} already reviewed. ${observedLine}
+
+Why this matters:
+${impact}
+
+What I would check next:
+- Repeat one clean ${actionLabel} test.
+- In GA4 DebugView or Realtime, confirm whether ${expectedEvent || "the expected business event"} appears instead of just ${observedComparisonLabel(observedEvent) || "a generic page event"}.
+- In GTM Preview, confirm the matching trigger and tag fire once for the real action.
+- If Google Ads is active, check whether the same action maps to the intended conversion action.
+- Match the same test interaction with the ${finalTargets}.
+
+Quick note:
+This is not a setup-first answer. It is a GA4/event-verification answer: page activity can be visible while the actual business event still needs confirmation.
+`.trim();
+}
+
 
 function isSetupFirstQuestion(question: string): boolean {
   const text = normalizeIntentText(question);
@@ -1043,11 +1185,15 @@ What I would check next:
 - Confirm the expected event${expectedEvent ? ` (${expectedEvent})` : ""} inside GA4 DebugView or Realtime.
 - Confirm the matching GTM trigger and tag.
 - If Google Ads is active, confirm the conversion action receives the same test.
-- Match the test with the CRM, form inbox, booking platform, call-tracking system, ecommerce record, or server logs.
+- Match the same test interaction with the ${manualFinalRecordTargets(context)}.
 
 Quick note:
 A positive event signal is a good sign, but the business still needs account-side confirmation before relying on it for reporting or ads optimization.
 `.trim();
+  }
+
+  if (hasManualEventEvidence(context) && (expectedEvent || observedEvent)) {
+    return manualActionSpecificLeadPathAnswer(context);
   }
 
   return `
@@ -1098,6 +1244,25 @@ What to verify next:
 - GA4 configuration and page_view activity.
 - ${actionLabel} setup after the foundation is ready.
 - Final recording in GA4, GTM, Google Ads, CRM, form/booking records, call-tracking, or server logs.
+`.trim();
+  }
+
+  if (hasManualEventEvidence(context) && (expectedEvent || observedEvent) && !isPositiveEventContext(context)) {
+    return `
+Short answer:
+Yes. For this report, the key point is not whether GA4 loaded at all; it is whether ${actionLabel} created the expected ${expectedEvent || "business event"} signal. The browser-visible result was ${observedEvent || "not clearly observed"}.
+
+Why this matters:
+${manualActionBusinessImpact(context)}
+
+What this means:
+Page activity can be visible while the actual lead or conversion event still needs confirmation. If the final account data does not match the real customer action, reporting and campaign decisions may be based on incomplete conversion data.
+
+What to verify next:
+- Check the event in GA4 DebugView or Realtime.
+- Check the matching trigger and tag in GTM Preview.
+- Check Google Ads conversion diagnostics if ads are active.
+- Match the same test interaction with the ${manualFinalRecordTargets(context)}.
 `.trim();
   }
 
@@ -1266,13 +1431,15 @@ function buildManualEvidenceAnswer(context: AnyRecord, question: string): string
   const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
   const expectedEvent = cleanContextText(context.manualExpectedEvent);
   const observedEvent = cleanContextText(context.manualObservedEvent);
-  const businessImpact = cleanContextText(context.manualBusinessImpact || context.businessImpact);
+  const businessImpact = manualActionBusinessImpact(context);
   const verificationMessage = cleanContextText(context.manualVerificationMessage);
   const tool = cleanContextText(context.manualTool, "manual browser-side review");
   const ga4Status = cleanContextText(context.manualGa4Status, "Unclear / needs verification");
   const googleAdsStatus = cleanContextText(context.manualGoogleAdsStatus, "Unclear / needs verification");
   const gtmStatus = cleanContextText(context.manualGtmStatus, "Unclear / needs verification");
   const operatorNote = cleanContextText(context.manualOperatorNote);
+  const finalTargets = manualFinalRecordTargets(context);
+  const observedLine = manualExpectedVsObservedLine(context);
   const q = normalizeIntentText(question);
 
   if (!expectedEvent && !observedEvent && !context.manualEvidenceLine) return "";
@@ -1282,12 +1449,14 @@ function buildManualEvidenceAnswer(context: AnyRecord, question: string): string
     (expectedEvent && q.includes(expectedEvent.toLowerCase())) ||
     (observedEvent && q.includes(observedEvent.toLowerCase()));
 
+  const asksGa4 = /\b(ga4|google analytics|debugview|debug view|realtime|real time|inside ga4)\b/.test(q);
+  const asksGtm = /\b(gtm|tag manager|preview|gtm preview|trigger|tag fires|tag firing)\b/.test(q);
   const asksGoogleAds =
     /\bgoogle ads|ads reporting|ad reporting|optimization|optimisation|optimize|optimise|campaign|conversion diagnostics\b/.test(q);
   const asksVerification =
     /\bwhat should|check|verify|verified|confirm|inside ga4|inside gtm|gtm preview|ga4 debugview|next step|first\b/.test(q);
 
-  if (!asksObserved && !asksGoogleAds && !asksVerification) return "";
+  if (!asksObserved && !asksGa4 && !asksGtm && !asksGoogleAds && !asksVerification) return "";
 
   if (isPositiveEventContext(context)) {
     return `
@@ -1295,38 +1464,79 @@ Short answer:
 The visible review suggests ${actionLabel} may be sending the expected event signal. That is a good sign, but I would still confirm it inside the actual accounts.
 
 Why this matters:
-${businessImpact || defaultBusinessImpactForContext(context)}
+${businessImpact}
 
 What to verify next:
 - Confirm the event appears correctly in GA4 DebugView or Realtime.
 - Confirm the GTM trigger and tag conditions match ${actionLabel}.
 - Confirm Google Ads conversion diagnostics if this action is used for ads optimization.
-- Match the same test with the CRM, form inbox, booking system, call-tracking platform, ecommerce record, or server logs.
+- Match the same test interaction with the ${finalTargets}.
 
 Important note:
 A positive browser-visible signal is helpful, but it should still be checked for correct counting, deduplication, and account-side conversion mapping.
 `.trim();
   }
 
+  if (asksGa4) {
+    return `
+Short answer:
+Inside GA4, I would check whether the expected ${expectedEvent || "business event"} appears for ${actionLabel}. In this review, ${observedLine}
+
+Why this matters:
+${businessImpact}
+
+What I would check next:
+- Open GA4 DebugView or Realtime during one clean ${actionLabel} test.
+- Confirm whether ${expectedEvent || "the expected event"} appears, not just ${observedComparisonLabel(observedEvent) || "a generic page event"}.
+- Check the event parameters, source/medium, and conversion/key-event setting.
+- Check whether the event is duplicated, renamed, or filtered by consent or configuration.
+
+Quick note:
+A visible page_view can show that GA4 page activity exists, but it does not confirm the actual business action event.
+`.trim();
+  }
+
+  if (asksGtm) {
+    return `
+Short answer:
+In GTM Preview, I would check whether the tag and trigger for ${actionLabel} fire when the real action happens. The key question is whether the expected ${expectedEvent || "business event"} is sent, not just whether the page loads.
+
+Why this matters:
+${businessImpact}
+
+What I would check next:
+- Start GTM Preview on the reviewed page.
+- Repeat one clean ${actionLabel} interaction.
+- Confirm the matching trigger fires once.
+- Confirm the GA4 event tag sends ${expectedEvent || "the expected event"} with the right parameters.
+- Then match the same test in GA4 and the ${finalTargets}.
+
+Quick note:
+If the review only saw ${observedComparisonLabel(observedEvent) || "a page-level signal"}, GTM Preview should be used to see exactly where the business-event signal is missing or not firing.
+`.trim();
+  }
+
   if (asksObserved && !asksVerification && !asksGoogleAds) {
     return `
 Short answer:
-For ${actionLabel}, the review expected ${expectedEvent || "a matching conversion event"}. From the browser-visible/manual review, the observed result was ${observedEvent || "not clearly observed"}.
+For ${actionLabel}, the expected event was ${expectedEvent || "a matching conversion event"}. ${observedLine}
 
 What this means:
-This does not prove final account-side tracking failure. It means the expected conversion signal was not clearly visible from the manual browser-side review.
+This does not prove final account-side tracking failure. It means GA4/page activity and the actual business-event signal should be treated separately and verified inside the accounts.
 
 Why this matters:
-${businessImpact || defaultBusinessImpactForContext(context)}
+${businessImpact}
 
 Evidence to review:
 - Tool/source: ${tool}.
-- GA4 event: ${ga4Status}.
+- Expected GA4 event: ${expectedEvent || "A matching business event"}.
+- Observed browser-visible result: ${observedEvent || "Not clearly observed"}.
+- GA4 status note: ${ga4Status}.
 - Google Ads conversion: ${googleAdsStatus}.
 - GTM trigger: ${gtmStatus}.${operatorNote ? `\n- Operator note: ${operatorNote}` : ""}
 
 Important note:
-Final confirmation still requires GA4, GTM, Google Ads, CRM, call-tracking, booking engine, or server-side records.
+Final confirmation still requires GA4, GTM, Google Ads, the ${finalTargets}, or server-side records.
 `.trim();
   }
 
@@ -1349,25 +1559,24 @@ This is not a final claim that Google Ads is missing conversions. It is a browse
   if (asksVerification || manualStatusNeedsVerification(ga4Status) || manualStatusNeedsVerification(googleAdsStatus) || manualStatusNeedsVerification(gtmStatus)) {
     return `
 Short answer:
-The safest next step is to repeat one controlled ${actionLabel} test and compare the same action across GA4, GTM, Google Ads, and the backend lead record.
+The safest next step is to repeat one controlled ${actionLabel} test and compare the same action across GA4, GTM, Google Ads if relevant, and the final business record.
 
 Why this matters:
-${businessImpact || defaultBusinessImpactForContext(context)}
+${businessImpact}
 
 What to verify next:
 - In GTM Preview, confirm whether a matching trigger fires for ${actionLabel}.
-- In GA4 DebugView, confirm whether ${expectedEvent || "the expected conversion event"} appears, not only ${observedEvent || "a generic page event"}.
-- In Google Ads, check whether a matching conversion action receives the same test.
-- In the CRM, form inbox, booking system, call-tracking platform, or server logs, match the submitted test lead.
+- In GA4 DebugView, confirm whether ${expectedEvent || "the expected conversion event"} appears, not just ${observedComparisonLabel(observedEvent) || "a generic page event"}.
+- In Google Ads, check whether a matching conversion action receives the same test if ads are active.
+- Match the same test interaction with the ${finalTargets}.
 
 Important note:
-${verificationMessage || "Browser-visible evidence is useful context, but final recording still requires account/server access."}
+${verificationMessage || "Browser-visible evidence is useful context, but final recording still requires approved account/server access."}
 `.trim();
   }
 
   return "";
 }
-
 
 function clampIntentScore(value: unknown, fallback = 0): number {
   const numeric = Number(value);

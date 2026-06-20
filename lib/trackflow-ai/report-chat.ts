@@ -661,6 +661,119 @@ function businessImpactForContext(context: ReportChatContext): string {
 
   return "If the main customer action is not recorded clearly, the business may have traffic data without a reliable view of which enquiries, calls, bookings, or purchases actually happened.";
 }
+function manualEventSearchText(context: ReportChatContext): string {
+  const anyContext = context as AnyRecord;
+  return [
+    anyContext.manualActionLabel,
+    anyContext.primaryConversionFocus,
+    anyContext.manualExpectedEvent,
+    anyContext.manualObservedEvent,
+    anyContext.manualGa4Status,
+    anyContext.manualGoogleAdsStatus,
+    anyContext.manualGtmStatus,
+    anyContext.manualVerificationMessage,
+    anyContext.manualEvidenceLine,
+  ]
+    .map((item) => cleanText(item, "", 220))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function hasManualEventEvidence(context: ReportChatContext): boolean {
+  const anyContext = context as AnyRecord;
+  return Boolean(
+    cleanText(anyContext.manualActionLabel || anyContext.primaryConversionFocus, "", 120) ||
+      cleanText(anyContext.manualExpectedEvent, "", 120) ||
+      cleanText(anyContext.manualObservedEvent, "", 160) ||
+      cleanText(anyContext.manualGa4Status, "", 160) ||
+      cleanText(anyContext.manualGoogleAdsStatus, "", 160) ||
+      cleanText(anyContext.manualGtmStatus, "", 160),
+  );
+}
+
+function isManualPhoneAction(context: ReportChatContext): boolean {
+  return /\b(phone|call|phone_call|phone click|call click|click_to_call|click-to-call|tel:|call-tracking|call tracking)\b/.test(
+    manualEventSearchText(context),
+  );
+}
+
+function isManualFormAction(context: ReportChatContext): boolean {
+  return /\b(form|lead form|contact|enquir|inquir|submit|submission|generate_lead|form_submit)\b/.test(manualEventSearchText(context));
+}
+
+function isManualBookingAction(context: ReportChatContext): boolean {
+  return /\b(booking|appointment|schedule|reservation|calendar)\b/.test(manualEventSearchText(context));
+}
+
+function isManualEcommerceAction(context: ReportChatContext): boolean {
+  return /\b(checkout|purchase|order|cart|transaction|ecommerce|e-commerce|add_to_cart|begin_checkout)\b/.test(
+    manualEventSearchText(context),
+  );
+}
+
+function manualFinalRecordTargets(context: ReportChatContext): string {
+  if (isManualPhoneAction(context)) return "call-tracking platform, CRM, Google Ads call conversion, or server logs";
+  if (isManualFormAction(context)) return "CRM, form inbox, marketing automation platform, or server logs";
+  if (isManualBookingAction(context)) return "booking platform, CRM, calendar/appointment record, or server logs";
+  if (isManualEcommerceAction(context)) return "ecommerce order record, payment/order system, Google Ads, or server logs";
+  return "CRM, form inbox, booking system, call-tracking platform, ecommerce record, or server logs";
+}
+
+function observedLooksLikePageViewOnly(context: ReportChatContext): boolean {
+  const observed = cleanText((context as AnyRecord).manualObservedEvent, "", 180).toLowerCase();
+  const expected = cleanText((context as AnyRecord).manualExpectedEvent, "", 120).toLowerCase();
+  return /\bpage[_\s-]?view\b/.test(observed) && (!expected || !observed.includes(expected));
+}
+
+function observedComparisonLabel(value: unknown): string {
+  const text = cleanText(value, "", 180);
+  if (/^page[_\s-]?view\s+only$/i.test(text) || /^only\s+page[_\s-]?view$/i.test(text)) return "page_view";
+  return text;
+}
+
+function manualExpectedVsObservedLine(context: ReportChatContext): string {
+  const action = manualActionLabel(context, "the selected customer action");
+  const expected = expectedEventLabel(context) || "the expected business event";
+  const observed = observedEventLabel(context) || "not clearly observed";
+  if (observedLooksLikePageViewOnly(context)) {
+    return `For ${action}, GA4/page activity was visible as ${observed}, but the expected ${expected} event was not clearly observed from the browser-side review.`;
+  }
+  return `For ${action}, the expected event was ${expected}. The browser-visible observed result was ${observed}.`;
+}
+
+function manualActionBusinessImpact(context: ReportChatContext): string {
+  const existing = cleanClientText((context as AnyRecord).manualBusinessImpact || context.businessImpact || (context as AnyRecord).business_impact, "", 520);
+  if (existing) return existing;
+  if (isManualPhoneAction(context)) return "If phone calls are a real lead source, page_view alone is not enough to understand call performance. GA4 and Google Ads need a clear phone-click or call-tracking signal before the data can be trusted for reporting or optimization.";
+  if (isManualFormAction(context)) return "If forms create real enquiries, the business needs more than page activity. The form action should create a clear event that can be matched with the final lead record.";
+  if (isManualBookingAction(context)) return "If bookings matter to the business, the booking action should be tracked as a clear event and matched with the actual booking record before reporting or ads decisions rely on it.";
+  if (isManualEcommerceAction(context)) return "If purchases or checkout actions matter, the business needs reliable event and order matching before using the data for revenue reporting or ad optimization.";
+  return businessImpactForContext(context);
+}
+
+function manualActionSpecificLeadPathAnswer(context: ReportChatContext): string {
+  const action = manualActionLabel(context, "the main lead action");
+  const expected = expectedEventLabel(context);
+  const observed = observedEventLabel(context);
+  const actionType = isManualPhoneAction(context)
+    ? "phone/call path"
+    : isManualFormAction(context)
+      ? "form/enquiry path"
+      : isManualBookingAction(context)
+        ? "booking path"
+        : isManualEcommerceAction(context)
+          ? "checkout or purchase path"
+          : "lead path";
+
+  return buildStructuredAnswer({
+    shortAnswer: `For this report, I would test ${action} first because that is the ${actionType} already reviewed. ${manualExpectedVsObservedLine(context)}`,
+    whyItMatters: manualActionBusinessImpact(context),
+    nextStep: `Repeat one clean ${action} test, confirm whether ${expected || "the expected business event"} appears in GA4 instead of just ${observedComparisonLabel(observed) || "a generic page event"}, check the matching GTM trigger and tag, check Google Ads if active, and match the same test interaction with the ${manualFinalRecordTargets(context)}.`,
+    importantNote: "This is not a setup-first answer. It is a GA4/event-verification answer: page activity can be visible while the actual business event still needs confirmation.",
+  });
+}
+
 
 function isLeadPathQuestion(question: string): boolean {
   return /\b(lead path|lead journey|lead flow|lead funnel|enquiry path|inquiry path|form path|customer journey|test on the lead|test the lead|which lead path|main lead action)\b/i.test(
@@ -712,6 +825,10 @@ function buildLeadPathAnswer(context: ReportChatContext, question: string): stri
       nextStep: `Repeat one clean test, confirm the expected event${expected ? ` (${expected})` : ""} in GA4, confirm the GTM tag/trigger, check Google Ads if active, and match the same test with the CRM, form inbox, booking tool, call-tracking platform, ecommerce record, or server logs.`,
       importantNote: "A positive event signal is encouraging, but the business should still confirm correct counting, deduplication, and conversion mapping.",
     });
+  }
+
+  if (hasManualEventEvidence(context) && (expected || observed)) {
+    return manualActionSpecificLeadPathAnswer(context);
   }
 
   return buildStructuredAnswer({
@@ -775,6 +892,15 @@ function buildBusinessImpactAnswer(context: ReportChatContext, question: string)
       whyItMatters: impact,
       nextStep: `Confirm GTM / Google tag, confirm GA4 page_view activity, then configure and test ${action}.`,
       importantNote: "Until the foundation is confirmed, I would avoid judging whether the selected action succeeded or failed as a conversion event.",
+    });
+  }
+
+  if (hasManualEventEvidence(context) && (expectedEventLabel(context) || observedEventLabel(context)) && !isPositiveEventContext(context)) {
+    return buildStructuredAnswer({
+      shortAnswer: `Yes. For this report, the key point is not whether GA4 loaded at all; it is whether ${action} created the expected ${expectedEventLabel(context) || "business event"} signal. The browser-visible result was ${observedEventLabel(context) || "not clearly observed"}.`,
+      whyItMatters: manualActionBusinessImpact(context),
+      nextStep: `Check the event in GA4 DebugView or Realtime, check the matching trigger and tag in GTM Preview, check Google Ads if active, and match the same test interaction with the ${manualFinalRecordTargets(context)}.`,
+      importantNote: "Page activity can be visible while the actual lead or conversion event still needs account-side confirmation.",
     });
   }
 
@@ -944,6 +1070,18 @@ function buildEcommerceTrackingAnswer(context: ReportChatContext, question: stri
 }
 
 function buildGa4Answer(context: ReportChatContext, question: string): string {
+  const expected = expectedEventLabel(context);
+  const observed = observedEventLabel(context);
+
+  if (!isSetupFirstContext(context) && hasManualEventEvidence(context) && (expected || observed)) {
+    return buildStructuredAnswer({
+      shortAnswer: `Inside GA4, I would check whether the expected ${expected || "business event"} appears for ${manualActionLabel(context)}. ${manualExpectedVsObservedLine(context)}`,
+      whyItMatters: manualActionBusinessImpact(context),
+      nextStep: `Open GA4 DebugView or Realtime during one clean test, confirm whether ${expected || "the expected event"} appears instead of just ${observedComparisonLabel(observed) || "a generic page event"}, then check parameters, conversion/key-event status, source/medium, and duplicate counting.`,
+      importantNote: "A visible page_view can show that GA4 page activity exists, but it does not confirm the actual business action event.",
+    });
+  }
+
   const mentionsOnlyPageView = /\b(only\s+)?page[_\s-]?view\b/i.test(question) || contextMentions(context, /\bpage[_\s-]?view\b/i);
   const evidence = pickContextLine(
     context,
@@ -964,6 +1102,18 @@ function buildGa4Answer(context: ReportChatContext, question: string): string {
 }
 
 function buildGtmAnswer(context: ReportChatContext): string {
+  const expected = expectedEventLabel(context);
+  const observed = observedEventLabel(context);
+
+  if (!isSetupFirstContext(context) && hasManualEventEvidence(context) && (expected || observed)) {
+    return buildStructuredAnswer({
+      shortAnswer: `In GTM Preview, I would check whether the tag and trigger for ${manualActionLabel(context)} fire when the real action happens. The key question is whether ${expected || "the expected business event"} is sent, not just whether the page loads.`,
+      whyItMatters: manualActionBusinessImpact(context),
+      nextStep: `Start GTM Preview, repeat one clean ${manualActionLabel(context)} interaction, confirm the matching trigger fires once, confirm the GA4 event tag sends ${expected || "the expected event"}, then match the same test in GA4 and the ${manualFinalRecordTargets(context)}.`,
+      importantNote: `If the review only saw ${observedComparisonLabel(observed) || "a page-level signal"}, GTM Preview should show exactly where the business-event signal is missing, blocked, renamed, or not firing.`,
+    });
+  }
+
   const evidence = pickContextLine(
     context,
     /\b(gtm|tag manager|container|preview)\b/i,
