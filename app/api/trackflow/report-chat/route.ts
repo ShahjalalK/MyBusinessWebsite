@@ -79,11 +79,13 @@ Premium chat formatting rules:
 - Use clear spacing with short section labels when helpful:
   Short answer:
   What this means:
+  Business impact:
   What to verify next:
   Important note:
 - Use simple hyphen bullets or numbered steps when listing items.
 - Do not use Markdown bold markers, tables, code blocks, emojis, or long wall-of-text paragraphs.
 - Do not invent evidence. Do not claim final account-level truth without approved access.
+- When a finding affects reporting, leads, ads optimization, audience building, or business decisions, explain the practical business impact in safe language.
 
 Trust, access, security, and service-scope rules:
 - Never ask the client to share passwords.
@@ -532,10 +534,35 @@ function buildSafestNextStepAnswer(context: AnyRecord, question: string): string
   const companyName = String(context.companyName || context.company_name || "this account").trim() || "this account";
   const domain = String(context.domain || "").trim();
   const target = companyName === "this account" ? "this tracking review" : `${companyName}${domain ? ` (${domain})` : ""}`;
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
+  const impact = defaultBusinessImpactForContext(context);
+
+  if (isSetupFirstReportContext(context)) {
+    return `
+Short answer:
+The safest next step for ${target} is to confirm the GA4/GTM foundation first, then test ${actionLabel} after setup.
+
+Business impact:
+${impact}
+
+Recommended order:
+- Confirm or install GTM / Google tag.
+- Configure GA4 and confirm normal page_view activity.
+- Define ${actionLabel} as the business event to test.
+- Run one controlled test in GTM Preview and GA4 DebugView after setup.
+- Match final recording inside GA4, GTM, Google Ads, CRM, form/booking records, call-tracking, ecommerce records, or server logs.
+
+Important note:
+Do not treat the selected action as a failed event before the tracking foundation is clearly installed and tested.
+`.trim();
+  }
 
   return `
 Short answer:
 The safest next step for ${target} is to verify one high-priority conversion path end to end before making final tracking or campaign decisions.
+
+Business impact:
+${impact}
 
 Recommended order:
 - Choose one important action to test, such as a lead form, phone call, booking, or contact enquiry.
@@ -545,14 +572,10 @@ Recommended order:
 - Check Google Ads conversion diagnostics or recent conversion activity if Google Ads is part of the setup.
 - Match the same test against the CRM, call-tracking platform, booking tool, or server-side record where relevant.
 
-Why it matters:
-A public page review can show visible tracking evidence, but final confirmation should happen inside GA4, GTM, Google Ads, CRM, call-tracking, or server-side logs.
-
 Important note:
 Avoid campaign optimization or budget decisions until the conversion path is confirmed with approved account-level access.
 `.trim();
 }
-
 function isTrackingReviewIntentQuestion(question: string): boolean {
   const text = normalizeIntentText(question);
 
@@ -757,6 +780,222 @@ function cleanContextText(value: unknown, fallback = ""): string {
   return text || fallback;
 }
 
+function reportModeFromContext(context: AnyRecord = {}): string {
+  const trackingCase = getObjectCandidate(context.trackingCase, context.tracking_case);
+  return cleanContextText(
+    context.reportMode ||
+      context.report_mode ||
+      trackingCase.mode ||
+      trackingCase.reportMode ||
+      trackingCase.report_mode,
+  ).toLowerCase();
+}
+
+function contextSearchText(context: AnyRecord = {}): string {
+  const parts = [
+    context.companyName,
+    context.company_name,
+    context.domain,
+    context.headline,
+    context.mainFinding,
+    context.main_finding,
+    context.businessImpact,
+    context.business_impact,
+    context.primaryConversionFocus,
+    context.manualActionLabel,
+    context.manualExpectedEvent,
+    context.manualObservedEvent,
+    context.manualGa4Status,
+    context.manualGoogleAdsStatus,
+    context.manualGtmStatus,
+    context.manualVerificationMessage,
+    context.manualEvidenceLine,
+    context.reportMode,
+    context.report_mode,
+  ];
+
+  for (const key of ["whatChecked", "proofPoints", "recommendations", "auditSnapshotQuestions"]) {
+    const value = context[key];
+    if (Array.isArray(value)) parts.push(...value);
+  }
+
+  return parts.map((item) => cleanContextText(item)).filter(Boolean).join(" ").toLowerCase();
+}
+
+function isSetupFirstReportContext(context: AnyRecord = {}): boolean {
+  const mode = reportModeFromContext(context);
+  if (context.isSetupFirst === true || context.is_setup_first === true) return true;
+  if (mode === "tracking_foundation_setup" || mode === "ga4_setup_needed") return true;
+  const text = contextSearchText(context);
+  return /tracking foundation|setup readiness|ga4\/gtm tracking foundation|analytics foundation|ga4\/gtm setup first/.test(text);
+}
+
+function isPositiveEventContext(context: AnyRecord = {}): boolean {
+  const mode = reportModeFromContext(context);
+  if (mode === "event_positive_snapshot") return true;
+  const expected = cleanContextText(context.manualExpectedEvent).toLowerCase();
+  const observed = cleanContextText(context.manualObservedEvent).toLowerCase();
+  const ga4Status = normalizeIntentText(context.manualGa4Status);
+  if (expected && observed && observed.includes(expected)) return true;
+  return /\b(yes|observed|appears|clearly observed|event observed|received)\b/.test(ga4Status) && !/\b(no|not|unclear|missing)\b/.test(ga4Status);
+}
+
+function defaultBusinessImpactForContext(context: AnyRecord = {}): string {
+  const existing = cleanContextText(context.manualBusinessImpact || context.businessImpact || context.business_impact);
+  if (existing) return existing;
+
+  if (isSetupFirstReportContext(context)) {
+    return "Without a clear GA4/GTM foundation, the business may not know which pages, enquiries, forms, calls, bookings, or campaigns are actually producing leads. That can make reporting, remarketing audiences, and future Google Ads decisions less reliable.";
+  }
+
+  if (isPositiveEventContext(context)) {
+    return "A positive event signal is helpful because it suggests the customer action may be measurable, but the business should still confirm account-side recording before relying on the data for reporting, bidding, or client decisions.";
+  }
+
+  return "If the main customer action is not recorded clearly, the business may see website activity without knowing which enquiries, bookings, calls, or purchases are actually being generated. That can make lead reporting, attribution, and Google Ads optimization less reliable.";
+}
+
+function isSetupFirstQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+  return /\b(install|installed|setup|set up|foundation|before event|before conversion|event testing|conversion testing|configured after setup|after setup|ga4\/gtm|google tag|tracking foundation|analytics foundation|not clearly detected|not clearly observed|lead reporting|business impact|why does this matter|why it matters)\b/.test(text);
+}
+
+function buildSetupFirstAnswer(context: AnyRecord, question: string): string {
+  if (!isSetupFirstReportContext(context) || !isSetupFirstQuestion(question)) return "";
+
+  const companyName = cleanContextText(context.companyName || context.company_name, "this website");
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
+  const impact = defaultBusinessImpactForContext(context);
+  const q = normalizeIntentText(question);
+
+  if (/\b(where|final recording|confirmed|confirm|account|server|crm|google ads|debugview|gtm preview)\b/.test(q)) {
+    return `
+Short answer:
+For ${companyName}, final recording should be confirmed inside the actual tracking and business systems after GA4/GTM setup is in place.
+
+Business impact:
+${impact}
+
+What to verify next:
+- Confirm GTM or Google tag is installed correctly.
+- Confirm GA4 is configured and normal page_view activity is visible.
+- Configure ${actionLabel} as the business action to test after setup.
+- Verify the test in GTM Preview, GA4 DebugView, Google Ads conversion diagnostics if ads are used, and the CRM, form inbox, booking system, call-tracking platform, ecommerce records, or server logs.
+
+Important note:
+This setup-first review should not be treated as a failed-event claim. Event testing comes after the tracking foundation is installed and visible.
+`.trim();
+  }
+
+  if (/\b(why|before|business impact|lead reporting|matter|affect|risk)\b/.test(q)) {
+    return `
+Short answer:
+Setup should come before conversion testing because the tracking foundation needs to exist before a form, call, booking, or purchase event can be judged fairly.
+
+Business impact:
+${impact}
+
+What this means:
+The public browser-side review did not clearly detect a GA4/GTM foundation. If the base setup is not visible, the next step is not to call ${actionLabel} a failed event. The next step is to install or confirm the foundation, then run a controlled event test.
+
+Recommended order:
+- Set up GTM or Google tag first.
+- Install and configure GA4, including normal page_view activity.
+- Define ${actionLabel} as the business action to test.
+- Test the action in GTM Preview and GA4 DebugView.
+- Confirm final recording inside GA4, GTM, Google Ads, CRM, form or booking records, call-tracking, ecommerce records, or server logs.
+`.trim();
+  }
+
+  return `
+Short answer:
+Before event testing, ${companyName} should have GTM or Google tag installed and GA4 configured with normal page_view activity.
+
+Business impact:
+${impact}
+
+What to verify next:
+- Install or confirm GTM / Google tag on the website.
+- Configure GA4 and confirm the base page_view signal.
+- Define ${actionLabel} as the business action to test after setup.
+- Run one controlled test only after the foundation is in place.
+- Confirm the result inside GA4, GTM, Google Ads, CRM, form or booking records, call-tracking, ecommerce records, or server logs.
+
+Important note:
+This does not mean ${actionLabel} failed. It means event testing should happen after the GA4/GTM foundation is installed and confirmed.
+`.trim();
+}
+
+function isBusinessImpactQuestion(question: string): boolean {
+  const text = normalizeIntentText(question);
+  return /\b(business impact|impact|why it matters|why does this matter|affect lead|lead reporting|reporting|attribution|optimization|optimisation|campaign decisions|ads decisions|business risk|risk to business|future campaigns|audience|audiences|remarketing|retargeting)\b/.test(text);
+}
+
+function buildBusinessImpactAnswer(context: AnyRecord, question: string): string {
+  if (!isBusinessImpactQuestion(question)) return "";
+
+  const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the main customer action");
+  const expectedEvent = cleanContextText(context.manualExpectedEvent);
+  const observedEvent = cleanContextText(context.manualObservedEvent);
+  const impact = defaultBusinessImpactForContext(context);
+
+  if (isSetupFirstReportContext(context)) {
+    return `
+Short answer:
+Yes. A missing or unclear GA4/GTM foundation can affect reporting because the business may not have a reliable base for measuring traffic and future conversion events.
+
+Business impact:
+${impact}
+
+What this means:
+Until GA4/GTM setup is confirmed, the business should avoid judging whether ${actionLabel} is working as a conversion event. The foundation should be installed or confirmed first, then the selected action should be tested.
+
+What to verify next:
+- GTM or Google tag installation.
+- GA4 configuration and page_view activity.
+- ${actionLabel} setup after the foundation is ready.
+- Final recording in GA4, GTM, Google Ads, CRM, form/booking records, call-tracking, or server logs.
+`.trim();
+  }
+
+  if (isPositiveEventContext(context)) {
+    return `
+Short answer:
+Yes. A clearly observed event can be a positive signal, but it still needs account-side confirmation before the business relies on it for reporting or ads optimization.
+
+Business impact:
+${impact}
+
+What this means:
+The browser-visible/manual review suggests ${actionLabel} may be measurable. The next business question is whether the same event is correctly counted once, mapped to the right conversion action, and connected to the final lead or sale record.
+
+What to verify next:
+- Confirm the event inside GA4 DebugView or Realtime.
+- Confirm the GTM trigger and tag conditions.
+- Confirm Google Ads conversion diagnostics if ads are active.
+- Match the same test with the CRM, booking tool, form inbox, call-tracking platform, ecommerce record, or server logs.
+`.trim();
+  }
+
+  return `
+Short answer:
+Yes. This can affect business reporting if ${actionLabel} is an important lead, booking, call, signup, checkout, or purchase action.
+
+Business impact:
+${impact}
+
+What this means:
+${expectedEvent ? `The expected event was ${expectedEvent}. ` : ""}${observedEvent ? `The observed result was ${observedEvent}. ` : ""}If the final account-side data does not match the real customer action, the business may make decisions from incomplete or misleading conversion data.
+
+What to verify next:
+- Check the event in GA4 DebugView or Realtime.
+- Check the trigger and tag in GTM Preview.
+- Check Google Ads conversion diagnostics if ads are active.
+- Match the same test with the CRM, form inbox, booking system, call-tracking platform, ecommerce record, or server logs.
+`.trim();
+}
+
+
 function getManualEvidenceChatContext(report: AnyRecord = {}): AnyRecord {
   const manualHero = getObjectCandidate(report.manualEvidenceHero, report.manual_evidence_hero);
   const manual = getObjectCandidate(report.manualConversionEvidence, report.manual_conversion_evidence);
@@ -879,6 +1118,8 @@ function manualStatusNeedsVerification(value: unknown): boolean {
 }
 
 function buildManualEvidenceAnswer(context: AnyRecord, question: string): string {
+  if (isSetupFirstReportContext(context)) return "";
+
   const actionLabel = cleanContextText(context.manualActionLabel || context.primaryConversionFocus, "the selected customer action");
   const expectedEvent = cleanContextText(context.manualExpectedEvent);
   const observedEvent = cleanContextText(context.manualObservedEvent);
@@ -905,13 +1146,35 @@ function buildManualEvidenceAnswer(context: AnyRecord, question: string): string
 
   if (!asksObserved && !asksGoogleAds && !asksVerification) return "";
 
+  if (isPositiveEventContext(context)) {
+    return `
+Short answer:
+The browser-visible/manual review suggests ${actionLabel} may have produced the expected event signal, but final account-side confirmation is still needed.
+
+Business impact:
+${businessImpact || defaultBusinessImpactForContext(context)}
+
+What to verify next:
+- Confirm the event appears correctly in GA4 DebugView or Realtime.
+- Confirm the GTM trigger and tag conditions match ${actionLabel}.
+- Confirm Google Ads conversion diagnostics if this action is used for ads optimization.
+- Match the same test with the CRM, form inbox, booking system, call-tracking platform, ecommerce record, or server logs.
+
+Important note:
+A positive browser-visible signal is helpful, but it should still be checked for correct counting, deduplication, and account-side conversion mapping.
+`.trim();
+  }
+
   if (asksObserved && !asksVerification && !asksGoogleAds) {
     return `
 Short answer:
-During the manual ${actionLabel} review, ${expectedEvent ? `${expectedEvent} was the expected event.` : "a matching conversion event was expected."} The browser-visible observed result was ${observedEvent || "not clearly confirmed"}.
+During the manual ${actionLabel} review, ${expectedEvent ? `${expectedEvent} was the expected event.` : "a matching conversion event was expected."} The browser-visible observed result was ${observedEvent || "not clearly observed"}.
 
 What this means:
 This does not prove final account-side tracking failure. It means the expected conversion signal was not clearly visible from the manual browser-side review.
+
+Business impact:
+${businessImpact || defaultBusinessImpactForContext(context)}
 
 Evidence to review:
 - Tool/source: ${tool}.
@@ -930,7 +1193,7 @@ Short answer:
 Yes, this can matter if ${actionLabel} is used as a Google Ads lead or conversion action.
 
 What this means:
-The review expected ${expectedEvent || "a matching conversion event"}, but the browser-visible observed result was ${observedEvent || "not clearly confirmed"}. If Google Ads depends on this action, reporting and optimization may be less reliable until the final conversion action is confirmed inside the actual accounts.
+The review expected ${expectedEvent || "a matching conversion event"}, but the browser-visible observed result was ${observedEvent || "not clearly observed"}. If Google Ads depends on this action, reporting and optimization may be less reliable until the final conversion action is confirmed inside the actual accounts.
 
 Why it matters:
 ${businessImpact || "Google Ads optimization works best when the selected conversion action is recorded clearly and consistently."}
@@ -944,6 +1207,9 @@ This is not a final claim that Google Ads is missing conversions. It is a browse
     return `
 Short answer:
 The safest next step is to repeat one controlled ${actionLabel} test and compare the same action across GA4, GTM, Google Ads, and the backend lead record.
+
+Business impact:
+${businessImpact || defaultBusinessImpactForContext(context)}
 
 What to verify next:
 - In GTM Preview, confirm whether a matching trigger fires for ${actionLabel}.
@@ -1604,6 +1870,58 @@ export async function POST(req: NextRequest) {
         });
       }),
       "access_security_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const setupFirstAnswer = buildSetupFirstAnswer(context, question);
+
+  if (setupFirstAnswer) {
+    const answer = validateAssistantAnswer(setupFirstAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "setup_first_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "setup_first_answer",
+      sessionCookieHeaders,
+    );
+  }
+
+  const businessImpactAnswer = buildBusinessImpactAnswer(context, question);
+
+  if (businessImpactAnswer) {
+    const answer = validateAssistantAnswer(businessImpactAnswer, context, question);
+
+    return streamResponse(
+      makeTextStream(answer, async () => {
+        await logSafely({
+          sessionId,
+          reportToken: token,
+          question,
+          answer,
+          mode: "smart_fallback",
+          status: "business_impact_answer",
+          domainSlug: context.domainSlug,
+          domain: context.domain,
+          companyName: context.companyName,
+          reportUrl,
+          visit,
+        });
+      }),
+      "business_impact_answer",
       sessionCookieHeaders,
     );
   }

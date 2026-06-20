@@ -16,6 +16,8 @@ export type ReportChatQuestionContext = {
   primaryConversionFocus?: string;
   businessType?: string;
   reportMode?: string;
+  report_mode?: string;
+  trackingCaseMode?: string;
   isSetupFirst?: boolean;
   whatChecked?: string[];
   proofPoints?: string[];
@@ -80,6 +82,8 @@ const BROAD_FALLBACK_POOL = [
   "What should we check in Google Ads?",
   "What should we test on the lead path?",
   "Can this affect lead reporting?",
+  "How could this affect business decisions?",
+  "Why does this matter for future campaigns?",
   "What is the safest next step?",
   "Is it risky to give account access?",
   "Can we start with read-only access?",
@@ -166,6 +170,8 @@ function contextToSearchText(context?: ReportChatQuestionContext): string {
     context.primaryConversionFocus,
     context.businessType,
     context.reportMode,
+    context.report_mode,
+    context.trackingCaseMode,
     context.isSetupFirst ? 'setup-first' : '',
     context.manualAdsSummary,
     context.manualActionLabel,
@@ -205,22 +211,45 @@ function isSafeReportQuestion(value: string): boolean {
 
 
 function isSetupFirstContext(context?: ReportChatQuestionContext): boolean {
-  const mode = cleanText(context?.reportMode || "").toLowerCase();
+  const mode = cleanText(context?.reportMode || context?.report_mode || context?.trackingCaseMode || "").toLowerCase();
   if (context?.isSetupFirst) return true;
   if (mode === "tracking_foundation_setup" || mode === "ga4_setup_needed") return true;
   const text = contextToSearchText(context);
   return /tracking foundation|setup readiness|ga4\/gtm tracking foundation|analytics foundation/.test(text);
 }
 
+function isPositiveEventContext(context?: ReportChatQuestionContext): boolean {
+  const mode = cleanText(context?.reportMode || context?.report_mode || context?.trackingCaseMode || "").toLowerCase();
+  if (mode === "event_positive_snapshot") return true;
+  const expected = cleanText(context?.manualExpectedEvent || "").toLowerCase();
+  const observed = cleanText(context?.manualObservedEvent || "").toLowerCase();
+  const ga4Status = cleanText(context?.manualGa4Status || "").toLowerCase();
+  if (expected && observed && observed.includes(expected)) return true;
+  return /\b(yes|observed|appears|clearly observed|event observed|received)\b/.test(ga4Status) && !/\b(no|not|unclear|missing)\b/.test(ga4Status);
+}
+
+function hasManualEventReviewContext(context?: ReportChatQuestionContext): boolean {
+  if (isSetupFirstContext(context)) return false;
+  return Boolean(
+    cleanText(context?.manualActionLabel || context?.primaryConversionFocus) ||
+      cleanText(context?.manualExpectedEvent) ||
+      cleanText(context?.manualObservedEvent) ||
+      cleanText(context?.manualGa4Status) ||
+      cleanText(context?.manualGoogleAdsStatus) ||
+      cleanText(context?.manualGtmStatus),
+  );
+}
+
 function getSetupFirstQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
   if (!isSetupFirstContext(context)) return [];
   const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "");
   const rules: QuestionRule[] = [
-    { question: "What needs to be installed before event testing?", priority: 205 },
-    { question: "Why should setup come before conversion testing?", priority: 202 },
-    { question: action ? `How should ${action} be configured after setup?` : "Which customer action should be configured after setup?", priority: 199 },
-    { question: "Where should final recording be confirmed after setup?", priority: 196 },
-    { question: "What is the safest next step for this review?", priority: 190 },
+    { question: "What needs to be installed before event testing?", priority: 212 },
+    { question: "Why should setup come before conversion testing?", priority: 209 },
+    { question: "How could this affect lead reporting?", priority: 206 },
+    { question: action ? `Which customer action should be tested after GA4/GTM setup?` : "Which customer action should be tested after GA4/GTM setup?", priority: 203 },
+    { question: "Where should final recording be confirmed after setup?", priority: 200 },
+    { question: "What is the safest next step for this review?", priority: 196 },
   ];
   return rules.filter((rule) => isSafeReportQuestion(rule.question));
 }
@@ -235,43 +264,84 @@ function getAuditSnapshotQuestionRules(context?: ReportChatQuestionContext): Que
 }
 
 function getManualEvidenceQuestionRules(context?: ReportChatQuestionContext): QuestionRule[] {
-  if (isSetupFirstContext(context)) return [];
+  if (!hasManualEventReviewContext(context)) return [];
   const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "the selected action");
   const expected = cleanText(context?.manualExpectedEvent || "");
   const observed = cleanText(context?.manualObservedEvent || "");
   const rules: QuestionRule[] = [];
 
+  if (isPositiveEventContext(context)) {
+    pushQuestion(
+      rules,
+      Boolean(action),
+      `Which evidence suggests the event was observed for ${action}?`,
+      198,
+    );
+    pushQuestion(
+      rules,
+      true,
+      "What still needs account-side confirmation?",
+      195,
+    );
+    pushQuestion(
+      rules,
+      Boolean(context?.manualGoogleAdsStatus || context?.businessImpact),
+      "Should Google Ads conversion recording still be checked?",
+      192,
+    );
+    pushQuestion(
+      rules,
+      true,
+      "Could duplicate or incorrect conversion setup still be an issue?",
+      188,
+    );
+    return rules.filter((rule) => isSafeReportQuestion(rule.question));
+  }
+
   pushQuestion(
     rules,
     Boolean(action && expected),
-    `Was ${expected} observed after the ${action} review?`,
-    188,
+    `Was the expected ${expected} event clearly observed for ${action}?`,
+    198,
   );
 
   pushQuestion(
     rules,
     Boolean(observed),
-    `Why does the observed result (${observed}) matter for Google Ads reporting?`,
-    187,
+    `What does the observed result (${observed}) mean in this review?`,
+    195,
   );
 
   pushQuestion(
     rules,
     Boolean(action),
-    `What should be checked inside GA4, GTM, and Google Ads for this ${action}?`,
-    186,
+    `What should be checked in GA4 DebugView for ${action}?`,
+    192,
   );
 
   pushQuestion(
     rules,
-    Boolean(context?.manualGoogleAdsStatus || context?.businessImpact),
-    "Could this affect optimization if ads are active?",
-    185,
+    Boolean(action),
+    "What should be checked in GTM Preview and Google Ads diagnostics?",
+    190,
+  );
+
+  pushQuestion(
+    rules,
+    Boolean(context?.manualGoogleAdsStatus || context?.businessImpact || observed),
+    "How could this affect lead reporting or ads optimization?",
+    188,
+  );
+
+  pushQuestion(
+    rules,
+    true,
+    "Should this be confirmed before campaign optimization?",
+    184,
   );
 
   return rules.filter((rule) => isSafeReportQuestion(rule.question));
 }
-
 function getScoreQuestion(context?: ReportChatQuestionContext): QuestionRule[] {
   const hasScore =
     context?.score !== undefined ||
@@ -413,7 +483,21 @@ function buildContextQuestionRules(context?: ReportChatQuestionContext): Questio
   pushQuestion(
     rules,
     hasAny(text, [/\bno clear\b.*\bconversion\b/, /\bno clear\b.*\bevent\b/, /\bnot clearly observed\b/, /\bno lead-related\b/]),
-    "What does not clearly confirmed mean here?",
+    "What does not clearly observed mean in this review?",
+    97,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\blead reporting\b/, /\bbusiness impact\b/, /\boptimization\b/, /\boptimisation\b/, /\bcampaign decisions\b/, /\battribution\b/, /\bnot clearly observed\b/]),
+    "How could this affect lead reporting?",
+    95,
+  );
+
+  pushQuestion(
+    rules,
+    hasAny(text, [/\bgoogle ads\b/, /\bcampaigns?\b/, /\boptimization\b/, /\boptimisation\b/, /\bad performance\b/]),
+    "Why does this matter for future campaigns?",
     93,
   );
 
@@ -666,6 +750,7 @@ function buildSafestNextStepFollowUpRules(_text: string): QuestionRule[] {
     { question: "What should we check in GTM Preview?", priority: 94 },
     { question: "What should we check in Google Ads?", priority: 92 },
     { question: "What should we test on the lead path?", priority: 90 },
+    { question: "How could this affect lead reporting?", priority: 88 },
     { question: "Can we book a verification call?", priority: 86 },
   ];
 }
@@ -736,6 +821,7 @@ function buildFollowUpRules(latestAssistantContent: string, context?: ReportChat
 
   rules.push(
     { question: "What is the safest next step?", priority: 84 },
+    { question: "How could this affect lead reporting?", priority: 83 },
     { question: "Why does this need account access?", priority: 82 },
     { question: "Should tracking be fixed before campaign changes?", priority: 78 },
     { question: "Can we book a verification call?", priority: 76 },
