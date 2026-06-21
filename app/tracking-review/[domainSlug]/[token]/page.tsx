@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_METADATA: Metadata = {
   title: "Private Tracking Review | TrackFlow Pro",
-  description: "A private browser-visible tracking review prepared by TrackFlow Pro.",
+  description: "A private tracking review prepared by TrackFlow Pro.",
   robots: {
     index: false,
     follow: false,
@@ -79,20 +79,20 @@ type SecureEvidenceSectionCopy = {
 };
 
 const DEFAULT_CHECKS = [
-  "GA4 and Google Tag Manager browser-visible signals",
+  "GA4 and Google Tag Manager signals checked with Tag Assistant",
   "Google Ads conversion and remarketing request signals",
   "Lead form or enquiry-path tracking indicators",
   "Server-side or first-party tracking-like request signals",
 ];
 
 const DEFAULT_PROOF_POINTS = [
-  "The review is based on public browser-visible evidence captured from the website.",
-  "Final account-level confirmation requires access to GA4, GTM, Google Ads, CRM, or server logs.",
+  "The review is based on Tag Assistant and browser test evidence captured during the review.",
+  "Approved account access can confirm the same signals in GA4, GTM, Google Ads, CRM, or server records.",
 ];
 
 const DEFAULT_RECOMMENDATIONS = [
   "Verify the main lead journey inside GTM Preview, GA4 DebugView, and Google Ads conversion diagnostics.",
-  "Confirm final lead recording inside the ad account, analytics property, CRM, or server logs before making final tracking decisions.",
+  "Compare the same test inside GA4, GTM, Google Ads, CRM, or server records before making final tracking decisions.",
 ];
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_TRACKFLOW_CONTACT_EMAIL || "shahjalal@trackflowpro.com";
@@ -108,9 +108,9 @@ const MAILING_ADDRESS =
   "Business mailing address available on request";
 
 const TRUST_SIGNALS = [
-  "Prepared from public browser-visible evidence",
+  "Reviewed with Tag Assistant and browser testing",
   "No GA4, GTM, Google Ads, CRM, or server login was used",
-  "Final confirmation requires account-level access",
+  "Approved account check can confirm final recording",
 ];
 
 
@@ -204,10 +204,10 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
     watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
     embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`,
     thumbnailUrl: getYouTubeThumbnailUrl(videoId),
-    title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short browser-side evidence walkthrough"),
+    title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short Tag Assistant evidence walkthrough"),
     description: cleanText(
       report.evidenceVideoDescription || report.evidence_video_description || raw.description,
-      "This optional video shows browser-visible evidence from the review. Final confirmation still requires GA4, GTM, Google Ads, CRM, or server access.",
+      "This optional video shows the review evidence captured during the test. Approved account access can confirm the same recording in GA4, GTM, Google Ads, CRM, or server records.",
     ),
   };
 }
@@ -218,7 +218,7 @@ const SECURE_EVIDENCE_ROLE_LABELS: Record<string, string> = {
   tag_assistant_after_submission: "Tag Assistant after submission",
   ga4_debugview_or_gtm_preview: "GA4 DebugView / GTM Preview",
   google_ads_diagnostics: "Google Ads diagnostics",
-  proof_screenshot: "Browser-side proof screenshot",
+  proof_screenshot: "Review proof screenshot",
 };
 
 function normalizeSecureEvidenceRole(value: unknown): string {
@@ -229,7 +229,7 @@ function normalizeSecureEvidenceRole(value: unknown): string {
     .replace(/^_+|_+$/g, "") || "proof_screenshot";
 }
 
-function getSecureEvidenceRoleLabel(role: string, fallback = "Browser-side proof screenshot"): string {
+function getSecureEvidenceRoleLabel(role: string, fallback = "Review proof screenshot"): string {
   return SECURE_EVIDENCE_ROLE_LABELS[normalizeSecureEvidenceRole(role)] || fallback;
 }
 
@@ -321,12 +321,12 @@ function getSecureEvidenceSectionCopy({
   if (isSetupFirst) {
     return {
       eyebrow: "Tracking foundation evidence",
-      title: "GA4/GTM foundation should be confirmed first",
+      title: "GA4/GTM foundation should be set up first",
       introText:
-        "These screenshots support a setup-first review. They show the browser-visible setup context before any conversion-event judgment is made.",
-      noteTitle: "Setup-first scope",
+        "These screenshots support a setup-first review. They show the tracking setup context captured during the Tag Assistant/browser review before any conversion-event judgment is made.",
+      noteTitle: "Setup-first note",
       noteText:
-        "No event failure is being claimed here. First confirm the GA4/GTM foundation, then run a controlled test for the selected business action.",
+        "No event failure is being claimed here. First set up or confirm the GA4/GTM foundation, then run one controlled test for the selected business action.",
       summaryCards: [
         { label: "Report mode", value: cleanMode || "Setup first" },
         { label: "Event judgment", value: "Not claimed yet" },
@@ -337,19 +337,19 @@ function getSecureEvidenceSectionCopy({
   }
 
   return {
-    eyebrow: "Browser-side proof screenshots",
+    eyebrow: "Tag Assistant proof screenshots",
     title: "Visual evidence from the manual test",
     introText:
-      "These screenshots show the form/success state and the Tag Assistant view captured during the manual browser-side review.",
+      "These screenshots show the form/success state and the Tag Assistant view captured during the manual test.",
     noteTitle: "How to read this evidence",
     noteText:
-      "Use these images as visual context. Final recording still needs confirmation inside GA4, GTM, Google Ads, and the relevant lead records.",
+      "Use these images as visual context from the test. The same action can be confirmed later inside GA4, GTM, Google Ads, and the relevant lead records.",
     summaryCards: [
       { label: "Review focus", value: actionLabel },
-      { label: "Evidence type", value: "Browser-side screenshots" },
-      { label: "Final check", value: "Account confirmation needed" },
+      { label: "Evidence type", value: "Tag Assistant screenshots" },
+      { label: "Next check", value: "Confirm in accounts" },
     ],
-    analyticsLabel: "Browser-side manual test proof screenshots visible",
+    analyticsLabel: "Tag Assistant manual test proof screenshots visible",
   };
 }
 
@@ -450,16 +450,16 @@ function getActionSpecificManualDisclaimer(rawDisclaimer: unknown, actionKey: st
 
   const dynamicDisclaimer =
     actionKey === "phone_call"
-      ? "This is browser-visible manual evidence only. Final call tracking should be confirmed inside GA4, GTM, Google Ads call conversions, the call-tracking platform, CRM, or server records."
+      ? "This review used manual Tag Assistant/browser testing. Call tracking can be confirmed inside GA4, GTM, Google Ads call conversions, the call-tracking platform, CRM, or server records."
       : actionKey === "booking"
-        ? "This is browser-visible manual evidence only. Final booking recording should be confirmed inside GA4, GTM, Google Ads, the booking platform, CRM, or server records."
+        ? "This review used manual Tag Assistant/browser testing. Booking recording can be confirmed inside GA4, GTM, Google Ads, the booking platform, CRM, or server records."
         : actionKey === "ecommerce"
-          ? "This is browser-visible manual evidence only. Final cart, checkout, or purchase recording should be confirmed inside GA4, GTM, Google Ads, the ecommerce platform, order records, or server records."
+          ? "This review used manual Tag Assistant/browser testing. Cart, checkout, or purchase recording can be confirmed inside GA4, GTM, Google Ads, the ecommerce platform, order records, or server records."
           : actionKey === "whatsapp"
-            ? "This is browser-visible manual evidence only. Final WhatsApp enquiry recording should be confirmed inside GA4, GTM, Google Ads, WhatsApp or CRM records, and server records where relevant."
+            ? "This review used manual Tag Assistant/browser testing. WhatsApp enquiry recording can be confirmed inside GA4, GTM, Google Ads, WhatsApp or CRM records, and server records where relevant."
             : actionKey === "email_click"
-              ? "This is browser-visible manual evidence only. Final email enquiry recording should be confirmed inside GA4, GTM, Google Ads, the CRM, inbox records, or server records."
-              : "This is browser-visible manual evidence only. Final lead/form submission recording should be confirmed inside GA4, GTM, Google Ads, the CRM, form inbox, email notification records, or server records.";
+              ? "This review used manual Tag Assistant/browser testing. Email enquiry recording can be confirmed inside GA4, GTM, Google Ads, the CRM, inbox records, or server records."
+              : "This review used manual Tag Assistant/browser testing. Lead or form submission recording can be confirmed inside GA4, GTM, Google Ads, the CRM, form inbox, email notification records, or server records.";
 
   if (provided && !isGenericManualEvidenceDisclaimer(provided)) return provided;
   return dynamicDisclaimer;
@@ -491,7 +491,7 @@ function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: R
     verificationMessage: cleanText(
       raw.verificationMessage || raw.verification_message,
       expectedEvent
-        ? `Expected event to verify: ${expectedEvent}. Observed result: ${observedEvent || "Not clearly observed"}. This should be confirmed inside GA4, GTM, Google Ads, and the relevant backend/account systems.`
+        ? `Expected event: ${expectedEvent}. Observed result: ${observedEvent || "Not clearly observed"}. Check the same action inside GA4, GTM, Google Ads, and the relevant lead records.`
         : "The selected conversion action should be verified inside GA4, GTM, Google Ads, and the relevant backend/account systems.",
     ),
     businessImpact: cleanText(
@@ -931,7 +931,7 @@ function alertSignupVerificationPlan(): string[] {
     "Run one controlled alert signup / notification form test from the website.",
     "Confirm sign_up, subscribe, generate_lead, or form_submit signals in GTM Preview, GA4 DebugView, and Google Ads diagnostics.",
     "Match the same test with the CRM, form platform, SMS/email platform, or server records where relevant.",
-    "Separate browser-visible evidence from final account-side confirmation.",
+    "Use the screenshots as test evidence, then compare the same action with account or lead records.",
   ];
 }
 
@@ -950,8 +950,8 @@ function alertSignupCheckedItems(existing: string[]): string[] {
 function alertSignupSnapshotQuestions(): string[] {
   return [
     "Are alert signup and notification form actions recorded clearly inside the relevant accounts?",
-    "Which browser-visible tracking signals were observed?",
-    "What needs confirmation inside GA4, GTM, Google Ads, CRM, SMS/email platform, or server logs?",
+    "Which tracking signals were observed during the test?",
+    "What should be checked inside GA4, GTM, Google Ads, CRM, SMS/email platform, or server records?",
   ];
 }
 
@@ -1076,12 +1076,12 @@ function getManualAdsTransparency(report: Record<string, any>): ManualAdsTranspa
 function getManualAdsSummary(manualAds: ManualAdsTransparency): string {
   if (!manualAds.checked) return "";
   if (manualAds.adsFound === "yes") {
-    return "Google Ads activity was manually checked through Ads Transparency. This adds paid-traffic context, but final conversion recording still requires account-level verification.";
+    return "Google Ads activity was manually checked through Ads Transparency. This adds paid-traffic context; the matching conversion action should still be checked in the ad account.";
   }
   if (manualAds.adsFound === "no") {
     return "Ads Transparency was manually checked and no active Google Ads were noted at the time of review. Browser-visible tracking evidence should still be verified where needed.";
   }
-  return "Ads Transparency was manually checked, but the ad activity result was left as unsure. Account-level verification is still recommended before making final tracking decisions.";
+  return "Ads Transparency was manually checked, but the ad activity result was left as unsure. Check the ad account before making final tracking decisions.";
 }
 
 function formatDate(value: unknown): string {
@@ -2008,7 +2008,7 @@ function SecureEvidenceGalleryExperienceScript() {
           button: button,
           src: text(button.getAttribute("data-evidence-src")),
           caption: text(button.getAttribute("data-evidence-caption")) || "Evidence screenshot",
-          role: text(button.getAttribute("data-evidence-role")) || "Browser-side proof screenshot",
+          role: text(button.getAttribute("data-evidence-role")) || "Review proof screenshot",
           pageUrl: text(button.getAttribute("data-evidence-page-url")),
           index: index
         };
@@ -2034,7 +2034,7 @@ function SecureEvidenceGalleryExperienceScript() {
       }
       if (title) title.textContent = item.caption;
       if (role) role.textContent = item.role;
-      if (page) page.textContent = item.pageUrl ? "Page URL: " + item.pageUrl : "Browser-side screenshot evidence";
+      if (page) page.textContent = item.pageUrl ? "Page URL: " + item.pageUrl : "Review screenshot evidence";
       if (counter) counter.textContent = String(state.index + 1) + " / " + String(state.items.length);
       if (prev) prev.disabled = state.items.length < 2;
       if (next) next.disabled = state.items.length < 2;
@@ -2198,7 +2198,7 @@ function ReportFooter() {
 
         <div className="mt-8 flex min-w-0 flex-col gap-3 border-t border-slate-200 pt-6 text-xs font-semibold text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <p className="break-words">© {new Date().getFullYear()} TrackFlow Pro. Conversion tracking and attribution support.</p>
-          <p className="max-w-3xl break-words leading-6">Not affiliated with Google, Meta, or the reviewed business. Audit notes are based on browser-visible evidence first.</p>
+          <p className="max-w-3xl break-words leading-6">Not affiliated with Google, Meta, or the reviewed business. Audit notes are based on review evidence captured during the test.</p>
 
           <div className="flex flex-wrap gap-4">
             <Link href="/privacy-policy" className="hover:text-blue-700">
@@ -2314,9 +2314,43 @@ function polishReviewExplainerText(value: unknown): string {
     return "TrackFlow Pro is not affiliated with Google, Meta, or the reviewed business.";
   }
 
+  return polishAuthorityScopeText(text)
+    .replace(/This page summarizes the most important browser-visible tracking evidence before any account-level review\.?/gi, "This private review summarizes the key tracking evidence captured during the review.")
+    .replace(/This private page summarizes the browser-visible tracking setup before account-level access or final conversion confirmation\.?/gi, "This private review summarizes the tracking setup captured during the review.")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function polishAuthorityScopeText(value: unknown): string {
+  const text = cleanText(value, "");
+  if (!text) return "";
+
   return text
-    .replace(/This page summarizes the most important browser-visible tracking evidence before any account-level review\.?/gi, "This private review summarizes browser-visible tracking evidence before account-level confirmation.")
-    .replace(/This private page summarizes the browser-visible tracking setup before account-level access or final conversion confirmation\.?/gi, "This private review summarizes browser-visible tracking setup before account-level confirmation.")
+    .replace(/public browser-visible evidence captured from the website/gi, "Tag Assistant and browser test evidence captured during the review")
+    .replace(/public browser-visible evidence/gi, "Tag Assistant/browser evidence")
+    .replace(/browser-visible manual evidence only/gi, "manual Tag Assistant/browser test evidence")
+    .replace(/browser-visible tracking evidence/gi, "tracking evidence captured during the review")
+    .replace(/browser-visible tracking setup/gi, "tracking setup captured during the review")
+    .replace(/browser-visible setup context/gi, "tracking setup context")
+    .replace(/browser-visible review/gi, "Tag Assistant/browser review")
+    .replace(/website\/browser side/gi, "Tag Assistant/browser test")
+    .replace(/browser side/gi, "browser test")
+    .replace(/browser-side manual test/gi, "Tag Assistant manual test")
+    .replace(/browser-side screenshots/gi, "Tag Assistant screenshots")
+    .replace(/browser-side evidence/gi, "Tag Assistant evidence")
+    .replace(/browser-visible signals/gi, "tracking signals")
+    .replace(/account-level verification/gi, "account check")
+    .replace(/account-level confirmation/gi, "account check")
+    .replace(/final account-side confirmation/gi, "account-side confirmation")
+    .replace(/Final recording still needs confirmation inside/gi, "Confirm the same recording inside")
+    .replace(/Final confirmation still requires/gi, "Approved access can confirm")
+    .replace(/Final confirmation requires/gi, "Approved access can confirm")
+    .replace(/Final call tracking should be confirmed inside/gi, "Call tracking can be confirmed inside")
+    .replace(/Final booking recording should be confirmed inside/gi, "Booking recording can be confirmed inside")
+    .replace(/Final cart, checkout, or purchase recording should be confirmed inside/gi, "Cart, checkout, or purchase recording can be confirmed inside")
+    .replace(/Final WhatsApp enquiry recording should be confirmed inside/gi, "WhatsApp enquiry recording can be confirmed inside")
+    .replace(/Final email enquiry recording should be confirmed inside/gi, "Email enquiry recording can be confirmed inside")
+    .replace(/Final lead\/form submission recording should be confirmed inside/gi, "Lead or form submission recording can be confirmed inside")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -2337,7 +2371,7 @@ export async function generateMetadata({ params }: ReportPageProps): Promise<Met
     const domain = getDomainLabel(report);
     const companyName = getDisplayCompanyName(report, domain);
     const title = `Tracking Review for ${companyName} | TrackFlow Pro`;
-    const description = "A private browser-visible tracking and attribution review prepared by TrackFlow Pro.";
+    const description = "A private tracking and attribution review prepared by TrackFlow Pro.";
     const previewImageUrl = getReportPreviewImageUrl(report);
     const metadataDomainSlug = normalizeSlug(report.domainSlug || report.domain_slug || domain || "website") || "website";
     const reportUrl = `${getAppBaseUrl()}/tracking-review/${encodeURIComponent(metadataDomainSlug)}/${encodeURIComponent(token)}`;
@@ -2415,22 +2449,22 @@ export default async function ReportPage({ params }: ReportPageProps) {
       privateReportCopy.privatePageSubheadline ||
       report.subheadline ||
       report.privatePageSubheadline,
-    "This page summarizes the most important browser-visible tracking evidence before any account-level review.",
+    "This private page summarizes the key tracking evidence captured during the review.",
   ));
   const ctaText = getDisplayCtaText(privateReportCopy.ctaText || report.ctaText || report.cta_text);
   const setupPageSubheadline = isSetupFirst
-    ? 'This private review summarizes browser-visible tracking setup before account-level confirmation.'
+    ? 'This private review summarizes the tracking setup captured during the review.'
     : pageSubheadline;
 
-  let mainFinding = sentenceCaseFirst(cleanText(
+  let mainFinding = polishAuthorityScopeText(sentenceCaseFirst(cleanText(
     privateReportCopy.mainFinding || report.mainFinding || report.mainIssue,
-    "A conversion tracking review may be useful based on public browser-visible evidence.",
-  ));
+    "A conversion tracking review may be useful based on the tracking signals captured during this review.",
+  )));
 
-  let businessImpact = sentenceCaseFirst(cleanText(
+  let businessImpact = polishAuthorityScopeText(sentenceCaseFirst(cleanText(
     privateReportCopy.businessImpact || report.businessImpact,
     "If important lead actions are not measured clearly, it can be harder to know which marketing channels are creating enquiries.",
-  ));
+  )));
 
   const trackingSignalItems = cleanSignalCards(privateReportCopy.trackingSignalCards || report.trackingSignalCards || report.tracking_signal_cards);
   const reviewedPageItems = cleanReviewedPageLabels(privateReportCopy.reviewedPageUrls || report.reviewedPageUrls || report.reviewed_page_urls);
@@ -2464,9 +2498,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
   let auditSnapshotQuestions = cleanList(
     privateReportCopy.auditSnapshotQuestions || report.auditSnapshotQuestions || report.audit_snapshot_questions,
     [
-      "Are key tracking tags visible from the browser?",
+      "Which key tracking tags were seen during the review?",
       "Does the lead path show clear conversion evidence?",
-      "Is account-level verification recommended?",
+      "What should be verified inside the tracking accounts?",
     ],
     3,
   );
@@ -2485,20 +2519,22 @@ export default async function ReportPage({ params }: ReportPageProps) {
   }
 
   const manualAds = getManualAdsTransparency(report);
-  const manualAdsSummary = getManualAdsSummary(manualAds);
-  const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
+  const manualAdsSummary = polishAuthorityScopeText(getManualAdsSummary(manualAds));
+  const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3)
+    .map(polishAuthorityScopeText)
+    .filter(Boolean);
   const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
   const manualEvidenceHero = getManualEvidenceHero(report, privateReportCopy);
   if (isSetupFirst) {
     auditSnapshotQuestions = [
       "Was a GA4/GTM tracking foundation clearly visible?",
       "What should be set up before conversion-event testing?",
-      "What needs account-level confirmation before final decisions?",
+      "What should be checked next?",
     ];
   } else if (manualEvidenceHero) {
     auditSnapshotQuestions = [
-      "What did the browser-side evidence show?",
-      "Why should final recording be confirmed inside GA4, GTM, and Google Ads?",
+      "What did the Tag Assistant test show?",
+      "What should be checked inside GA4, GTM, and Google Ads?",
       "What is the safest next verification step?",
     ];
   }
@@ -2508,15 +2544,17 @@ export default async function ReportPage({ params }: ReportPageProps) {
     .includes("call");
   const enhancedProofPoints = manualAdsSummary ? cleanList([manualAdsSummary, ...proofPoints], DEFAULT_PROOF_POINTS, 6) : proofPoints;
   const clientFacingProofPoints = cleanList(
-    enhancedProofPoints.map((item) => polishClientFacingEvidenceText(item, hasCallTrackingContext)),
+    enhancedProofPoints.map((item) => polishAuthorityScopeText(polishClientFacingEvidenceText(item, hasCallTrackingContext))),
     DEFAULT_PROOF_POINTS,
     6,
   );
+  whatChecked = cleanList(whatChecked.map(polishAuthorityScopeText), DEFAULT_CHECKS, 8);
+  recommendations = cleanList(recommendations.map(polishAuthorityScopeText), DEFAULT_RECOMMENDATIONS, 6);
   const howToReadTitle = cleanText(privateReportCopy.howToReadTitle || report.howToReadTitle || report.how_to_read_title, "How to read this review");
   const howToReadParagraphs = cleanList(
     privateReportCopy.howToReadParagraphs || report.howToReadParagraphs || report.how_to_read_paragraphs || report.howToReadThisReview,
     [
-      "This is an initial tracking review, not an account audit. It highlights what can be seen from the website/browser side and where account-level verification should be done.",
+      "Review scope: this page is based on Tag Assistant/browser testing and operator evidence, not a login-based account audit.",
       "TrackFlow Pro is not affiliated with Google, Meta, or the reviewed business.",
     ],
     3,
@@ -2581,7 +2619,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
       : `Private tracking review for ${companyName}`;
   const preparedForLabel = companyName === "this website" ? "the reviewed website" : companyName;
   const manualReviewContextLine = manualEvidenceHero?.actionLabel
-    ? `Manual review focus: ${manualEvidenceHero.actionLabel}. Visual proof and account-level verification steps are shown below.`
+    ? `Manual review focus: ${manualEvidenceHero.actionLabel}. Visual proof from the test is shown below.`
     : "";
   const heroContextLine = manualReviewContextLine || (isSetupFirst
     ? setupPageSubheadline
@@ -2613,11 +2651,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
         },
         {
           label: "Evidence type",
-          value: "Browser-side manual test",
+          value: "Tag Assistant test",
         },
         {
           label: "Best next action",
-          value: "Account-level verification",
+          value: "Confirm in accounts",
         },
       ]
     : isSetupFirst
@@ -2642,7 +2680,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           },
           {
             label: "Evidence type",
-            value: "Browser-visible signals",
+            value: "Tracking signals",
           },
           {
             label: "Best next action",
@@ -2742,7 +2780,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </div>
 
                 <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-blue-950/80">
-                  The selected action was reviewed from the browser side. The screenshots below show the visual proof, while final recording should be confirmed inside GA4, GTM, Google Ads, and the relevant lead records.
+                  The selected action was tested manually. The screenshots below show the result captured during the review, and the same action can be checked inside GA4, GTM, Google Ads, and the relevant lead records.
                 </p>
 
                 {manualEvidenceHero.tool || manualEvidenceHero.testUrl ? (
@@ -2825,7 +2863,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     Watch the short evidence video
                   </span>
                   <span className="mt-1 block break-words text-xs font-bold leading-5 text-blue-800">
-                    See the browser-visible review before the PDF.
+                    See the review evidence before the PDF.
                   </span>
                 </span>
               </a>
@@ -2874,7 +2912,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 Prepared by TrackFlow Pro
               </span>
               <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
-                Browser-visible evidence
+                Tag Assistant review
               </span>
               {domain ? (
                 <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
@@ -2887,7 +2925,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </span>
               ) : null}
               <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
-                No account access used
+                No account login used
               </span>
               {manualAds.checked ? (
                 <span className="max-w-full break-words rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 sm:px-4">
@@ -2959,7 +2997,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 Private review assistant
               </p>
               <p className="mt-3 text-sm font-bold leading-7 text-blue-950">
-                The assistant can explain this saved review in plain English. Final confirmation still requires approved access to the actual tracking accounts and lead records.
+                The assistant can explain this saved review in plain English and point to the next account checks when needed.
               </p>
             </div>
           </div>
@@ -3033,7 +3071,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     </span>
 
                     <span className="absolute bottom-3 left-3 right-3 rounded-xl bg-slate-950/80 px-3 py-2.5 text-left text-[11px] font-black leading-4 shadow-lg shadow-slate-950/30 backdrop-blur sm:bottom-4 sm:left-4 sm:right-4 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5">
-                      <span className="block text-white">Browser-side evidence walkthrough</span>
+                      <span className="block text-white">Tag Assistant evidence walkthrough</span>
                       <span className="mt-1 block text-[9px] font-bold uppercase tracking-[0.13em] text-blue-200 sm:text-[10px] sm:tracking-[0.16em]">Tap to watch the audit video</span>
                     </span>
                   </button>
@@ -3042,7 +3080,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
               <div className="min-w-0 border-t border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-4 sm:p-6 lg:border-l lg:border-t-0 lg:p-8">
                 <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
-                  Browser-side evidence walkthrough
+                  Tag Assistant evidence walkthrough
                 </p>
                 <h2 className="mt-3 break-words text-xl font-black leading-tight tracking-[-0.045em] text-slate-950 sm:mt-4 sm:text-4xl">
                   Watch the evidence before reading the PDF.
@@ -3069,7 +3107,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 {evidenceSignalBadges.length ? (
                   <div className="mt-6">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                      Visible signals in this review
+                      Signals captured in this review
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {evidenceSignalBadges.map((item) => (
