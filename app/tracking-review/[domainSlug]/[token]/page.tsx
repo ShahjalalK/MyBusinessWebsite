@@ -53,6 +53,21 @@ type EvidenceVideoDisplay = {
   provider: "youtube";
 };
 
+
+type SecureEvidenceAssetDisplay = {
+  id: string;
+  role: string;
+  roleLabel: string;
+  caption: string;
+  fileName: string;
+  mimeType: string;
+  sizeLabel: string;
+  pageUrl: string;
+  src: string;
+  displayOrder: number;
+  redacted: boolean;
+};
+
 const DEFAULT_CHECKS = [
   "GA4 and Google Tag Manager browser-visible signals",
   "Google Ads conversion and remarketing request signals",
@@ -185,6 +200,106 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
       "This optional video shows browser-visible evidence from the review. Final confirmation still requires GA4, GTM, Google Ads, CRM, or server access.",
     ),
   };
+}
+
+
+const SECURE_EVIDENCE_ROLE_LABELS: Record<string, string> = {
+  form_success: "Form submission success state",
+  tag_assistant_after_submission: "Tag Assistant after submission",
+  ga4_debugview_or_gtm_preview: "GA4 DebugView / GTM Preview",
+  google_ads_diagnostics: "Google Ads diagnostics",
+  proof_screenshot: "Browser-side proof screenshot",
+};
+
+function normalizeSecureEvidenceRole(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "proof_screenshot";
+}
+
+function getSecureEvidenceRoleLabel(role: string, fallback = "Browser-side proof screenshot"): string {
+  return SECURE_EVIDENCE_ROLE_LABELS[normalizeSecureEvidenceRole(role)] || fallback;
+}
+
+function isAllowedSecureEvidenceMimeType(value: unknown): boolean {
+  const type = cleanText(value, "").toLowerCase();
+  return ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/avif"].includes(type);
+}
+
+function formatBytes(value: unknown): string {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function firstArrayCandidate(...values: unknown[]): any[] {
+  for (const value of values) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function getSecureEvidenceAssetDisplays(report: Record<string, any>, token: string): SecureEvidenceAssetDisplay[] {
+  const privateReportCopy = getPrivateReportCopy(report);
+  const rawAssets = firstArrayCandidate(
+    report.securePageEvidenceAssets,
+    report.secure_page_evidence_assets,
+    privateReportCopy.securePageEvidenceAssets,
+    privateReportCopy.secure_page_evidence_assets,
+  );
+
+  const seen = new Set<string>();
+  const output: SecureEvidenceAssetDisplay[] = [];
+
+  rawAssets.forEach((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return;
+    const raw = item as Record<string, any>;
+    const assetId = cleanText(raw.id || raw.assetId || raw.asset_id, "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120);
+    const b2Key = cleanText(raw.b2Key || raw.b2_key || raw.key || raw.storageKey || raw.storage_key, "");
+    const mimeType = cleanText(raw.mimeType || raw.mime_type, "").toLowerCase();
+
+    if (!assetId || !b2Key || !isAllowedSecureEvidenceMimeType(mimeType)) return;
+    if (!b2Key.includes(`/${token}/secure-evidence/`)) return;
+    if (seen.has(assetId)) return;
+    seen.add(assetId);
+
+    const role = normalizeSecureEvidenceRole(raw.role);
+    const roleLabel = getSecureEvidenceRoleLabel(role);
+    const caption = cleanText(raw.caption || raw.title || raw.label, roleLabel);
+    const fileName = cleanText(raw.fileName || raw.file_name || raw.name, "Proof screenshot");
+    const pageUrl = normalizeManualHeroUrl(raw.pageUrl || raw.page_url || raw.url);
+    const displayOrder = Number.isFinite(Number(raw.displayOrder ?? raw.display_order)) ? Number(raw.displayOrder ?? raw.display_order) : index + 1;
+
+    output.push({
+      id: assetId,
+      role,
+      roleLabel,
+      caption,
+      fileName,
+      mimeType,
+      sizeLabel: formatBytes(raw.sizeBytes ?? raw.size_bytes),
+      pageUrl,
+      src: `/api/report-evidence?token=${encodeURIComponent(token)}&assetId=${encodeURIComponent(assetId)}`,
+      displayOrder,
+      redacted: raw.redacted !== false,
+    });
+  });
+
+  return output.sort((a, b) => a.displayOrder - b.displayOrder).slice(0, 6);
+}
+
+function getSecureEvidenceIntroText(manualEvidenceHero: ManualEvidenceHero | null): string {
+  if (manualEvidenceHero?.actionLabel) {
+    const expected = manualEvidenceHero.expectedEvent ? ` Expected event to verify: ${manualEvidenceHero.expectedEvent}.` : "";
+    const observed = manualEvidenceHero.observedEvent ? ` Browser-side observed result: ${manualEvidenceHero.observedEvent}.` : "";
+    return `These screenshots support the browser-side manual review for ${manualEvidenceHero.actionLabel}.${expected}${observed} Final confirmation should still be checked inside the actual tracking accounts and lead records.`;
+  }
+
+  return "These screenshots support the browser-side review. They show what was visible during the public/manual test, while final recording still requires confirmation inside the actual tracking accounts and lead records.";
 }
 
 function escapeHtmlAttribute(value: unknown): string {
@@ -1665,6 +1780,112 @@ function NumberedStepList({ items }: { items: string[] }) {
   );
 }
 
+function SecureEvidenceGallery({
+  assets,
+  introText,
+}: {
+  assets: SecureEvidenceAssetDisplay[];
+  introText: string;
+}) {
+  if (!assets.length) return null;
+
+  return (
+    <section
+      id="browser-evidence"
+      data-trackflow-observe-event="secure_report_evidence_assets_visible"
+      data-trackflow-analytics-section="browser_evidence"
+      data-trackflow-analytics-label="Browser evidence screenshots visible"
+      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:py-10 lg:px-8"
+    >
+      <div className="overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
+        <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-7 lg:p-8">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-start">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
+                Browser-side proof screenshots
+              </p>
+              <h2 className="mt-3 break-words text-2xl font-black tracking-[-0.045em] text-slate-950 sm:text-4xl">
+                Evidence captured after the manual test
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-slate-600 sm:text-base sm:leading-8">
+                {introText}
+              </p>
+            </div>
+
+            <div className="rounded-[1.25rem] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
+              <span className="font-black">Important note: </span>
+              These are browser-visible/manual screenshots only. They help explain the review, but final confirmation still needs GA4, GTM, Google Ads, CRM, form inbox, or server-side access.
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 bg-slate-50 p-4 sm:p-5 lg:grid-cols-2 lg:p-6">
+          {assets.map((asset) => (
+            <article
+              key={asset.id}
+              className="min-w-0 overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-lg shadow-slate-950/5 sm:rounded-[1.5rem]"
+            >
+              <div className="flex min-w-0 flex-col gap-3 border-b border-slate-100 bg-white px-4 py-4 sm:px-5 sm:py-5">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                      {asset.roleLabel}
+                    </p>
+                    <h3 className="mt-2 break-words text-lg font-black leading-6 text-slate-950">
+                      {asset.caption}
+                    </h3>
+                  </div>
+                  {asset.redacted ? (
+                    <span className="inline-flex shrink-0 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                      Redacted
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="flex min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.13em] text-slate-500">
+                  {asset.fileName ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{asset.fileName}</span> : null}
+                  {asset.sizeLabel ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{asset.sizeLabel}</span> : null}
+                  {asset.mimeType ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{asset.mimeType.replace("image/", "")}</span> : null}
+                </div>
+              </div>
+
+              <a
+                href={asset.src}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-trackflow-analytics-event="secure_report_evidence_asset_open"
+                data-trackflow-analytics-section="browser_evidence"
+                data-trackflow-analytics-label={asset.roleLabel}
+                className="group block bg-slate-950 p-2.5 sm:p-3"
+              >
+                <span className="relative block aspect-[16/10] w-full overflow-hidden rounded-[1rem] border border-white/10 bg-slate-900 sm:rounded-[1.25rem]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={asset.src}
+                    alt={`${asset.caption} screenshot`}
+                    loading="lazy"
+                    className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.015]"
+                  />
+                  <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent p-3 text-[10px] font-black uppercase tracking-[0.14em] text-white opacity-0 transition group-hover:opacity-100 sm:text-xs">
+                    Open screenshot
+                  </span>
+                </span>
+              </a>
+
+              {asset.pageUrl ? (
+                <div className="border-t border-slate-100 px-4 py-3 text-xs font-bold leading-6 text-slate-500 sm:px-5">
+                  <span className="font-black uppercase tracking-[0.13em] text-slate-400">Page URL: </span>
+                  <span className="break-all">{asset.pageUrl}</span>
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ReportFooter() {
   return (
     <footer className="overflow-x-hidden border-t border-slate-200 bg-white">
@@ -2098,6 +2319,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = isSetupFirst ? "Tracking setup readiness" : (primaryConversionFocus || businessTypeLabel || "Conversion path review");
   const evidenceVideo = getEvidenceVideoDisplay(report);
+  const secureEvidenceAssets = getSecureEvidenceAssetDisplays(report, token);
+  const secureEvidenceIntroText = getSecureEvidenceIntroText(manualEvidenceHero);
   const heroHeadline = isSetupFirst
     ? "Private tracking readiness review"
     : companyName === "this website"
@@ -2415,6 +2638,17 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   Short evidence video available
                 </a>
               ) : null}
+              {secureEvidenceAssets.length ? (
+                <a
+                  href="#browser-evidence"
+                  data-trackflow-analytics-event="secure_report_browser_evidence_anchor_click"
+                  data-trackflow-analytics-section="hero"
+                  data-trackflow-analytics-label="Proof screenshots available"
+                  className="max-w-full break-words rounded-full border border-purple-100 bg-purple-50 px-3 py-2 text-purple-700 transition hover:border-purple-200 hover:bg-white sm:px-4"
+                >
+                  Proof screenshots available
+                </a>
+              ) : null}
               <span className="max-w-full break-words rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-emerald-700 sm:px-4">
                 Review assistant included
               </span>
@@ -2643,6 +2877,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </div>
         </section>
       ) : null}
+
+      <SecureEvidenceGallery assets={secureEvidenceAssets} introText={secureEvidenceIntroText} />
 
       <section
         id="findings"
