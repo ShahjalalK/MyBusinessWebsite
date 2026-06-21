@@ -316,63 +316,40 @@ function getSecureEvidenceSectionCopy({
   reportMode?: string;
 }): SecureEvidenceSectionCopy {
   const actionLabel = cleanText(manualEvidenceHero?.actionLabel || setupActionLabel || reviewFocusLabel, "selected customer action");
-  const expectedEvent = cleanText(manualEvidenceHero?.expectedEvent, "");
-  const observedEvent = cleanText(manualEvidenceHero?.observedEvent, "");
   const cleanMode = cleanText(reportMode, "").replace(/[_-]+/g, " ").trim();
 
   if (isSetupFirst) {
     return {
       eyebrow: "Tracking foundation evidence",
-      title: "GA4/GTM setup should be confirmed before event-level testing",
+      title: "GA4/GTM foundation should be confirmed first",
       introText:
-        "These screenshots support a setup-first review. The purpose is to show the browser-visible setup context before judging individual conversion events. If GA4/GTM is not clearly detected, the safe next step is to install or verify the tracking foundation first, then run a controlled test for the selected business action.",
-      noteTitle: "Why this is setup-first",
+        "These screenshots support a setup-first review. They show the browser-visible setup context before any conversion-event judgment is made.",
+      noteTitle: "Setup-first scope",
       noteText:
-        "This section should not be read as proof that generate_lead, form_submit, or another conversion event failed. Event-level testing comes after the GA4/GTM foundation is confirmed inside the actual accounts.",
+        "No event failure is being claimed here. First confirm the GA4/GTM foundation, then run a controlled test for the selected business action.",
       summaryCards: [
         { label: "Report mode", value: cleanMode || "Setup first" },
         { label: "Event judgment", value: "Not claimed yet" },
-        { label: "Future test target", value: actionLabel },
+        { label: "Next step", value: "Confirm setup" },
       ],
       analyticsLabel: "Tracking foundation evidence screenshots visible",
     };
   }
 
-  if (manualEvidenceHero?.actionLabel || expectedEvent || observedEvent) {
-    return {
-      eyebrow: "Browser-side proof after manual test",
-      title: "Evidence captured immediately after the selected action",
-      introText:
-        `These screenshots support the browser-side manual review for ${actionLabel}.` +
-        (expectedEvent ? ` Expected event to verify: ${expectedEvent}.` : "") +
-        (observedEvent ? ` Browser-side observed result: ${observedEvent}.` : "") +
-        " Final confirmation should still be checked inside GA4, GTM, Google Ads, and the relevant lead records before making final decisions.",
-      noteTitle: "Important note",
-      noteText:
-        "These are browser-visible/manual screenshots only. They help explain the review, but final recording still needs GA4, GTM, Google Ads, CRM, form inbox, or server-side confirmation.",
-      summaryCards: [
-        { label: "Action tested", value: actionLabel },
-        { label: "Expected event", value: expectedEvent || "Needs account confirmation" },
-        { label: "Observed result", value: observedEvent || "Not clearly observed" },
-      ],
-      analyticsLabel: "Browser-side manual test proof screenshots visible",
-    };
-  }
-
   return {
-    eyebrow: "Browser-side evidence screenshots",
-    title: "Evidence captured during the public review",
+    eyebrow: "Browser-side proof screenshots",
+    title: "Visual evidence from the manual test",
     introText:
-      "These screenshots support the browser-side review. They show what was visible during the public/manual test, while final recording still requires confirmation inside the actual tracking accounts and lead records.",
-    noteTitle: "Important note",
+      "These screenshots show the form/success state and the Tag Assistant view captured during the manual browser-side review.",
+    noteTitle: "How to read this evidence",
     noteText:
-      "Screenshots are used as review evidence only. They should be confirmed against GA4, GTM, Google Ads, CRM, form inbox, or server-side records before final decisions are made.",
+      "Use these images as visual context. Final recording still needs confirmation inside GA4, GTM, Google Ads, and the relevant lead records.",
     summaryCards: [
-      { label: "Evidence type", value: "Browser-visible screenshots" },
-      { label: "Review scope", value: "Public/manual review" },
-      { label: "Final confirmation", value: "Account-level check needed" },
+      { label: "Review focus", value: actionLabel },
+      { label: "Evidence type", value: "Browser-side screenshots" },
+      { label: "Final check", value: "Account confirmation needed" },
     ],
-    analyticsLabel: "Browser evidence screenshots visible",
+    analyticsLabel: "Browser-side manual test proof screenshots visible",
   };
 }
 
@@ -1870,7 +1847,7 @@ function SecureEvidenceGallery({
       data-trackflow-observe-event="secure_report_evidence_assets_visible"
       data-trackflow-analytics-section="browser_evidence"
       data-trackflow-analytics-label={sectionCopy.analyticsLabel}
-      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:py-10 lg:px-8"
+      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:py-9 lg:px-8"
     >
       <div className="overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
         <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-7 lg:p-8">
@@ -1888,15 +1865,15 @@ function SecureEvidenceGallery({
             </div>
 
             <div className="grid gap-3">
-              <div className="rounded-[1.25rem] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
-                <span className="font-black">{sectionCopy.noteTitle}: </span>
+              <div className="rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-bold leading-7 text-slate-700 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
+                <span className="font-black text-slate-950">{sectionCopy.noteTitle}: </span>
                 {sectionCopy.noteText}
               </div>
 
               {sectionCopy.summaryCards.length ? (
                 <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                   {sectionCopy.summaryCards.map((item) => (
-                    <div key={`${item.label}-${item.value}`} className="min-w-0 rounded-2xl border border-blue-100 bg-white px-4 py-3 shadow-sm shadow-blue-950/5">
+                    <div key={`${item.label}-${item.value}`} className="min-w-0 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3">
                       <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-500">{item.label}</p>
                       <p className="mt-1.5 break-words text-xs font-black leading-5 text-slate-950">{item.value}</p>
                     </div>
@@ -1913,28 +1890,20 @@ function SecureEvidenceGallery({
               key={asset.id}
               className="min-w-0 overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-lg shadow-slate-950/5 sm:rounded-[1.5rem]"
             >
-              <div className="flex min-w-0 flex-col gap-3 border-b border-slate-100 bg-white px-4 py-4 sm:px-5 sm:py-5">
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
-                      {asset.roleLabel}
-                    </p>
-                    <h3 className="mt-2 break-words text-lg font-black leading-6 text-slate-950 sm:text-xl sm:leading-7">
-                      {asset.caption}
-                    </h3>
-                  </div>
-                  {asset.redacted ? (
-                    <span className="inline-flex shrink-0 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
-                      Redacted
-                    </span>
-                  ) : null}
+              <div className="flex min-w-0 items-start justify-between gap-3 border-b border-slate-100 bg-white px-4 py-4 sm:px-5 sm:py-5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
+                    {asset.roleLabel}
+                  </p>
+                  <h3 className="mt-2 break-words text-lg font-black leading-6 text-slate-950 sm:text-xl sm:leading-7">
+                    {asset.caption}
+                  </h3>
                 </div>
-
-                <div className="flex min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.13em] text-slate-500">
-                  {asset.fileName ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{asset.fileName}</span> : null}
-                  {asset.sizeLabel ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{asset.sizeLabel}</span> : null}
-                  {asset.mimeType ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">{asset.mimeType.replace("image/", "")}</span> : null}
-                </div>
+                {asset.redacted ? (
+                  <span className="inline-flex shrink-0 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                    Redacted
+                  </span>
+                ) : null}
               </div>
 
               <button
@@ -1950,13 +1919,13 @@ function SecureEvidenceGallery({
                 data-trackflow-analytics-label={asset.roleLabel}
                 className="group block w-full bg-slate-950 p-2.5 text-left focus:outline-none focus:ring-4 focus:ring-blue-500/25 sm:p-3"
               >
-                <span className="relative block aspect-[16/10] w-full overflow-hidden rounded-[1rem] border border-white/10 bg-slate-900 sm:rounded-[1.25rem]">
+                <span className="relative block aspect-[16/9] w-full overflow-hidden rounded-[1rem] border border-white/10 bg-slate-900 sm:rounded-[1.25rem] lg:aspect-[16/8.8]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={asset.src}
                     alt={`${asset.caption} screenshot`}
                     loading="lazy"
-                    className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.015]"
+                    className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.01]"
                   />
                   <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-transparent p-3 text-[10px] font-black uppercase tracking-[0.14em] text-white transition sm:text-xs">
                     Tap to enlarge
@@ -1966,7 +1935,7 @@ function SecureEvidenceGallery({
 
               {asset.pageUrl ? (
                 <div className="border-t border-slate-100 px-4 py-3 text-xs font-bold leading-6 text-slate-500 sm:px-5">
-                  <span className="font-black uppercase tracking-[0.13em] text-slate-400">Page URL: </span>
+                  <span className="font-black uppercase tracking-[0.13em] text-slate-400">Reviewed URL: </span>
                   <span className="break-all">{asset.pageUrl}</span>
                 </div>
               ) : null}
@@ -2520,6 +2489,19 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const trustSignals = cleanList(privateReportCopy.trustNotes || report.trustNotes || report.trustSignals, TRUST_SIGNALS, 3);
   const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
   const manualEvidenceHero = getManualEvidenceHero(report, privateReportCopy);
+  if (isSetupFirst) {
+    auditSnapshotQuestions = [
+      "Was a GA4/GTM tracking foundation clearly visible?",
+      "What should be set up before conversion-event testing?",
+      "What needs account-level confirmation before final decisions?",
+    ];
+  } else if (manualEvidenceHero) {
+    auditSnapshotQuestions = [
+      "What did the browser-side evidence show?",
+      "Why should final recording be confirmed inside GA4, GTM, and Google Ads?",
+      "What is the safest next verification step?",
+    ];
+  }
   const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
     .join(" ")
     .toLowerCase()
@@ -2598,14 +2580,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
       ? "Private tracking review"
       : `Private tracking review for ${companyName}`;
   const preparedForLabel = companyName === "this website" ? "the reviewed website" : companyName;
-  const manualReviewContextLine = manualEvidenceHero
-    ? [
-        manualEvidenceHero.actionLabel ? `Manual review focus: ${manualEvidenceHero.actionLabel}.` : "",
-        manualEvidenceHero.expectedEvent ? `Expected event: ${manualEvidenceHero.expectedEvent}.` : "",
-        manualEvidenceHero.observedEvent ? `Observed result: ${manualEvidenceHero.observedEvent}.` : "",
-      ]
-        .filter(Boolean)
-        .join(" ")
+  const manualReviewContextLine = manualEvidenceHero?.actionLabel
+    ? `Manual review focus: ${manualEvidenceHero.actionLabel}. Visual proof and account-level verification steps are shown below.`
     : "";
   const heroContextLine = manualReviewContextLine || (isSetupFirst
     ? setupPageSubheadline
@@ -2632,16 +2608,16 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const heroSummaryCards = manualEvidenceHero
     ? [
         {
-          label: "Reviewed action",
+          label: "Review focus",
           value: manualEvidenceHero.actionLabel || reviewFocusLabel,
         },
         {
-          label: "Expected event",
-          value: manualEvidenceHero.expectedEvent || "Needs account confirmation",
+          label: "Evidence type",
+          value: "Browser-side manual test",
         },
         {
-          label: "Observed result",
-          value: manualEvidenceHero.observedEvent || "Not clearly observed",
+          label: "Best next action",
+          value: "Account-level verification",
         },
       ]
     : isSetupFirst
@@ -2743,79 +2719,46 @@ export default async function ReportPage({ params }: ReportPageProps) {
             {manualEvidenceHero ? (
               <div
                 data-trackflow-manual-evidence-hero
-                className="mt-5 overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white p-4 shadow-lg shadow-slate-950/8 sm:mt-7 sm:rounded-[1.75rem] sm:p-5 lg:p-6"
+                className="mt-5 rounded-[1.25rem] border border-blue-100 bg-blue-50/70 p-4 shadow-sm shadow-blue-950/5 sm:mt-7 sm:rounded-[1.6rem] sm:p-5"
               >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 sm:text-[11px]">
-                      Manual conversion test result
+                      Manual review focus
                     </p>
-                    <h2 className="mt-3 max-w-2xl break-words text-2xl font-black leading-tight tracking-[-0.04em] text-slate-950 sm:text-3xl">
-                      {manualEvidenceHero.title}
-                    </h2>
+                    <p className="mt-2 break-words text-lg font-black leading-7 text-slate-950 sm:text-2xl sm:leading-8">
+                      {manualEvidenceHero.actionLabel || "Selected conversion action"}
+                    </p>
                   </div>
-                  <span className="inline-flex shrink-0 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 shadow-sm">
-                    Browser-side manual evidence
-                  </span>
+                  <a
+                    href={secureEvidenceAssets.length ? "#browser-evidence" : "#findings"}
+                    data-trackflow-analytics-event="secure_report_manual_focus_evidence_click"
+                    data-trackflow-analytics-section="hero"
+                    data-trackflow-analytics-label="Review visual evidence"
+                    className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white shadow-lg shadow-slate-950/10 transition hover:-translate-y-0.5 hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+                  >
+                    Review visual evidence
+                  </a>
                 </div>
 
-                <p className="mt-4 max-w-3xl break-words text-sm font-bold leading-7 text-slate-700 sm:text-base sm:leading-8">
-                  {manualEvidenceHero.summary}
+                <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-blue-950/80">
+                  The selected action was reviewed from the browser side. The screenshots below show the visual proof, while final recording should be confirmed inside GA4, GTM, Google Ads, and the relevant lead records.
                 </p>
 
-                {manualEvidenceHero.verificationMessage ? (
-                  <div className="mt-4 rounded-[1.1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black leading-7 text-amber-950 shadow-sm sm:px-5 sm:py-4 sm:text-base sm:leading-8">
-                    {manualEvidenceHero.verificationMessage}
-                  </div>
-                ) : null}
-
-                {manualEvidenceHero.businessImpact ? (
-                  <div className="mt-4 rounded-[1.1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold leading-7 text-slate-700 sm:text-base">
-                    <span className="font-black">Why this matters: </span>
-                    {manualEvidenceHero.businessImpact}
-                  </div>
-                ) : null}
-
-                <div className="mt-5 grid min-w-0 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                  {[
-                    ["Action tested", manualEvidenceHero.actionLabel],
-                    ["Expected event to verify", manualEvidenceHero.expectedEvent],
-                    ["Observed result", manualEvidenceHero.observedEvent],
-                    ["Google Ads conversion", manualEvidenceHero.googleAdsStatus],
-                    ["GA4 event", manualEvidenceHero.ga4Status],
-                    ["GTM trigger", manualEvidenceHero.gtmStatus],
-                    ["Action completed", manualEvidenceHero.actionCompleted],
-                    ["Tool used", manualEvidenceHero.tool],
-                  ]
-                    .filter(([, value]) => Boolean(value))
-                    .map(([label, value]) => (
-                      <div key={label} className="min-w-0 rounded-[1rem] border border-slate-100 bg-slate-50 p-3 shadow-sm shadow-slate-950/5">
-                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
-                        <p className="mt-2 break-words text-sm font-black leading-6 text-slate-950">{value}</p>
-                      </div>
-                    ))}
-                </div>
-
-                {manualEvidenceHero.testUrl || manualEvidenceHero.operatorNote ? (
-                  <div className="mt-4 grid gap-3">
+                {manualEvidenceHero.tool || manualEvidenceHero.testUrl ? (
+                  <div className="mt-3 flex min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
+                    {manualEvidenceHero.tool ? (
+                      <span className="max-w-full rounded-full border border-blue-100 bg-white px-3 py-2">
+                        Tool: {manualEvidenceHero.tool}
+                      </span>
+                    ) : null}
                     {manualEvidenceHero.testUrl ? (
-                      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-bold leading-6 text-blue-950 sm:text-sm">
-                        <span className="font-black uppercase tracking-[0.14em] text-blue-700">Test URL: </span>
-                        <span className="break-all">{manualEvidenceHero.testUrl}</span>
-                      </div>
-                    ) : null}
-                    {manualEvidenceHero.operatorNote ? (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold leading-6 text-slate-600 sm:text-sm">
-                        <span className="font-black text-slate-900">Operator note: </span>
-                        {manualEvidenceHero.operatorNote}
-                      </div>
+                      <span className="max-w-full break-all rounded-full border border-blue-100 bg-white px-3 py-2">
+                        URL: {manualEvidenceHero.testUrl}
+                      </span>
                     ) : null}
                   </div>
                 ) : null}
-
-                <p className="mt-4 rounded-[1rem] border border-slate-200 bg-slate-950 px-4 py-3 text-xs font-bold leading-6 text-slate-200">
-                  {manualEvidenceHero.disclaimer}
-                </p>
               </div>
             ) : null}
 
@@ -3105,7 +3048,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   Watch the evidence before reading the PDF.
                 </h2>
                 <p className="mt-3 text-sm font-semibold leading-7 text-slate-600 sm:mt-4">
-                  {evidenceVideo.description} The walkthrough shows the reviewed page context and visible signals before the full PDF details.
+                  {evidenceVideo.description}
                 </p>
 
                 {reviewedPageBadges.length ? (
@@ -3157,11 +3100,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
         className="mx-auto grid w-full max-w-7xl scroll-mt-24 gap-5 overflow-hidden px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:py-16"
       >
         <div className="min-w-0 space-y-5 sm:space-y-6">
-          <SectionCard label="Primary finding" tone="blue">
+          <SectionCard label="What this means" tone="blue">
             <p className="break-words text-base font-black leading-7 text-slate-950 sm:text-lg sm:leading-8">{mainFinding}</p>
-            <p className="mt-3 text-sm font-semibold leading-7 text-blue-950/70">
-              This section summarizes the main browser-visible point to review before relying on the data for reporting or optimisation decisions.
-            </p>
           </SectionCard>
 
           <SectionCard label="Business impact" tone="green">
