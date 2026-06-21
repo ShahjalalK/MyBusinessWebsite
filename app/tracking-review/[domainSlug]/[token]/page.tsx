@@ -68,6 +68,16 @@ type SecureEvidenceAssetDisplay = {
   redacted: boolean;
 };
 
+type SecureEvidenceSectionCopy = {
+  eyebrow: string;
+  title: string;
+  introText: string;
+  noteTitle: string;
+  noteText: string;
+  summaryCards: { label: string; value: string }[];
+  analyticsLabel: string;
+};
+
 const DEFAULT_CHECKS = [
   "GA4 and Google Tag Manager browser-visible signals",
   "Google Ads conversion and remarketing request signals",
@@ -292,14 +302,78 @@ function getSecureEvidenceAssetDisplays(report: Record<string, any>, token: stri
   return output.sort((a, b) => a.displayOrder - b.displayOrder).slice(0, 6);
 }
 
-function getSecureEvidenceIntroText(manualEvidenceHero: ManualEvidenceHero | null): string {
-  if (manualEvidenceHero?.actionLabel) {
-    const expected = manualEvidenceHero.expectedEvent ? ` Expected event to verify: ${manualEvidenceHero.expectedEvent}.` : "";
-    const observed = manualEvidenceHero.observedEvent ? ` Browser-side observed result: ${manualEvidenceHero.observedEvent}.` : "";
-    return `These screenshots support the browser-side manual review for ${manualEvidenceHero.actionLabel}.${expected}${observed} Final confirmation should still be checked inside the actual tracking accounts and lead records.`;
+function getSecureEvidenceSectionCopy({
+  isSetupFirst,
+  manualEvidenceHero,
+  setupActionLabel,
+  reviewFocusLabel,
+  reportMode,
+}: {
+  isSetupFirst: boolean;
+  manualEvidenceHero: ManualEvidenceHero | null;
+  setupActionLabel?: string;
+  reviewFocusLabel?: string;
+  reportMode?: string;
+}): SecureEvidenceSectionCopy {
+  const actionLabel = cleanText(manualEvidenceHero?.actionLabel || setupActionLabel || reviewFocusLabel, "selected customer action");
+  const expectedEvent = cleanText(manualEvidenceHero?.expectedEvent, "");
+  const observedEvent = cleanText(manualEvidenceHero?.observedEvent, "");
+  const cleanMode = cleanText(reportMode, "").replace(/[_-]+/g, " ").trim();
+
+  if (isSetupFirst) {
+    return {
+      eyebrow: "Tracking foundation evidence",
+      title: "GA4/GTM setup should be confirmed before event-level testing",
+      introText:
+        "These screenshots support a setup-first review. The purpose is to show the browser-visible setup context before judging individual conversion events. If GA4/GTM is not clearly detected, the safe next step is to install or verify the tracking foundation first, then run a controlled test for the selected business action.",
+      noteTitle: "Why this is setup-first",
+      noteText:
+        "This section should not be read as proof that generate_lead, form_submit, or another conversion event failed. Event-level testing comes after the GA4/GTM foundation is confirmed inside the actual accounts.",
+      summaryCards: [
+        { label: "Report mode", value: cleanMode || "Setup first" },
+        { label: "Event judgment", value: "Not claimed yet" },
+        { label: "Future test target", value: actionLabel },
+      ],
+      analyticsLabel: "Tracking foundation evidence screenshots visible",
+    };
   }
 
-  return "These screenshots support the browser-side review. They show what was visible during the public/manual test, while final recording still requires confirmation inside the actual tracking accounts and lead records.";
+  if (manualEvidenceHero?.actionLabel || expectedEvent || observedEvent) {
+    return {
+      eyebrow: "Browser-side proof after manual test",
+      title: "Evidence captured immediately after the selected action",
+      introText:
+        `These screenshots support the browser-side manual review for ${actionLabel}.` +
+        (expectedEvent ? ` Expected event to verify: ${expectedEvent}.` : "") +
+        (observedEvent ? ` Browser-side observed result: ${observedEvent}.` : "") +
+        " Final confirmation should still be checked inside GA4, GTM, Google Ads, and the relevant lead records before making final decisions.",
+      noteTitle: "Important note",
+      noteText:
+        "These are browser-visible/manual screenshots only. They help explain the review, but final recording still needs GA4, GTM, Google Ads, CRM, form inbox, or server-side confirmation.",
+      summaryCards: [
+        { label: "Action tested", value: actionLabel },
+        { label: "Expected event", value: expectedEvent || "Needs account confirmation" },
+        { label: "Observed result", value: observedEvent || "Not clearly observed" },
+      ],
+      analyticsLabel: "Browser-side manual test proof screenshots visible",
+    };
+  }
+
+  return {
+    eyebrow: "Browser-side evidence screenshots",
+    title: "Evidence captured during the public review",
+    introText:
+      "These screenshots support the browser-side review. They show what was visible during the public/manual test, while final recording still requires confirmation inside the actual tracking accounts and lead records.",
+    noteTitle: "Important note",
+    noteText:
+      "Screenshots are used as review evidence only. They should be confirmed against GA4, GTM, Google Ads, CRM, form inbox, or server-side records before final decisions are made.",
+    summaryCards: [
+      { label: "Evidence type", value: "Browser-visible screenshots" },
+      { label: "Review scope", value: "Public/manual review" },
+      { label: "Final confirmation", value: "Account-level check needed" },
+    ],
+    analyticsLabel: "Browser evidence screenshots visible",
+  };
 }
 
 function escapeHtmlAttribute(value: unknown): string {
@@ -1782,19 +1856,20 @@ function NumberedStepList({ items }: { items: string[] }) {
 
 function SecureEvidenceGallery({
   assets,
-  introText,
+  sectionCopy,
 }: {
   assets: SecureEvidenceAssetDisplay[];
-  introText: string;
+  sectionCopy: SecureEvidenceSectionCopy;
 }) {
   if (!assets.length) return null;
 
   return (
     <section
       id="browser-evidence"
+      data-trackflow-secure-evidence-gallery="true"
       data-trackflow-observe-event="secure_report_evidence_assets_visible"
       data-trackflow-analytics-section="browser_evidence"
-      data-trackflow-analytics-label="Browser evidence screenshots visible"
+      data-trackflow-analytics-label={sectionCopy.analyticsLabel}
       className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:py-10 lg:px-8"
     >
       <div className="overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
@@ -1802,25 +1877,38 @@ function SecureEvidenceGallery({
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-start">
             <div className="min-w-0">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-700">
-                Browser-side proof screenshots
+                {sectionCopy.eyebrow}
               </p>
               <h2 className="mt-3 break-words text-2xl font-black tracking-[-0.045em] text-slate-950 sm:text-4xl">
-                Evidence captured after the manual test
+                {sectionCopy.title}
               </h2>
               <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-slate-600 sm:text-base sm:leading-8">
-                {introText}
+                {sectionCopy.introText}
               </p>
             </div>
 
-            <div className="rounded-[1.25rem] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
-              <span className="font-black">Important note: </span>
-              These are browser-visible/manual screenshots only. They help explain the review, but final confirmation still needs GA4, GTM, Google Ads, CRM, form inbox, or server-side access.
+            <div className="grid gap-3">
+              <div className="rounded-[1.25rem] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold leading-7 text-amber-950 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
+                <span className="font-black">{sectionCopy.noteTitle}: </span>
+                {sectionCopy.noteText}
+              </div>
+
+              {sectionCopy.summaryCards.length ? (
+                <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                  {sectionCopy.summaryCards.map((item) => (
+                    <div key={`${item.label}-${item.value}`} className="min-w-0 rounded-2xl border border-blue-100 bg-white px-4 py-3 shadow-sm shadow-blue-950/5">
+                      <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-500">{item.label}</p>
+                      <p className="mt-1.5 break-words text-xs font-black leading-5 text-slate-950">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
 
-        <div className="grid gap-4 bg-slate-50 p-4 sm:p-5 lg:grid-cols-2 lg:p-6">
-          {assets.map((asset) => (
+        <div className="grid gap-4 bg-slate-50 p-4 pb-8 sm:p-5 sm:pb-9 lg:grid-cols-2 lg:p-6 lg:pb-10">
+          {assets.map((asset, index) => (
             <article
               key={asset.id}
               className="min-w-0 overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-lg shadow-slate-950/5 sm:rounded-[1.5rem]"
@@ -1831,7 +1919,7 @@ function SecureEvidenceGallery({
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">
                       {asset.roleLabel}
                     </p>
-                    <h3 className="mt-2 break-words text-lg font-black leading-6 text-slate-950">
+                    <h3 className="mt-2 break-words text-lg font-black leading-6 text-slate-950 sm:text-xl sm:leading-7">
                       {asset.caption}
                     </h3>
                   </div>
@@ -1849,14 +1937,18 @@ function SecureEvidenceGallery({
                 </div>
               </div>
 
-              <a
-                href={asset.src}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                data-trackflow-evidence-open="true"
+                data-evidence-src={asset.src}
+                data-evidence-caption={asset.caption}
+                data-evidence-role={asset.roleLabel}
+                data-evidence-page-url={asset.pageUrl}
+                data-evidence-index={String(index)}
                 data-trackflow-analytics-event="secure_report_evidence_asset_open"
                 data-trackflow-analytics-section="browser_evidence"
                 data-trackflow-analytics-label={asset.roleLabel}
-                className="group block bg-slate-950 p-2.5 sm:p-3"
+                className="group block w-full bg-slate-950 p-2.5 text-left focus:outline-none focus:ring-4 focus:ring-blue-500/25 sm:p-3"
               >
                 <span className="relative block aspect-[16/10] w-full overflow-hidden rounded-[1rem] border border-white/10 bg-slate-900 sm:rounded-[1.25rem]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1866,11 +1958,11 @@ function SecureEvidenceGallery({
                     loading="lazy"
                     className="h-full w-full object-contain transition duration-300 group-hover:scale-[1.015]"
                   />
-                  <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent p-3 text-[10px] font-black uppercase tracking-[0.14em] text-white opacity-0 transition group-hover:opacity-100 sm:text-xs">
-                    Open screenshot
+                  <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-transparent p-3 text-[10px] font-black uppercase tracking-[0.14em] text-white transition sm:text-xs">
+                    Tap to enlarge
                   </span>
                 </span>
-              </a>
+              </button>
 
               {asset.pageUrl ? (
                 <div className="border-t border-slate-100 px-4 py-3 text-xs font-bold leading-6 text-slate-500 sm:px-5">
@@ -1883,6 +1975,179 @@ function SecureEvidenceGallery({
         </div>
       </div>
     </section>
+  );
+}
+
+function SecureEvidenceGalleryExperienceScript() {
+  const styles = `
+.tfp-evidence-lightbox[hidden] { display: none !important; }
+.tfp-evidence-lightbox { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; padding: 14px; background: rgba(2, 6, 23, .92); backdrop-filter: blur(10px); }
+.tfp-evidence-lightbox__panel { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(1180px, 100%); height: min(92vh, 920px); overflow: hidden; border: 1px solid rgba(255,255,255,.14); border-radius: 28px; background: #020617; box-shadow: 0 28px 90px rgba(0,0,0,.48); }
+.tfp-evidence-lightbox__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 16px; border-bottom: 1px solid rgba(255,255,255,.1); color: white; }
+.tfp-evidence-lightbox__eyebrow { font-size: 10px; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; color: #93c5fd; }
+.tfp-evidence-lightbox__title { margin-top: 5px; font-size: 18px; line-height: 1.22; font-weight: 900; letter-spacing: -.03em; }
+.tfp-evidence-lightbox__body { position: relative; min-height: 0; display: grid; place-items: center; padding: 10px; background: radial-gradient(circle at top, rgba(30,64,175,.28), transparent 40%), #020617; }
+.tfp-evidence-lightbox__img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 18px; background: #0f172a; }
+.tfp-evidence-lightbox__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.1); color: #cbd5e1; }
+.tfp-evidence-lightbox__page { min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; font-weight: 700; color: #94a3b8; }
+.tfp-evidence-lightbox__controls { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
+.tfp-evidence-lightbox__button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; background: rgba(255,255,255,.08); padding: 0 14px; color: white; font-size: 12px; font-weight: 900; cursor: pointer; }
+.tfp-evidence-lightbox__button:hover { background: rgba(37,99,235,.72); border-color: rgba(147,197,253,.65); }
+.tfp-evidence-lightbox__button:disabled { cursor: not-allowed; opacity: .45; }
+.tfp-evidence-lightbox__close { width: 42px; padding: 0; font-size: 20px; }
+.tfp-evidence-lightbox__counter { min-width: 56px; text-align: center; font-size: 12px; font-weight: 900; color: #bfdbfe; }
+@media (max-width: 640px) {
+  .tfp-evidence-lightbox { padding: 8px; }
+  .tfp-evidence-lightbox__panel { height: 94vh; border-radius: 22px; }
+  .tfp-evidence-lightbox__header { padding: 13px; }
+  .tfp-evidence-lightbox__title { font-size: 15px; }
+  .tfp-evidence-lightbox__body { padding: 6px; }
+  .tfp-evidence-lightbox__footer { align-items: stretch; flex-direction: column; padding: 10px 12px 12px; }
+  .tfp-evidence-lightbox__controls { justify-content: space-between; width: 100%; }
+  .tfp-evidence-lightbox__button { flex: 1; min-height: 42px; }
+  .tfp-evidence-lightbox__close { flex: 0 0 42px; }
+}
+`;
+
+  const script = `
+(function () {
+  try {
+    if (window.__trackflowSecureEvidenceGalleryReady) return;
+    window.__trackflowSecureEvidenceGalleryReady = true;
+
+    var state = { overlay: null, items: [], index: 0, previousOverflow: "" };
+
+    function text(value) {
+      return String(value || "").replace(/\\s+/g, " ").trim();
+    }
+
+    function createOverlay() {
+      if (state.overlay) return state.overlay;
+      var overlay = document.createElement("div");
+      overlay.className = "tfp-evidence-lightbox";
+      overlay.setAttribute("hidden", "hidden");
+      overlay.innerHTML = '<div class="tfp-evidence-lightbox__panel" role="dialog" aria-modal="true" aria-label="Evidence screenshot gallery"><div class="tfp-evidence-lightbox__header"><div><div class="tfp-evidence-lightbox__eyebrow" data-tfp-evidence-role></div><div class="tfp-evidence-lightbox__title" data-tfp-evidence-title></div></div><button type="button" class="tfp-evidence-lightbox__button tfp-evidence-lightbox__close" data-tfp-evidence-close aria-label="Close evidence gallery">×</button></div><div class="tfp-evidence-lightbox__body"><img class="tfp-evidence-lightbox__img" data-tfp-evidence-img alt="Evidence screenshot" /></div><div class="tfp-evidence-lightbox__footer"><div class="tfp-evidence-lightbox__page" data-tfp-evidence-page></div><div class="tfp-evidence-lightbox__controls"><button type="button" class="tfp-evidence-lightbox__button" data-tfp-evidence-prev>Previous</button><div class="tfp-evidence-lightbox__counter" data-tfp-evidence-counter></div><button type="button" class="tfp-evidence-lightbox__button" data-tfp-evidence-next>Next</button></div></div></div>';
+      document.body.appendChild(overlay);
+      state.overlay = overlay;
+      return overlay;
+    }
+
+    function readItemsFromSection(section) {
+      var buttons = Array.prototype.slice.call(section.querySelectorAll("[data-trackflow-evidence-open]"));
+      return buttons.map(function (button, index) {
+        return {
+          button: button,
+          src: text(button.getAttribute("data-evidence-src")),
+          caption: text(button.getAttribute("data-evidence-caption")) || "Evidence screenshot",
+          role: text(button.getAttribute("data-evidence-role")) || "Browser-side proof screenshot",
+          pageUrl: text(button.getAttribute("data-evidence-page-url")),
+          index: index
+        };
+      }).filter(function (item) { return item.src; });
+    }
+
+    function render() {
+      var overlay = createOverlay();
+      var item = state.items[state.index];
+      if (!item) return;
+
+      var img = overlay.querySelector("[data-tfp-evidence-img]");
+      var title = overlay.querySelector("[data-tfp-evidence-title]");
+      var role = overlay.querySelector("[data-tfp-evidence-role]");
+      var page = overlay.querySelector("[data-tfp-evidence-page]");
+      var counter = overlay.querySelector("[data-tfp-evidence-counter]");
+      var prev = overlay.querySelector("[data-tfp-evidence-prev]");
+      var next = overlay.querySelector("[data-tfp-evidence-next]");
+
+      if (img) {
+        img.src = item.src;
+        img.alt = item.caption + " screenshot";
+      }
+      if (title) title.textContent = item.caption;
+      if (role) role.textContent = item.role;
+      if (page) page.textContent = item.pageUrl ? "Page URL: " + item.pageUrl : "Browser-side screenshot evidence";
+      if (counter) counter.textContent = String(state.index + 1) + " / " + String(state.items.length);
+      if (prev) prev.disabled = state.items.length < 2;
+      if (next) next.disabled = state.items.length < 2;
+    }
+
+    function openGallery(button) {
+      var section = button.closest("[data-trackflow-secure-evidence-gallery]");
+      if (!section) return;
+      state.items = readItemsFromSection(section);
+      state.index = Math.max(0, state.items.findIndex(function (item) { return item.button === button; }));
+      if (!state.items.length) return;
+      var overlay = createOverlay();
+      render();
+      overlay.removeAttribute("hidden");
+      state.previousOverflow = document.documentElement.style.overflow || "";
+      document.documentElement.style.overflow = "hidden";
+      try {
+        window.dispatchEvent(new CustomEvent("trackflow:secure-report-event", {
+          detail: {
+            eventName: "secure_report_evidence_gallery_open",
+            buttonLabel: state.items[state.index].caption,
+            eventSection: "browser_evidence"
+          }
+        }));
+      } catch (error) {}
+    }
+
+    function closeGallery() {
+      if (!state.overlay) return;
+      state.overlay.setAttribute("hidden", "hidden");
+      document.documentElement.style.overflow = state.previousOverflow || "";
+    }
+
+    function move(delta) {
+      if (!state.items.length) return;
+      state.index = (state.index + delta + state.items.length) % state.items.length;
+      render();
+    }
+
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) return;
+
+      var openButton = target.closest("[data-trackflow-evidence-open]");
+      if (openButton) {
+        event.preventDefault();
+        openGallery(openButton);
+        return;
+      }
+
+      if (target.closest("[data-tfp-evidence-close]")) {
+        event.preventDefault();
+        closeGallery();
+        return;
+      }
+
+      if (target.closest("[data-tfp-evidence-prev]")) {
+        event.preventDefault();
+        move(-1);
+        return;
+      }
+
+      if (target.closest("[data-tfp-evidence-next]")) {
+        event.preventDefault();
+        move(1);
+      }
+    }, true);
+
+    document.addEventListener("keydown", function (event) {
+      if (!state.overlay || state.overlay.hasAttribute("hidden")) return;
+      if (event.key === "Escape") closeGallery();
+      if (event.key === "ArrowLeft") move(-1);
+      if (event.key === "ArrowRight") move(1);
+    });
+  } catch (error) {}
+})();`;
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <script dangerouslySetInnerHTML={{ __html: script }} />
+    </>
   );
 }
 
@@ -2320,7 +2585,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const reviewFocusLabel = isSetupFirst ? "Tracking setup readiness" : (primaryConversionFocus || businessTypeLabel || "Conversion path review");
   const evidenceVideo = getEvidenceVideoDisplay(report);
   const secureEvidenceAssets = getSecureEvidenceAssetDisplays(report, token);
-  const secureEvidenceIntroText = getSecureEvidenceIntroText(manualEvidenceHero);
+  const secureEvidenceCopy = getSecureEvidenceSectionCopy({
+    isSetupFirst,
+    manualEvidenceHero,
+    setupActionLabel,
+    reviewFocusLabel,
+    reportMode,
+  });
   const heroHeadline = isSetupFirst
     ? "Private tracking readiness review"
     : companyName === "this website"
@@ -2445,6 +2716,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
       />
       <PdfDownloadExperienceScript />
       <EvidenceVideoExperienceScript />
+      <SecureEvidenceGalleryExperienceScript />
       <AssistantVisibilityScript />
       <ReportNavbar />
 
@@ -2643,10 +2915,10 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   href="#browser-evidence"
                   data-trackflow-analytics-event="secure_report_browser_evidence_anchor_click"
                   data-trackflow-analytics-section="hero"
-                  data-trackflow-analytics-label="Proof screenshots available"
+                  data-trackflow-analytics-label={isSetupFirst ? "Setup evidence available" : "Proof screenshots available"}
                   className="max-w-full break-words rounded-full border border-purple-100 bg-purple-50 px-3 py-2 text-purple-700 transition hover:border-purple-200 hover:bg-white sm:px-4"
                 >
-                  Proof screenshots available
+                  {isSetupFirst ? "Setup evidence available" : "Proof screenshots available"}
                 </a>
               ) : null}
               <span className="max-w-full break-words rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-emerald-700 sm:px-4">
@@ -2750,6 +3022,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </div>
         </div>
       </section>
+
+      <SecureEvidenceGallery assets={secureEvidenceAssets} sectionCopy={secureEvidenceCopy} />
 
       <section className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
         <div className="grid min-w-0 gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3 sm:rounded-[2rem] sm:p-4 lg:p-5">
@@ -2877,8 +3151,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
           </div>
         </section>
       ) : null}
-
-      <SecureEvidenceGallery assets={secureEvidenceAssets} introText={secureEvidenceIntroText} />
 
       <section
         id="findings"
