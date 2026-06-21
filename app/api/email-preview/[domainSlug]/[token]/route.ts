@@ -139,7 +139,10 @@ export async function GET(
     });
   }
 
-  return new Response(object.buffer, {
+  const responseBody = new ArrayBuffer(object.buffer.byteLength);
+  new Uint8Array(responseBody).set(object.buffer);
+
+  return new Response(responseBody, {
     status: 200,
     headers: {
       'Content-Type': contentType,
