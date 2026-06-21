@@ -230,10 +230,12 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
 
 
 const SECURE_EVIDENCE_ROLE_LABELS: Record<string, string> = {
-  form_success: "Form submission success state",
-  tag_assistant_after_submission: "Tag Assistant after submission",
-  ga4_debugview_or_gtm_preview: "GA4 DebugView / GTM Preview",
-  google_ads_diagnostics: "Google Ads diagnostics",
+  form_success: "Website / selected action screenshot",
+  tag_assistant_after_submission: "Tag Assistant / browser review screenshot",
+  ga4_debugview: "GA4 DebugView screenshot",
+  gtm_preview: "GTM Preview screenshot",
+  ga4_debugview_or_gtm_preview: "GA4 DebugView / GTM Preview screenshot",
+  google_ads_diagnostics: "Google Ads diagnostics screenshot",
   proof_screenshot: "Review proof screenshot",
 };
 
@@ -269,7 +271,102 @@ function firstArrayCandidate(...values: unknown[]): any[] {
   return [];
 }
 
-function getSecureEvidenceAssetDisplays(report: Record<string, any>, token: string): SecureEvidenceAssetDisplay[] {
+type SecureEvidenceDisplayCopyInput = {
+  role: string;
+  index: number;
+  fallbackRoleLabel: string;
+  fallbackCaption: string;
+  isSetupFirst: boolean;
+  manualEvidenceHero: ManualEvidenceHero | null;
+  setupActionLabel?: string;
+  reviewFocusLabel?: string;
+  reportMode?: string;
+};
+
+function getModeAwareSecureEvidenceDisplayCopy({
+  role,
+  index,
+  fallbackRoleLabel,
+  fallbackCaption,
+  isSetupFirst,
+  manualEvidenceHero,
+  setupActionLabel,
+  reviewFocusLabel,
+  reportMode,
+}: SecureEvidenceDisplayCopyInput): { roleLabel: string; caption: string } {
+  const normalizedRole = normalizeSecureEvidenceRole(role);
+  const actionLabel = cleanText(manualEvidenceHero?.actionLabel || setupActionLabel || reviewFocusLabel, "selected customer action");
+  const expectedEvent = cleanText(manualEvidenceHero?.expectedEvent, "");
+  const observedEvent = cleanText(manualEvidenceHero?.observedEvent, "Not clearly observed");
+  const cleanMode = cleanText(reportMode, "").toLowerCase();
+  const looksLikeTagAssistant =
+    normalizedRole.includes("tag_assistant") ||
+    normalizedRole.includes("debugview") ||
+    normalizedRole.includes("gtm_preview") ||
+    index === 1;
+  const looksLikeActionContext = normalizedRole === "form_success" || normalizedRole === "browser_side_proof" || index === 0;
+
+  if (isSetupFirst) {
+    if (looksLikeTagAssistant) {
+      return {
+        roleLabel: "Tag Assistant setup check",
+        caption: "The Tag Assistant/browser review did not clearly confirm the GA4/GTM foundation needed before conversion-event testing.",
+      };
+    }
+
+    if (looksLikeActionContext) {
+      return {
+        roleLabel: "Future test target context",
+        caption: "This screenshot shows the selected customer action that should be tested after the GA4/GTM foundation is installed or confirmed.",
+      };
+    }
+  }
+
+  if (looksLikeTagAssistant) {
+    if (expectedEvent && cleanMode === "event_positive_snapshot") {
+      return {
+        roleLabel: `Tag Assistant after ${actionLabel}`,
+        caption: `Expected event ${expectedEvent} was observed during the browser-visible/manual review. Final account-side confirmation is still recommended.`,
+      };
+    }
+
+    if (expectedEvent) {
+      return {
+        roleLabel: `Tag Assistant after ${actionLabel}`,
+        caption: `Expected event ${expectedEvent} was not clearly observed. Observed result: ${observedEvent}.`,
+      };
+    }
+
+    return {
+      roleLabel: `Tag Assistant after ${actionLabel}`,
+      caption: `The Tag Assistant result should be compared with GA4/GTM and account-side records for ${actionLabel}.`,
+    };
+  }
+
+  if (looksLikeActionContext) {
+    return {
+      roleLabel: `${actionLabel} test context`,
+      caption: `This screenshot shows the selected ${actionLabel} action context from the manual review.`,
+    };
+  }
+
+  return {
+    roleLabel: fallbackRoleLabel,
+    caption: fallbackCaption || fallbackRoleLabel,
+  };
+}
+
+function getSecureEvidenceAssetDisplays(
+  report: Record<string, any>,
+  token: string,
+  options: {
+    isSetupFirst: boolean;
+    manualEvidenceHero: ManualEvidenceHero | null;
+    setupActionLabel?: string;
+    reviewFocusLabel?: string;
+    reportMode?: string;
+  },
+): SecureEvidenceAssetDisplay[] {
   const privateReportCopy = getPrivateReportCopy(report);
   const rawAssets = firstArrayCandidate(
     report.securePageEvidenceAssets,
@@ -294,8 +391,19 @@ function getSecureEvidenceAssetDisplays(report: Record<string, any>, token: stri
     seen.add(assetId);
 
     const role = normalizeSecureEvidenceRole(raw.role);
-    const roleLabel = getSecureEvidenceRoleLabel(role);
-    const caption = cleanText(raw.caption || raw.title || raw.label, roleLabel);
+    const fallbackRoleLabel = getSecureEvidenceRoleLabel(role);
+    const fallbackCaption = cleanText(raw.caption || raw.title || raw.label, fallbackRoleLabel);
+    const { roleLabel, caption } = getModeAwareSecureEvidenceDisplayCopy({
+      role,
+      index,
+      fallbackRoleLabel,
+      fallbackCaption,
+      isSetupFirst: options.isSetupFirst,
+      manualEvidenceHero: options.manualEvidenceHero,
+      setupActionLabel: options.setupActionLabel,
+      reviewFocusLabel: options.reviewFocusLabel,
+      reportMode: options.reportMode,
+    });
     const fileName = cleanText(raw.fileName || raw.file_name || raw.name, "Proof screenshot");
     const pageUrl = normalizeManualHeroUrl(raw.pageUrl || raw.page_url || raw.url);
     const displayOrder = Number.isFinite(Number(raw.displayOrder ?? raw.display_order)) ? Number(raw.displayOrder ?? raw.display_order) : index + 1;
@@ -315,7 +423,7 @@ function getSecureEvidenceAssetDisplays(report: Record<string, any>, token: stri
     });
   });
 
-  return output.sort((a, b) => a.displayOrder - b.displayOrder).slice(0, 6);
+  return output.sort((a, b) => a.displayOrder - b.displayOrder).slice(0, 2);
 }
 
 function getSecureEvidenceSectionCopy({
@@ -356,7 +464,7 @@ function getSecureEvidenceSectionCopy({
     eyebrow: "Tag Assistant proof screenshots",
     title: "Visual evidence from the manual test",
     introText:
-      "These screenshots show the form/success state and the Tag Assistant view captured during the manual test.",
+      "These screenshots show the selected action context and the Tag Assistant view captured during the manual test.",
     noteTitle: "How to read this evidence",
     noteText:
       "Use these images as visual context from the test. The same action can be confirmed later inside GA4, GTM, Google Ads, and the relevant lead records.",
@@ -3038,7 +3146,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = isSetupFirst ? "Tracking setup readiness" : (primaryConversionFocus || businessTypeLabel || "Conversion path review");
   const evidenceVideo = getEvidenceVideoDisplay(report);
-  const secureEvidenceAssets = getSecureEvidenceAssetDisplays(report, token);
+  const secureEvidenceAssets = getSecureEvidenceAssetDisplays(report, token, {
+    isSetupFirst,
+    manualEvidenceHero,
+    setupActionLabel,
+    reviewFocusLabel,
+    reportMode,
+  });
   const secureEvidenceCopy = getSecureEvidenceSectionCopy({
     isSetupFirst,
     manualEvidenceHero,

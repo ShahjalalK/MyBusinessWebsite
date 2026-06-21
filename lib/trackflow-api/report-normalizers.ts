@@ -295,7 +295,11 @@ function normalizeSecurePageEvidenceAssetsPayload(body: AnyRecord = {}, privateP
     if (!key || seen.has(key)) continue;
     seen.add(key);
     output.push(asset);
-    if (output.length >= 12) break;
+    // TrackFlow secure evidence currently supports two client-facing proof images:
+    // 1) website / selected-action context, and 2) Tag Assistant / browser review.
+    // Keep the Firestore metadata payload aligned with that UI so old optional slots
+    // do not reappear through alternate register/export paths.
+    if (output.length >= 2) break;
   }
 
   return output;
