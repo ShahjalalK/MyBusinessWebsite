@@ -85,6 +85,9 @@ function tfpV2749TrackingCaseForFirestore(report: AnyRecord = {}, body: AnyRecor
 
 function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
   const raw = value || {};
+  const secureAssets = Array.isArray(raw.securePageEvidenceAssets || raw.secure_page_evidence_assets)
+    ? (raw.securePageEvidenceAssets || raw.secure_page_evidence_assets)
+    : [];
   return {
     token: String(raw.token || raw.reportToken || raw.report_token || ""),
     domain: String(raw.domain || raw.websiteUrl || raw.website_url || raw.website || ""),
@@ -101,6 +104,8 @@ function pickModularReportDebugFields(value: AnyRecord = {}): AnyRecord {
     homepageScreenshotUrl: String(raw.homepageScreenshotUrl || raw.homepage_screenshot_url || ""),
     evidenceVideoUrl: String(raw.evidenceVideoUrl || raw.evidence_video_url || raw.evidenceVideo?.videoUrl || raw.evidence_video?.video_url || ""),
     evidenceVideoStatus: String(raw.evidenceVideoStatus || raw.evidence_video_status || raw.evidenceVideo?.status || raw.evidence_video?.status || ""),
+    securePageEvidenceAssetCount: secureAssets.length,
+    securePageEvidenceRoles: secureAssets.map((item: AnyRecord) => String(item?.role || item?.type || "")).filter(Boolean),
     ogImagePathname: String(raw.ogImagePathname || raw.og_image_pathname || raw.previewImagePathname || raw.preview_image_pathname || ""),
     sourceType: String(raw.sourceType || raw.source_type || ""),
     outreachChannel: String(raw.outreachChannel || raw.outreach_channel || ""),
@@ -233,6 +238,64 @@ function normalizeEvidenceVideoForFirestore(value: any, report: AnyRecord = {}):
     addedAt: reportCleanString(raw.addedAt || raw.added_at || ""),
     optional: raw.optional !== false,
   };
+}
+
+function normalizeSecurePageEvidenceAssetsForFirestore(value: any, maxItems = 12): AnyRecord[] {
+  const rawItems = Array.isArray(value) ? value : [];
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const [index, item] of rawItems.entries()) {
+    const raw = item && typeof item === "object" && !Array.isArray(item) ? (item as AnyRecord) : {};
+    const b2Key = reportCleanString(raw.b2Key || raw.b2_key || raw.storageKey || raw.storage_key || raw.key || "");
+    if (!b2Key) continue;
+    const dedupeKey = b2Key.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const id = reportCleanString(raw.id || raw.assetId || raw.asset_id || `asset_${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 96) || `asset_${index + 1}`;
+    const role = reportCleanString(raw.role || raw.kind || raw.type || "browser_side_proof").toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "browser_side_proof";
+    const fileName = reportCleanString(raw.fileName || raw.file_name || raw.name || "secure-page-evidence.png").replace(/[\r\n"]/g, "").slice(0, 180);
+    const mimeType = reportCleanString(raw.mimeType || raw.mime_type || raw.contentType || raw.content_type || "image/png").toLowerCase().slice(0, 80);
+    const sizeBytes = Number(raw.sizeBytes || raw.size_bytes || raw.size || raw.contentLength || raw.content_length || 0) || 0;
+    const pageUrl = String(raw.pageUrl || raw.page_url || "");
+    const caption = reportCleanString(raw.caption || raw.title || raw.label || "Browser-side evidence screenshot").slice(0, 240);
+    const bucket = reportCleanString(raw.b2Bucket || raw.b2_bucket || raw.bucket || "");
+
+    output.push({
+      id,
+      role,
+      caption,
+      fileName,
+      file_name: fileName,
+      mimeType,
+      mime_type: mimeType,
+      sizeBytes,
+      size_bytes: sizeBytes,
+      pageUrl,
+      page_url: pageUrl,
+      source: reportCleanString(raw.source || "manual_secure_page_evidence_upload").slice(0, 120),
+      storageProvider: reportCleanString(raw.storageProvider || raw.storage_provider || "backblaze_b2"),
+      storage_provider: reportCleanString(raw.storageProvider || raw.storage_provider || "backblaze_b2"),
+      b2Bucket: bucket,
+      b2_bucket: bucket,
+      b2Key,
+      b2_key: b2Key,
+      etag: reportCleanString(raw.etag || raw.eTag || raw.b2Etag || raw.b2_etag || ""),
+      uploadedAt: reportCleanString(raw.uploadedAt || raw.uploaded_at || raw.createdAt || raw.created_at || ""),
+      uploaded_at: reportCleanString(raw.uploadedAt || raw.uploaded_at || raw.createdAt || raw.created_at || ""),
+      redacted: raw.redacted !== false,
+      displayOrder: Number(raw.displayOrder || raw.display_order || index + 1) || index + 1,
+      display_order: Number(raw.displayOrder || raw.display_order || index + 1) || index + 1,
+      publicUrl: reportCleanString(raw.publicUrl || raw.public_url || raw.proxyUrl || raw.proxy_url || ""),
+      public_url: reportCleanString(raw.publicUrl || raw.public_url || raw.proxyUrl || raw.proxy_url || ""),
+      note: reportCleanString(raw.note || "Private evidence image metadata only. Rendering can be enabled on the secure page UI separately.").slice(0, 260),
+    });
+
+    if (output.length >= maxItems) break;
+  }
+
+  return output;
 }
 
 
@@ -544,6 +607,10 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     logModularReportDebug("normalized_report", {
       normalized: pickModularReportDebugFields(report || {}),
       hasOgImageUrl: Boolean(report.ogImageUrl),
+      secureEvidence: {
+        incomingCount: Array.isArray(body?.securePageEvidenceAssets || body?.secure_page_evidence_assets) ? (body.securePageEvidenceAssets || body.secure_page_evidence_assets).length : 0,
+        normalizedCount: Array.isArray(report.securePageEvidenceAssets || report.secure_page_evidence_assets) ? (report.securePageEvidenceAssets || report.secure_page_evidence_assets).length : 0,
+      },
       manualEvidence: {
         incoming: pickManualEvidenceDebugFields(body || {}),
         normalized: pickManualEvidenceDebugFields(report || {}),
@@ -731,6 +798,16 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const cleanProblemCards = normalizeProblemCardsForFirestore(report.problemCards);
     const cleanVerificationPlan = normalizeVerificationPlanForFirestore(report.verificationPlan);
     const cleanTrackingSignalCards = normalizeTrackingSignalCardsForFirestore(report.trackingSignalCards);
+    const cleanSecurePageEvidenceAssets = normalizeSecurePageEvidenceAssetsForFirestore(
+      report.securePageEvidenceAssets || report.secure_page_evidence_assets || body?.securePageEvidenceAssets || body?.secure_page_evidence_assets,
+    );
+
+    logModularReportDebug("secure_evidence_firestore_resolution", {
+      incomingCount: Array.isArray(body?.securePageEvidenceAssets || body?.secure_page_evidence_assets) ? (body.securePageEvidenceAssets || body.secure_page_evidence_assets).length : 0,
+      normalizedCount: cleanSecurePageEvidenceAssets.length,
+      roles: cleanSecurePageEvidenceAssets.map((item) => String(item.role || "")),
+      note: "Firestore stores B2 metadata only, never dataUrl/base64 image data.",
+    });
 
     const payload: AnyRecord = {
       token: report.token,
@@ -804,6 +881,14 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       ctaClickCount: Number(existingData.ctaClickCount || 0),
     };
 
+    if (cleanSecurePageEvidenceAssets.length) {
+      payload.securePageEvidenceAssets = cleanSecurePageEvidenceAssets;
+      payload.secure_page_evidence_assets = cleanSecurePageEvidenceAssets;
+      payload.securePageEvidenceAssetCount = cleanSecurePageEvidenceAssets.length;
+      payload.secure_page_evidence_asset_count = cleanSecurePageEvidenceAssets.length;
+      payload.securePageEvidenceUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
     for (const field of legacyReportFieldsToDelete) {
       payload[field] = deleteField;
     }
@@ -850,6 +935,9 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       saved: pickModularReportDebugFields(savedData || {}),
       savedKeys: savedData && typeof savedData === "object" ? Object.keys(savedData).sort() : [],
       hasSavedOgImageUrl: Boolean(savedData?.ogImageUrl),
+      secureEvidenceSavedCount: Array.isArray(savedData?.securePageEvidenceAssets || savedData?.secure_page_evidence_assets)
+        ? (savedData.securePageEvidenceAssets || savedData.secure_page_evidence_assets).length
+        : 0,
     });
 
     if (normalizedDomain) {

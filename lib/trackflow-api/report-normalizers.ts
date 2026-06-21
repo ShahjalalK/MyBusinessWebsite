@@ -211,6 +211,96 @@ function normalizeEvidenceVideoPayload(body: AnyRecord = {}, privatePage: AnyRec
   };
 }
 
+function normalizeEvidenceAssetRole(value: any, fallback = "browser_side_proof"): string {
+  const role = firstCleanString(value, fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+  return role || fallback;
+}
+
+function normalizeSecurePageEvidenceAsset(item: any, index = 0): AnyRecord | null {
+  const raw = getObjectCandidate(item);
+  if (!Object.keys(raw).length) return null;
+
+  // Do not allow raw images/base64 into Firestore. Only stored-asset metadata is kept.
+  const b2Key = firstCleanString(raw.b2Key, raw.b2_key, raw.storageKey, raw.storage_key, raw.key);
+  if (!b2Key) return null;
+
+  const id = firstCleanString(raw.id, raw.assetId, raw.asset_id, `asset_${index + 1}`)
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 96) || `asset_${index + 1}`;
+  const role = normalizeEvidenceAssetRole(raw.role || raw.kind || raw.type || raw.slot);
+  const fileName = firstCleanString(raw.fileName, raw.file_name, raw.name, "secure-page-evidence.png").replace(/[\r\n"]/g, "").slice(0, 180);
+  const mimeType = firstCleanString(raw.mimeType, raw.mime_type, raw.contentType, raw.content_type, "image/png").toLowerCase().slice(0, 80);
+  const sizeBytes = Number(raw.sizeBytes || raw.size_bytes || raw.size || raw.contentLength || raw.content_length || 0) || 0;
+  const pageUrl = sanitizeOptionalUrl(firstCleanString(raw.pageUrl, raw.page_url, raw.url, raw.testUrl, raw.test_url));
+  const caption = firstCleanString(raw.caption, raw.title, raw.label, "Browser-side evidence screenshot").replace(/\s+/g, " " ).slice(0, 240);
+  const source = firstCleanString(raw.source, "manual_secure_page_evidence_upload").replace(/\s+/g, " " ).slice(0, 120);
+  const bucket = firstCleanString(raw.b2Bucket, raw.b2_bucket, raw.bucket);
+
+  return {
+    id,
+    role,
+    caption,
+    fileName,
+    file_name: fileName,
+    mimeType,
+    mime_type: mimeType,
+    sizeBytes,
+    size_bytes: sizeBytes,
+    pageUrl,
+    page_url: pageUrl,
+    source,
+    storageProvider: firstCleanString(raw.storageProvider, raw.storage_provider, "backblaze_b2"),
+    storage_provider: firstCleanString(raw.storageProvider, raw.storage_provider, "backblaze_b2"),
+    b2Bucket: bucket,
+    b2_bucket: bucket,
+    b2Key,
+    b2_key: b2Key,
+    etag: firstCleanString(raw.etag, raw.eTag, raw.b2Etag, raw.b2_etag),
+    uploadedAt: firstCleanString(raw.uploadedAt, raw.uploaded_at, raw.createdAt, raw.created_at),
+    uploaded_at: firstCleanString(raw.uploadedAt, raw.uploaded_at, raw.createdAt, raw.created_at),
+    redacted: raw.redacted !== false,
+    displayOrder: Number(raw.displayOrder || raw.display_order || index + 1) || index + 1,
+    display_order: Number(raw.displayOrder || raw.display_order || index + 1) || index + 1,
+    publicUrl: sanitizeOptionalUrl(firstCleanString(raw.publicUrl, raw.public_url, raw.proxyUrl, raw.proxy_url)),
+    public_url: sanitizeOptionalUrl(firstCleanString(raw.publicUrl, raw.public_url, raw.proxyUrl, raw.proxy_url)),
+    note: firstCleanString(raw.note, "Private evidence image metadata only. Rendering can be enabled on the secure page UI separately.").replace(/\s+/g, " " ).slice(0, 260),
+  };
+}
+
+function normalizeSecurePageEvidenceAssetsPayload(body: AnyRecord = {}, privatePage: AnyRecord = {}): AnyRecord[] {
+  const rawItems = [
+    body.securePageEvidenceAssets,
+    body.secure_page_evidence_assets,
+    body.secureEvidenceAssets,
+    body.secure_evidence_assets,
+    privatePage.securePageEvidenceAssets,
+    privatePage.secure_page_evidence_assets,
+    privatePage.secureEvidenceAssets,
+    privatePage.secure_evidence_assets,
+  ].find((item) => Array.isArray(item)) as any[] | undefined;
+
+  if (!rawItems?.length) return [];
+
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const [index, item] of rawItems.entries()) {
+    const asset = normalizeSecurePageEvidenceAsset(item, index);
+    if (!asset) continue;
+    const key = String(asset.b2Key || asset.b2_key).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(asset);
+    if (output.length >= 12) break;
+  }
+
+  return output;
+}
+
 export function sanitizeLocalRedirectTarget(value: any): string {
   const raw = String(value || "").trim();
   if (!raw) return "/contact";
@@ -1780,6 +1870,7 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
   const alertSignupContext = isAlertSignupReportPayload(body, privatePage);
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
   const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
+  const securePageEvidenceAssets = normalizeSecurePageEvidenceAssetsPayload(body, privatePage);
   const manualConversionEvidence = normalizeManualConversionEvidenceForReport(body, privatePage);
   const incomingManualEvidenceHero = normalizeIncomingManualEvidenceHero(
     getObjectCandidate(
@@ -2025,6 +2116,10 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     manualEvidenceHero: manualEvidenceHero || undefined,
     manual_evidence_hero: manualEvidenceHero || undefined,
     evidenceVideo: evidenceVideo.enabled ? evidenceVideo : undefined,
+    securePageEvidenceAssets: securePageEvidenceAssets.length ? securePageEvidenceAssets : undefined,
+    secure_page_evidence_assets: securePageEvidenceAssets.length ? securePageEvidenceAssets : undefined,
+    securePageEvidenceAssetCount: securePageEvidenceAssets.length,
+    secure_page_evidence_asset_count: securePageEvidenceAssets.length,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
   };
 
@@ -2160,6 +2255,10 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     evidenceVideoVisibility: evidenceVideo.enabled ? "unlisted" : "",
     evidenceVideoTitle: evidenceVideo.enabled ? evidenceVideo.title : "",
     evidenceVideoStatus: evidenceVideo.status || "",
+    securePageEvidenceAssets,
+    secure_page_evidence_assets: securePageEvidenceAssets,
+    securePageEvidenceAssetCount: securePageEvidenceAssets.length,
+    secure_page_evidence_asset_count: securePageEvidenceAssets.length,
     contactEmail: firstCleanString(body.contactEmail, body.contact_email, body.agencyEmail, body.agency_email, MAIN_INBOX_EMAIL),
     ctaUrl: firstCleanString(body.ctaUrl, body.cta_url, privatePage.ctaUrl, privatePage.cta_url, "/contact"),
     ctaText,

@@ -8352,6 +8352,9 @@ async function handleResolveExistingReportForReports(body: AnyRecord = {}) {
 
 function pickReportRegisterDebugFields(value: AnyRecord = {}): AnyRecord {
   const raw = value || {};
+  const secureAssets = Array.isArray(raw.securePageEvidenceAssets || raw.secure_page_evidence_assets)
+    ? (raw.securePageEvidenceAssets || raw.secure_page_evidence_assets)
+    : [];
   return {
     token: String(raw.token || raw.reportToken || raw.report_token || ""),
     domain: String(raw.domain || raw.websiteUrl || raw.website_url || raw.website || ""),
@@ -8364,10 +8367,75 @@ function pickReportRegisterDebugFields(value: AnyRecord = {}): AnyRecord {
     openGraphImageUrl: String(raw.openGraphImageUrl || raw.open_graph_image_url || ""),
     previewImageUrl: String(raw.previewImageUrl || raw.preview_image_url || ""),
     homepageScreenshotUrl: String(raw.homepageScreenshotUrl || raw.homepage_screenshot_url || ""),
+    securePageEvidenceAssetCount: secureAssets.length,
+    securePageEvidenceRoles: secureAssets.map((item: AnyRecord) => String(item?.role || item?.type || "")).filter(Boolean),
     ogImagePathname: String(raw.ogImagePathname || raw.og_image_pathname || raw.previewImagePathname || raw.preview_image_pathname || ""),
     hasPrivateReportCopy: Boolean(raw.privateReportCopy || raw.private_report_copy),
     hasHeavyDuplicates: Boolean(raw.privateReportCopy || raw.private_report_copy || raw.business_problems || raw.verification_plan || raw.website_speed || raw.manual_ads_transparency),
   };
+}
+
+function normalizeSecurePageEvidenceAssetsForRegister(...values: any[]): AnyRecord[] {
+  const output: AnyRecord[] = [];
+  const seen = new Set<string>();
+
+  const collect = (value: any) => {
+    const rawItems = Array.isArray(value) ? value : [];
+    for (const [index, item] of rawItems.entries()) {
+      const raw = item && typeof item === "object" && !Array.isArray(item) ? (item as AnyRecord) : {};
+      const b2Key = cleanCell(raw.b2Key || raw.b2_key || raw.storageKey || raw.storage_key || raw.key || "");
+      if (!b2Key || seen.has(b2Key.toLowerCase())) continue;
+      seen.add(b2Key.toLowerCase());
+
+      const id = cleanCell(raw.id || raw.assetId || raw.asset_id || `asset_${output.length + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 96) || `asset_${output.length + 1}`;
+      const role = cleanCell(raw.role || raw.kind || raw.type || "browser_side_proof").toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "browser_side_proof";
+      const fileName = cleanCell(raw.fileName || raw.file_name || raw.name || "secure-page-evidence.png").replace(/[\r\n"]/g, "").slice(0, 180);
+      const mimeType = cleanCell(raw.mimeType || raw.mime_type || raw.contentType || raw.content_type || "image/png").toLowerCase().slice(0, 80);
+      const sizeBytes = Number(raw.sizeBytes || raw.size_bytes || raw.size || raw.contentLength || raw.content_length || 0) || 0;
+      const pageUrl = sanitizeOptionalUrl(cleanCell(raw.pageUrl || raw.page_url || raw.url || raw.testUrl || raw.test_url || ""));
+      const caption = cleanCell(raw.caption || raw.title || raw.label || "Browser-side evidence screenshot").replace(/\s+/g, " " ).slice(0, 240);
+      const bucket = cleanCell(raw.b2Bucket || raw.b2_bucket || raw.bucket || "");
+
+      output.push({
+        id,
+        role,
+        caption,
+        fileName,
+        file_name: fileName,
+        mimeType,
+        mime_type: mimeType,
+        sizeBytes,
+        size_bytes: sizeBytes,
+        pageUrl,
+        page_url: pageUrl,
+        source: cleanCell(raw.source || "manual_secure_page_evidence_upload").slice(0, 120),
+        storageProvider: cleanCell(raw.storageProvider || raw.storage_provider || "backblaze_b2"),
+        storage_provider: cleanCell(raw.storageProvider || raw.storage_provider || "backblaze_b2"),
+        b2Bucket: bucket,
+        b2_bucket: bucket,
+        b2Key,
+        b2_key: b2Key,
+        etag: cleanCell(raw.etag || raw.eTag || raw.b2Etag || raw.b2_etag || ""),
+        uploadedAt: cleanCell(raw.uploadedAt || raw.uploaded_at || raw.createdAt || raw.created_at || ""),
+        uploaded_at: cleanCell(raw.uploadedAt || raw.uploaded_at || raw.createdAt || raw.created_at || ""),
+        redacted: raw.redacted !== false,
+        displayOrder: Number(raw.displayOrder || raw.display_order || index + 1) || index + 1,
+        display_order: Number(raw.displayOrder || raw.display_order || index + 1) || index + 1,
+        publicUrl: sanitizeOptionalUrl(cleanCell(raw.publicUrl || raw.public_url || raw.proxyUrl || raw.proxy_url || "")),
+        public_url: sanitizeOptionalUrl(cleanCell(raw.publicUrl || raw.public_url || raw.proxyUrl || raw.proxy_url || "")),
+        note: cleanCell(raw.note || "Private evidence image metadata only. Rendering can be enabled on the secure page UI separately.").replace(/\s+/g, " " ).slice(0, 260),
+      });
+
+      if (output.length >= 12) return;
+    }
+  };
+
+  for (const value of values) {
+    collect(value);
+    if (output.length >= 12) break;
+  }
+
+  return output;
 }
 
 function logReportRegisterDebug(stage: string, details: AnyRecord = {}) {
@@ -8467,6 +8535,10 @@ async function handleReportRegister(req: Request) {
     hasOgImageUrl: Boolean(report.ogImageUrl),
     hasHomepageScreenshotUrl: Boolean(report.homepageScreenshotUrl),
     hasPdfViewUrl: Boolean(report.pdfViewUrl),
+    secureEvidence: {
+      incomingCount: Array.isArray(body?.securePageEvidenceAssets || body?.secure_page_evidence_assets) ? (body.securePageEvidenceAssets || body.secure_page_evidence_assets).length : 0,
+      normalizedCount: Array.isArray(report.securePageEvidenceAssets || report.secure_page_evidence_assets) ? (report.securePageEvidenceAssets || report.secure_page_evidence_assets).length : 0,
+    },
     manualEvidence: {
       incoming: {
         hasManualConversionEvidence: Boolean(body?.manualConversionEvidence || body?.manual_conversion_evidence),
@@ -8669,6 +8741,22 @@ async function handleReportRegister(req: Request) {
     preservedExistingManualEvidence: shouldPreserveExistingManualEvidence,
   });
 
+  const cleanSecurePageEvidenceAssets = normalizeSecurePageEvidenceAssetsForRegister(
+    report.securePageEvidenceAssets,
+    report.secure_page_evidence_assets,
+    body?.securePageEvidenceAssets,
+    body?.secure_page_evidence_assets,
+    report.privateReportCopy?.securePageEvidenceAssets,
+    report.privateReportCopy?.secure_page_evidence_assets,
+  );
+
+  logReportRegisterDebug("secure_evidence_firestore_resolution", {
+    incomingCount: Array.isArray(body?.securePageEvidenceAssets || body?.secure_page_evidence_assets) ? (body.securePageEvidenceAssets || body.secure_page_evidence_assets).length : 0,
+    normalizedCount: cleanSecurePageEvidenceAssets.length,
+    roles: cleanSecurePageEvidenceAssets.map((item) => String(item.role || "")),
+    note: "Firestore stores B2 metadata only, never dataUrl/base64 image data.",
+  });
+
   const payload: AnyRecord = {
     token: report.token,
     domainSlug: report.domainSlug,
@@ -8725,6 +8813,14 @@ async function handleReportRegister(req: Request) {
     ctaClickCount: Number(existingData.ctaClickCount || 0),
   };
 
+  if (cleanSecurePageEvidenceAssets.length) {
+    payload.securePageEvidenceAssets = cleanSecurePageEvidenceAssets;
+    payload.secure_page_evidence_assets = cleanSecurePageEvidenceAssets;
+    payload.securePageEvidenceAssetCount = cleanSecurePageEvidenceAssets.length;
+    payload.secure_page_evidence_asset_count = cleanSecurePageEvidenceAssets.length;
+    payload.securePageEvidenceUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+
   for (const field of legacyReportFieldsToDelete) {
     payload[field] = deleteField;
   }
@@ -8764,6 +8860,7 @@ async function handleReportRegister(req: Request) {
     docPath: `audit_reports/${report.token}`,
     existing: existing.exists,
     payload: pickReportRegisterDebugFields(payload),
+    secureEvidenceCount: cleanSecurePageEvidenceAssets.length,
     deleteHeavyDuplicateFields: true,
     payloadKeys: Object.keys(payload).sort(),
   });
@@ -8777,6 +8874,9 @@ async function handleReportRegister(req: Request) {
     exists: savedSnap.exists,
     saved: pickReportRegisterDebugFields(savedData),
     savedKeys: Object.keys(savedData).sort(),
+    secureEvidenceSavedCount: Array.isArray(savedData?.securePageEvidenceAssets || savedData?.secure_page_evidence_assets)
+      ? (savedData.securePageEvidenceAssets || savedData.secure_page_evidence_assets).length
+      : 0,
   });
 
   if (normalizedDomain) {
