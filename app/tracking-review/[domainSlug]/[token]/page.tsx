@@ -78,6 +78,22 @@ type SecureEvidenceSectionCopy = {
   analyticsLabel: string;
 };
 
+type BusinessImpactArticleSection = {
+  title: string;
+  body: string[];
+};
+
+type BusinessImpactArticle = {
+  eyebrow: string;
+  title: string;
+  summary: string;
+  highlights: { label: string; value: string }[];
+  modalIntro: string[];
+  sections: BusinessImpactArticleSection[];
+  recommendedStep: string;
+  analyticsLabel: string;
+};
+
 const DEFAULT_CHECKS = [
   "GA4 and Google Tag Manager signals checked with Tag Assistant",
   "Google Ads conversion and remarketing request signals",
@@ -350,6 +366,191 @@ function getSecureEvidenceSectionCopy({
       { label: "Next check", value: "Confirm in accounts" },
     ],
     analyticsLabel: "Tag Assistant manual test proof screenshots visible",
+  };
+}
+
+function getBusinessImpactArticle({
+  isSetupFirst,
+  manualEvidenceHero,
+  setupActionLabel,
+  reviewFocusLabel,
+}: {
+  isSetupFirst: boolean;
+  manualEvidenceHero: ManualEvidenceHero | null;
+  setupActionLabel?: string;
+  reviewFocusLabel?: string;
+}): BusinessImpactArticle {
+  const actionLabel = cleanText(manualEvidenceHero?.actionLabel || setupActionLabel || reviewFocusLabel, "the selected business action");
+  const expectedEvent = cleanText(manualEvidenceHero?.expectedEvent, "");
+  const expectedEventPhrase = expectedEvent ? `the expected conversion event, ${expectedEvent}` : "the expected conversion event";
+
+  if (isSetupFirst) {
+    return {
+      eyebrow: "Business impact",
+      title: "Business impact if the GA4/GTM tracking foundation is not set up",
+      summary:
+        "GA4 and Google Tag Manager are not only useful for Google Ads or Facebook/Meta Ads. They are the measurement foundation that helps a business understand website activity, lead actions, channel quality, and reporting performance.",
+      highlights: [
+        { label: "Website clarity", value: "Visitor behavior and page performance may be harder to understand." },
+        { label: "Lead tracking", value: "Key actions need the foundation before they can be measured reliably." },
+        { label: "Channel reporting", value: "Search, social, referral, email, direct, and paid traffic may be harder to compare." },
+        { label: "Dashboard readiness", value: "Looker Studio needs reliable GA4/GTM data behind it." },
+      ],
+      modalIntro: [
+        "GA4 and Google Tag Manager are not only useful for Google Ads or Facebook/Meta Ads. They are the measurement foundation that helps a business understand what people are doing on the website, which pages are working, and which actions are creating real business value.",
+        "In this review, the Tag Assistant check did not show a clear GA4/GTM tracking foundation for the website. Because the foundation itself needs to be set up or verified first, this review does not judge individual events such as generate_lead, form_submit, phone_click, booking, or purchase yet.",
+        "The first priority is to confirm the analytics foundation. After that, the main business actions can be tested properly.",
+      ],
+      sections: [
+        {
+          title: "Website performance may be difficult to understand",
+          body: [
+            "The business may be getting visitors, but without a proper analytics foundation, it becomes difficult to see what those visitors are actually doing.",
+            "For example, it may be unclear which pages people visit most, where they lose interest, which service pages perform better, or which pages help turn visitors into enquiries.",
+          ],
+        },
+        {
+          title: "Lead tracking may not be ready",
+          body: [
+            "Important actions such as form submissions, phone clicks, WhatsApp enquiries, bookings, purchases, or enquiry button clicks need a proper tracking foundation before they can be measured reliably.",
+            "Without GA4/GTM in place, the business may receive leads, but those actions may not be recorded clearly inside analytics or reporting dashboards.",
+          ],
+        },
+        {
+          title: "Marketing channel reporting may be incomplete",
+          body: [
+            "This is not only a paid ads issue. Even if the business is not running Google Ads or Facebook Ads, GA4/GTM still helps show which channels are bringing quality visitors.",
+            "That can include Google Search, Facebook, Instagram, LinkedIn, referral websites, email campaigns, direct traffic, and other marketing sources.",
+            "Without this foundation, it becomes harder to understand which channels are helping the business grow.",
+          ],
+        },
+        {
+          title: "Paid ads decisions may be harder",
+          body: [
+            "For businesses running Google Ads, Facebook Ads, Meta Ads, or other paid campaigns, the ad platforms may still show clicks, impressions, reach, and spend.",
+            "But the business also needs to know what happened after those people reached the website. Did they view the right page? Did they submit a form? Did they call? Did they book? Did they become a lead?",
+            "Without GA4/GTM and properly tested events, it becomes harder to connect ad spend with real customer actions.",
+          ],
+        },
+        {
+          title: "Landing page performance may be unclear",
+          body: [
+            "A landing page can receive traffic but still fail to produce enquiries. Without analytics and event tracking, it becomes harder to see which pages are helping visitors take action and which pages need improvement.",
+            "This can make website and campaign optimization slower and less accurate.",
+          ],
+        },
+        {
+          title: "Looker Studio reporting may not have reliable website data",
+          body: [
+            "Looker Studio can be a very useful reporting dashboard, but it depends on the quality of the data behind it.",
+            "If GA4/GTM is not set up and key actions are not configured, the dashboard may show limited information. It may not clearly show website behavior, lead actions, conversion paths, landing page performance, or channel-level results.",
+            "A stronger dashboard starts with a stronger tracking foundation.",
+          ],
+        },
+        {
+          title: "Historical data may be missed",
+          body: [
+            "If GA4 is not set up today, the business cannot go back later and recover the website behavior data that was missed.",
+            "Setting up tracking early helps create a baseline. That baseline can be used later to compare performance before and after website updates, SEO work, advertising campaigns, landing page changes, or conversion improvements.",
+          ],
+        },
+        {
+          title: "Business decisions may depend too much on guesswork",
+          body: [
+            "Without a clear measurement foundation, the business may have to rely on partial signals such as inbox messages, calls, ad platform numbers, or manual assumptions.",
+            "Those signals are useful, but they do not always show the full website-to-lead journey. A proper GA4/GTM setup helps connect traffic, pages, actions, and business outcomes in a more structured way.",
+          ],
+        },
+      ],
+      recommendedStep:
+        "Set up or verify the GA4/GTM tracking foundation first. After the foundation is confirmed, test the selected business action in a controlled way, such as form submission, phone click, WhatsApp click, booking, checkout, purchase, or another key customer action. Once the foundation and key events are verified, the business can use the data more confidently for GA4 reporting, Google Ads and Facebook/Meta Ads optimization, Looker Studio dashboards, cost-per-lead analysis, landing page improvement, remarketing audiences, and better marketing decisions.",
+      analyticsLabel: "Business impact modal for tracking foundation setup",
+    };
+  }
+
+  return {
+    eyebrow: "Business impact",
+    title: "Business impact if the expected conversion event is not recorded",
+    summary:
+      `${actionLabel} reached the completion/success state during the manual test, but ${expectedEventPhrase} was not observed in the Tag Assistant result. This can affect lead reporting, paid ads optimization, cost-per-lead analysis, remarketing, and Looker Studio reporting.`,
+    highlights: [
+      { label: "Lead reporting", value: "Traffic may be visible, but completed lead actions may not be counted clearly." },
+      { label: "Paid ads", value: "Google Ads and Meta Ads may be judged by surface-level activity instead of real enquiries." },
+      { label: "Cost per lead", value: "Ad spend may be harder to connect with actual form submissions, calls, bookings, or enquiries." },
+      { label: "Looker Studio", value: "Dashboards may show activity but miss the final visitor-to-lead result." },
+    ],
+    modalIntro: [
+      "GA4 or Google Tag Manager may already be installed on the website, but installation alone does not always mean the most important business actions are being measured correctly.",
+      "For a business, the real value is not only knowing that someone visited the website. The important question is whether completed actions — such as form submissions, phone clicks, WhatsApp enquiries, bookings, purchases, or other lead actions — are being recorded clearly after the visitor completes them.",
+      `In this review, the selected action was tested manually. The action reached the completion/success state, but ${expectedEventPhrase} was not observed in the Tag Assistant result.`,
+    ],
+    sections: [
+      {
+        title: "Lead reporting may be incomplete",
+        body: [
+          "The website may still receive real enquiries or form submissions, but GA4 may not record those actions clearly as leads.",
+          "This means the business can see traffic, page views, and engagement, but may not have a clear count of how many visitors actually became leads.",
+        ],
+      },
+      {
+        title: "Paid ads may be harder to optimize",
+        body: [
+          "For businesses running Google Ads, Facebook Ads, Meta Ads, or other paid campaigns, accurate conversion tracking is especially important.",
+          "Ad platforms can show clicks, impressions, reach, and engagement, but the business still needs to know what happened after the click.",
+          "If the expected lead event is not recorded, it becomes harder to understand which campaign, audience, keyword, creative, or landing page is producing real enquiries. Paid campaigns may then be judged by surface-level activity instead of completed business actions.",
+        ],
+      },
+      {
+        title: "Cost per lead may be difficult to measure",
+        body: [
+          "Ad spend is only meaningful when it can be connected to real outcomes.",
+          "If form submissions, calls, bookings, WhatsApp clicks, or other lead actions are not passed correctly as conversions, the business may know how much was spent but may not clearly know which spend produced actual enquiries.",
+          "This makes cost-per-lead reporting less reliable and can make budget decisions harder.",
+        ],
+      },
+      {
+        title: "Good traffic and weak traffic may look similar",
+        body: [
+          "When only page views, sessions, or engagement events are visible, a visitor who simply browses the website can look very similar to a visitor who submits a form or becomes a real lead.",
+          "This can make reporting less accurate because the final business action is missing from the journey.",
+        ],
+      },
+      {
+        title: "Campaign and landing page performance may be unclear",
+        body: [
+          "A proper conversion event helps show which campaigns and landing pages are moving visitors toward action.",
+          "Without that event, it becomes harder to identify which pages are generating enquiries and which pages need improvement.",
+          "The business may see traffic coming in, but the final step from visitor to lead may remain unclear.",
+        ],
+      },
+      {
+        title: "Remarketing audiences may be less accurate",
+        body: [
+          "A clear lead event helps separate people who completed a key action from people who only visited the website.",
+          "Without that separation, remarketing audiences may be incomplete or less useful.",
+          "This can affect future Google Ads, Facebook/Meta Ads, and retargeting campaigns because the business may not be able to properly include or exclude the right users.",
+        ],
+      },
+      {
+        title: "Looker Studio reports may miss the final business result",
+        body: [
+          "Looker Studio can turn GA4, Google Ads, Meta Ads, and other data into a clear business dashboard. But the dashboard is only as useful as the data behind it.",
+          "If the expected conversion event is missing, a Looker Studio report may still show traffic, sessions, clicks, landing pages, and engagement — but it may miss the most important step: which visitors actually became leads.",
+          "This can make client reporting look complete on the surface while still missing the final business outcome.",
+        ],
+      },
+      {
+        title: "Business decisions may be based on partial data",
+        body: [
+          "When the selected business action is not tracked correctly, the business may make decisions using incomplete information.",
+          "A campaign may look weak because the leads are not being recorded properly. Another campaign may look strong because it brings traffic, even if it does not produce real enquiries.",
+          "This can make it harder to decide where to increase budget, where to reduce spend, and which parts of the website need improvement.",
+        ],
+      },
+    ],
+    recommendedStep:
+      "Test the selected action again inside GTM Preview, GA4 DebugView, Google Ads conversion diagnostics, and the relevant lead records such as the form inbox, CRM, booking platform, call records, WhatsApp records, or backend records. If the expected event is missing, adjust the setup so that the correct conversion event fires only after the successful completion of the selected business action. Once the event is verified, the business can use the data more confidently for GA4 reporting, Google Ads and Facebook/Meta Ads optimization, Looker Studio dashboards, cost-per-lead analysis, remarketing audiences, and better marketing decisions.",
+    analyticsLabel: "Business impact modal for expected conversion event not recorded",
   };
 }
 
@@ -1658,6 +1859,201 @@ function EvidenceVideoExperienceScript() {
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
+
+function BusinessImpactSection({ article }: { article: BusinessImpactArticle }) {
+  return (
+    <section
+      id="business-impact"
+      data-trackflow-observe-event="secure_report_business_impact_preview_visible"
+      data-trackflow-analytics-section="business_impact"
+      data-trackflow-analytics-label={article.analyticsLabel}
+      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-14"
+    >
+      <div className="overflow-hidden rounded-[1.5rem] border border-emerald-100 bg-white shadow-2xl shadow-emerald-950/10 sm:rounded-[2rem]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="min-w-0 bg-gradient-to-br from-emerald-50 via-white to-blue-50 p-5 sm:p-7 lg:p-8">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700">
+              {article.eyebrow}
+            </p>
+            <h2 className="mt-3 break-words text-2xl font-black tracking-[-0.045em] text-slate-950 sm:text-4xl">
+              {article.title}
+            </h2>
+            <p className="mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-600 sm:text-base sm:leading-8">
+              {article.summary}
+            </p>
+
+            <button
+              type="button"
+              data-trackflow-business-impact-open="true"
+              data-trackflow-analytics-event="secure_report_business_impact_open"
+              data-trackflow-analytics-section="business_impact"
+              data-trackflow-analytics-label="See full business impact"
+              className="mt-5 inline-flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-slate-950 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 sm:w-auto"
+            >
+              See full business impact
+            </button>
+          </div>
+
+          <div className="grid min-w-0 gap-3 border-t border-emerald-100 bg-slate-50 p-4 sm:grid-cols-2 sm:p-5 lg:border-l lg:border-t-0 lg:p-6">
+            {article.highlights.map((item) => (
+              <article key={`${item.label}-${item.value}`} className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">{item.label}</p>
+                <p className="mt-2 break-words text-sm font-bold leading-6 text-slate-700">{item.value}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div
+        data-trackflow-business-impact-modal
+        className="tfp-business-impact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tfp-business-impact-title"
+        hidden
+      >
+        <div className="tfp-business-impact-modal__panel">
+          <div className="tfp-business-impact-modal__header">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300 sm:text-[11px]">Business impact details</p>
+              <h2 id="tfp-business-impact-title" className="mt-2 break-words text-lg font-black leading-tight tracking-[-0.04em] text-white sm:text-3xl">
+                {article.title}
+              </h2>
+            </div>
+            <button
+              type="button"
+              data-trackflow-business-impact-close="true"
+              aria-label="Close business impact details"
+              className="tfp-business-impact-modal__close"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="tfp-business-impact-modal__body">
+            <div className="rounded-[1.25rem] border border-emerald-100 bg-emerald-50 p-4 sm:rounded-[1.5rem] sm:p-5">
+              <div className="space-y-3 text-sm font-semibold leading-7 text-emerald-950 sm:text-base sm:leading-8">
+                {article.modalIntro.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-2">
+              {article.sections.map((section) => (
+                <article key={section.title} className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:p-5">
+                  <h3 className="break-words text-base font-black leading-6 text-slate-950 sm:text-lg sm:leading-7">
+                    {section.title}
+                  </h3>
+                  <div className="mt-3 space-y-2 text-sm font-semibold leading-7 text-slate-600">
+                    {section.body.map((paragraph) => (
+                      <p key={paragraph}>{paragraph}</p>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-[1.25rem] border border-blue-100 bg-blue-50 p-4 sm:mt-5 sm:rounded-[1.5rem] sm:p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">Recommended next step</p>
+              <p className="mt-3 text-sm font-bold leading-7 text-blue-950 sm:text-base sm:leading-8">
+                {article.recommendedStep}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BusinessImpactExperienceScript() {
+  const styles = `
+.tfp-business-impact-modal[hidden] { display: none !important; }
+.tfp-business-impact-modal { position: fixed; inset: 0; z-index: 2147482500; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 6, 23, .78); backdrop-filter: blur(12px); }
+.tfp-business-impact-modal__panel { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(1040px, 100%); max-height: min(92vh, 900px); overflow: hidden; border: 1px solid rgba(255,255,255,.16); border-radius: 30px; background: #f8fafc; box-shadow: 0 28px 90px rgba(0,0,0,.42); }
+.tfp-business-impact-modal__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 18px; background: linear-gradient(135deg, #020617, #064e3b 56%, #0f172a); }
+.tfp-business-impact-modal__close { display: inline-grid; place-items: center; flex: 0 0 auto; width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; background: rgba(255,255,255,.1); color: white; font-size: 26px; line-height: 1; font-weight: 900; cursor: pointer; }
+.tfp-business-impact-modal__close:hover { background: rgba(16,185,129,.72); border-color: rgba(167,243,208,.65); }
+.tfp-business-impact-modal__body { min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; }
+@media (max-width: 640px) {
+  .tfp-business-impact-modal { align-items: stretch; padding: 0; }
+  .tfp-business-impact-modal__panel { width: 100%; max-height: none; height: 100dvh; border: 0; border-radius: 0; }
+  .tfp-business-impact-modal__header { padding: 16px 14px; }
+  .tfp-business-impact-modal__body { padding: 14px; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+}
+`;
+
+  const script = `
+(function () {
+  try {
+    if (window.__trackflowBusinessImpactModalReady) return;
+    window.__trackflowBusinessImpactModalReady = true;
+
+    var previousOverflow = '';
+
+    function getModal() {
+      return document.querySelector('[data-trackflow-business-impact-modal]');
+    }
+
+    function openModal() {
+      var modal = getModal();
+      if (!modal) return;
+      previousOverflow = document.body.style.overflow || '';
+      document.body.style.overflow = 'hidden';
+      modal.hidden = false;
+      window.setTimeout(function () {
+        try {
+          var closeButton = modal.querySelector('[data-trackflow-business-impact-close]');
+          if (closeButton && typeof closeButton.focus === 'function') closeButton.focus({ preventScroll: true });
+        } catch (error) {}
+      }, 30);
+    }
+
+    function closeModal() {
+      var modal = getModal();
+      if (!modal || modal.hidden) return;
+      modal.hidden = true;
+      document.body.style.overflow = previousOverflow;
+    }
+
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) return;
+
+      if (target.closest('[data-trackflow-business-impact-open]')) {
+        event.preventDefault();
+        openModal();
+        return;
+      }
+
+      if (target.closest('[data-trackflow-business-impact-close]')) {
+        event.preventDefault();
+        closeModal();
+        return;
+      }
+
+      var modal = getModal();
+      if (modal && !modal.hidden && target === modal) {
+        closeModal();
+      }
+    }, true);
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeModal();
+    });
+  } catch (error) {}
+})();`;
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <script dangerouslySetInnerHTML={{ __html: script }} />
+    </>
+  );
+}
+
 function LinkButton({
   href,
   children,
@@ -2612,6 +3008,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
     reviewFocusLabel,
     reportMode,
   });
+  const businessImpactArticle = getBusinessImpactArticle({
+    isSetupFirst,
+    manualEvidenceHero,
+    setupActionLabel,
+    reviewFocusLabel,
+  });
   const heroHeadline = isSetupFirst
     ? "Private tracking readiness review"
     : companyName === "this website"
@@ -2695,7 +3097,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     score: getReportScoreValue(report),
     scoreLabel: getReportScoreLabel(report),
     mainFinding,
-    businessImpact,
+    businessImpact: businessImpactArticle.summary,
     reportMode,
     isSetupFirst,
     primaryConversionFocus: manualEvidenceHero?.actionLabel || setupActionLabel || primaryConversionFocus,
@@ -2731,6 +3133,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
       <PdfDownloadExperienceScript />
       <EvidenceVideoExperienceScript />
       <SecureEvidenceGalleryExperienceScript />
+      <BusinessImpactExperienceScript />
       <AssistantVisibilityScript />
       <ReportNavbar />
 
@@ -3133,6 +3536,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </section>
       ) : null}
 
+      <BusinessImpactSection article={businessImpactArticle} />
+
       <section
         id="findings"
         className="mx-auto grid w-full max-w-7xl scroll-mt-24 gap-5 overflow-hidden px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:py-16"
@@ -3142,9 +3547,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
             <p className="break-words text-base font-black leading-7 text-slate-950 sm:text-lg sm:leading-8">{mainFinding}</p>
           </SectionCard>
 
-          <SectionCard label="Business impact" tone="green">
-            <p className="break-words text-base font-bold leading-8 text-emerald-950">{businessImpact}</p>
-          </SectionCard>
 
           {manualAds.checked ? (
             <SectionCard label="Ads Transparency context" tone="amber">
