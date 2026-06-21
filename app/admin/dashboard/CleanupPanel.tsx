@@ -62,12 +62,12 @@ const REPORT_CLEANUP_MODES: Array<{ id: ReportAssetCleanupMode; label: string; n
   {
     id: "hard",
     label: "Delete All Data",
-    note: "Deletes the secure report, PDF, preview image, chat history, Google Sheet row, and report-linked send/event data. No contact footprint memory is kept from this cleanup action.",
+    note: "Deletes the secure report, B2 PDF, B2 secure evidence screenshots, preview image, chat history, Google Sheet row, and report-linked send/event data. No contact footprint memory is kept from this cleanup action.",
   },
   {
     id: "assets_only",
     label: "Remove Files Only",
-    note: "Removes only the PDF, preview image, and chat history. Saved report, Sheet row, and contact data stay unchanged.",
+    note: "Removes only the B2 PDF, B2 secure evidence screenshots, preview image, and chat history. Saved report, Sheet row, and contact data stay unchanged.",
   },
 ];
 
@@ -110,6 +110,7 @@ function reportStepLabel(step: ReportCleanupStep): string {
   const service = String(step.service || "").toLowerCase();
   const action = String(step.action || "").toLowerCase();
 
+  if (action.includes("secure_evidence")) return "Evidence screenshots";
   if (service.includes("backblaze") || action.includes("pdf")) return "PDF file";
   if (service.includes("blob") || action.includes("preview")) return "Preview image";
   if (service.includes("supabase") || action.includes("chat")) return "Chat history";
@@ -125,6 +126,7 @@ function reportStepLabel(step: ReportCleanupStep): string {
 function reportStepActionLabel(step: ReportCleanupStep): string {
   const action = String(step.action || "").toLowerCase();
 
+  if (action.includes("delete_secure_evidence")) return "Remove screenshots";
   if (action.includes("delete_pdf")) return "Remove file";
   if (action.includes("delete_preview")) return "Remove image";
   if (action.includes("delete_report_chat")) return "Remove chat";
@@ -1120,7 +1122,7 @@ export default function CleanupPanel({
         )}
 
         {manifest && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Secure report</p>
               <p className="text-sm font-black text-gray-900 mt-1">{manifest.reportFound ? "Found" : "Not found"}</p>
@@ -1130,6 +1132,11 @@ export default function CleanupPanel({
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PDF file</p>
               <p className="text-sm font-black text-gray-900 mt-1">{manifest.b2PdfKey ? "Ready to remove" : "No PDF file found"}</p>
               <p className="text-[10px] font-bold text-gray-400 mt-1">{manifest.pdfExpiresAt ? `Expires: ${formatDate(manifest.pdfExpiresAt)}` : "No expiry date"}</p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Evidence screenshots</p>
+              <p className="text-sm font-black text-gray-900 mt-1">{manifest.secureEvidenceAssetCount ?? manifest.secureEvidenceB2Keys?.length ?? 0} item(s)</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1">B2 secure evidence assets</p>
             </div>
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Preview image</p>

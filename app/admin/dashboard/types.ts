@@ -480,6 +480,8 @@ export type ReportCleanupManifest = {
   emailLower?: string;
   sheetRowNumber?: number | null;
   b2PdfKey?: string;
+  secureEvidenceB2Keys?: string[];
+  secureEvidenceAssetCount?: number;
   blobImageTargets?: string[];
   domainIndexIds?: string[];
   pdfExpiresAt?: string;

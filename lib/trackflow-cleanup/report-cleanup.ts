@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 import { del } from "@vercel/blob";
 import { adminDb } from "@/lib/firebase-admin";
-import { buildReportPdfB2Key, deletePdfFromB2WithVersions, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
+import { buildReportPdfB2Key, deleteB2ObjectWithVersions, deletePdfFromB2WithVersions, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import { deleteReportChatHistory } from "@/lib/supabase-admin";
 import { cleanupGoogleSheetReportRow, isCleanupSheetConfigured, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
 import { deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
@@ -40,6 +40,8 @@ type CleanupManifest = {
   emailLower: string;
   sheetRowNumber: number | null;
   b2PdfKey: string;
+  secureEvidenceB2Keys: string[];
+  secureEvidenceAssetCount: number;
   blobImageTargets: string[];
   domainIndexIds: string[];
   pdfExpiresAt: string;
@@ -377,6 +379,67 @@ function getReportB2Key(report: AnyRecord, lead: AnyRecord, reportToken = "", do
 }
 
 
+function normalizeSecureEvidenceAssetList(...values: unknown[]): AnyRecord[] {
+  const output: AnyRecord[] = [];
+
+  for (const value of values) {
+    if (!Array.isArray(value)) continue;
+
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      output.push(item as AnyRecord);
+    }
+  }
+
+  return output;
+}
+
+function collectSecureEvidenceB2Keys(report: AnyRecord, token: string): string[] {
+  const privateCopy = asRecord(
+    report.privateReportCopy ||
+      report.private_report_copy ||
+      report.privateReportPage ||
+      report.private_report_page ||
+      report.aiPrivateReportCopy ||
+      report.ai_private_report_copy,
+  );
+
+  const rawAssets = normalizeSecureEvidenceAssetList(
+    report.securePageEvidenceAssets,
+    report.secure_page_evidence_assets,
+    privateCopy.securePageEvidenceAssets,
+    privateCopy.secure_page_evidence_assets,
+  );
+
+  const cleanToken = cleanId(token, 128);
+  const keys = rawAssets
+    .map((asset) =>
+      safeB2Key(
+        asset.b2Key,
+        asset.b2_key,
+        asset.key,
+        asset.storageKey,
+        asset.storage_key,
+        asset.objectKey,
+        asset.object_key,
+      ),
+    )
+    .filter((key) => {
+      if (!key) return false;
+
+      // Secure page evidence screenshots are stored under:
+      // reports/{domainSlug}/{token}/secure-evidence/{role}/{assetId}-{filename}
+      // Keep this scoped so cleanup never deletes unrelated B2 objects accidentally.
+      if (!key.includes("/secure-evidence/")) return false;
+      if (cleanToken && !key.includes(`/${cleanToken}/secure-evidence/`)) return false;
+
+      return true;
+    });
+
+  return uniqueStrings(keys, 50);
+}
+
+
 function isReportCleanupLinkedLead(data: AnyRecord = {}): boolean {
   const source = clean(data.source).toLowerCase();
   const sourceOrigin = clean(data.sourceOrigin).toLowerCase();
@@ -562,6 +625,7 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
   const normalizedDomain = normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website, lead.website);
   const domainIndexIds = await collectDomainIndexIds(report, token);
   const sheetRowNumber = Number(report.sheetRowNumber || report.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
+  const secureEvidenceB2Keys = collectSecureEvidenceB2Keys(report, token);
 
   const manifest: CleanupManifest = {
     reportToken: token,
@@ -577,6 +641,8 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     emailLower: cleanEmail(lead.emailLower || lead.email_lower || lead.email || report.emailLower || report.email_lower || report.email),
     sheetRowNumber,
     b2PdfKey: getReportB2Key(report, lead, token, domainSlug),
+    secureEvidenceB2Keys,
+    secureEvidenceAssetCount: secureEvidenceB2Keys.length,
     blobImageTargets: collectBlobImageTargets(report, lead),
     domainIndexIds,
     pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
@@ -686,6 +752,71 @@ async function deleteB2PdfStep(manifest: CleanupManifest): Promise<CleanupStep> 
       error: safeError(error),
     };
   }
+}
+
+
+async function deleteB2SecureEvidenceStep(manifest: CleanupManifest): Promise<CleanupStep> {
+  const keys = uniqueStrings(manifest.secureEvidenceB2Keys || [], 50);
+
+  if (!keys.length) {
+    return {
+      service: "backblaze_b2",
+      action: "delete_secure_evidence_assets",
+      status: "skipped",
+      message: "No secure page evidence screenshot B2 key found.",
+    };
+  }
+
+  const results: AnyRecord[] = [];
+
+  for (const key of keys) {
+    try {
+      const result = await deleteB2ObjectWithVersions(key);
+      results.push({
+        key,
+        ok: true,
+        deleted: result.deleted,
+        deletedCount: result.deletedCount,
+        versionCount: result.versionCount,
+        deleteMarkerCount: result.deleteMarkerCount,
+        attemptedVersionCleanup: result.attemptedVersionCleanup,
+        fallbackUsed: result.fallbackUsed,
+        errors: result.errors,
+        status: result.deleted ? "deleted" : "already_missing",
+      });
+    } catch (error: any) {
+      if (isAlreadyMissingError(error)) {
+        results.push({ key, ok: true, deleted: false, deletedCount: 0, status: "already_missing" });
+        continue;
+      }
+
+      results.push({ key, ok: false, error: safeError(error) });
+    }
+  }
+
+  const failed = results.filter((item) => !item.ok);
+  const deletedObjectCount = results.filter((item) => item.ok && item.deleted).length;
+  const deletedVersionCount = results.reduce((sum, item) => sum + (Number(item.deletedCount) || 0), 0);
+
+  return {
+    service: "backblaze_b2",
+    action: "delete_secure_evidence_assets",
+    status: failed.length ? "error" : "ok",
+    target: `${keys.length} screenshot asset(s)`,
+    message: failed.length
+      ? `${failed.length} secure evidence screenshot asset(s) could not be removed from B2.`
+      : deletedObjectCount
+        ? `Deleted ${deletedObjectCount} secure evidence screenshot asset(s) from B2.`
+        : "Secure evidence screenshot assets were already missing.",
+    error: failed.length ? failed.map((item) => item.error).filter(Boolean).join(" | ").slice(0, 700) : undefined,
+    details: {
+      targets: keys,
+      resultCount: results.length,
+      deletedObjectCount,
+      deletedVersionCount,
+      results,
+    },
+  };
 }
 
 
@@ -1085,6 +1216,23 @@ async function cleanupFirestoreReportStep(manifest: CleanupManifest, mode: Clean
         blobPathname: "",
         ogImagePathname: "",
         previewImagePathname: "",
+        securePageEvidenceAssets: [],
+        secure_page_evidence_assets: [],
+        securePageEvidenceAssetCount: 0,
+        secure_page_evidence_asset_count: 0,
+        securePageEvidenceUpdatedAt: now,
+        privateReportCopy: {
+          securePageEvidenceAssets: [],
+          secure_page_evidence_assets: [],
+          securePageEvidenceAssetCount: 0,
+          secure_page_evidence_asset_count: 0,
+        },
+        private_report_copy: {
+          securePageEvidenceAssets: [],
+          secure_page_evidence_assets: [],
+          securePageEvidenceAssetCount: 0,
+          secure_page_evidence_asset_count: 0,
+        },
         updatedAt: now,
       },
       { merge: true },
@@ -1233,6 +1381,15 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
     manifest.b2PdfKey
       ? plannedStep("backblaze_b2", "delete_pdf", manifest.b2PdfKey, "B2 PDF would be deleted.")
       : { service: "backblaze_b2", action: "delete_pdf", status: "skipped", message: "No B2 PDF key found." },
+    manifest.secureEvidenceB2Keys.length
+      ? plannedStep(
+          "backblaze_b2",
+          "delete_secure_evidence_assets",
+          `${manifest.secureEvidenceB2Keys.length} screenshot asset(s)`,
+          "Secure page evidence screenshots stored in B2 would be deleted.",
+          { targets: manifest.secureEvidenceB2Keys },
+        )
+      : { service: "backblaze_b2", action: "delete_secure_evidence_assets", status: "skipped", message: "No secure page evidence screenshot B2 key found." },
     manifest.blobImageTargets.length
       ? plannedStep("vercel_blob", "delete_preview_images", undefined, "Blob preview image target(s) would be deleted.", { targets: manifest.blobImageTargets })
       : { service: "vercel_blob", action: "delete_preview_images", status: "skipped", message: "No Vercel Blob preview image target found." },
@@ -1316,6 +1473,7 @@ async function runCleanup(input: {
   const steps: CleanupStep[] = [];
 
   steps.push(await runCleanupStep("delete_pdf", () => deleteB2PdfStep(input.manifest)));
+  steps.push(await runCleanupStep("delete_secure_evidence_assets", () => deleteB2SecureEvidenceStep(input.manifest)));
   steps.push(await runCleanupStep("delete_preview_images", () => deleteBlobImagesStep(input.manifest)));
   steps.push(await runCleanupStep("delete_report_chat", () => deleteSupabaseChatStep(input.manifest)));
   steps.push(await runCleanupStep("delete_report_email_events", () => cleanupReportEmailEventsStep(input.manifest)));
