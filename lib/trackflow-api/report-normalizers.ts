@@ -305,6 +305,94 @@ function normalizeSecurePageEvidenceAssetsPayload(body: AnyRecord = {}, privateP
   return output;
 }
 
+
+function normalizeEmailPreviewImageAssetPayload(body: AnyRecord = {}, privatePage: AnyRecord = {}): AnyRecord | null {
+  const raw = getObjectCandidate(
+    body.emailPreviewImage,
+    body.email_preview_image,
+    body.emailPreviewImageAsset,
+    body.email_preview_image_asset,
+    privatePage.emailPreviewImage,
+    privatePage.email_preview_image,
+  );
+
+  const b2Key = firstCleanString(
+    raw.b2Key,
+    raw.b2_key,
+    body.emailPreviewImageB2Key,
+    body.email_preview_image_b2_key,
+    privatePage.emailPreviewImageB2Key,
+    privatePage.email_preview_image_b2_key,
+  ).replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
+
+  const publicUrl = sanitizeOptionalUrl(firstCleanString(
+    raw.publicUrl,
+    raw.public_url,
+    raw.url,
+    body.emailPreviewImageUrl,
+    body.email_preview_image_url,
+    body.emailPreviewImageWebpUrl,
+    body.email_preview_image_webp_url,
+    privatePage.emailPreviewImageUrl,
+    privatePage.email_preview_image_url,
+    privatePage.emailPreviewImageWebpUrl,
+    privatePage.email_preview_image_webp_url,
+  ));
+
+  if (!b2Key && !publicUrl) return null;
+
+  const mimeType = firstCleanString(
+    raw.mimeType,
+    raw.mime_type,
+    body.emailPreviewImageMimeType,
+    body.email_preview_image_mime_type,
+    privatePage.emailPreviewImageMimeType,
+    privatePage.email_preview_image_mime_type,
+    "image/webp",
+  ).toLowerCase();
+
+  const sizeBytes = Number(
+    raw.sizeBytes ||
+      raw.size_bytes ||
+      body.emailPreviewImageSizeBytes ||
+      body.email_preview_image_size_bytes ||
+      privatePage.emailPreviewImageSizeBytes ||
+      privatePage.email_preview_image_size_bytes ||
+      0,
+  ) || 0;
+
+  return {
+    id: firstCleanString(raw.id, "email_preview_thumbnail"),
+    role: firstCleanString(raw.role, "email_preview_thumbnail"),
+    caption: firstCleanString(raw.caption, raw.title, "Clickable email preview thumbnail"),
+    fileName: firstCleanString(raw.fileName, raw.file_name, "email-preview-thumbnail.webp"),
+    file_name: firstCleanString(raw.fileName, raw.file_name, "email-preview-thumbnail.webp"),
+    mimeType,
+    mime_type: mimeType,
+    sizeBytes,
+    size_bytes: sizeBytes,
+    pageUrl: sanitizeOptionalUrl(firstCleanString(raw.pageUrl, raw.page_url, privatePage.pageUrl, body.websiteUrl, body.website_url)),
+    page_url: sanitizeOptionalUrl(firstCleanString(raw.pageUrl, raw.page_url, privatePage.pageUrl, body.websiteUrl, body.website_url)),
+    source: firstCleanString(raw.source, "manual_email_preview_upload"),
+    storageProvider: firstCleanString(raw.storageProvider, raw.storage_provider, "backblaze_b2"),
+    storage_provider: firstCleanString(raw.storageProvider, raw.storage_provider, "backblaze_b2"),
+    b2Bucket: firstCleanString(raw.b2Bucket, raw.b2_bucket, raw.bucket, body.emailPreviewImageB2Bucket, body.email_preview_image_b2_bucket),
+    b2_bucket: firstCleanString(raw.b2Bucket, raw.b2_bucket, raw.bucket, body.emailPreviewImageB2Bucket, body.email_preview_image_b2_bucket),
+    b2Key,
+    b2_key: b2Key,
+    etag: firstCleanString(raw.etag, raw.eTag, raw.b2Etag, raw.b2_etag),
+    uploadedAt: firstCleanString(raw.uploadedAt, raw.uploaded_at, raw.createdAt, raw.created_at),
+    uploaded_at: firstCleanString(raw.uploadedAt, raw.uploaded_at, raw.createdAt, raw.created_at),
+    redacted: raw.redacted !== false,
+    publicUrl,
+    public_url: publicUrl,
+    optimized: Boolean(raw.optimized),
+    optimizationFormat: firstCleanString(raw.optimizationFormat, raw.optimization_format),
+    optimization_format: firstCleanString(raw.optimizationFormat, raw.optimization_format),
+    note: firstCleanString(raw.note, "Email-only preview thumbnail metadata. This is not secure-page evidence and should not be displayed as proof on the report page."),
+  };
+}
+
 export function sanitizeLocalRedirectTarget(value: any): string {
   const raw = String(value || "").trim();
   if (!raw) return "/contact";
@@ -1875,6 +1963,47 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
   const manualAdsTransparency = normalizeManualAdsTransparency(body, privatePage);
   const evidenceVideo = normalizeEvidenceVideoPayload(body, privatePage);
   const securePageEvidenceAssets = normalizeSecurePageEvidenceAssetsPayload(body, privatePage);
+  const emailPreviewImage = normalizeEmailPreviewImageAssetPayload(body, privatePage);
+  const emailPreviewImageUrl = sanitizeOptionalUrl(firstCleanString(
+    body.emailPreviewImageUrl,
+    body.email_preview_image_url,
+    privatePage.emailPreviewImageUrl,
+    privatePage.email_preview_image_url,
+    emailPreviewImage?.publicUrl,
+    emailPreviewImage?.public_url,
+  ));
+  const emailPreviewImageWebpUrl = sanitizeOptionalUrl(firstCleanString(
+    body.emailPreviewImageWebpUrl,
+    body.email_preview_image_webp_url,
+    privatePage.emailPreviewImageWebpUrl,
+    privatePage.email_preview_image_webp_url,
+    emailPreviewImage?.mimeType === "image/webp" ? (emailPreviewImage?.publicUrl || emailPreviewImage?.public_url) : "",
+  ));
+  const emailPreviewImageB2Key = firstCleanString(
+    body.emailPreviewImageB2Key,
+    body.email_preview_image_b2_key,
+    privatePage.emailPreviewImageB2Key,
+    privatePage.email_preview_image_b2_key,
+    emailPreviewImage?.b2Key,
+    emailPreviewImage?.b2_key,
+  );
+  const emailPreviewImageMimeType = firstCleanString(
+    body.emailPreviewImageMimeType,
+    body.email_preview_image_mime_type,
+    privatePage.emailPreviewImageMimeType,
+    privatePage.email_preview_image_mime_type,
+    emailPreviewImage?.mimeType,
+    emailPreviewImage?.mime_type,
+  );
+  const emailPreviewImageSizeBytes = Number(
+    body.emailPreviewImageSizeBytes ||
+      body.email_preview_image_size_bytes ||
+      privatePage.emailPreviewImageSizeBytes ||
+      privatePage.email_preview_image_size_bytes ||
+      emailPreviewImage?.sizeBytes ||
+      emailPreviewImage?.size_bytes ||
+      0,
+  ) || 0;
   const manualConversionEvidence = normalizeManualConversionEvidenceForReport(body, privatePage);
   const incomingManualEvidenceHero = normalizeIncomingManualEvidenceHero(
     getObjectCandidate(
@@ -2124,6 +2253,18 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     secure_page_evidence_assets: securePageEvidenceAssets.length ? securePageEvidenceAssets : undefined,
     securePageEvidenceAssetCount: securePageEvidenceAssets.length,
     secure_page_evidence_asset_count: securePageEvidenceAssets.length,
+    emailPreviewImage: emailPreviewImage || undefined,
+    email_preview_image: emailPreviewImage || undefined,
+    emailPreviewImageUrl,
+    email_preview_image_url: emailPreviewImageUrl,
+    emailPreviewImageWebpUrl,
+    email_preview_image_webp_url: emailPreviewImageWebpUrl,
+    emailPreviewImageB2Key,
+    email_preview_image_b2_key: emailPreviewImageB2Key,
+    emailPreviewImageMimeType,
+    email_preview_image_mime_type: emailPreviewImageMimeType,
+    emailPreviewImageSizeBytes,
+    email_preview_image_size_bytes: emailPreviewImageSizeBytes,
     privateReportVersion: firstCleanString(privatePage.privateReportVersion, privatePage.private_report_version, body.privateReportVersion, body.private_report_version),
   };
 
@@ -2140,6 +2281,18 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     preview_image_url: ogImageUrl,
     homepageScreenshotUrl: ogImageUrl,
     homepage_screenshot_url: ogImageUrl,
+    emailPreviewImage: emailPreviewImage || null,
+    email_preview_image: emailPreviewImage || null,
+    emailPreviewImageUrl,
+    email_preview_image_url: emailPreviewImageUrl,
+    emailPreviewImageWebpUrl,
+    email_preview_image_webp_url: emailPreviewImageWebpUrl,
+    emailPreviewImageB2Key,
+    email_preview_image_b2_key: emailPreviewImageB2Key,
+    emailPreviewImageMimeType,
+    email_preview_image_mime_type: emailPreviewImageMimeType,
+    emailPreviewImageSizeBytes,
+    email_preview_image_size_bytes: emailPreviewImageSizeBytes,
     ogImagePathname,
     og_image_pathname: ogImagePathname,
     domain,
