@@ -1867,7 +1867,7 @@ function BusinessImpactSection({ article }: { article: BusinessImpactArticle }) 
       data-trackflow-observe-event="secure_report_business_impact_preview_visible"
       data-trackflow-analytics-section="business_impact"
       data-trackflow-analytics-label={article.analyticsLabel}
-      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-14"
+      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-4 sm:px-6 sm:py-10 lg:px-8 lg:py-14"
     >
       <div className="overflow-hidden rounded-[1.5rem] border border-emerald-100 bg-white shadow-2xl shadow-emerald-950/10 sm:rounded-[2rem]">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -1894,11 +1894,11 @@ function BusinessImpactSection({ article }: { article: BusinessImpactArticle }) 
             </button>
           </div>
 
-          <div className="grid min-w-0 gap-3 border-t border-emerald-100 bg-slate-50 p-4 sm:grid-cols-2 sm:p-5 lg:border-l lg:border-t-0 lg:p-6">
+          <div className="grid min-w-0 grid-cols-2 gap-2 border-t border-emerald-100 bg-slate-50 p-3 sm:gap-3 sm:p-5 lg:border-l lg:border-t-0 lg:p-6">
             {article.highlights.map((item) => (
-              <article key={`${item.label}-${item.value}`} className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:p-5">
+              <article key={`${item.label}-${item.value}`} className="min-w-0 rounded-[1rem] border border-slate-200 bg-white p-3 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:p-5">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">{item.label}</p>
-                <p className="mt-2 break-words text-sm font-bold leading-6 text-slate-700">{item.value}</p>
+                <p className="mt-2 break-words text-xs font-bold leading-5 text-slate-700 sm:text-sm sm:leading-6">{item.value}</p>
               </article>
             ))}
           </div>
@@ -1942,7 +1942,7 @@ function BusinessImpactSection({ article }: { article: BusinessImpactArticle }) 
 
             <div className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-2">
               {article.sections.map((section) => (
-                <article key={section.title} className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:p-5">
+                <article key={section.title} className="min-w-0 rounded-[1rem] border border-slate-200 bg-white p-3 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:p-5">
                   <h3 className="break-words text-base font-black leading-6 text-slate-950 sm:text-lg sm:leading-7">
                     {section.title}
                   </h3>
@@ -2227,6 +2227,44 @@ function NumberedStepList({ items }: { items: string[] }) {
   );
 }
 
+function MobileDetailCard({
+  label,
+  summary,
+  children,
+  tone = "default",
+}: {
+  label: string;
+  summary: string;
+  children: ReactNode;
+  tone?: "default" | "blue" | "green" | "amber";
+}) {
+  const toneClass = {
+    default: "border-slate-200 bg-white",
+    blue: "border-blue-100 bg-blue-50/80",
+    green: "border-emerald-100 bg-emerald-50/80",
+    amber: "border-amber-100 bg-amber-50/80",
+  }[tone];
+
+  return (
+    <details className={`group min-w-0 overflow-hidden rounded-[1.25rem] border shadow-sm ${toneClass}`}>
+      <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-[10px] font-black uppercase leading-4 tracking-[0.18em] text-slate-500">
+            {label}
+          </span>
+          <span className="mt-1 block break-words text-sm font-black leading-5 text-slate-950">
+            {summary}
+          </span>
+        </span>
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-lg font-black text-slate-600 transition group-open:rotate-45">
+          +
+        </span>
+      </summary>
+      <div className="border-t border-slate-200/80 px-4 py-4">{children}</div>
+    </details>
+  );
+}
+
 function SecureEvidenceGallery({
   assets,
   sectionCopy,
@@ -2243,7 +2281,7 @@ function SecureEvidenceGallery({
       data-trackflow-observe-event="secure_report_evidence_assets_visible"
       data-trackflow-analytics-section="browser_evidence"
       data-trackflow-analytics-label={sectionCopy.analyticsLabel}
-      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:py-9 lg:px-8"
+      className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-4 sm:px-6 sm:py-9 lg:px-8"
     >
       <div className="overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
         <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-5 sm:p-7 lg:p-8">
@@ -2260,14 +2298,14 @@ function SecureEvidenceGallery({
               </p>
             </div>
 
-            <div className="grid gap-3">
+            <div className="hidden gap-3 sm:grid">
               <div className="rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-bold leading-7 text-slate-700 shadow-sm shadow-slate-950/5 sm:rounded-[1.5rem] sm:px-5 sm:py-4">
                 <span className="font-black text-slate-950">{sectionCopy.noteTitle}: </span>
                 {sectionCopy.noteText}
               </div>
 
               {sectionCopy.summaryCards.length ? (
-                <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div className="hidden gap-2 sm:grid sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                   {sectionCopy.summaryCards.map((item) => (
                     <div key={`${item.label}-${item.value}`} className="min-w-0 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3">
                       <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-500">{item.label}</p>
@@ -2280,11 +2318,11 @@ function SecureEvidenceGallery({
           </div>
         </div>
 
-        <div className="grid gap-4 bg-slate-50 p-4 pb-8 sm:p-5 sm:pb-9 lg:grid-cols-2 lg:p-6 lg:pb-10">
+        <div className="flex snap-x gap-3 overflow-x-auto bg-slate-50 p-3 pb-6 sm:grid sm:overflow-visible sm:p-5 sm:pb-9 lg:grid-cols-2 lg:p-6 lg:pb-10">
           {assets.map((asset, index) => (
             <article
               key={asset.id}
-              className="min-w-0 overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-lg shadow-slate-950/5 sm:rounded-[1.5rem]"
+              className="w-[82vw] min-w-0 shrink-0 snap-start overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-lg shadow-slate-950/5 sm:w-auto sm:shrink sm:rounded-[1.5rem]"
             >
               <div className="flex min-w-0 items-start justify-between gap-3 border-b border-slate-100 bg-white px-4 py-4 sm:px-5 sm:py-5">
                 <div className="min-w-0">
@@ -2296,7 +2334,7 @@ function SecureEvidenceGallery({
                   </h3>
                 </div>
                 {asset.redacted ? (
-                  <span className="inline-flex shrink-0 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                  <span className="hidden shrink-0 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 sm:inline-flex">
                     Redacted
                   </span>
                 ) : null}
@@ -2330,7 +2368,7 @@ function SecureEvidenceGallery({
               </button>
 
               {asset.pageUrl ? (
-                <div className="border-t border-slate-100 px-4 py-3 text-xs font-bold leading-6 text-slate-500 sm:px-5">
+                <div className="hidden border-t border-slate-100 px-4 py-3 text-xs font-bold leading-6 text-slate-500 sm:block sm:px-5">
                   <span className="font-black uppercase tracking-[0.13em] text-slate-400">Reviewed URL: </span>
                   <span className="break-all">{asset.pageUrl}</span>
                 </div>
@@ -3187,7 +3225,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </p>
 
                 {manualEvidenceHero.tool || manualEvidenceHero.testUrl ? (
-                  <div className="mt-3 flex min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
+                  <div className="mt-3 hidden min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700 sm:flex">
                     {manualEvidenceHero.tool ? (
                       <span className="max-w-full rounded-full border border-blue-100 bg-white px-3 py-2">
                         Tool: {manualEvidenceHero.tool}
@@ -3203,7 +3241,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </div>
             ) : null}
 
-            <div className="mt-5 grid min-w-0 gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
+            <div className="mt-5 hidden min-w-0 gap-2 sm:mt-6 sm:grid sm:grid-cols-3 sm:gap-3">
               {heroSummaryCards.map((item) => (
                 <div
                   key={item.label}
@@ -3272,7 +3310,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </a>
             ) : null}
 
-            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2 text-xs font-bold text-slate-500 sm:gap-3">
+            <div className="mt-4 hidden min-w-0 flex-wrap items-center gap-2 text-xs font-bold text-slate-500 sm:flex sm:gap-3">
               <a
                 href="#pdf-report"
                 data-trackflow-analytics-event="secure_report_pdf_anchor_click"
@@ -3310,7 +3348,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </span>
             </div>
 
-            <div className="mt-6 flex min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase leading-5 tracking-[0.14em] text-slate-500 sm:mt-8 sm:gap-3 sm:text-[11px] sm:tracking-[0.18em]">
+            <div className="mt-6 hidden min-w-0 flex-wrap gap-2 text-[10px] font-black uppercase leading-5 tracking-[0.14em] text-slate-500 sm:mt-8 sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em]">
               <span className="max-w-full break-words rounded-full border border-slate-200 bg-white px-3 py-2 sm:px-4">
                 Prepared by TrackFlow Pro
               </span>
@@ -3338,7 +3376,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </div>
           </div>
 
-          <div className="min-w-0 max-w-full rounded-[1.35rem] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-950/10 sm:rounded-[1.75rem] sm:p-4 lg:p-5">
+          <div className="hidden min-w-0 max-w-full rounded-[1.35rem] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-950/10 sm:rounded-[1.75rem] sm:p-4 lg:block lg:p-5">
             <div className="min-w-0 rounded-[1.2rem] border border-slate-200 bg-slate-950 p-4 text-white sm:rounded-[1.5rem] sm:p-5">
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-blue-300">
                 Private review snapshot
@@ -3409,7 +3447,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
       <SecureEvidenceGallery assets={secureEvidenceAssets} sectionCopy={secureEvidenceCopy} />
 
-      <section className="mx-auto w-full max-w-7xl overflow-hidden px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <section className="mx-auto hidden w-full max-w-7xl overflow-hidden px-4 py-4 sm:block sm:px-6 sm:py-8 lg:px-8">
         <div className="grid min-w-0 gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3 sm:rounded-[2rem] sm:p-4 lg:p-5">
           {trustSignals.map((item, index) => (
             <div key={item} className="flex min-w-0 items-start gap-3 rounded-[1.25rem] border border-slate-100 bg-slate-50 p-3 sm:rounded-[1.35rem] sm:p-4">
@@ -3429,7 +3467,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           data-trackflow-analytics-section="evidence_video"
           data-trackflow-analytics-label="Evidence video visible"
           data-trackflow-video-id={evidenceVideo.videoId}
-          className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-5 sm:px-6 sm:pb-10 sm:pt-2 lg:px-8"
+          className="mx-auto w-full max-w-7xl scroll-mt-24 overflow-hidden px-4 py-4 sm:px-6 sm:pb-10 sm:pt-2 lg:px-8"
         >
           <div className="min-w-0 overflow-hidden rounded-[1.35rem] border border-blue-100 bg-white shadow-2xl shadow-blue-950/10 sm:rounded-[2rem]">
             <div className="grid min-w-0 items-start gap-0 lg:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
@@ -3493,7 +3531,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </p>
 
                 {reviewedPageBadges.length ? (
-                  <div className="mt-6">
+                  <div className="mt-6 hidden sm:block">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                       Reviewed page context
                     </p>
@@ -3508,7 +3546,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 ) : null}
 
                 {evidenceSignalBadges.length ? (
-                  <div className="mt-6">
+                  <div className="mt-6 hidden sm:block">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                       Signals captured in this review
                     </p>
@@ -3540,7 +3578,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
       <section
         id="findings"
-        className="mx-auto grid w-full max-w-7xl scroll-mt-24 gap-5 overflow-hidden px-4 py-8 sm:gap-6 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:py-16"
+        className="mx-auto grid w-full max-w-7xl scroll-mt-24 gap-4 overflow-hidden px-4 py-4 sm:gap-6 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:px-8 lg:py-16"
       >
         <div className="min-w-0 space-y-5 sm:space-y-6">
           <SectionCard label="What this means" tone="blue">
@@ -3560,29 +3598,59 @@ export default async function ReportPage({ params }: ReportPageProps) {
             </SectionCard>
           ) : null}
 
-          <SectionCard label="What I checked">
-            <BulletList items={whatChecked} />
-          </SectionCard>
+          <div className="space-y-3 md:hidden">
+            <MobileDetailCard label="What I checked" summary={`${whatChecked.length} review areas covered`}>
+              <BulletList items={whatChecked} />
+            </MobileDetailCard>
 
-          <SectionCard label="Supporting evidence">
-            <BulletList items={clientFacingProofPoints} marker="slate" />
-          </SectionCard>
+            <MobileDetailCard label="Supporting evidence" summary={`${clientFacingProofPoints.length} proof points available`}>
+              <BulletList items={clientFacingProofPoints} marker="slate" />
+            </MobileDetailCard>
+          </div>
+
+          <div className="hidden md:block">
+            <SectionCard label="What I checked">
+              <BulletList items={whatChecked} />
+            </SectionCard>
+          </div>
+
+          <div className="hidden md:block">
+            <SectionCard label="Supporting evidence">
+              <BulletList items={clientFacingProofPoints} marker="slate" />
+            </SectionCard>
+          </div>
         </div>
 
-        <aside className="min-w-0 space-y-5 sm:space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <SectionCard label="Recommended verification plan" tone="amber">
-            <NumberedStepList items={recommendations} />
-          </SectionCard>
+        <aside className="min-w-0 space-y-4 sm:space-y-6 xl:sticky xl:top-24 xl:self-start">
+          <div className="space-y-3 md:hidden">
+            <MobileDetailCard label="Recommended verification plan" summary={`${recommendations.length} next checks`} tone="amber">
+              <NumberedStepList items={recommendations} />
+            </MobileDetailCard>
 
+            <MobileDetailCard label={howToReadTitle} summary="Review scope and confirmation note">
+              <div className="space-y-3 text-sm font-semibold leading-7 text-slate-600">
+                {howToReadParagraphs.map((paragraph, index) => (
+                  <p key={`${paragraph}-${index}`}>{paragraph}</p>
+                ))}
+              </div>
+            </MobileDetailCard>
+          </div>
 
+          <div className="hidden md:block">
+            <SectionCard label="Recommended verification plan" tone="amber">
+              <NumberedStepList items={recommendations} />
+            </SectionCard>
+          </div>
 
-          <SectionCard label={howToReadTitle}>
-            <div className="space-y-3 text-sm font-semibold leading-7 text-slate-600">
-              {howToReadParagraphs.map((paragraph, index) => (
-                <p key={`${paragraph}-${index}`}>{paragraph}</p>
-              ))}
-            </div>
-          </SectionCard>
+          <div className="hidden md:block">
+            <SectionCard label={howToReadTitle}>
+              <div className="space-y-3 text-sm font-semibold leading-7 text-slate-600">
+                {howToReadParagraphs.map((paragraph, index) => (
+                  <p key={`${paragraph}-${index}`}>{paragraph}</p>
+                ))}
+              </div>
+            </SectionCard>
+          </div>
 
           <section
             id="pdf-report"
@@ -3591,19 +3659,19 @@ export default async function ReportPage({ params }: ReportPageProps) {
             data-trackflow-analytics-label="PDF preview visible"
             className="min-w-0 scroll-mt-24 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/5 sm:rounded-[2rem]"
           >
-            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-5 sm:p-6">
+            <div className="border-b border-slate-200 bg-gradient-to-br from-white via-blue-50/70 to-slate-50 p-4 sm:p-6">
               <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">
                     Secure review access
                   </p>
 
-                  <h2 className="mt-3 break-words text-2xl font-black tracking-[-0.04em] text-slate-950">
+                  <h2 className="mt-3 break-words text-xl font-black tracking-[-0.04em] text-slate-950 sm:text-2xl">
                     Review the full audit document
                   </h2>
 
                   <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-                    This private review page keeps the PDF report and related review materials available during the access window.
+                    Open or download the full PDF when you want the complete audit document.
                   </p>
                 </div>
 
@@ -3614,7 +3682,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 ) : null}
               </div>
 
-              <div className="mt-5 grid min-w-0 gap-2 text-xs font-black uppercase leading-5 tracking-[0.12em] text-slate-500 sm:grid-cols-3 sm:gap-3 sm:tracking-[0.14em]">
+              <div className="mt-5 hidden min-w-0 gap-2 text-xs font-black uppercase leading-5 tracking-[0.12em] text-slate-500 md:grid sm:grid-cols-3 sm:gap-3 sm:tracking-[0.14em]">
                 <span className="break-words rounded-2xl border border-blue-100 bg-white px-4 py-3 text-center text-blue-700 shadow-sm sm:text-left">
                   Secure PDF preview
                 </span>
@@ -3627,7 +3695,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               </div>
             </div>
 
-            <div className="overflow-hidden bg-slate-100 p-3 sm:p-4">
+            <div className="hidden overflow-hidden bg-slate-100 p-3 md:block sm:p-4">
               <div className="min-w-0 rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-[1.5rem] md:p-5">
                 <div className="mb-4 flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -3674,7 +3742,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 data-trackflow-pdf-status
                 role="status"
                 aria-live="polite"
-                className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600"
+                className="mb-3 hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600 md:block"
               >
                 <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <span data-trackflow-pdf-status-icon className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
@@ -3720,7 +3788,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </a>
               </div>
 
-              <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
+              <p className="mt-3 text-xs font-semibold leading-6 text-slate-500 md:hidden">
+                Use Open full PDF for reading, or Download PDF to save a copy.
+              </p>
+
+              <p className="mt-3 hidden text-xs font-semibold leading-6 text-slate-500 md:block">
                 Download starts in the background, so the visitor stays on this secure review page.
               </p>
             </div>
