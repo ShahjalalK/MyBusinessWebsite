@@ -145,6 +145,20 @@ function reportPlainObject(value: any): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : {};
 }
 
+function isEmailPreviewB2KeyScopedToToken(value: unknown, token: string): boolean {
+  const key = reportCleanString(value).replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
+  const safeToken = normalizeReportToken(token);
+  if (!key || !safeToken || key.includes("..")) return false;
+  return key.startsWith("reports/") && key.includes(`/${safeToken}/email-preview/`);
+}
+
+function buildCanonicalEmailPreviewProxyUrl(report: AnyRecord = {}, b2Key = ""): string {
+  const token = normalizeReportToken(report.token || report.reportToken || report.report_token);
+  const domainSlug = normalizeReportSlug(report.domainSlug || report.domain_slug || report.domain || report.websiteUrl || "website");
+  if (!token || !domainSlug || !isEmailPreviewB2KeyScopedToToken(b2Key, token)) return "";
+  return `${appBaseUrl()}/api/email-preview/${encodeURIComponent(domainSlug)}/${encodeURIComponent(token)}`;
+}
+
 function normalizeEmailPreviewImageForFirestore(rawValue: any, fallback: AnyRecord = {}): AnyRecord | null {
   const raw = reportPlainObject(rawValue);
   const b2Key = reportFirstCleanString(raw.b2Key, raw.b2_key, fallback.b2Key, fallback.b2_key).replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
@@ -220,7 +234,7 @@ function resolveEmailPreviewImageForFirestore(report: AnyRecord = {}, existingDa
       report.email_preview_image_b2_key
   );
   const selected = incomingAsset || existingAsset;
-  const url = sanitizeOptionalUrl(reportFirstCleanString(
+  const storedUrl = sanitizeOptionalUrl(reportFirstCleanString(
     hasIncoming ? report.emailPreviewImageUrl : "",
     hasIncoming ? report.email_preview_image_url : "",
     selected?.publicUrl,
@@ -241,6 +255,7 @@ function resolveEmailPreviewImageForFirestore(report: AnyRecord = {}, existingDa
     existingData.emailPreviewImageB2Key,
     existingData.email_preview_image_b2_key,
   );
+  const url = storedUrl || buildCanonicalEmailPreviewProxyUrl(report, b2Key) || buildCanonicalEmailPreviewProxyUrl(existingData, b2Key);
   const mimeType = reportFirstCleanString(
     selected?.mimeType,
     selected?.mime_type,
@@ -986,6 +1001,22 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     });
 
     const cleanEmailPreviewImage = resolveEmailPreviewImageForFirestore(report, existingData);
+
+    if (cleanEmailPreviewImage.url && !cleanEmailPreviewImage.b2Key) {
+      throw new ApiError(
+        "Email preview URL was provided without a private B2 key. Re-upload the thumbnail so the token-scoped B2 metadata can be saved.",
+        400,
+      );
+    }
+    if (
+      cleanEmailPreviewImage.b2Key &&
+      !isEmailPreviewB2KeyScopedToToken(cleanEmailPreviewImage.b2Key, report.token)
+    ) {
+      throw new ApiError(
+        "Email preview B2 key is not scoped to the current report token/email-preview folder.",
+        400,
+      );
+    }
 
     logModularReportDebug("email_preview_firestore_resolution", {
       incoming: pickModularReportDebugFields(report || {}),
