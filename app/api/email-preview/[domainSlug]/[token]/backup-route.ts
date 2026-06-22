@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { readB2Object } from '@/lib/trackflow-storage/b2';
+import {
+  buildEmailPreviewImageB2Key,
+  readB2Object,
+  sanitizeB2Key,
+} from '@/lib/trackflow-storage/b2';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,36 +43,6 @@ function normalizeSlug(value: unknown): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 96);
-}
-
-
-function buildDeterministicEmailPreviewB2Key(input: {
-  domainSlug: string;
-  token: string;
-  mimeType: string;
-}): string {
-  const domainSlug = normalizeSlug(input.domainSlug) || 'website';
-  const token = normalizeToken(input.token);
-  if (!token) throw new Error('Email preview token is required.');
-
-  const mimeType = normalizeMimeType(input.mimeType);
-  const extension = mimeType === 'image/png'
-    ? 'png'
-    : mimeType === 'image/jpeg'
-      ? 'jpg'
-      : 'webp';
-
-  return `reports/${domainSlug}/${token}/email-preview/thumbnail.${extension}`;
-}
-
-function normalizeSafeB2Key(value: unknown): string {
-  const key = clean(value)
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/\/+/g, '/');
-
-  if (!key || key.includes('..')) throw new Error('Unsafe B2 object key.');
-  return key;
 }
 
 function firstCleanString(...values: unknown[]): string {
@@ -176,11 +150,17 @@ function buildCandidateKeys(input: {
   const mimeCandidates = [storedMime, 'image/webp', 'image/png', 'image/jpeg'];
   for (const mimeType of mimeCandidates) {
     if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) continue;
+    const fileName = mimeType === 'image/webp'
+      ? 'email-preview-thumbnail.webp'
+      : mimeType === 'image/png'
+        ? 'email-preview-thumbnail.png'
+        : 'email-preview-thumbnail.jpg';
     add(
-      buildDeterministicEmailPreviewB2Key({
+      buildEmailPreviewImageB2Key({
         domainSlug: input.domainSlug,
         token: input.token,
-        mimeType,
+        fileName,
+        contentType: mimeType,
       }),
     );
   }
@@ -221,7 +201,7 @@ async function servePreview(
 
   for (const key of candidates) {
     try {
-      object = await readB2Object(normalizeSafeB2Key(key));
+      object = await readB2Object(sanitizeB2Key(key));
       selectedKey = key;
       break;
     } catch (error) {
