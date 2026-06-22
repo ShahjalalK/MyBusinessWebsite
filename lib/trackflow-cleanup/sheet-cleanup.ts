@@ -572,3 +572,104 @@ export async function cleanupGoogleSheetReportRow(input: {
     };
   }
 }
+
+
+const EMAIL_PREVIEW_SHEET_HEADERS = [
+  "Email Preview Image URL",
+  "Email Preview Image B2 Key",
+  "Email Preview Image MIME Type",
+  "Email Preview Image Size Bytes",
+] as const;
+
+export async function clearGoogleSheetEmailPreviewFields(input: {
+  rowNumber: number | null | undefined;
+  reportToken: string;
+  actor: string;
+}): Promise<SheetCleanupResult> {
+  const rowNumber = Number(input.rowNumber || 0) || null;
+  const reportToken = normalizeTokenForMatch(input.reportToken);
+  const config = getSheetEnv();
+
+  // These columns are optional. Do not turn an otherwise valid file cleanup into
+  // a failure when the Sheet integration or optional columns are not present.
+  if (!config.configured) {
+    return {
+      configured: false,
+      skipped: true,
+      rowNumber,
+      rowNumbers: rowNumber ? [rowNumber] : [],
+      mode: "clear",
+      ok: true,
+      message: "Email preview Sheet metadata cleanup skipped because the Sheet integration is not configured.",
+      details: { sheetName: config.sheetName },
+    };
+  }
+
+  try {
+    const { sheets, spreadsheetId } = await getSheetsClient();
+    const { headers, matchedRows } = await findSheetRowsByReportToken(sheets, spreadsheetId, reportToken);
+    const presentHeaders = EMAIL_PREVIEW_SHEET_HEADERS.filter((header) => findHeaderIndex(headers, header) >= 0);
+
+    if (!presentHeaders.length) {
+      return {
+        configured: true,
+        skipped: true,
+        rowNumber,
+        rowNumbers: [],
+        mode: "clear",
+        ok: true,
+        message: "No email preview metadata columns exist in the Google Sheet, so no Sheet cells needed clearing.",
+        details: { sheetName: SHEET_NAME, checkedHeaders: EMAIL_PREVIEW_SHEET_HEADERS },
+      };
+    }
+
+    const targetRowResult = normalizeTargetRows({ rowNumber, matchedRows, reportToken });
+    const targetRows = targetRowResult.rows;
+    if (!targetRows.length) {
+      return {
+        configured: true,
+        skipped: true,
+        rowNumber,
+        rowNumbers: [],
+        mode: "clear",
+        ok: true,
+        message: "No matching Google Sheet row was found for email preview metadata cleanup.",
+        details: { sheetName: SHEET_NAME, matchedRows, presentHeaders },
+      };
+    }
+
+    for (const targetRow of targetRows) {
+      const existing = await readSingleSheetRow(sheets, spreadsheetId, headers, targetRow);
+      const updates: AnyRecord = {};
+      presentHeaders.forEach((header) => {
+        updates[header] = "";
+      });
+      updates["Last Synced"] = new Date().toISOString();
+      await updateSingleSheetRow(sheets, spreadsheetId, headers, targetRow, { ...existing, ...updates });
+    }
+
+    return {
+      configured: true,
+      skipped: false,
+      rowNumber: targetRows[0] || rowNumber,
+      rowNumbers: targetRows,
+      mode: "clear",
+      ok: true,
+      updatedCount: targetRows.length,
+      message: `Cleared email preview metadata from ${targetRows.length} Google Sheet row(s).`,
+      details: { sheetName: SHEET_NAME, updatedRows: targetRows, clearedHeaders: presentHeaders },
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      skipped: false,
+      rowNumber,
+      rowNumbers: rowNumber ? [rowNumber] : [],
+      mode: "clear",
+      ok: false,
+      message: "Google Sheet email preview metadata cleanup failed.",
+      error: errorMessage(error),
+      details: { sheetName: SHEET_NAME },
+    };
+  }
+}

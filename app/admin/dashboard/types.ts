@@ -482,6 +482,9 @@ export type ReportCleanupManifest = {
   b2PdfKey?: string;
   secureEvidenceB2Keys?: string[];
   secureEvidenceAssetCount?: number;
+  emailPreviewB2Keys?: string[];
+  emailPreviewAssetCount?: number;
+  emailPreviewMetadataFound?: boolean;
   blobImageTargets?: string[];
   domainIndexIds?: string[];
   pdfExpiresAt?: string;

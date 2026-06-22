@@ -2486,7 +2486,7 @@ export default function DashboardPage() {
 
     const confirmMessage =
       reportAssetCleanup.mode === "assets_only"
-        ? "Remove Files Only will remove the PDF, preview image, and chat history but keep saved records. Continue?"
+        ? "Remove Files Only will remove the PDF, secure evidence screenshots, private B2 email preview thumbnail, preview image, and chat history while keeping the saved report, Sheet row, and contact record. Thumbnail references will be cleared. Continue?"
         : `Delete All Data will remove the secure report, files, Sheet row, and report-linked contact data.${contactModeNote} Continue?`;
 
     if (!window.confirm(confirmMessage)) return;

@@ -3,7 +3,7 @@ import { del } from "@vercel/blob";
 import { adminDb } from "@/lib/firebase-admin";
 import { buildReportPdfB2Key, deleteB2ObjectWithVersions, deletePdfFromB2WithVersions, sanitizeB2Key } from "@/lib/trackflow-storage/b2";
 import { deleteReportChatHistory } from "@/lib/supabase-admin";
-import { cleanupGoogleSheetReportRow, isCleanupSheetConfigured, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
+import { clearGoogleSheetEmailPreviewFields, cleanupGoogleSheetReportRow, isCleanupSheetConfigured, type SheetCleanupMode } from "@/lib/trackflow-cleanup/sheet-cleanup";
 import { deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
 
 type AnyRecord = Record<string, any>;
@@ -42,6 +42,9 @@ type CleanupManifest = {
   b2PdfKey: string;
   secureEvidenceB2Keys: string[];
   secureEvidenceAssetCount: number;
+  emailPreviewB2Keys: string[];
+  emailPreviewAssetCount: number;
+  emailPreviewMetadataFound: boolean;
   blobImageTargets: string[];
   domainIndexIds: string[];
   pdfExpiresAt: string;
@@ -440,6 +443,114 @@ function collectSecureEvidenceB2Keys(report: AnyRecord, token: string): string[]
 }
 
 
+function emailPreviewMetadataSources(value: AnyRecord = {}): AnyRecord[] {
+  const privateCopy = asRecord(
+    value.privateReportCopy ||
+      value.private_report_copy ||
+      value.privateReportPage ||
+      value.private_report_page,
+  );
+
+  return [value, privateCopy];
+}
+
+function isEmailPreviewB2KeyScopedToToken(value: unknown, token: string): boolean {
+  const key = safeB2Key(value);
+  const cleanToken = cleanId(token, 128);
+  if (!key || !cleanToken) return false;
+  return key.includes(`/${cleanToken}/email-preview/`);
+}
+
+function collectEmailPreviewB2Keys(sources: AnyRecord[], token: string, domainSlug: string): string[] {
+  const keys: string[] = [];
+  let metadataFound = false;
+
+  for (const sourceValue of sources) {
+    for (const source of emailPreviewMetadataSources(asRecord(sourceValue))) {
+      const asset = asRecord(source.emailPreviewImage || source.email_preview_image || source.emailPreviewImageAsset || source.email_preview_image_asset);
+      const candidates = [
+        source.emailPreviewImageB2Key,
+        source.email_preview_image_b2_key,
+        asset.b2Key,
+        asset.b2_key,
+        asset.storageKey,
+        asset.storage_key,
+        asset.objectKey,
+        asset.object_key,
+      ];
+
+      const hasSourceMetadata = Boolean(
+        firstCleanString(
+          ...candidates,
+          source.emailPreviewImageUrl,
+          source.email_preview_image_url,
+          source.emailPreviewImageWebpUrl,
+          source.email_preview_image_webp_url,
+          asset.publicUrl,
+          asset.public_url,
+          asset.url,
+        ),
+      );
+      metadataFound = metadataFound || hasSourceMetadata || Object.keys(asset).length > 0;
+
+      for (const candidate of candidates) {
+        const key = safeB2Key(candidate);
+        if (isEmailPreviewB2KeyScopedToToken(key, token)) keys.push(key);
+      }
+    }
+  }
+
+  const unique = uniqueStrings(keys, 12);
+  if (unique.length || !metadataFound) return unique;
+
+  // Compatibility fallback for reports created while the B2 upload succeeded but
+  // the register route saved only the proxy URL. The local uploader uses this
+  // deterministic token-scoped WebP pathname.
+  const fallback = safeB2Key(`reports/${normalizeSlug(domainSlug)}/${cleanId(token, 128)}/email-preview/thumbnail.webp`);
+  return isEmailPreviewB2KeyScopedToToken(fallback, token) ? [fallback] : [];
+}
+
+function hasEmailPreviewMetadata(sources: AnyRecord[]): boolean {
+  return sources.some((sourceValue) =>
+    emailPreviewMetadataSources(asRecord(sourceValue)).some((source) => {
+      const asset = asRecord(source.emailPreviewImage || source.email_preview_image || source.emailPreviewImageAsset || source.email_preview_image_asset);
+      return Boolean(
+        Object.keys(asset).length ||
+          firstCleanString(
+            source.emailPreviewImageUrl,
+            source.email_preview_image_url,
+            source.emailPreviewImageWebpUrl,
+            source.email_preview_image_webp_url,
+            source.emailPreviewImageB2Key,
+            source.email_preview_image_b2_key,
+          ),
+      );
+    }),
+  );
+}
+
+function emailPreviewDeleteFields(): AnyRecord {
+  const deleteField = admin.firestore.FieldValue.delete();
+  return {
+    emailPreviewImage: deleteField,
+    email_preview_image: deleteField,
+    emailPreviewImageUrl: deleteField,
+    email_preview_image_url: deleteField,
+    emailPreviewImageWebpUrl: deleteField,
+    email_preview_image_webp_url: deleteField,
+    emailPreviewImageB2Key: deleteField,
+    email_preview_image_b2_key: deleteField,
+    emailPreviewImageB2Bucket: deleteField,
+    email_preview_image_b2_bucket: deleteField,
+    emailPreviewImageMimeType: deleteField,
+    email_preview_image_mime_type: deleteField,
+    emailPreviewImageSizeBytes: deleteField,
+    email_preview_image_size_bytes: deleteField,
+    emailPreviewImageUpdatedAt: deleteField,
+    email_preview_image_updated_at: deleteField,
+  };
+}
+
 function isReportCleanupLinkedLead(data: AnyRecord = {}): boolean {
   const source = clean(data.source).toLowerCase();
   const sourceOrigin = clean(data.sourceOrigin).toLowerCase();
@@ -591,6 +702,19 @@ async function collectDomainIndexIds(report: AnyRecord, token: string): Promise<
   return Array.from(ids).filter(Boolean);
 }
 
+async function readDomainIndexRecords(ids: string[]): Promise<AnyRecord[]> {
+  const records: AnyRecord[] = [];
+  for (const id of uniqueStrings(ids, 20)) {
+    try {
+      const snap = await adminDb.collection("audit_report_domains").doc(id).get();
+      if (snap.exists) records.push(asRecord(snap.data()));
+    } catch {
+      // Best-effort metadata lookup. Cleanup can still proceed from report/lead data.
+    }
+  }
+  return records;
+}
+
 async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupManifest; report: AnyRecord; lead: AnyRecord }> {
   const reportSnap = await adminDb.collection("audit_reports").doc(token).get();
   const reportFound = Boolean(reportSnap.exists);
@@ -624,8 +748,12 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
   const domainSlug = normalizeSlug(report.domainSlug || report.domain_slug || report.domain || report.websiteUrl || lead.website || "website");
   const normalizedDomain = normalizeDomainKey(report.normalizedDomain, report.domain, report.websiteUrl, report.website, lead.website);
   const domainIndexIds = await collectDomainIndexIds(report, token);
+  const domainIndexRecords = await readDomainIndexRecords(domainIndexIds);
   const sheetRowNumber = Number(report.sheetRowNumber || report.sheet_row_number || lead.sheetRowNumber || lead.sheet_row_number || 0) || null;
   const secureEvidenceB2Keys = collectSecureEvidenceB2Keys(report, token);
+  const emailPreviewSources = [report, ...leadResults.map((item) => asRecord(item.data)), ...domainIndexRecords];
+  const emailPreviewB2Keys = collectEmailPreviewB2Keys(emailPreviewSources, token, domainSlug);
+  const emailPreviewMetadataFound = hasEmailPreviewMetadata(emailPreviewSources);
 
   const manifest: CleanupManifest = {
     reportToken: token,
@@ -643,6 +771,9 @@ async function buildCleanupManifest(token: string): Promise<{ manifest: CleanupM
     b2PdfKey: getReportB2Key(report, lead, token, domainSlug),
     secureEvidenceB2Keys,
     secureEvidenceAssetCount: secureEvidenceB2Keys.length,
+    emailPreviewB2Keys,
+    emailPreviewAssetCount: emailPreviewB2Keys.length,
+    emailPreviewMetadataFound,
     blobImageTargets: collectBlobImageTargets(report, lead),
     domainIndexIds,
     pdfExpiresAt: toIso(report.pdfExpiresAt || report.pdf_expires_at || lead.pdfExpiresAt || lead.pdf_expires_at),
@@ -819,6 +950,64 @@ async function deleteB2SecureEvidenceStep(manifest: CleanupManifest): Promise<Cl
   };
 }
 
+
+async function deleteB2EmailPreviewStep(manifest: CleanupManifest): Promise<CleanupStep> {
+  const keys = uniqueStrings(manifest.emailPreviewB2Keys || [], 12).filter((key) =>
+    isEmailPreviewB2KeyScopedToToken(key, manifest.reportToken),
+  );
+
+  if (!keys.length) {
+    return {
+      service: "backblaze_b2",
+      action: "delete_email_preview_image",
+      status: "skipped",
+      message: "No token-scoped email preview thumbnail B2 key found.",
+    };
+  }
+
+  const results: AnyRecord[] = [];
+  for (const key of keys) {
+    try {
+      const result = await deleteB2ObjectWithVersions(key);
+      results.push({
+        key,
+        ok: true,
+        deleted: result.deleted,
+        deletedCount: result.deletedCount,
+        versionCount: result.versionCount,
+        deleteMarkerCount: result.deleteMarkerCount,
+        attemptedVersionCleanup: result.attemptedVersionCleanup,
+        fallbackUsed: result.fallbackUsed,
+        errors: result.errors,
+        status: result.deleted ? "deleted" : "already_missing",
+      });
+    } catch (error: any) {
+      if (isAlreadyMissingError(error)) {
+        results.push({ key, ok: true, deleted: false, deletedCount: 0, status: "already_missing" });
+      } else {
+        results.push({ key, ok: false, error: safeError(error) });
+      }
+    }
+  }
+
+  const failed = results.filter((item) => !item.ok);
+  const deletedObjectCount = results.filter((item) => item.ok && item.deleted).length;
+  const deletedVersionCount = results.reduce((sum, item) => sum + (Number(item.deletedCount) || 0), 0);
+
+  return {
+    service: "backblaze_b2",
+    action: "delete_email_preview_image",
+    status: failed.length ? "error" : "ok",
+    target: `${keys.length} email preview object(s)`,
+    message: failed.length
+      ? `${failed.length} email preview thumbnail object(s) could not be removed from B2.`
+      : deletedObjectCount
+        ? `Deleted ${deletedObjectCount} email preview thumbnail object(s) from B2.`
+        : "Email preview thumbnail was already missing.",
+    error: failed.length ? failed.map((item) => item.error).filter(Boolean).join(" | ").slice(0, 700) : undefined,
+    details: { targets: keys, deletedObjectCount, deletedVersionCount, results },
+  };
+}
 
 async function deleteBlobImagesStep(manifest: CleanupManifest): Promise<CleanupStep> {
   if (!manifest.blobImageTargets.length) {
@@ -1176,6 +1365,100 @@ async function cleanupLeadStep(manifest: CleanupManifest, lead: AnyRecord, leadM
   }
 }
 
+async function cleanupLinkedLeadEmailPreviewMetadataStep(manifest: CleanupManifest, actor: string): Promise<CleanupStep> {
+  if (!manifest.emailPreviewMetadataFound && !(manifest.emailPreviewB2Keys || []).length) {
+    return {
+      service: "firestore",
+      action: "clear_email_preview_metadata",
+      status: "skipped",
+      message: "No email preview thumbnail metadata was found on this report.",
+    };
+  }
+
+  const leadIds = uniqueStrings(manifest.linkedLeadIds || [], 80);
+  if (!leadIds.length) {
+    return {
+      service: "firestore",
+      action: "clear_email_preview_metadata",
+      status: "skipped",
+      message: "No linked contact record was found for email preview metadata cleanup.",
+    };
+  }
+
+  const results: AnyRecord[] = [];
+  for (const leadId of leadIds) {
+    try {
+      const ref = adminDb.collection("outreach_leads").doc(leadId);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        results.push({ leadId, ok: true, status: "missing" });
+        continue;
+      }
+      await ref.set(
+        {
+          ...emailPreviewDeleteFields(),
+          emailPreviewCleanupAt: admin.firestore.FieldValue.serverTimestamp(),
+          emailPreviewCleanedBy: actor,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      results.push({ leadId, ok: true, status: "cleared" });
+    } catch (error: any) {
+      results.push({ leadId, ok: false, error: safeError(error) });
+    }
+  }
+
+  const failed = results.filter((item) => !item.ok);
+  return {
+    service: "firestore",
+    action: "clear_email_preview_metadata",
+    status: failed.length ? "error" : "ok",
+    target: `${leadIds.length} linked contact(s)`,
+    message: failed.length
+      ? `${failed.length} linked contact record(s) still contain email preview metadata.`
+      : "Email preview thumbnail references cleared from linked contact records.",
+    error: failed.length ? failed.map((item) => item.error).filter(Boolean).join(" | ").slice(0, 700) : undefined,
+    details: { linkedLeadIds: leadIds, results },
+  };
+}
+
+async function clearSheetEmailPreviewMetadataStep(manifest: CleanupManifest, mode: CleanupMode, actor: string): Promise<CleanupStep> {
+  if (mode === "hard") {
+    return {
+      service: "google_sheet",
+      action: "clear_email_preview_sheet_fields",
+      status: "skipped",
+      message: "The complete Sheet row will be deleted by the hard cleanup step.",
+    };
+  }
+
+  if (!manifest.emailPreviewMetadataFound && !(manifest.emailPreviewB2Keys || []).length) {
+    return {
+      service: "google_sheet",
+      action: "clear_email_preview_sheet_fields",
+      status: "skipped",
+      message: "No email preview thumbnail metadata was found for Sheet cleanup.",
+    };
+  }
+
+  const result = await clearGoogleSheetEmailPreviewFields({
+    rowNumber: manifest.sheetRowNumber,
+    reportToken: manifest.reportToken,
+    actor,
+  });
+
+  return {
+    service: "google_sheet",
+    action: "clear_email_preview_sheet_fields",
+    status: result.ok ? (result.skipped ? "skipped" : "ok") : "error",
+    target: String(manifest.sheetRowNumber || manifest.reportToken || ""),
+    message: result.message,
+    error: result.error,
+    details: result.details,
+  };
+}
+
 async function cleanupFirestoreReportStep(manifest: CleanupManifest, mode: CleanupMode, actor: string): Promise<CleanupStep> {
   if (!manifest.reportFound) {
     return { service: "firestore", action: "cleanup_report_document", status: "skipped", message: "Report document was not found." };
@@ -1216,18 +1499,52 @@ async function cleanupFirestoreReportStep(manifest: CleanupManifest, mode: Clean
         blobPathname: "",
         ogImagePathname: "",
         previewImagePathname: "",
+        ...emailPreviewDeleteFields(),
+        emailPreviewCleanupAt: now,
         securePageEvidenceAssets: [],
         secure_page_evidence_assets: [],
         securePageEvidenceAssetCount: 0,
         secure_page_evidence_asset_count: 0,
         securePageEvidenceUpdatedAt: now,
         privateReportCopy: {
+          emailPreviewImage: null,
+          email_preview_image: null,
+          emailPreviewImageUrl: "",
+          email_preview_image_url: "",
+          emailPreviewImageWebpUrl: "",
+          email_preview_image_webp_url: "",
+          emailPreviewImageB2Key: "",
+          email_preview_image_b2_key: "",
+          emailPreviewImageB2Bucket: "",
+          email_preview_image_b2_bucket: "",
+          emailPreviewImageMimeType: "",
+          email_preview_image_mime_type: "",
+          emailPreviewImageSizeBytes: 0,
+          email_preview_image_size_bytes: 0,
+          emailPreviewImageUpdatedAt: null,
+          email_preview_image_updated_at: null,
           securePageEvidenceAssets: [],
           secure_page_evidence_assets: [],
           securePageEvidenceAssetCount: 0,
           secure_page_evidence_asset_count: 0,
         },
         private_report_copy: {
+          emailPreviewImage: null,
+          email_preview_image: null,
+          emailPreviewImageUrl: "",
+          email_preview_image_url: "",
+          emailPreviewImageWebpUrl: "",
+          email_preview_image_webp_url: "",
+          emailPreviewImageB2Key: "",
+          email_preview_image_b2_key: "",
+          emailPreviewImageB2Bucket: "",
+          email_preview_image_b2_bucket: "",
+          emailPreviewImageMimeType: "",
+          email_preview_image_mime_type: "",
+          emailPreviewImageSizeBytes: 0,
+          email_preview_image_size_bytes: 0,
+          emailPreviewImageUpdatedAt: null,
+          email_preview_image_updated_at: null,
           securePageEvidenceAssets: [],
           secure_page_evidence_assets: [],
           securePageEvidenceAssetCount: 0,
@@ -1278,6 +1595,8 @@ async function cleanupDomainIndexStep(manifest: CleanupManifest, mode: CleanupMo
             cleanupStatus: mode === "assets_only" ? "assets_cleaned" : "soft_cleaned",
             cleanupAt: now,
             cleanedBy: actor,
+            ...emailPreviewDeleteFields(),
+            emailPreviewCleanupAt: now,
             updatedAt: now,
           },
           { merge: true },
@@ -1390,6 +1709,15 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
           { targets: manifest.secureEvidenceB2Keys },
         )
       : { service: "backblaze_b2", action: "delete_secure_evidence_assets", status: "skipped", message: "No secure page evidence screenshot B2 key found." },
+    manifest.emailPreviewB2Keys.length
+      ? plannedStep(
+          "backblaze_b2",
+          "delete_email_preview_image",
+          `${manifest.emailPreviewB2Keys.length} email thumbnail object(s)`,
+          "Token-scoped email preview thumbnail stored in private B2 would be deleted.",
+          { targets: manifest.emailPreviewB2Keys },
+        )
+      : { service: "backblaze_b2", action: "delete_email_preview_image", status: "skipped", message: "No token-scoped email preview thumbnail B2 key found." },
     manifest.blobImageTargets.length
       ? plannedStep("vercel_blob", "delete_preview_images", undefined, "Blob preview image target(s) would be deleted.", { targets: manifest.blobImageTargets })
       : { service: "vercel_blob", action: "delete_preview_images", status: "skipped", message: "No Vercel Blob preview image target found." },
@@ -1408,6 +1736,24 @@ function dryRunSteps(manifest: CleanupManifest, mode: CleanupMode, leadMode: Lea
         manualReportLinkedProtected: true,
       },
     ),
+    (manifest.emailPreviewMetadataFound || manifest.emailPreviewB2Keys.length) && manifest.linkedLeadIds.length
+      ? plannedStep(
+          "firestore",
+          "clear_email_preview_metadata",
+          `${manifest.linkedLeadIds.length} linked contact(s)`,
+          "Email preview thumbnail references would be cleared from linked Firestore contact records.",
+        )
+      : { service: "firestore", action: "clear_email_preview_metadata", status: "skipped", message: "No linked contact record found for email preview metadata cleanup." },
+    mode === "hard"
+      ? { service: "google_sheet", action: "clear_email_preview_sheet_fields", status: "skipped", message: "The complete Sheet row would be deleted by hard cleanup." }
+      : manifest.emailPreviewMetadataFound || manifest.emailPreviewB2Keys.length
+        ? plannedStep(
+          "google_sheet",
+          "clear_email_preview_sheet_fields",
+          String(manifest.sheetRowNumber || manifest.reportToken || ""),
+          "If email-preview columns exist, only those Sheet cells would be cleared; the row would remain.",
+        )
+        : { service: "google_sheet", action: "clear_email_preview_sheet_fields", status: "skipped", message: "No email preview thumbnail metadata found for Sheet cleanup." },
     manifest.reportFound
       ? plannedStep("firestore", mode === "hard" ? "delete_report_document" : "mark_report_cleaned", manifest.reportToken)
       : { service: "firestore", action: "cleanup_report_document", status: "skipped", message: "Report document was not found." },
@@ -1474,9 +1820,12 @@ async function runCleanup(input: {
 
   steps.push(await runCleanupStep("delete_pdf", () => deleteB2PdfStep(input.manifest)));
   steps.push(await runCleanupStep("delete_secure_evidence_assets", () => deleteB2SecureEvidenceStep(input.manifest)));
+  steps.push(await runCleanupStep("delete_email_preview_image", () => deleteB2EmailPreviewStep(input.manifest)));
   steps.push(await runCleanupStep("delete_preview_images", () => deleteBlobImagesStep(input.manifest)));
   steps.push(await runCleanupStep("delete_report_chat", () => deleteSupabaseChatStep(input.manifest)));
   steps.push(await runCleanupStep("delete_report_email_events", () => cleanupReportEmailEventsStep(input.manifest)));
+  steps.push(await runCleanupStep("clear_email_preview_metadata", () => cleanupLinkedLeadEmailPreviewMetadataStep(input.manifest, input.actor)));
+  steps.push(await runCleanupStep("clear_email_preview_sheet_fields", () => clearSheetEmailPreviewMetadataStep(input.manifest, input.mode, input.actor)));
   steps.push(await runCleanupStep("cleanup_report_document", () => cleanupFirestoreReportStep(input.manifest, input.mode, input.actor)));
   steps.push(await runCleanupStep("cleanup_domain_indexes", () => cleanupDomainIndexStep(input.manifest, input.mode, input.actor)));
   steps.push(await runCleanupStep("cleanup_sheet_row", () => writeSheetCleanupStep(input.manifest, input.sheetMode, input.mode, input.actor)));
