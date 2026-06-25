@@ -1,4 +1,4 @@
-export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
+export type MainTab = "overview" | "sheet" | "gmail-outreach" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
 export type LeadSourceFilter = "all" | "manual" | "manual_report_linked" | "sheet" | "sheet_primary" | "sheet_additional" | "test";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
 
