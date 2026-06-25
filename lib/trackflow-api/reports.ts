@@ -141,6 +141,45 @@ function reportFirstCleanString(...values: any[]): string {
   return "";
 }
 
+function reportImageUrlFrom(value: any): string {
+  const direct = sanitizeOptionalUrl(typeof value === "string" || typeof value === "number" ? String(value) : "");
+  if (direct) return direct;
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const record = value as AnyRecord;
+  const candidates = [
+    record.url,
+    record.publicUrl,
+    record.public_url,
+    record.src,
+    record.href,
+    record.imageUrl,
+    record.image_url,
+    record.ogImageUrl,
+    record.og_image_url,
+    record.openGraphImageUrl,
+    record.open_graph_image_url,
+    record.previewImageUrl,
+    record.preview_image_url,
+  ];
+
+  for (const candidate of candidates) {
+    const url = sanitizeOptionalUrl(typeof candidate === "string" || typeof candidate === "number" ? String(candidate) : "");
+    if (url) return url;
+  }
+
+  return "";
+}
+
+function firstReportImageUrl(...values: any[]): string {
+  for (const value of values) {
+    const url = reportImageUrlFrom(value);
+    if (url) return url;
+  }
+  return "";
+}
+
 function reportPlainObject(value: any): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : {};
 }
@@ -1005,7 +1044,7 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const deleteField = admin.firestore.FieldValue.delete();
 
     const normalizedDomain = normalizeDomainKey(report.domain, report.websiteUrl);
-    const previewImageUrl = report.previewImageUrl || report.ogImageUrl || report.openGraphImageUrl || report.homepageScreenshotUrl || "";
+    const previewImageUrl = firstReportImageUrl(report.previewImageUrl, report.ogImageUrl, report.openGraphImageUrl, report.homepageScreenshotUrl, existingData.previewImageUrl, existingData.ogImageUrl, existingData.openGraphImageUrl, existingData.emailPreviewImageUrl);
     const pdfStorageKey = report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId;
     const sourceIdentity = normalizeReportSourceIdentity(report, body || {}, existingData);
     const existingManualConversionEvidence = existingData.manualConversionEvidence && typeof existingData.manualConversionEvidence === "object"
@@ -1060,13 +1099,6 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       "domain_slug",
       "normalized_domain",
       "email",
-      "ogImageUrl",
-      "og_image_url",
-      "openGraphImageUrl",
-      "open_graph_image_url",
-      "homepageScreenshotUrl",
-      "homepage_screenshot_url",
-      "preview_image_url",
       "previewImagePathname",
       "preview_image_pathname",
       "recommendations",
@@ -1245,7 +1277,14 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       howToReadTitle: report.howToReadTitle,
       howToReadParagraphs: report.howToReadParagraphs,
       ctaHeadline: report.ctaHeadline,
+      ogImageUrl: previewImageUrl,
+      og_image_url: previewImageUrl,
+      openGraphImageUrl: previewImageUrl,
+      open_graph_image_url: previewImageUrl,
       previewImageUrl,
+      preview_image_url: previewImageUrl,
+      homepageScreenshotUrl: previewImageUrl,
+      homepage_screenshot_url: previewImageUrl,
       emailPreviewImage: cleanEmailPreviewImage.asset || null,
       email_preview_image: cleanEmailPreviewImage.asset || null,
       emailPreviewImageUrl: cleanEmailPreviewImage.url,
@@ -1377,7 +1416,14 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
           domain: normalizedDomain,
           normalizedDomain,
           domainSlug: report.domainSlug,
+          ogImageUrl: previewImageUrl,
+          og_image_url: previewImageUrl,
+          openGraphImageUrl: previewImageUrl,
+          open_graph_image_url: previewImageUrl,
           previewImageUrl,
+          preview_image_url: previewImageUrl,
+          homepageScreenshotUrl: previewImageUrl,
+          homepage_screenshot_url: previewImageUrl,
           emailPreviewImageUrl: cleanEmailPreviewImage.url,
           email_preview_image_url: cleanEmailPreviewImage.url,
           emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,

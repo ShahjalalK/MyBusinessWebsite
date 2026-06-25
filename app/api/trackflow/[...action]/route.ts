@@ -2502,43 +2502,39 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
   );
   const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token, domainSlug);
 
-  const ogImageUrl = sanitizeOptionalUrl(
-    body.ogImageUrl ||
-      body.og_image_url ||
-      body.openGraphImageUrl ||
-      body.open_graph_image_url ||
-      body.previewImageUrl ||
-      body.preview_image_url ||
-      body.homepageScreenshotUrl ||
-      body.homepage_screenshot_url ||
-      "",
+  const ogImageUrl = firstRegisterImageUrl(
+    body.ogImageUrl,
+    body.og_image_url,
+    body.openGraphImageUrl,
+    body.open_graph_image_url,
+    body.previewImageUrl,
+    body.preview_image_url,
+    body.homepageScreenshotUrl,
+    body.homepage_screenshot_url,
   );
-  const openGraphImageUrl = sanitizeOptionalUrl(
-    body.openGraphImageUrl ||
-      body.open_graph_image_url ||
-      ogImageUrl ||
-      body.previewImageUrl ||
-      body.preview_image_url ||
-      body.homepageScreenshotUrl ||
-      body.homepage_screenshot_url ||
-      "",
+  const openGraphImageUrl = firstRegisterImageUrl(
+    body.openGraphImageUrl,
+    body.open_graph_image_url,
+    ogImageUrl,
+    body.previewImageUrl,
+    body.preview_image_url,
+    body.homepageScreenshotUrl,
+    body.homepage_screenshot_url,
   );
-  const previewImageUrl = sanitizeOptionalUrl(
-    body.previewImageUrl ||
-      body.preview_image_url ||
-      ogImageUrl ||
-      openGraphImageUrl ||
-      body.homepageScreenshotUrl ||
-      body.homepage_screenshot_url ||
-      "",
+  const previewImageUrl = firstRegisterImageUrl(
+    body.previewImageUrl,
+    body.preview_image_url,
+    ogImageUrl,
+    openGraphImageUrl,
+    body.homepageScreenshotUrl,
+    body.homepage_screenshot_url,
   );
-  const homepageScreenshotUrl = sanitizeOptionalUrl(
-    body.homepageScreenshotUrl ||
-      body.homepage_screenshot_url ||
-      previewImageUrl ||
-      ogImageUrl ||
-      openGraphImageUrl ||
-      "",
+  const homepageScreenshotUrl = firstRegisterImageUrl(
+    body.homepageScreenshotUrl,
+    body.homepage_screenshot_url,
+    previewImageUrl,
+    ogImageUrl,
+    openGraphImageUrl,
   );
   const ogImagePathname = firstCleanString(
     body.ogImagePathname,
@@ -9840,15 +9836,66 @@ async function handleReportDebug(req: Request) {
 function isRegisterFirestoreSpecialValue(value: any): boolean {
   if (!value || typeof value !== "object") return false;
   const ctorName = String(value?.constructor?.name || "");
+  const hasFirestoreTransformShape =
+    typeof value?.toProto === "function" ||
+    typeof value?.includeInDocumentMask === "function" ||
+    typeof value?.includeInDocumentTransform === "function" ||
+    typeof value?._toFieldTransform === "function" ||
+    typeof value?._toFieldValue === "function" ||
+    typeof value?._methodName === "string";
+
   return (
     ctorName.includes("FieldValue") ||
+    ctorName.includes("FieldTransform") ||
+    ctorName.includes("DeleteTransform") ||
+    ctorName.includes("ServerTimestampTransform") ||
     ctorName.includes("Timestamp") ||
     ctorName.includes("DocumentReference") ||
     ctorName.includes("GeoPoint") ||
+    hasFirestoreTransformShape ||
     typeof value?.toDate === "function" ||
     typeof value?.toMillis === "function" ||
-    typeof value?.isEqual === "function" && ("seconds" in value || "nanoseconds" in value)
+    (typeof value?.isEqual === "function" && ("seconds" in value || "nanoseconds" in value))
   );
+}
+
+function registerImageUrlFrom(value: any): string {
+  const direct = sanitizeOptionalUrl(typeof value === "string" || typeof value === "number" ? String(value) : "");
+  if (direct) return direct;
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const record = value as AnyRecord;
+  const candidates = [
+    record.url,
+    record.publicUrl,
+    record.public_url,
+    record.src,
+    record.href,
+    record.imageUrl,
+    record.image_url,
+    record.ogImageUrl,
+    record.og_image_url,
+    record.openGraphImageUrl,
+    record.open_graph_image_url,
+    record.previewImageUrl,
+    record.preview_image_url,
+  ];
+
+  for (const candidate of candidates) {
+    const url = sanitizeOptionalUrl(typeof candidate === "string" || typeof candidate === "number" ? String(candidate) : "");
+    if (url) return url;
+  }
+
+  return "";
+}
+
+function firstRegisterImageUrl(...values: any[]): string {
+  for (const value of values) {
+    const url = registerImageUrlFrom(value);
+    if (url) return url;
+  }
+  return "";
 }
 
 function sanitizeRegisterFirestoreValue(value: any, depth = 0): any {
@@ -10009,19 +10056,12 @@ async function handleReportRegister(req: Request) {
   const deleteField = admin.firestore.FieldValue.delete();
   const normalizedDomain = normalizeDomainKeyForReports(report.domain, report.websiteUrl);
 
-  const previewImageUrl = report.previewImageUrl || report.ogImageUrl || report.openGraphImageUrl || report.homepageScreenshotUrl || "";
+  const previewImageUrl = firstRegisterImageUrl(report.previewImageUrl, report.ogImageUrl, report.openGraphImageUrl, report.homepageScreenshotUrl, existingData.previewImageUrl, existingData.ogImageUrl, existingData.openGraphImageUrl, existingData.emailPreviewImageUrl);
   const pdfStorageKey = report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId;
   const legacyReportFieldsToDelete = [
     "domain_slug",
     "normalized_domain",
     "email",
-    "ogImageUrl",
-    "og_image_url",
-    "openGraphImageUrl",
-    "open_graph_image_url",
-    "homepageScreenshotUrl",
-    "homepage_screenshot_url",
-    "preview_image_url",
     "previewImagePathname",
     "preview_image_pathname",
     "recommendations",
@@ -10261,7 +10301,14 @@ async function handleReportRegister(req: Request) {
     manual_conversion_evidence: deleteField,
     manualEvidenceHero: nextManualEvidenceHero || null,
     manual_evidence_hero: deleteField,
+    ogImageUrl: previewImageUrl,
+    og_image_url: previewImageUrl,
+    openGraphImageUrl: previewImageUrl,
+    open_graph_image_url: previewImageUrl,
     previewImageUrl,
+    preview_image_url: previewImageUrl,
+    homepageScreenshotUrl: previewImageUrl,
+    homepage_screenshot_url: previewImageUrl,
     emailPreviewImage: persistedEmailPreviewImage.asset || null,
     email_preview_image: persistedEmailPreviewImage.asset || null,
     emailPreviewImageUrl: persistedEmailPreviewImage.url,
@@ -10429,7 +10476,14 @@ async function handleReportRegister(req: Request) {
         index: {
           token: report.token,
           reportUrl: report.reportUrl,
+          ogImageUrl: previewImageUrl,
+          og_image_url: previewImageUrl,
+          openGraphImageUrl: previewImageUrl,
+          open_graph_image_url: previewImageUrl,
           previewImageUrl,
+          preview_image_url: previewImageUrl,
+          homepageScreenshotUrl: previewImageUrl,
+          homepage_screenshot_url: previewImageUrl,
           emailPreviewImageUrl: persistedEmailPreviewImage.url,
           emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
           emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,

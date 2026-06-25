@@ -415,6 +415,45 @@ export function firstCleanString(...values: any[]): string {
   return "";
 }
 
+function publicImageUrlFrom(value: any): string {
+  const direct = sanitizeOptionalUrl(typeof value === "string" || typeof value === "number" ? String(value) : "");
+  if (direct) return direct;
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const record = value as AnyRecord;
+  const candidates = [
+    record.url,
+    record.publicUrl,
+    record.public_url,
+    record.src,
+    record.href,
+    record.imageUrl,
+    record.image_url,
+    record.ogImageUrl,
+    record.og_image_url,
+    record.openGraphImageUrl,
+    record.open_graph_image_url,
+    record.previewImageUrl,
+    record.preview_image_url,
+  ];
+
+  for (const candidate of candidates) {
+    const url = sanitizeOptionalUrl(typeof candidate === "string" || typeof candidate === "number" ? String(candidate) : "");
+    if (url) return url;
+  }
+
+  return "";
+}
+
+function firstPublicImageUrl(...values: any[]): string {
+  for (const value of values) {
+    const url = publicImageUrlFrom(value);
+    if (url) return url;
+  }
+  return "";
+}
+
 
 function normalizeDisplaySentence(value: any, fallback = ""): string {
   return cleanCell(value || fallback)
@@ -1943,18 +1982,17 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
       "",
   );
   const reportUrl = sanitizePublicReportUrl(body.reportUrl || body.report_url) || buildPublicReportUrl(token, domainSlug);
-  const ogImageUrl = sanitizeOptionalUrl(
-    body.ogImageUrl ||
-      body.og_image_url ||
-      body.openGraphImageUrl ||
-      body.open_graph_image_url ||
-      body.previewImageUrl ||
-      body.preview_image_url ||
-      body.homepageScreenshotUrl ||
-      body.homepage_screenshot_url ||
-      body.screenshotUrl ||
-      body.screenshot_url ||
-      "",
+  const ogImageUrl = firstPublicImageUrl(
+    body.ogImageUrl,
+    body.og_image_url,
+    body.openGraphImageUrl,
+    body.open_graph_image_url,
+    body.previewImageUrl,
+    body.preview_image_url,
+    body.homepageScreenshotUrl,
+    body.homepage_screenshot_url,
+    body.screenshotUrl,
+    body.screenshot_url,
   );
   const ogImagePathname = firstCleanString(
     body.ogImagePathname,

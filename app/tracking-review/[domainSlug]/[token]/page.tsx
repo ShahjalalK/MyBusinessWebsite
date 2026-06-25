@@ -2770,6 +2770,8 @@ function getAppBaseUrl(): string {
 }
 
 function sanitizeMetadataImageUrl(value: unknown): string {
+  if (typeof value !== "string" && typeof value !== "number") return "";
+
   const raw = cleanText(value, "");
   if (!raw) return "";
 
@@ -2785,17 +2787,57 @@ function sanitizeMetadataImageUrl(value: unknown): string {
   }
 }
 
+function metadataImageUrlFrom(value: unknown): string {
+  const direct = sanitizeMetadataImageUrl(value);
+  if (direct) return direct;
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const record = value as Record<string, unknown>;
+  const nestedCandidates = [
+    record.url,
+    record.publicUrl,
+    record.public_url,
+    record.src,
+    record.href,
+    record.imageUrl,
+    record.image_url,
+    record.ogImageUrl,
+    record.og_image_url,
+    record.openGraphImageUrl,
+    record.open_graph_image_url,
+    record.previewImageUrl,
+    record.preview_image_url,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const url = sanitizeMetadataImageUrl(candidate);
+    if (url) return url;
+  }
+
+  return "";
+}
+
+function firstMetadataImageUrl(...values: unknown[]): string {
+  for (const value of values) {
+    const url = metadataImageUrlFrom(value);
+    if (url) return url;
+  }
+  return "";
+}
+
 function getReportPreviewImageUrl(report: Record<string, any>): string {
-  return sanitizeMetadataImageUrl(
-    report.ogImageUrl ||
-      report.og_image_url ||
-      report.openGraphImageUrl ||
-      report.open_graph_image_url ||
-      report.previewImageUrl ||
-      report.preview_image_url ||
-      report.homepageScreenshotUrl ||
-      report.homepage_screenshot_url ||
-      "",
+  return firstMetadataImageUrl(
+    report.ogImageUrl,
+    report.og_image_url,
+    report.openGraphImageUrl,
+    report.open_graph_image_url,
+    report.previewImageUrl,
+    report.preview_image_url,
+    report.homepageScreenshotUrl,
+    report.homepage_screenshot_url,
+    report.emailPreviewImageUrl,
+    report.email_preview_image_url,
   );
 }
 
