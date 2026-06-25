@@ -127,8 +127,32 @@ function buildEmailPreviewHtml(lead: SheetLead) {
   const safeReportUrl = escapeHtmlAttribute(reportUrl);
   const safeImageUrl = escapeHtmlAttribute(imageUrl);
 
-  return `<a href="${safeReportUrl}" target="_blank" rel="noopener noreferrer"><img src="${safeImageUrl}" alt="${alt} private tracking review" width="600" style="display:block;width:100%;max-width:600px;border:0;border-radius:16px;outline:none;text-decoration:none;" /></a>`;
+  // Gmail-ready block: when copied as text/html, this pastes as a visible image
+  // and the image itself opens the secure TrackFlow report page.
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:16px 0;line-height:1.45;color:#111827;">
+      <a href="${safeReportUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;color:#111827;">
+        <img src="${safeImageUrl}" alt="${alt} private tracking review" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:1px solid #e5e7eb;border-radius:16px;outline:none;text-decoration:none;" />
+      </a>
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#6b7280;margin-top:8px;">
+        Private TrackFlow review — click the image to open the secure page.
+      </div>
+    </div>
+  `.trim();
 }
+
+function buildEmailPreviewPlainText(lead: SheetLead | null) {
+  if (!lead) return "";
+  const reportUrl = getReportUrl(lead);
+  const imageUrl = getEmailPreviewUrl(lead);
+  return [
+    reportUrl ? `Secure page: ${reportUrl}` : "",
+    imageUrl ? `Email preview image: ${imageUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 
 function sourceTone(source: string) {
   if (source === "python_search") return "bg-blue-50 text-blue-700 border-blue-100";
@@ -194,6 +218,134 @@ function fullCopyText(subject: string, message: string) {
   const cleanBody = plainEmailBody(message);
   return [cleanSubject ? `Subject: ${cleanSubject}` : "", cleanBody].filter(Boolean).join("\n\n");
 }
+
+function escapeHtmlText(value: unknown): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function hasLikelyHtml(value: string) {
+  return /<\/?(?:p|br|div|span|table|tbody|tr|td|a|strong|b|em|i|ul|ol|li|img|h[1-6])\b/i.test(String(value || ""));
+}
+
+function plainTextToParagraphHtml(value: string) {
+  const paragraphs = String(value || "")
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  if (!paragraphs.length) return "";
+
+  return paragraphs
+    .map((paragraph) => `<p style="margin:0 0 12px 0;">${escapeHtmlText(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+}
+
+function normalizeEmailBodyHtml(message: string) {
+  const raw = String(message || "").trim();
+  if (!raw) return "";
+  if (hasLikelyHtml(raw)) return raw;
+  return plainTextToParagraphHtml(raw);
+}
+
+function buildRichEmailBodyHtml(message: string) {
+  const html = normalizeEmailBodyHtml(message);
+  if (!html) return "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:21px;color:#111827;max-width:640px;">
+      ${html}
+    </div>
+  `.trim();
+}
+
+function buildRichFullEmailHtml(subject: string, message: string) {
+  const subjectText = String(subject || "").trim();
+  const bodyHtml = normalizeEmailBodyHtml(message);
+  if (!subjectText && !bodyHtml) return "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:21px;color:#111827;max-width:640px;">
+      ${subjectText ? `<div style="margin:0 0 14px 0;font-size:13px;line-height:19px;color:#374151;"><strong>Subject:</strong> ${escapeHtmlText(subjectText)}</div>` : ""}
+      ${bodyHtml}
+    </div>
+  `.trim();
+}
+
+type ClipboardCopyMode = "rich" | "dom-rich" | "plain";
+
+function copyRichHtmlViaDomSelection(html: string): boolean {
+  if (typeof document === "undefined" || typeof window === "undefined") return false;
+
+  const container = document.createElement("div");
+  container.setAttribute("contenteditable", "true");
+  container.style.position = "fixed";
+  container.style.left = "-10000px";
+  container.style.top = "0";
+  container.style.width = "760px";
+  container.style.padding = "16px";
+  container.style.background = "#ffffff";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  const selection = window.getSelection();
+  const range = document.createRange();
+
+  try {
+    range.selectNodeContents(container);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    container.focus();
+    const copied = document.execCommand("copy");
+    selection?.removeAllRanges();
+    return copied;
+  } catch {
+    selection?.removeAllRanges();
+    return false;
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+async function writeRichHtmlToClipboard(html: string, plainText: string): Promise<ClipboardCopyMode> {
+  const safeHtml = String(html || "").trim();
+  const safePlain = String(plainText || "").trim() || stripHtml(safeHtml);
+  if (!safeHtml && !safePlain) throw new Error("Nothing to copy.");
+
+  try {
+    const ClipboardItemCtor = typeof window !== "undefined" ? (window as any).ClipboardItem : undefined;
+    const clipboardWrite = typeof navigator !== "undefined" ? (navigator.clipboard as any)?.write : undefined;
+    if (ClipboardItemCtor && typeof clipboardWrite === "function") {
+      await clipboardWrite.call(navigator.clipboard, [
+        new ClipboardItemCtor({
+          "text/html": new Blob([safeHtml || escapeHtmlText(safePlain)], { type: "text/html" }),
+          "text/plain": new Blob([safePlain], { type: "text/plain" }),
+        }),
+      ]);
+      return "rich";
+    }
+  } catch {
+    // Some browsers block navigator.clipboard.write for HTML. Fall back to a
+    // DOM selection copy, which still gives Gmail a rendered HTML selection.
+  }
+
+  if (safeHtml && copyRichHtmlViaDomSelection(safeHtml)) {
+    return "dom-rich";
+  }
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(safePlain || safeHtml);
+    return "plain";
+  }
+
+  throw new Error("Clipboard copy is not available in this browser.");
+}
+
 
 export default function GmailOutreachPanel({
   sheetLeads,
@@ -270,8 +422,69 @@ export default function GmailOutreachPanel({
       return;
     }
 
-    await navigator.clipboard.writeText(text);
-    setStatus(`${label} copied.`);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus(`${label} copied.`);
+    } catch (error: any) {
+      setStatus(`${label} copy failed: ${error?.message || "clipboard blocked"}`);
+    }
+  };
+
+  const copyRichHtml = async (html: string, plainText: string, label: string) => {
+    const richHtml = String(html || "").trim();
+    const plain = String(plainText || "").trim() || stripHtml(richHtml);
+
+    if (!richHtml && !plain) {
+      setStatus(`${label} missing for this row.`);
+      return;
+    }
+
+    try {
+      const mode = await writeRichHtmlToClipboard(richHtml, plain);
+      if (mode === "plain") {
+        setStatus(`${label} copied as plain text fallback. Use Open rendered preview if Gmail shows code/text only.`);
+      } else {
+        setStatus(`${label} copied as a rich Gmail-ready block. Paste directly into Gmail compose.`);
+      }
+    } catch (error: any) {
+      setStatus(`${label} copy failed: ${error?.message || "clipboard blocked"}`);
+    }
+  };
+
+  const openRenderedPreview = () => {
+    if (!selectedPreviewHtml) {
+      setStatus("Email preview image block missing for this row.");
+      return;
+    }
+
+    const previewWindow = window.open("", "_blank", "width=820,height=720");
+    if (!previewWindow) {
+      setStatus("Popup blocked. Allow popups, or use Copy Gmail image block.");
+      return;
+    }
+
+    previewWindow.document.open();
+    previewWindow.document.write(`<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>TrackFlow Gmail Image Preview</title>
+          <style>
+            body { margin: 0; padding: 28px; background: #f8fafc; font-family: Arial, Helvetica, sans-serif; color: #0f172a; }
+            .card { max-width: 720px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 24px; padding: 24px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.10); }
+            .hint { margin: 0 0 18px 0; font-size: 13px; line-height: 20px; color: #475569; font-weight: 700; }
+            .copy-zone { padding: 12px; border: 1px dashed #cbd5e1; border-radius: 18px; background: #ffffff; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <p class="hint">Select/copy the image block below if the direct clipboard button does not paste correctly into Gmail. The image is linked to the secure report page.</p>
+            <div class="copy-zone" contenteditable="true">${selectedPreviewHtml}</div>
+          </div>
+        </body>
+      </html>`);
+    previewWindow.document.close();
+    setStatus("Rendered preview opened. Copy the visible image block from that page if needed.");
   };
 
   const openLead = (lead: SheetLead) => {
@@ -392,6 +605,7 @@ export default function GmailOutreachPanel({
   const selectedReport = selectedLead ? getReportUrl(selectedLead) : "";
   const selectedPreviewUrl = selectedLead ? getEmailPreviewUrl(selectedLead) : "";
   const selectedPreviewHtml = selectedLead ? buildEmailPreviewHtml(selectedLead) : "";
+  const selectedPreviewPlainText = buildEmailPreviewPlainText(selectedLead);
   const selectedCurrentStage = selectedLead ? getGmailOutreachStage(selectedLead) : "ready";
   const modalLoading = selectedLead ? actionLoadingRow === Number(selectedLead.rowNumber) : false;
 
@@ -645,17 +859,36 @@ export default function GmailOutreachPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => copyText(selectedPreviewHtml, "Clickable email preview HTML")}
+                    onClick={() => copyRichHtml(selectedPreviewHtml, selectedPreviewPlainText, "Gmail image block")}
                     className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-left text-xs font-black text-blue-700"
                   >
-                    Copy clickable image HTML
-                    <span className="mt-1 block font-semibold text-blue-500">Image links to secure page</span>
+                    Copy Gmail image block
+                    <span className="mt-1 block font-semibold text-blue-500">Paste into Gmail as visible image</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openRenderedPreview}
+                    className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-left text-xs font-black text-indigo-700"
+                  >
+                    Open rendered preview
+                    <span className="mt-1 block font-semibold text-indigo-500">Backup copy method</span>
                   </button>
                 </div>
 
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-white p-3 text-[11px] font-bold leading-5 text-slate-500">
-                  Gmail compose auto-open removed from the main flow. Copy subject/body from this modal, paste into Gmail Workspace, then mark the stage sent here. For the email preview image, copy the clickable image HTML when you want the image to open the secure report page.
+                  Gmail compose auto-open removed from the main flow. Copy subject/body from this modal, paste into Gmail Workspace, then mark the stage sent here. Use Copy Gmail image block when you want the preview image to paste as a visible, clickable image that opens the secure report page.
                 </div>
+
+                {selectedPreviewHtml ? (
+                  <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-3">
+                    <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">Rendered Gmail image preview</div>
+                    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 p-2" dangerouslySetInnerHTML={{ __html: selectedPreviewHtml }} />
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-[11px] font-bold leading-5 text-amber-700">
+                    Email preview image is missing for this Sheet row. Secure page URL and normal email copy can still be copied.
+                  </div>
+                )}
 
                 <div className="mt-5 grid gap-2">
                   <button
@@ -728,17 +961,17 @@ export default function GmailOutreachPanel({
                           </button>
                           <button
                             type="button"
-                            onClick={() => copyText(plainEmailBody(draft.message), `${stage.label} body`)}
+                            onClick={() => copyRichHtml(buildRichEmailBodyHtml(draft.message), plainEmailBody(draft.message), `${stage.label} body`)}
                             className="rounded-xl border border-slate-100 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-600"
                           >
-                            Copy body
+                            Copy body rich
                           </button>
                           <button
                             type="button"
-                            onClick={() => copyText(fullCopyText(draft.subject, draft.message), `${stage.label} full copy`)}
+                            onClick={() => copyRichHtml(buildRichFullEmailHtml(draft.subject, draft.message), fullCopyText(draft.subject, draft.message), `${stage.label} full copy`)}
                             className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase text-blue-700"
                           >
-                            Copy all
+                            Copy all rich
                           </button>
                           <button
                             type="button"
