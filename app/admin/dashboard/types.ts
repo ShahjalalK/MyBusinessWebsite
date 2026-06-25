@@ -1,6 +1,17 @@
-export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
+export type MainTab = "overview" | "sheet" | "gmail-outreach" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
 export type LeadSourceFilter = "all" | "manual" | "manual_report_linked" | "sheet" | "sheet_primary" | "sheet_additional" | "test";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
+
+export type GmailOutreachStage =
+  | "ready"
+  | "initial_sent"
+  | "followup_1"
+  | "followup_2"
+  | "followup_3"
+  | "followup_4"
+  | "closed"
+  | "do_not_contact";
+
 
 export type LinkedInKeywordPriority = "A" | "B" | "C";
 
@@ -231,6 +242,30 @@ export type SheetLead = {
   "Source Context"?: string;
   "Email Outreach Allowed"?: string;
   "LinkedIn Outreach Allowed"?: string;
+
+  // Gmail Workspace manual outreach pipeline (Sheet-only).
+  "Gmail Outreach Stage"?: string;
+  "Gmail Last Sent At"?: string;
+  "Gmail Next Follow-up Due"?: string;
+  "Gmail Last Action"?: string;
+  "Gmail Last Action At"?: string;
+  "Gmail Initial Sent At"?: string;
+  "Gmail Follow-up 1 Sent At"?: string;
+  "Gmail Follow-up 2 Sent At"?: string;
+  "Gmail Follow-up 3 Sent At"?: string;
+  "Gmail Follow-up 4 Sent At"?: string;
+  "Gmail Initial Subject"?: string;
+  "Gmail Initial Message"?: string;
+  "Gmail Follow-up 1 Subject"?: string;
+  "Gmail Follow-up 1 Message"?: string;
+  "Gmail Follow-up 2 Subject"?: string;
+  "Gmail Follow-up 2 Message"?: string;
+  "Gmail Follow-up 3 Subject"?: string;
+  "Gmail Follow-up 3 Message"?: string;
+  "Gmail Follow-up 4 Subject"?: string;
+  "Gmail Follow-up 4 Message"?: string;
+  "Gmail Outreach Notes"?: string;
+  "Gmail Closed Reason"?: string;
   [key: string]: any;
 };
 

@@ -130,6 +130,7 @@ import AnalyticsPanel from "./AnalyticsPanel";
 import CleanupPanel from "./CleanupPanel";
 import AutomationPanel from "./AutomationPanel";
 import SheetQueuePanel from "./SheetQueuePanel";
+import GmailOutreachPanel from "./GmailOutreachPanel";
 import OutreachPanel from "./OutreachPanel";
 import LeadsPanel from "./LeadsPanel";
 import ChatInsightsPanel from "./ChatInsightsPanel";
@@ -3088,7 +3089,7 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    if (activeTab === "sheet") {
+    if (activeTab === "sheet" || activeTab === "gmail-outreach") {
       loadSheetLeads(false);
     }
     // The Send Email tab loads its drawer queue independently so Sheet tab filters
@@ -3581,6 +3582,7 @@ export default function DashboardPage() {
     const tabs: { id: MainTab; label: string; icon: ReactNode }[] = [
       { id: "overview", label: "Overview", icon: <LayoutDashboard size={16} /> },
       { id: "sheet", label: "Sheet Leads", icon: <FileText size={16} /> },
+      { id: "gmail-outreach", label: "Gmail Outreach", icon: <Mail size={16} /> },
       { id: "outreach", label: "Send Email", icon: <Send size={16} /> },
       { id: "scheduled", label: "Scheduled", icon: <Clock size={16} /> },
       { id: "leads", label: "Leads", icon: <Mail size={16} /> },
@@ -3635,6 +3637,16 @@ export default function DashboardPage() {
       toggleSheetRow={toggleSheetRow}
       fillOutreachFromSheet={fillOutreachFromSheet}
       queueSheetLead={queueSheetLead}
+    />
+  );
+
+  const renderGmailOutreach = () => (
+    <GmailOutreachPanel
+      sheetLeads={sheetLeads}
+      sheetStatus={sheetStatus}
+      sheetLoading={sheetLoading}
+      loadSheetLeads={loadSheetLeads}
+      patchSheetLead={patchSheetLead}
     />
   );
 
@@ -4113,6 +4125,7 @@ export default function DashboardPage() {
             />
           )}
           {activeTab === "sheet" && renderSheetLeads()}
+          {activeTab === "gmail-outreach" && renderGmailOutreach()}
           {activeTab === "outreach" && renderOutreach()}
           {activeTab === "scheduled" && renderScheduledEmails()}
           {activeTab === "leads" && renderLeads()}

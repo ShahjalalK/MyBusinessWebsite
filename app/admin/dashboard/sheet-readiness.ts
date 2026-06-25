@@ -333,3 +333,127 @@ export function getSheetEmailQueueStatus(lead: SheetLead) {
     tone: "bg-amber-50 text-amber-700 border-amber-100",
   };
 }
+
+
+export type GmailOutreachStage =
+  | "ready"
+  | "initial_sent"
+  | "followup_1"
+  | "followup_2"
+  | "followup_3"
+  | "followup_4"
+  | "closed"
+  | "do_not_contact";
+
+export const GMAIL_OUTREACH_STAGE_LABELS: Record<GmailOutreachStage, string> = {
+  ready: "Ready",
+  initial_sent: "Initial Sent",
+  followup_1: "Follow-up 1",
+  followup_2: "Follow-up 2",
+  followup_3: "Follow-up 3",
+  followup_4: "Follow-up 4",
+  closed: "Closed",
+  do_not_contact: "Do Not Contact",
+};
+
+const GMAIL_STAGE_VALUES = new Set<GmailOutreachStage>([
+  "ready",
+  "initial_sent",
+  "followup_1",
+  "followup_2",
+  "followup_3",
+  "followup_4",
+  "closed",
+  "do_not_contact",
+]);
+
+function normalizeGmailStageText(value: string): GmailOutreachStage | "" {
+  const text = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (!text) return "";
+  if (GMAIL_STAGE_VALUES.has(text as GmailOutreachStage)) return text as GmailOutreachStage;
+  if (["not_sent", "ready_to_send", "new"].includes(text)) return "ready";
+  if (["initial", "initial_sent", "sent_initial"].includes(text)) return "initial_sent";
+  if (["followup1", "follow_up_1", "f1"].includes(text)) return "followup_1";
+  if (["followup2", "follow_up_2", "f2"].includes(text)) return "followup_2";
+  if (["followup3", "follow_up_3", "f3"].includes(text)) return "followup_3";
+  if (["followup4", "follow_up_4", "f4"].includes(text)) return "followup_4";
+  if (["done", "complete", "completed"].includes(text)) return "closed";
+  if (["dnc", "blocked", "unsubscribe", "unsubscribed"].includes(text)) return "do_not_contact";
+  return "";
+}
+
+export function getGmailOutreachStage(lead: SheetLead): GmailOutreachStage {
+  const explicit = normalizeGmailStageText(sheetValue(lead, "Gmail Outreach Stage"));
+  if (explicit) return explicit;
+
+  const sendStatus = sheetValue(lead, "Send Status").toLowerCase();
+  if (sendStatus.includes("do not contact") || sendStatus.includes("unsubscribed") || sendStatus.includes("bounced")) return "do_not_contact";
+  if (sendStatus.includes("closed") || sendStatus.includes("complete")) return "closed";
+
+  if (sheetValue(lead, "Gmail Follow-up 4 Sent At")) return "closed";
+  if (sheetValue(lead, "Gmail Follow-up 3 Sent At")) return "followup_4";
+  if (sheetValue(lead, "Gmail Follow-up 2 Sent At")) return "followup_3";
+  if (sheetValue(lead, "Gmail Follow-up 1 Sent At")) return "followup_2";
+  if (sheetValue(lead, "Gmail Initial Sent At") || sendStatus.includes("manual gmail initial sent")) return "followup_1";
+
+  return "ready";
+}
+
+export function getGmailOutreachStageLabel(lead: SheetLead): string {
+  return GMAIL_OUTREACH_STAGE_LABELS[getGmailOutreachStage(lead)];
+}
+
+export function getNextGmailStageAfterSend(stage: GmailOutreachStage): GmailOutreachStage {
+  if (stage === "ready") return "followup_1";
+  if (stage === "initial_sent") return "followup_1";
+  if (stage === "followup_1") return "followup_2";
+  if (stage === "followup_2") return "followup_3";
+  if (stage === "followup_3") return "followup_4";
+  if (stage === "followup_4") return "closed";
+  return stage;
+}
+
+export function gmailSentAtHeaderForStage(stage: GmailOutreachStage): string {
+  if (stage === "ready" || stage === "initial_sent") return "Gmail Initial Sent At";
+  if (stage === "followup_1") return "Gmail Follow-up 1 Sent At";
+  if (stage === "followup_2") return "Gmail Follow-up 2 Sent At";
+  if (stage === "followup_3") return "Gmail Follow-up 3 Sent At";
+  if (stage === "followup_4") return "Gmail Follow-up 4 Sent At";
+  return "Gmail Last Sent At";
+}
+
+export function gmailSubjectHeaderForStage(stage: GmailOutreachStage): string {
+  if (stage === "ready" || stage === "initial_sent") return "Gmail Initial Subject";
+  if (stage === "followup_1") return "Gmail Follow-up 1 Subject";
+  if (stage === "followup_2") return "Gmail Follow-up 2 Subject";
+  if (stage === "followup_3") return "Gmail Follow-up 3 Subject";
+  if (stage === "followup_4") return "Gmail Follow-up 4 Subject";
+  return "Gmail Initial Subject";
+}
+
+export function gmailMessageHeaderForStage(stage: GmailOutreachStage): string {
+  if (stage === "ready" || stage === "initial_sent") return "Gmail Initial Message";
+  if (stage === "followup_1") return "Gmail Follow-up 1 Message";
+  if (stage === "followup_2") return "Gmail Follow-up 2 Message";
+  if (stage === "followup_3") return "Gmail Follow-up 3 Message";
+  if (stage === "followup_4") return "Gmail Follow-up 4 Message";
+  return "Gmail Initial Message";
+}
+
+export function getGmailOutreachSubject(lead: SheetLead, stage = getGmailOutreachStage(lead)): string {
+  return (
+    sheetValue(lead, gmailSubjectHeaderForStage(stage)) ||
+    (stage === "ready" || stage === "initial_sent" ? sheetValue(lead, "Email Subject") : "")
+  );
+}
+
+export function getGmailOutreachMessage(lead: SheetLead, stage = getGmailOutreachStage(lead)): string {
+  return (
+    sheetValue(lead, gmailMessageHeaderForStage(stage)) ||
+    (stage === "ready" || stage === "initial_sent" ? sheetValue(lead, "Email Body") : "")
+  );
+}
