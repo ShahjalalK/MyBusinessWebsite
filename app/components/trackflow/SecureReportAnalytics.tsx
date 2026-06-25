@@ -966,12 +966,20 @@ export default function SecureReportAnalytics({
     if (!reportId || typeof window === "undefined" || hasPrivacyOptOut()) return;
 
     let activeDurationMs = 0;
-    let visibleStartedAt = document.visibilityState === "visible" ? getSafeNowMs() : 0;
+    let visibleStartedAt = 0;
     let lastSentDurationMs = 0;
     let disposed = false;
 
+    function isActivelyViewingReport() {
+      // Count time only when the report tab is visible and the browser window is focused.
+      // This avoids stale open tabs being counted as real visit time.
+      if (document.visibilityState !== "visible") return false;
+      if (typeof document.hasFocus === "function" && !document.hasFocus()) return false;
+      return true;
+    }
+
     function currentActiveDurationMs() {
-      if (visibleStartedAt > 0 && document.visibilityState === "visible") {
+      if (visibleStartedAt > 0 && isActivelyViewingReport()) {
         return activeDurationMs + Math.max(0, getSafeNowMs() - visibleStartedAt);
       }
 
@@ -985,11 +993,11 @@ export default function SecureReportAnalytics({
     }
 
     function resumeVisibleTimer() {
-      if (visibleStartedAt > 0 || document.visibilityState !== "visible") return;
+      if (visibleStartedAt > 0 || !isActivelyViewingReport()) return;
       visibleStartedAt = getSafeNowMs();
     }
 
-    function sendDurationEvent(reason: "ping" | "hidden" | "pagehide" | "cleanup") {
+    function sendDurationEvent(reason: "ping" | "hidden" | "blur" | "pagehide" | "cleanup") {
       if (disposed) return;
 
       const totalMs = Math.round(currentActiveDurationMs());
@@ -1005,7 +1013,7 @@ export default function SecureReportAnalytics({
             ? "secure_report_duration_ping"
             : "secure_report_duration_final",
         eventSection: "duration",
-        buttonLabel: `Time on report ${Math.round(totalMs / 1000)}s`,
+        buttonLabel: `Active on report ${Math.round(totalMs / 1000)}s`,
         extra: {
           time_on_report_seconds: Math.round(totalMs / 1000),
           time_on_report_milliseconds: totalMs,
@@ -1016,18 +1024,29 @@ export default function SecureReportAnalytics({
       });
     }
 
+    resumeVisibleTimer();
+
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
+      if (!isActivelyViewingReport()) return;
       sendDurationEvent("ping");
     }, REPORT_DURATION_PING_INTERVAL_MS);
 
     function onVisibilityChange() {
-      if (document.visibilityState === "hidden") {
+      if (!isActivelyViewingReport()) {
         pauseVisibleTimer();
         sendDurationEvent("hidden");
         return;
       }
 
+      resumeVisibleTimer();
+    }
+
+    function onWindowBlur() {
+      pauseVisibleTimer();
+      sendDurationEvent("blur");
+    }
+
+    function onWindowFocus() {
       resumeVisibleTimer();
     }
 
@@ -1037,6 +1056,8 @@ export default function SecureReportAnalytics({
     }
 
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("focus", onWindowFocus);
     window.addEventListener("pagehide", onPageHide);
 
     return () => {
@@ -1045,6 +1066,8 @@ export default function SecureReportAnalytics({
       disposed = true;
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("focus", onWindowFocus);
       window.removeEventListener("pagehide", onPageHide);
     };
   }, [reportId, sendEvent]);

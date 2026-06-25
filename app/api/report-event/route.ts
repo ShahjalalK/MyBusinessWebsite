@@ -481,6 +481,128 @@ function ctaTypeFromEventName(eventName: string): "booking" | "whatsapp" | "emai
   return "cta";
 }
 
+const DURATION_MIN_INCREMENT_SECONDS = 1;
+const DURATION_MAX_SINGLE_INCREMENT_SECONDS = 30 * 60;
+const DURATION_MAX_SESSION_SECONDS = 24 * 60 * 60;
+
+function roundedDurationSeconds(...values: unknown[]): number {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric >= 0) return Math.round(numeric);
+  }
+  return 0;
+}
+
+function normalizeDurationSessionId(value: unknown): string {
+  return sanitizeParam(value, 100).replace(/[^a-zA-Z0-9_:-]/g, "").slice(0, 100);
+}
+
+function normalizeDurationEventId(value: unknown): string {
+  return sanitizeParam(value, 200).replace(/[\r\n]/g, "").slice(0, 200);
+}
+
+async function buildDurationSummaryPatch(input: {
+  token: string;
+  payload: Record<string, unknown>;
+  now: any;
+  FieldValue: typeof admin.firestore.FieldValue;
+}): Promise<{ shouldWrite: boolean; update: Record<string, unknown>; incrementSeconds: number; reason?: string }> {
+  const payload = input.payload;
+  const FieldValue = input.FieldValue;
+  const eventId = normalizeDurationEventId(payload.eventId || payload.event_id);
+  const reportSessionId = normalizeDurationSessionId(
+    payload.reportSessionId || payload.report_session_id || payload.gaSessionId || payload.ga_session_id,
+  );
+  const durationEventType = sanitizeParam(payload.durationEventType || payload.duration_event_type, 80);
+
+  const rawDeltaSeconds = roundedDurationSeconds(
+    payload.timeOnReportDeltaSeconds,
+    payload.time_on_report_delta_seconds,
+    Number((payload.timeOnReportDeltaMilliseconds ?? payload.time_on_report_delta_milliseconds) || 0) / 1000,
+  );
+  const totalSeconds = Math.min(
+    DURATION_MAX_SESSION_SECONDS,
+    roundedDurationSeconds(
+      payload.timeOnReportSeconds,
+      payload.time_on_report_seconds,
+      Number((payload.timeOnReportMilliseconds ?? payload.time_on_report_milliseconds) || 0) / 1000,
+    ),
+  );
+
+  if (totalSeconds < 3 && rawDeltaSeconds < DURATION_MIN_INCREMENT_SECONDS) {
+    return { shouldWrite: false, update: {}, incrementSeconds: 0, reason: "duration_too_small" };
+  }
+
+  let previous: Record<string, any> = {};
+  try {
+    const snapshot = await adminDb.collection("audit_reports").doc(input.token).get();
+    previous = snapshot.exists ? (snapshot.data() || {}) : {};
+  } catch {
+    previous = {};
+  }
+
+  const previousEventId = normalizeDurationEventId(previous.lastActiveDurationEventId || previous.last_active_duration_event_id);
+  if (eventId && previousEventId && eventId === previousEventId) {
+    return { shouldWrite: false, update: {}, incrementSeconds: 0, reason: "duplicate_duration_event" };
+  }
+
+  const previousSessionId = normalizeDurationSessionId(previous.lastActiveReportSessionId || previous.last_active_report_session_id);
+  const previousSessionTotal = Math.max(0, Number(previous.lastActiveSessionTotalSeconds || previous.last_active_session_total_seconds || 0));
+
+  let incrementSeconds = 0;
+
+  if (reportSessionId && previousSessionId && reportSessionId === previousSessionId && totalSeconds > 0) {
+    // Same browser report session: use the monotonic total to avoid double-counting
+    // ping + final events that repeat the same elapsed time.
+    incrementSeconds = Math.max(0, totalSeconds - previousSessionTotal);
+  } else if (totalSeconds > 0 && rawDeltaSeconds <= 0) {
+    // New session with only a total value.
+    incrementSeconds = totalSeconds;
+  } else {
+    incrementSeconds = rawDeltaSeconds;
+    if (totalSeconds > 0) incrementSeconds = Math.min(incrementSeconds, totalSeconds);
+  }
+
+  incrementSeconds = Math.max(0, Math.min(DURATION_MAX_SINGLE_INCREMENT_SECONDS, Math.round(incrementSeconds)));
+
+  if (incrementSeconds < DURATION_MIN_INCREMENT_SECONDS && totalSeconds < 60) {
+    return { shouldWrite: false, update: {}, incrementSeconds: 0, reason: "no_new_active_seconds" };
+  }
+
+  const sameSession = Boolean(reportSessionId && previousSessionId && reportSessionId === previousSessionId);
+  const nextSessionTotalSeconds = sameSession
+    ? Math.max(totalSeconds, previousSessionTotal + incrementSeconds, previousSessionTotal)
+    : Math.max(totalSeconds, incrementSeconds);
+
+  const update: Record<string, unknown> = {
+    lastSeenAt: input.now,
+    lastActiveDurationAt: input.now,
+    last_active_duration_at: input.now,
+    lastReportedActiveSeconds: nextSessionTotalSeconds,
+    last_reported_active_seconds: nextSessionTotalSeconds,
+    lastActiveSessionTotalSeconds: nextSessionTotalSeconds,
+    last_active_session_total_seconds: nextSessionTotalSeconds,
+    lastDurationEventType: durationEventType,
+    last_duration_event_type: durationEventType,
+  };
+
+  if (reportSessionId) {
+    update.lastActiveReportSessionId = reportSessionId;
+    update.last_active_report_session_id = reportSessionId;
+  }
+  if (eventId) {
+    update.lastActiveDurationEventId = eventId;
+    update.last_active_duration_event_id = eventId;
+  }
+  if (incrementSeconds > 0) {
+    update.estimatedActiveSeconds = FieldValue.increment(incrementSeconds);
+    update.estimated_active_seconds = FieldValue.increment(incrementSeconds);
+  }
+
+  return { shouldWrite: true, update, incrementSeconds };
+}
+
 async function updateSecureReportLightweightSummary(payload: Record<string, unknown>) {
   const token = normalizeToken(payload.token || payload.reportToken || payload.report_token || "");
   if (!token || token === "unknown") return { skipped: true, reason: "missing_report_token" };
@@ -517,22 +639,9 @@ async function updateSecureReportLightweightSummary(payload: Record<string, unkn
   }
 
   if (eventName.includes("duration")) {
-    const deltaSeconds = clampNumber(
-      payload.timeOnReportDeltaSeconds ?? payload.time_on_report_delta_seconds,
-      0,
-      600,
-    );
-    const totalSeconds = clampNumber(
-      payload.timeOnReportSeconds ?? payload.time_on_report_seconds,
-      0,
-      60 * 60 * 6,
-    );
-
-    // Keep Firestore light: ignore tiny final pings and only add useful active-time deltas.
-    if (deltaSeconds >= 15 || totalSeconds >= 60) {
-      update.lastSeenAt = now;
-      update.estimatedActiveSeconds = FieldValue.increment(Math.max(0, Math.round(deltaSeconds)));
-      update.lastReportedActiveSeconds = Math.round(totalSeconds);
+    const durationPatch = await buildDurationSummaryPatch({ token, payload, now, FieldValue });
+    if (durationPatch.shouldWrite) {
+      Object.assign(update, durationPatch.update);
       shouldWrite = true;
       touchActivity = true;
     }

@@ -415,6 +415,66 @@ function secureReportContactNote(report: SecureReportRow): string {
   return report.contacted ? "Outreach history found" : "Safe as test/no outreach";
 }
 
+function firstNonEmptyReportString(...values: unknown[]): string {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function secureReportContactEmail(report: SecureReportRow): string {
+  const email = firstNonEmptyReportString(
+    report.contactEmail,
+    report.contact_email,
+    report.email,
+    report.finalEmail,
+    report.final_email,
+    report.sheetFinalEmail,
+    report.sheet_final_email,
+  ).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
+function secureReportLinkedInUrl(report: SecureReportRow): string {
+  const raw = firstNonEmptyReportString(
+    report.linkedinProfileUrl,
+    report.linkedin_profile_url,
+    report.linkedinUrl,
+    report.linkedin_url,
+    report.linkedinCompanyUrl,
+    report.linkedin_company_url,
+    report.socialLink,
+    report.social_link,
+  );
+  if (!raw || !/linkedin\.com/i.test(raw)) return "";
+  return normalizeOptionalUrl(raw);
+}
+
+function secureReportContactActions(report: SecureReportRow): Array<{ key: string; label: string; href: string; title: string }> {
+  const actions: Array<{ key: string; label: string; href: string; title: string }> = [];
+  const email = secureReportContactEmail(report);
+  const linkedInUrl = secureReportLinkedInUrl(report);
+
+  if (email) {
+    actions.push({
+      key: "email",
+      label: "Email",
+      href: `mailto:${encodeURIComponent(email)}`,
+      title: email,
+    });
+  }
+  if (linkedInUrl) {
+    actions.push({
+      key: "linkedin",
+      label: "LinkedIn",
+      href: linkedInUrl,
+      title: firstNonEmptyReportString(report.linkedinContactName, report.linkedin_contact_name, linkedInUrl),
+    });
+  }
+
+  return actions;
+}
 
 function numberFromReport(...values: unknown[]): number {
   for (const value of values) {
@@ -422,6 +482,21 @@ function numberFromReport(...values: unknown[]): number {
     if (Number.isFinite(numeric) && numeric > 0) return numeric;
   }
   return 0;
+}
+
+function secureReportActiveSeconds(report: SecureReportRow): number {
+  // "Active" means the visitor's current/last visible+focused report session time.
+  // estimatedActiveSeconds is kept as an aggregate/backward-compatible field, but it can
+  // be inflated on older records if total duration was added repeatedly. Prefer the
+  // session total fields when present.
+  const sessionSeconds = numberFromReport(
+    report.lastActiveSessionTotalSeconds,
+    report.last_active_session_total_seconds,
+    report.lastReportedActiveSeconds,
+    report.last_reported_active_seconds,
+  );
+  if (sessionSeconds) return sessionSeconds;
+  return numberFromReport(report.estimatedActiveSeconds, report.estimated_active_seconds);
 }
 
 function formatActiveSeconds(seconds: number): string {
@@ -462,7 +537,7 @@ function secureReportIntentScore(report: SecureReportRow): number {
   if (report.pdfDownloaded) return 75;
   if (report.videoPlayClicked || report.chatboxOpened) return 55;
   if (report.pdfOpened) return 45;
-  if (numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds) >= 60) return 30;
+  if (secureReportActiveSeconds(report) >= 60) return 30;
   if (report.reportPageViewed) return 10;
   return 0;
 }
@@ -507,7 +582,7 @@ function secureReportActivitySummary(report: SecureReportRow): string {
 
 function secureReportActivityMeta(report: SecureReportRow): string {
   const details: string[] = [];
-  const activeSeconds = numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds);
+  const activeSeconds = secureReportActiveSeconds(report);
   if (activeSeconds) details.push(formatActiveSeconds(activeSeconds));
   if (report.lastVisitorCountry || report.visitorCountry) details.push(`Country: ${report.lastVisitorCountry || report.visitorCountry}`);
   const lastTime = report.lastSeenAt || report.lastActivityAt;
@@ -1026,7 +1101,7 @@ export default function CleanupPanel({
                 const selected = bulkSelected || secureReports.selectedToken === report.token || reportAssetCleanup.input.includes(report.token);
                 const rowNumber = reportIndex + 1;
                 const openReportUrl = report.reportUrl ? normalizeOptionalUrl(report.reportUrl) : "";
-                const activeSeconds = numberFromReport(report.estimatedActiveSeconds, report.lastReportedActiveSeconds);
+                const activeSeconds = secureReportActiveSeconds(report);
                 const countryLabel = report.lastVisitorCountry || report.visitorCountry || "Unknown";
                 const deviceSummary = formatDeviceSummary(report);
                 const lastSeenAt = report.lastSeenAt || report.lastActivityAt;
@@ -1075,7 +1150,24 @@ export default function CleanupPanel({
 
                       <div className="min-w-0 space-y-1">
                         <p className="text-[11px] font-black text-gray-600 truncate">{report.domain || report.domainSlug || report.token}</p>
-                        {report.email && <p className="text-[10px] font-bold text-gray-400 truncate">{report.email}</p>}
+                        {secureReportContactActions(report).length ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {secureReportContactActions(report).map((action) => (
+                              <a
+                                key={`${report.token}-${action.key}`}
+                                href={action.href}
+                                target={action.key === "linkedin" ? "_blank" : undefined}
+                                rel={action.key === "linkedin" ? "noreferrer" : undefined}
+                                title={action.title}
+                                onClick={(event) => event.stopPropagation()}
+                                className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[9px] font-black uppercase text-blue-700 hover:bg-blue-100"
+                              >
+                                {action.label}
+                                {action.key === "linkedin" ? <ExternalLink size={9} /> : null}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="text-[10px] font-bold text-gray-400 leading-4 line-clamp-2">{secureReportSourceNote(report)}</p>
                       </div>
                     </div>

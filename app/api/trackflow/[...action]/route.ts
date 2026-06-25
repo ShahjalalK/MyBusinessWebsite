@@ -120,6 +120,31 @@ function tfpCleanupText(value: any, fallback = ""): string {
   return text || fallback;
 }
 
+function tfpCleanupFirstText(...values: any[]): string {
+  for (const value of values) {
+    const text = tfpCleanupText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function tfpCleanupEmail(value: any): string {
+  const email = tfpCleanupText(value).toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
+function tfpCleanupLinkedInUrl(value: any): string {
+  const raw = tfpCleanupText(value);
+  if (!raw || !/linkedin\.com/i.test(raw)) return "";
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (!/^https?:$/i.test(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function tfpCleanupSourceText(row: AnyRecord = {}): string {
   return [
     row.sourceGroup,
@@ -441,6 +466,32 @@ function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
     (sourceType === "search" ? "python_search" : sourceType === "linkedin" ? "linkedin_audit" : sourceType === "manual" ? "manual_audit" : tfpCleanupText(row.source || "unknown"));
   const sourceContext = tfpCleanupText(row.sourceContext || row.source_context || auditSource);
   const sourceLabel = tfpCleanupSourceLabel(row);
+  const contactEmail = tfpCleanupEmail(tfpCleanupFirstText(
+    row.contactEmail,
+    row.contact_email,
+    row.email,
+    row.finalEmail,
+    row.final_email,
+    row.sheetFinalEmail,
+    row.sheet_final_email,
+  ));
+  const linkedinProfileUrl = tfpCleanupLinkedInUrl(tfpCleanupFirstText(
+    row.linkedinProfileUrl,
+    row.linkedin_profile_url,
+    row.linkedinUrl,
+    row.linkedin_url,
+    row.linkedinCompanyUrl,
+    row.linkedin_company_url,
+    row.socialLink,
+    row.social_link,
+  ));
+  const linkedinCompanyUrl = tfpCleanupLinkedInUrl(tfpCleanupFirstText(
+    row.linkedinCompanyUrl,
+    row.linkedin_company_url,
+    row.companyLinkedinUrl,
+    row.company_linkedin_url,
+  ));
+  const linkedinContactName = tfpCleanupFirstText(row.linkedinContactName, row.linkedin_contact_name, row.decisionMaker, row.decision_maker);
 
   return {
     ...row,
@@ -459,6 +510,10 @@ function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
     audit_source: auditSource,
     sourceContext,
     source_context: sourceContext,
+    ...(contactEmail ? { contactEmail, contact_email: contactEmail, email: row.email || contactEmail } : {}),
+    ...(linkedinProfileUrl ? { linkedinProfileUrl, linkedin_profile_url: linkedinProfileUrl, linkedinUrl: row.linkedinUrl || linkedinProfileUrl, linkedin_url: row.linkedin_url || linkedinProfileUrl } : {}),
+    ...(linkedinCompanyUrl ? { linkedinCompanyUrl, linkedin_company_url: linkedinCompanyUrl } : {}),
+    ...(linkedinContactName ? { linkedinContactName, linkedin_contact_name: linkedinContactName } : {}),
     createdAt: tfpCleanupToIso(row.createdAt || row.created_at || row.reportCreatedAt || row.report_created_at || row.registeredAt || row.registered_at) || row.createdAt,
     updatedAt: tfpCleanupToIso(row.updatedAt || row.updated_at) || row.updatedAt,
     lastActivityAt: tfpCleanupToIso(row.lastActivityAt || row.last_activity_at || row.lastSeenAt || row.last_seen_at) || row.lastActivityAt,
