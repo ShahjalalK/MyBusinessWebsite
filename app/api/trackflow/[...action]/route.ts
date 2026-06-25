@@ -7323,6 +7323,10 @@ const HEADERS = [
   'Proof Points',
   'Report Token',
   'Report URL',
+  'Email Preview Image URL',
+  'Email Preview Image B2 Key',
+  'Email Preview Image MIME',
+  'Email Preview Image Size',
   'PDF File ID',
   'PDF View URL',
   'PDF Download URL',
@@ -7402,6 +7406,10 @@ const MAX_CELL_CHARS = 45000;
 const CONTROL_HEADERS = new Set<HeaderName>([
   'Approval Status',
   'Send Status',
+  'Email Preview Image URL',
+  'Email Preview Image B2 Key',
+  'Email Preview Image MIME',
+  'Email Preview Image Size',
   'Tracking ID',
   'Firestore Lead ID',
   'Open Count',
@@ -7600,6 +7608,10 @@ const COLUMN_WIDTHS: Partial<Record<HeaderName, number>> = {
   'Proof Points': 360,
   'Report Token': 180,
   'Report URL': 280,
+  'Email Preview Image URL': 280,
+  'Email Preview Image B2 Key': 220,
+  'Email Preview Image MIME': 140,
+  'Email Preview Image Size': 140,
   'PDF File ID': 210,
   'PDF View URL': 280,
   'PDF Download URL': 280,
@@ -7954,6 +7966,89 @@ function getReportToken(audit?: AnyRecord, lead?: AnyRecord): string {
       audit?.exports?.report_token ||
       audit?.exports?.reportToken ||
       '',
+  );
+}
+
+function getEmailPreviewImageUrl(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  const raw =
+    manual?.email_preview_image_url ||
+    manual?.emailPreviewImageUrl ||
+    lead?.emailPreviewImageUrl ||
+    lead?.email_preview_image_url ||
+    lead?.emailPreviewImageWebpUrl ||
+    lead?.email_preview_image_webp_url ||
+    audit?.emailPreviewImageUrl ||
+    audit?.email_preview_image_url ||
+    audit?.emailPreviewImageWebpUrl ||
+    audit?.email_preview_image_webp_url ||
+    audit?.emailPreviewImage?.publicUrl ||
+    audit?.emailPreviewImage?.public_url ||
+    audit?.email_preview_image?.publicUrl ||
+    audit?.email_preview_image?.public_url ||
+    audit?.exports?.emailPreviewImageUrl ||
+    audit?.exports?.email_preview_image_url ||
+    audit?.report?.emailPreviewImageUrl ||
+    audit?.report?.email_preview_image_url ||
+    '';
+  const safe = sanitizeOptionalUrl(raw);
+  return /\/api\/email-preview\//i.test(safe) ? cleanCell(safe) : '';
+}
+
+function getEmailPreviewImageB2Key(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    manual?.email_preview_image_b2_key ||
+      manual?.emailPreviewImageB2Key ||
+      lead?.emailPreviewImageB2Key ||
+      lead?.email_preview_image_b2_key ||
+      audit?.emailPreviewImageB2Key ||
+      audit?.email_preview_image_b2_key ||
+      audit?.emailPreviewImage?.b2Key ||
+      audit?.emailPreviewImage?.b2_key ||
+      audit?.email_preview_image?.b2Key ||
+      audit?.email_preview_image?.b2_key ||
+      audit?.exports?.emailPreviewImageB2Key ||
+      audit?.exports?.email_preview_image_b2_key ||
+      ''
+  );
+}
+
+function getEmailPreviewImageMimeType(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    manual?.email_preview_image_mime_type ||
+      manual?.emailPreviewImageMimeType ||
+      lead?.emailPreviewImageMimeType ||
+      lead?.email_preview_image_mime_type ||
+      audit?.emailPreviewImageMimeType ||
+      audit?.email_preview_image_mime_type ||
+      audit?.emailPreviewImage?.mimeType ||
+      audit?.emailPreviewImage?.mime_type ||
+      audit?.email_preview_image?.mimeType ||
+      audit?.email_preview_image?.mime_type ||
+      audit?.exports?.emailPreviewImageMimeType ||
+      audit?.exports?.email_preview_image_mime_type ||
+      ''
+  );
+}
+
+function getEmailPreviewImageSizeBytes(audit?: AnyRecord, lead?: AnyRecord): string {
+  const manual = getManualUpdate(audit, lead);
+  return cleanCell(
+    manual?.email_preview_image_size_bytes ||
+      manual?.emailPreviewImageSizeBytes ||
+      lead?.emailPreviewImageSizeBytes ||
+      lead?.email_preview_image_size_bytes ||
+      audit?.emailPreviewImageSizeBytes ||
+      audit?.email_preview_image_size_bytes ||
+      audit?.emailPreviewImage?.sizeBytes ||
+      audit?.emailPreviewImage?.size_bytes ||
+      audit?.email_preview_image?.sizeBytes ||
+      audit?.email_preview_image?.size_bytes ||
+      audit?.exports?.emailPreviewImageSizeBytes ||
+      audit?.exports?.email_preview_image_size_bytes ||
+      ''
   );
 }
 
@@ -8343,6 +8438,10 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
     'Proof Points': cleanCell(getProofPoints(audit, lead).join(' | ')),
     'Report Token': getReportToken(audit, lead),
     'Report URL': getReportUrl(audit, lead),
+    'Email Preview Image URL': getExistingOrDefault(existing, 'Email Preview Image URL', getEmailPreviewImageUrl(audit, lead), lead?.emailPreviewImageUrl || lead?.email_preview_image_url || lead?.emailPreviewImageWebpUrl || lead?.email_preview_image_webp_url),
+    'Email Preview Image B2 Key': getExistingOrDefault(existing, 'Email Preview Image B2 Key', getEmailPreviewImageB2Key(audit, lead), lead?.emailPreviewImageB2Key || lead?.email_preview_image_b2_key),
+    'Email Preview Image MIME': getExistingOrDefault(existing, 'Email Preview Image MIME', getEmailPreviewImageMimeType(audit, lead), lead?.emailPreviewImageMimeType || lead?.email_preview_image_mime_type),
+    'Email Preview Image Size': getExistingOrDefault(existing, 'Email Preview Image Size', getEmailPreviewImageSizeBytes(audit, lead), lead?.emailPreviewImageSizeBytes || lead?.email_preview_image_size_bytes),
     'PDF File ID': getPdfFileId(audit, lead),
     'PDF View URL': getPdfViewUrl(audit, lead),
     'PDF Download URL': getPdfDownloadUrl(audit, lead),
@@ -8422,16 +8521,81 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
 
   generated['Last Synced'] = nowDhaka();
 
+  if (generated['Email Preview Image URL']) {
+    const safePreviewUrl = sanitizeOptionalUrl(generated['Email Preview Image URL']);
+    generated['Email Preview Image URL'] = /\/api\/email-preview\//i.test(safePreviewUrl) ? cleanCell(safePreviewUrl) : '';
+  }
+
   return generated;
 }
 
-function rowToObject(row: any[] = [], rowNumber?: number): AnyRecord {
+const EMAIL_PREVIEW_HEADERS = new Set<string>([
+  'Email Preview Image URL',
+  'Email Preview Image B2 Key',
+  'Email Preview Image MIME',
+  'Email Preview Image Size',
+]);
+
+const LEGACY_HEADERS_WITHOUT_EMAIL_PREVIEW = HEADERS.filter((header) => !EMAIL_PREVIEW_HEADERS.has(header)) as string[];
+
+function isEmailPreviewImageUrl(value: any): boolean {
+  const url = sanitizeOptionalUrl(value);
+  return Boolean(url && /\/api\/email-preview\//i.test(url));
+}
+
+function looksLikePdfStorageValue(value: any): boolean {
+  const text = clean(value).toLowerCase();
+  return Boolean(
+    text &&
+      (
+        text.includes('/pdf/') ||
+        text.includes('audit-report.pdf') ||
+        text.includes('/api/trackflow/reports/preview') ||
+        text.includes('/api/trackflow/reports/download') ||
+        text.endsWith('.pdf')
+      )
+  );
+}
+
+function rowToObjectWithHeaders(row: any[] = [], headers: readonly string[], rowNumber?: number): AnyRecord {
   const record: AnyRecord = {};
-  HEADERS.forEach((header, index) => {
+  headers.forEach((header, index) => {
     record[header] = clean(row[index], '');
   });
   if (rowNumber) record.rowNumber = rowNumber;
   return record;
+}
+
+function rowToObject(row: any[] = [], rowNumber?: number): AnyRecord {
+  const canonical = rowToObjectWithHeaders(row, HEADERS, rowNumber);
+
+  // Backward-compatible read repair:
+  // Some older Sheets did not have Email Preview Image columns. If a legacy row
+  // was written before those columns existed, its PDF fields appear in the new
+  // Email Preview slots after the header is repaired. Detect that shape and map
+  // the physical cells with the legacy header layout instead. Rows that already
+  // contain /api/email-preview/ in the new slot are already in the new layout.
+  const previewSlot = canonical['Email Preview Image URL'];
+  const pdfSlot = canonical['PDF File ID'];
+  const probablyLegacyWithoutPreviewColumns =
+    Boolean(previewSlot) &&
+    !isEmailPreviewImageUrl(previewSlot) &&
+    looksLikePdfStorageValue(previewSlot) &&
+    !looksLikePdfStorageValue(pdfSlot);
+
+  if (!probablyLegacyWithoutPreviewColumns) {
+    return canonical;
+  }
+
+  const legacy = rowToObjectWithHeaders(row, LEGACY_HEADERS_WITHOUT_EMAIL_PREVIEW, rowNumber);
+  return {
+    ...legacy,
+    'Email Preview Image URL': '',
+    'Email Preview Image B2 Key': '',
+    'Email Preview Image MIME': '',
+    'Email Preview Image Size': '',
+    rowNumber,
+  };
 }
 
 function normalizeSheetRowForDashboard(row: AnyRecord): AnyRecord {

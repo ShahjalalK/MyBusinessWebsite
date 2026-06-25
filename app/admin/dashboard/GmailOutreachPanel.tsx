@@ -390,6 +390,7 @@ export default function GmailOutreachPanel({
   const selectedEmail = selectedLead ? getEmail(selectedLead) : "";
   const selectedLinkedIn = selectedLead ? getLinkedInUrl(selectedLead) : "";
   const selectedReport = selectedLead ? getReportUrl(selectedLead) : "";
+  const selectedPreviewUrl = selectedLead ? getEmailPreviewUrl(selectedLead) : "";
   const selectedPreviewHtml = selectedLead ? buildEmailPreviewHtml(selectedLead) : "";
   const selectedCurrentStage = selectedLead ? getGmailOutreachStage(selectedLead) : "ready";
   const modalLoading = selectedLead ? actionLoadingRow === Number(selectedLead.rowNumber) : false;
@@ -628,22 +629,32 @@ export default function GmailOutreachPanel({
                   )}
                   <button
                     type="button"
-                    onClick={() => copyText(selectedReport, "Secure URL")}
+                    onClick={() => copyText(selectedReport, "Secure page URL")}
                     className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-left text-xs font-black text-blue-700"
                   >
                     Copy secure page URL
+                    <span className="mt-1 block truncate font-semibold text-blue-500">{selectedReport || "Missing"}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => copyText(selectedPreviewHtml, "Email preview HTML")}
+                    onClick={() => copyText(selectedPreviewUrl, "Email preview image URL")}
+                    className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-left text-xs font-black text-sky-700"
+                  >
+                    Copy preview image URL
+                    <span className="mt-1 block truncate font-semibold text-sky-500">{selectedPreviewUrl || "Missing"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyText(selectedPreviewHtml, "Clickable email preview HTML")}
                     className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-left text-xs font-black text-blue-700"
                   >
-                    Copy email preview HTML
+                    Copy clickable image HTML
+                    <span className="mt-1 block font-semibold text-blue-500">Image links to secure page</span>
                   </button>
                 </div>
 
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-white p-3 text-[11px] font-bold leading-5 text-slate-500">
-                  Gmail compose auto-open removed from the main flow. Copy subject/body from this modal, paste into Gmail Workspace, then mark the stage sent here.
+                  Gmail compose auto-open removed from the main flow. Copy subject/body from this modal, paste into Gmail Workspace, then mark the stage sent here. For the email preview image, copy the clickable image HTML when you want the image to open the secure report page.
                 </div>
 
                 <div className="mt-5 grid gap-2">

@@ -1,17 +1,6 @@
-export type MainTab = "overview" | "sheet" | "gmail-outreach" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
+export type MainTab = "overview" | "sheet" | "outreach" | "scheduled" | "leads" | "cleanup" | "automation" | "analytics" | "chat-insights" | "linkedin-keywords";
 export type LeadSourceFilter = "all" | "manual" | "manual_report_linked" | "sheet" | "sheet_primary" | "sheet_additional" | "test";
 export type TriggerMode = "no_reply_after_delay" | "open_required";
-
-export type GmailOutreachStage =
-  | "ready"
-  | "initial_sent"
-  | "followup_1"
-  | "followup_2"
-  | "followup_3"
-  | "followup_4"
-  | "closed"
-  | "do_not_contact";
-
 
 export type LinkedInKeywordPriority = "A" | "B" | "C";
 
@@ -205,6 +194,10 @@ export type SheetLead = {
   "Proof Points"?: string;
   "Report Token"?: string;
   "Report URL"?: string;
+  "Email Preview Image URL"?: string;
+  "Email Preview Image B2 Key"?: string;
+  "Email Preview Image MIME"?: string;
+  "Email Preview Image Size"?: string;
   "PDF File ID"?: string;
   "PDF View URL"?: string;
   "PDF Download URL"?: string;
@@ -242,8 +235,6 @@ export type SheetLead = {
   "Source Context"?: string;
   "Email Outreach Allowed"?: string;
   "LinkedIn Outreach Allowed"?: string;
-
-  // Gmail Workspace manual outreach pipeline (Sheet-only).
   "Gmail Outreach Stage"?: string;
   "Gmail Last Sent At"?: string;
   "Gmail Next Follow-up Due"?: string;
