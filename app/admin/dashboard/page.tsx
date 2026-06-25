@@ -55,7 +55,6 @@ import {
 } from "react-simple-wysiwyg";
 import { AnimatePresence, motion } from "framer-motion";
 import AdminGuard from "@/app/components/AdminGuard";
-import Navbar from "@/app/components/navbar";
 import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, getColdEmailTemplateForService, applyColdEmailMergeTags, type SenderAccount } from "../../../lib/senders";
 import { useLeadStore, type LeadSourceFilter, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
@@ -4107,16 +4106,15 @@ export default function DashboardPage() {
   const showInitialDashboardLoading = loading && leads.length === 0 && !leadsLastFetchedAt;
 
   if (showInitialDashboardLoading) {
-    return <div className="min-h-screen bg-[#FAFBFF] px-4 pt-28 text-center text-xs font-black uppercase text-blue-600 animate-pulse">
+    return <div className="min-h-screen bg-[#FAFBFF] px-4 pt-10 text-center text-xs font-black uppercase text-blue-600 animate-pulse">
         Syncing Command Center...
       </div>
   }
 
   return (
     <>
-      <Navbar />
       <AdminGuard>
-        <div data-no-track="true" data-tfp-dashboard-shell="true" className="min-h-screen max-w-full overflow-x-hidden bg-[#FAFBFF] px-3 pb-4 pt-24 sm:px-4 lg:px-10 lg:pb-10 lg:pt-28">
+        <div data-no-track="true" data-tfp-dashboard-shell="true" className="min-h-screen max-w-full overflow-x-hidden bg-[#FAFBFF] px-3 pb-4 pt-8 sm:px-4 lg:px-10 lg:pb-10 lg:pt-10">
           <div className="mb-6 flex w-full min-w-0 flex-col items-start gap-5 xl:mb-8 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0 max-w-full">
               <h1 className="break-words text-2xl font-black uppercase italic tracking-tighter text-gray-900 sm:text-4xl">TrackFlowPro Command Center</h1>
