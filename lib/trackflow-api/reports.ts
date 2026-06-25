@@ -145,6 +145,175 @@ function reportPlainObject(value: any): AnyRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : {};
 }
 
+function reportNormalizeWorkflowText(value: any): string {
+  return reportCleanString(value)
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function reportSourceBlob(...values: any[]): string {
+  return values
+    .map((value) => reportCleanString(value))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function normalizeReportSourceIdentity(report: AnyRecord = {}, body: AnyRecord = {}, existing: AnyRecord = {}): AnyRecord {
+  const text = reportSourceBlob(
+    report.sourceGroup,
+    report.source_group,
+    report.sourceLabel,
+    report.source_label,
+    report.channel,
+    report.source,
+    report.sourceType,
+    report.source_type,
+    report.outreachChannel,
+    report.outreach_channel,
+    report.leadSource,
+    report.lead_source,
+    report.auditSource,
+    report.audit_source,
+    report.sourceContext,
+    report.source_context,
+    body.sourceGroup,
+    body.source_group,
+    body.sourceLabel,
+    body.source_label,
+    body.channel,
+    body.source,
+    body.sourceType,
+    body.source_type,
+    body.outreachChannel,
+    body.outreach_channel,
+    body.leadSource,
+    body.lead_source,
+    body.auditSource,
+    body.audit_source,
+    body.sourceContext,
+    body.source_context,
+    existing.sourceGroup,
+    existing.source_group,
+    existing.sourceLabel,
+    existing.source_label,
+    existing.channel,
+    existing.source,
+    existing.sourceType,
+    existing.source_type,
+    existing.outreachChannel,
+    existing.outreach_channel,
+    existing.leadSource,
+    existing.lead_source,
+    existing.auditSource,
+    existing.audit_source,
+    existing.sourceContext,
+    existing.source_context,
+  );
+
+  const explicitSourceType = reportNormalizeWorkflowText(
+    report.sourceType || report.source_type || body.sourceType || body.source_type || existing.sourceType || existing.source_type,
+  );
+  const explicitChannel = reportNormalizeWorkflowText(
+    report.outreachChannel || report.outreach_channel || report.channel || body.outreachChannel || body.outreach_channel || body.channel || existing.outreachChannel || existing.outreach_channel || existing.channel,
+  );
+
+  const hasLinkedIn = text.includes("linkedin") || text.includes("linked_in");
+  const hasManual =
+    text.includes("manual_audit") ||
+    text.includes("manual_report") ||
+    text.includes("operator_manual") ||
+    text.includes("direct_manual") ||
+    text.includes("source_type_manual");
+  const hasSearch =
+    text.includes("python_search") ||
+    text.includes("python") ||
+    text.includes("colab_direct") ||
+    text.includes("colab") ||
+    text.includes("search_result") ||
+    text.includes("google_search") ||
+    text.includes("website_search") ||
+    text.includes("lead_row_secure_page") ||
+    text.includes("lead_row") ||
+    text.includes("local_audit_b2_report_export") ||
+    text.includes("local_audit_dashboard_selected_export") ||
+    text.includes("source_type_search") ||
+    text.includes("lead_source_python_search") ||
+    text.includes("audit_source_python");
+
+  const sourceType =
+    explicitSourceType === "linkedin" || explicitSourceType === "search" || explicitSourceType === "manual" || explicitSourceType === "unknown"
+      ? explicitSourceType
+      : hasLinkedIn
+        ? "linkedin"
+        : hasManual
+          ? "manual"
+          : hasSearch
+            ? "search"
+            : "unknown";
+
+  const outreachChannel =
+    explicitChannel === "email" || explicitChannel === "linkedin" || explicitChannel === "manual" || explicitChannel === "unknown"
+      ? explicitChannel
+      : sourceType === "linkedin"
+        ? "linkedin"
+        : sourceType === "manual"
+          ? "manual"
+          : sourceType === "search" || report.email || body.email || report.contactEmail || body.contactEmail
+            ? "email"
+            : "unknown";
+
+  const leadSource =
+    reportNormalizeWorkflowText(report.leadSource || report.lead_source || body.leadSource || body.lead_source || existing.leadSource || existing.lead_source) ||
+    (sourceType === "linkedin" ? "linkedin_audit" : sourceType === "manual" ? "manual_audit" : sourceType === "search" ? "python_search" : "unknown");
+
+  const auditSource =
+    reportCleanString(report.auditSource || report.audit_source || body.auditSource || body.audit_source || existing.auditSource || existing.audit_source || report.source || body.source || existing.source) ||
+    (sourceType === "search" ? "python_search" : sourceType === "linkedin" ? "linkedin_audit" : sourceType === "manual" ? "manual_audit" : "unknown");
+
+  const sourceContext =
+    reportCleanString(report.sourceContext || report.source_context || body.sourceContext || body.source_context || existing.sourceContext || existing.source_context || auditSource);
+
+  const sourceGroup =
+    sourceType === "linkedin" || sourceType === "manual"
+      ? "linkedin_manual"
+      : sourceType === "search" || outreachChannel === "email"
+        ? "search_email"
+        : "other";
+
+  const sourceLabel =
+    sourceType === "search"
+      ? "Python search audit"
+      : sourceType === "linkedin"
+        ? "LinkedIn / manual report"
+        : sourceType === "manual"
+          ? "Manual audit"
+          : sourceGroup === "search_email"
+            ? "Search / Email lead"
+            : "Secure report";
+
+  return {
+    source: reportCleanString(report.source || body.source || existing.source || auditSource),
+    sourceType,
+    source_type: sourceType,
+    outreachChannel,
+    outreach_channel: outreachChannel,
+    channel: outreachChannel,
+    leadSource,
+    lead_source: leadSource,
+    auditSource,
+    audit_source: auditSource,
+    sourceContext,
+    source_context: sourceContext,
+    sourceGroup,
+    source_group: sourceGroup,
+    sourceLabel,
+    source_label: sourceLabel,
+  };
+}
+
 function isEmailPreviewB2KeyScopedToToken(value: unknown, token: string): boolean {
   const key = reportCleanString(value).replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/");
   const safeToken = normalizeReportToken(token);
@@ -548,8 +717,16 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       reportReady: report.reportReady !== false,
       source: "audit_reports_lookup",
       sourceType: String(report.sourceType || report.source_type || ""),
-      outreachChannel: String(report.outreachChannel || report.outreach_channel || ""),
+      source_type: String(report.sourceType || report.source_type || ""),
+      outreachChannel: String(report.outreachChannel || report.outreach_channel || report.channel || ""),
+      outreach_channel: String(report.outreachChannel || report.outreach_channel || report.channel || ""),
+      channel: String(report.channel || report.outreachChannel || report.outreach_channel || ""),
       leadSource: String(report.leadSource || report.lead_source || ""),
+      lead_source: String(report.leadSource || report.lead_source || ""),
+      sourceGroup: String(report.sourceGroup || report.source_group || ""),
+      source_group: String(report.sourceGroup || report.source_group || ""),
+      sourceLabel: String(report.sourceLabel || report.source_label || ""),
+      source_label: String(report.sourceLabel || report.source_label || ""),
       emailValid: report.emailValid ?? report.email_valid ?? false,
       emailOutreachAllowed: report.emailOutreachAllowed ?? report.email_outreach_allowed ?? false,
       linkedinOutreachAllowed: report.linkedinOutreachAllowed ?? report.linkedin_outreach_allowed ?? false,
@@ -830,6 +1007,7 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const normalizedDomain = normalizeDomainKey(report.domain, report.websiteUrl);
     const previewImageUrl = report.previewImageUrl || report.ogImageUrl || report.openGraphImageUrl || report.homepageScreenshotUrl || "";
     const pdfStorageKey = report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId;
+    const sourceIdentity = normalizeReportSourceIdentity(report, body || {}, existingData);
     const existingManualConversionEvidence = existingData.manualConversionEvidence && typeof existingData.manualConversionEvidence === "object"
       ? existingData.manualConversionEvidence
       : null;
@@ -1090,15 +1268,28 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       pdfExpiresAt: report.pdfExpiresAt,
       leadId: report.leadId,
       sheetRowNumber: report.sheetRowNumber,
-      source: report.source,
-      sourceType: report.sourceType,
-      outreachChannel: report.outreachChannel,
-      leadSource: report.leadSource,
+      source: sourceIdentity.source,
+      sourceType: sourceIdentity.sourceType,
+      source_type: sourceIdentity.source_type,
+      outreachChannel: sourceIdentity.outreachChannel,
+      outreach_channel: sourceIdentity.outreach_channel,
+      channel: sourceIdentity.channel,
+      leadSource: sourceIdentity.leadSource,
+      lead_source: sourceIdentity.lead_source,
+      sourceGroup: sourceIdentity.sourceGroup,
+      source_group: sourceIdentity.source_group,
+      sourceLabel: sourceIdentity.sourceLabel,
+      source_label: sourceIdentity.source_label,
       emailValid: report.emailValid,
+      email_valid: report.email_valid ?? report.emailValid,
       emailOutreachAllowed: report.emailOutreachAllowed,
+      email_outreach_allowed: report.email_outreach_allowed ?? report.emailOutreachAllowed,
       linkedinOutreachAllowed: report.linkedinOutreachAllowed,
-      auditSource: report.auditSource,
-      sourceContext: report.sourceContext,
+      linkedin_outreach_allowed: report.linkedin_outreach_allowed ?? report.linkedinOutreachAllowed,
+      auditSource: sourceIdentity.auditSource,
+      audit_source: sourceIdentity.audit_source,
+      sourceContext: sourceIdentity.sourceContext,
+      source_context: sourceIdentity.source_context,
       linkedinProfileUrl: report.linkedinProfileUrl,
       linkedinCompanyUrl: report.linkedinCompanyUrl,
       linkedinContactName: report.linkedinContactName,
@@ -1200,6 +1391,22 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
           pdfDownloadUrl: report.pdfDownloadUrl,
           pdfStorageKey,
           storageProvider: report.storageProvider,
+          source: sourceIdentity.source,
+          sourceType: sourceIdentity.sourceType,
+          source_type: sourceIdentity.source_type,
+          outreachChannel: sourceIdentity.outreachChannel,
+          outreach_channel: sourceIdentity.outreach_channel,
+          channel: sourceIdentity.channel,
+          leadSource: sourceIdentity.leadSource,
+          lead_source: sourceIdentity.lead_source,
+          sourceGroup: sourceIdentity.sourceGroup,
+          source_group: sourceIdentity.source_group,
+          sourceLabel: sourceIdentity.sourceLabel,
+          source_label: sourceIdentity.source_label,
+          auditSource: sourceIdentity.auditSource,
+          audit_source: sourceIdentity.audit_source,
+          sourceContext: sourceIdentity.sourceContext,
+          source_context: sourceIdentity.source_context,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastRegisteredAt: admin.firestore.FieldValue.serverTimestamp(),
         },

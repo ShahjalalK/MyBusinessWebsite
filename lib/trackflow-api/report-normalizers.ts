@@ -1307,6 +1307,22 @@ function normalizeReportWorkflow(body: AnyRecord, normalizedEmail: string): AnyR
 
   const explicitLeadSource = normalizeWorkflowText(body.leadSource || body.lead_source);
   const leadSource = explicitLeadSource || (sourceType === "linkedin" ? "linkedin_audit" : sourceType === "search" ? "python_search" : sourceType === "manual" ? "manual_audit" : "unknown");
+  const sourceGroup =
+    sourceType === "linkedin" || sourceType === "manual"
+      ? "linkedin_manual"
+      : sourceType === "search" || outreachChannel === "email"
+        ? "search_email"
+        : "other";
+  const sourceLabel =
+    sourceType === "search"
+      ? "Python search audit"
+      : sourceType === "linkedin"
+        ? "LinkedIn / manual report"
+        : sourceType === "manual"
+          ? "Manual audit"
+          : sourceGroup === "search_email"
+            ? "Search / Email lead"
+            : "Secure report";
 
   const emailValid = optionalBoolean(body.emailValid, body.email_valid, body.validEmail, body.valid_email) ?? isValidEmailAddress(normalizedEmail);
   const emailOutreachAllowed =
@@ -1333,6 +1349,11 @@ function normalizeReportWorkflow(body: AnyRecord, normalizedEmail: string): AnyR
     audit_source: auditSource,
     sourceContext,
     source_context: sourceContext,
+    sourceGroup,
+    source_group: sourceGroup,
+    sourceLabel,
+    source_label: sourceLabel,
+    channel: outreachChannel,
     linkedinProfileUrl,
     linkedin_profile_url: linkedinProfileUrl,
     linkedinCompanyUrl,
@@ -2380,6 +2401,11 @@ function tfpV2749NormalizeReportPayloadBase(body: AnyRecord = {}) {
     audit_source: workflow.audit_source,
     sourceContext: workflow.sourceContext,
     source_context: workflow.source_context,
+    sourceGroup: workflow.sourceGroup,
+    source_group: workflow.source_group,
+    sourceLabel: workflow.sourceLabel,
+    source_label: workflow.source_label,
+    channel: workflow.channel,
     linkedinProfileUrl: workflow.linkedinProfileUrl,
     linkedin_profile_url: workflow.linkedin_profile_url,
     linkedinCompanyUrl: workflow.linkedinCompanyUrl,

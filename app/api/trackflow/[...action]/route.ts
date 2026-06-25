@@ -140,8 +140,20 @@ function tfpCleanupSourceText(row: AnyRecord = {}): string {
     row.source_origin,
     row.sourceRole,
     row.source_role,
+    row.reportMode,
+    row.report_mode,
+    row.trackingCase?.mode,
+    row.tracking_case?.mode,
+    row.reportUrl,
+    row.report_url,
+    row.websiteUrl,
+    row.website_url,
+    row.contactEmail,
+    row.contact_email,
     row.companyName,
     row.company_name,
+    row.businessName,
+    row.business_name,
     row.domain,
   ]
     .filter(Boolean)
@@ -183,7 +195,11 @@ function tfpCleanupIsLinkedIn(row: AnyRecord = {}): boolean {
 
 function tfpCleanupIsPythonSearch(row: AnyRecord = {}): boolean {
   const text = tfpCleanupSourceText(row);
-  return (
+  const sourceType = tfpCleanupText(row.sourceType || row.source_type).toLowerCase().replace(/[\s-]+/g, "_");
+  const source = tfpCleanupText(row.source).toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (sourceType === "search") return true;
+  if (
     text.includes("python_search") ||
     text.includes("python") ||
     text.includes("colab_direct") ||
@@ -194,7 +210,29 @@ function tfpCleanupIsPythonSearch(row: AnyRecord = {}): boolean {
     text.includes("source_type_search") ||
     text.includes("lead_source_python_search") ||
     text.includes("audit_source_python")
-  );
+  ) {
+    return true;
+  }
+
+  // Backfill for older secure reports created from local search rows before
+  // sourceType/leadSource were written into Firestore. These records usually
+  // only saved source=lead_row_secure_page_create/update.
+  if (
+    !tfpCleanupIsLinkedIn(row) &&
+    !tfpCleanupIsManual(row) &&
+    (
+      source.includes("lead_row_secure_page") ||
+      source.includes("lead_row") ||
+      source.includes("local_audit_b2_report_export") ||
+      source.includes("local_audit_dashboard_selected_export") ||
+      text.includes("lead_row_secure_page") ||
+      text.includes("local_audit_b2_report_export")
+    )
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function tfpCleanupIsSearchEmail(row: AnyRecord = {}): boolean {
@@ -394,13 +432,33 @@ function tfpCleanupMatchesSearch(row: AnyRecord, search: string): boolean {
 function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
   const sourceGroup = tfpCleanupSourceGroup(row);
   const channel = tfpCleanupNormalizeChannel(row);
+  const normalizedChannel = channel === "unknown" ? row.channel || (sourceGroup === "search_email" ? "email" : "manual") : channel;
+  const sourceType = tfpCleanupText(row.sourceType || row.source_type) ||
+    (sourceGroup === "search_email" ? "search" : sourceGroup === "linkedin_manual" ? (tfpCleanupIsLinkedIn(row) ? "linkedin" : "manual") : "unknown");
+  const leadSource = tfpCleanupText(row.leadSource || row.lead_source) ||
+    (sourceType === "search" ? "python_search" : sourceType === "linkedin" ? "linkedin_audit" : sourceType === "manual" ? "manual_audit" : "unknown");
+  const auditSource = tfpCleanupText(row.auditSource || row.audit_source) ||
+    (sourceType === "search" ? "python_search" : sourceType === "linkedin" ? "linkedin_audit" : sourceType === "manual" ? "manual_audit" : tfpCleanupText(row.source || "unknown"));
+  const sourceContext = tfpCleanupText(row.sourceContext || row.source_context || auditSource);
+  const sourceLabel = tfpCleanupSourceLabel(row);
+
   return {
     ...row,
     sourceGroup,
     source_group: sourceGroup,
-    sourceLabel: tfpCleanupSourceLabel(row),
-    source_label: tfpCleanupSourceLabel(row),
-    channel: channel === "unknown" ? row.channel || (sourceGroup === "search_email" ? "email" : "manual") : channel,
+    sourceLabel,
+    source_label: sourceLabel,
+    sourceType,
+    source_type: sourceType,
+    outreachChannel: normalizedChannel,
+    outreach_channel: normalizedChannel,
+    channel: normalizedChannel,
+    leadSource,
+    lead_source: leadSource,
+    auditSource,
+    audit_source: auditSource,
+    sourceContext,
+    source_context: sourceContext,
     createdAt: tfpCleanupToIso(row.createdAt || row.created_at || row.reportCreatedAt || row.report_created_at || row.registeredAt || row.registered_at) || row.createdAt,
     updatedAt: tfpCleanupToIso(row.updatedAt || row.updated_at) || row.updatedAt,
     lastActivityAt: tfpCleanupToIso(row.lastActivityAt || row.last_activity_at || row.lastSeenAt || row.last_seen_at) || row.lastActivityAt,
