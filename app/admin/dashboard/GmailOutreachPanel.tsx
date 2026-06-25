@@ -82,7 +82,19 @@ function getReportUrl(lead: SheetLead) {
 }
 
 function getEmailPreviewUrl(lead: SheetLead) {
-  return normalizeOptionalUrl(sheetValue(lead, "Email Preview Image URL"));
+  const direct = normalizeOptionalUrl(sheetValue(lead, "Email Preview Image URL"));
+  if (direct) return direct;
+
+  // Backward-compatible fallback for rows created while the Sheet header did not yet
+  // include Email Preview Image columns. In those rows, the preview URL may sit in
+  // the next available report column, usually PDF File ID.
+  const legacyPdfFileId = normalizeOptionalUrl(sheetValue(lead, "PDF File ID"));
+  if (/\/api\/email-preview\//i.test(legacyPdfFileId)) return legacyPdfFileId;
+
+  const legacyPdfViewUrl = normalizeOptionalUrl(sheetValue(lead, "PDF View URL"));
+  if (/\/api\/email-preview\//i.test(legacyPdfViewUrl)) return legacyPdfViewUrl;
+
+  return "";
 }
 
 function buildEmailPreviewHtml(lead: SheetLead) {
@@ -129,7 +141,7 @@ export default function GmailOutreachPanel({
   loadSheetLeads,
   patchSheetLead,
 }: GmailOutreachPanelProps) {
-  const [stageFilter, setStageFilter] = useState<GmailOutreachStage | "all">("ready");
+  const [stageFilter, setStageFilter] = useState<GmailOutreachStage | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedRowNumber, setSelectedRowNumber] = useState<number | null>(null);
@@ -350,6 +362,9 @@ export default function GmailOutreachPanel({
           </label>
           <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">
             {sheetLoading ? "Loading Sheet..." : sheetStatus || `${filteredLeads.length} visible row(s)`}
+            <div className="mt-1 text-[10px] font-bold text-slate-400">
+              Gmail Outreach loads all Sheet rows independently from the Sheet tab filters.
+            </div>
           </div>
         </div>
 
@@ -481,7 +496,7 @@ export default function GmailOutreachPanel({
 
           {!filteredLeads.length && (
             <div className="rounded-[28px] border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500">
-              No Sheet rows matched this Gmail outreach filter.
+              No Sheet rows matched this Gmail outreach filter. Click All, clear search, or refresh Sheet. This panel does not use the Sheet tab approval/send filters.
             </div>
           )}
         </div>

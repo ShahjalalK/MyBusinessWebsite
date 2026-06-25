@@ -2931,6 +2931,55 @@ export default function DashboardPage() {
     }
   };
 
+  const loadGmailOutreachSheetLeads = async (force = false) => {
+    const cacheKey = "gmail_outreach_all_sheet_rows_v2";
+    if (!force && sheetLoadedAt && sheetCacheKey === cacheKey) {
+      setSheetStatus(`Cached ${sheetLeads.length} Gmail Outreach Sheet row(s). Use refresh to reload.`);
+      return;
+    }
+
+    setSheetLoading(true);
+    setSheetStatus("Loading Gmail Outreach rows from Google Sheet...");
+
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "500");
+
+      const headers = await getAuthHeaders();
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 20000);
+      const response = await fetch(`/api/trackflow/sheets/leads?${params.toString()}`, {
+        headers,
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeout);
+
+      const text = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Sheet API did not return JSON. Status: ${response.status}`);
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.message || `Gmail Outreach Sheet load failed. Status: ${response.status}`);
+      }
+
+      const rows = Array.isArray(data.leads) ? data.leads : [];
+      setSheetLeads(rows);
+      setSelectedSheetRows([]);
+      setSheetLoadedAt(Date.now());
+      setSheetCacheKey(cacheKey);
+      setSheetStatus(`Loaded ${rows.length} Gmail Outreach Sheet row(s).`);
+    } catch (error: any) {
+      console.error("Gmail Outreach Sheet load error:", error);
+      setSheetStatus(`Gmail Outreach Sheet load failed: ${error.message || "Unknown error"}`);
+    } finally {
+      setSheetLoading(false);
+    }
+  };
+
   const loadEmailDrawerSheetLeads = async (force = false) => {
     const cacheKey = "send_email_drawer_all";
     if (!force && sheetLoadedAt && sheetCacheKey === cacheKey && sheetLeads.length > 0) {
@@ -3089,11 +3138,13 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    if (activeTab === "sheet" || activeTab === "gmail-outreach") {
+    if (activeTab === "sheet") {
       loadSheetLeads(false);
     }
-    // The Send Email tab loads its drawer queue independently so Sheet tab filters
-    // cannot accidentally hide ready email leads.
+    if (activeTab === "gmail-outreach") {
+      loadGmailOutreachSheetLeads(false);
+    }
+    // The Gmail Outreach tab intentionally ignores Sheet tab filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, sheetLeadFilter, sheetApprovalFilter, sheetSendFilter]);
 
@@ -3645,7 +3696,7 @@ export default function DashboardPage() {
       sheetLeads={sheetLeads}
       sheetStatus={sheetStatus}
       sheetLoading={sheetLoading}
-      loadSheetLeads={loadSheetLeads}
+      loadSheetLeads={loadGmailOutreachSheetLeads}
       patchSheetLead={patchSheetLead}
     />
   );

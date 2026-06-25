@@ -24,6 +24,10 @@ function explicitSourceFieldText(lead: SheetLead) {
     sheetValue(lead, "sourceContext"),
     sheetValue(lead, "Outreach Channel"),
     sheetValue(lead, "outreachChannel"),
+    // Backward-compatible recovery for rows written while headers were briefly misaligned.
+    sheetValue(lead, "Gmail Outreach Stage"),
+    sheetValue(lead, "Gmail Last Sent At"),
+    sheetValue(lead, "Gmail Last Action"),
   );
 }
 
@@ -36,24 +40,44 @@ function fallbackSourceFieldText(lead: SheetLead) {
 }
 
 function sourceKindFromText(text: string, allowManual: boolean): SheetSourceKind {
-  if (text.includes("linkedin") || text.includes("linked in")) return "linkedin_audit";
+  const clean = String(text || "").toLowerCase();
+
+  // Strong source metadata must win over a generic LinkedIn profile/company URL.
+  // Many Python-search rows also contain a LinkedIn social link, so checking
+  // "linkedin" first misclassifies them and hides them under the wrong filter.
   if (
-    text.includes("python_search") ||
-    text.includes("python search") ||
-    text.includes("search_result") ||
-    text.includes("search result") ||
-    text.includes("website search") ||
-    text.includes("google search") ||
-    text.includes("source type: search") ||
-    text.includes("lead_source: python_search") ||
-    text.includes("lead source: python_search") ||
-    text.includes(" search") ||
-    text.includes("search ") ||
-    text.includes("python")
+    clean.includes("python_search") ||
+    clean.includes("python search") ||
+    clean.includes("search_result") ||
+    clean.includes("search result") ||
+    clean.includes("search_result_lead_audit") ||
+    clean.includes("website search") ||
+    clean.includes("google search") ||
+    clean.includes("source type: search") ||
+    clean.includes("source_type_search") ||
+    clean.includes("lead_source: python_search") ||
+    clean.includes("lead source: python_search") ||
+    clean.includes("lead_source_python_search") ||
+    clean.includes("audit_source_python") ||
+    clean.includes("python_sheet_export") ||
+    clean.includes("colab_direct") ||
+    clean.includes("python")
   ) {
     return "python_search";
   }
-  if (allowManual && (text.includes("manual_audit") || text.includes("manual audit") || text.includes("source type: manual"))) return "manual";
+
+  if (
+    clean.includes("linkedin_audit") ||
+    clean.includes("linkedin_manual_audit") ||
+    clean.includes("linkedin manual") ||
+    clean.includes("linkedin_manual") ||
+    clean.includes("linkedin") ||
+    clean.includes("linked in")
+  ) {
+    return "linkedin_audit";
+  }
+
+  if (allowManual && (clean.includes("manual_audit") || clean.includes("manual audit") || clean.includes("source type: manual"))) return "manual";
   return "unknown";
 }
 
