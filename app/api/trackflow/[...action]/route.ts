@@ -120,31 +120,6 @@ function tfpCleanupText(value: any, fallback = ""): string {
   return text || fallback;
 }
 
-function tfpCleanupFirstText(...values: any[]): string {
-  for (const value of values) {
-    const text = tfpCleanupText(value);
-    if (text) return text;
-  }
-  return "";
-}
-
-function tfpCleanupEmail(value: any): string {
-  const email = tfpCleanupText(value).toLowerCase();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
-}
-
-function tfpCleanupLinkedInUrl(value: any): string {
-  const raw = tfpCleanupText(value);
-  if (!raw || !/linkedin\.com/i.test(raw)) return "";
-  try {
-    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-    if (!/^https?:$/i.test(url.protocol)) return "";
-    return url.toString();
-  } catch {
-    return "";
-  }
-}
-
 function tfpCleanupSourceText(row: AnyRecord = {}): string {
   return [
     row.sourceGroup,
@@ -454,6 +429,230 @@ function tfpCleanupMatchesSearch(row: AnyRecord, search: string): boolean {
     .some((value) => String(value).toLowerCase().includes(query));
 }
 
+function tfpCleanupFirstEmail(...values: any[]): string {
+  for (const value of values) {
+    const email = String(value || "").trim().toLowerCase();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
+  }
+  return "";
+}
+
+function tfpCleanupSafeUrl(value: any): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function tfpCleanupCollectStrings(value: any, depth = 0, output: string[] = []): string[] {
+  if (output.length > 400 || depth > 4 || value === null || value === undefined) return output;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    const text = String(value || "").trim();
+    if (text) output.push(text);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 80)) tfpCleanupCollectStrings(item, depth + 1, output);
+    return output;
+  }
+  if (typeof value === "object") {
+    for (const [key, item] of Object.entries(value as AnyRecord).slice(0, 120)) {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey.includes("raw") || normalizedKey.includes("html") || normalizedKey.includes("copy")) continue;
+      tfpCleanupCollectStrings(item, depth + 1, output);
+      if (output.length > 400) break;
+    }
+  }
+  return output;
+}
+
+function tfpCleanupFirstLinkedInUrl(...values: any[]): string {
+  const candidates: string[] = [];
+  for (const value of values) tfpCleanupCollectStrings(value, 0, candidates);
+
+  for (const candidate of candidates) {
+    const match = String(candidate || "").match(/(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/[A-Za-z0-9_./%?=&+#:-]+/i);
+    if (!match?.[0]) continue;
+    const url = tfpCleanupSafeUrl(match[0]);
+    if (url && /linkedin\.com/i.test(url)) return url;
+  }
+
+  return "";
+}
+
+function tfpCleanupFirstContactName(...values: any[]): string {
+  for (const value of values) {
+    const text = String(value || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+    if (text) return text.slice(0, 160);
+  }
+  return "";
+}
+
+function tfpCleanupPickSafeContactFields(row: AnyRecord = {}, reportData: AnyRecord = {}): AnyRecord {
+  const person1 = (reportData.person1 || reportData.person_1 || row.person1 || row.person_1 || {}) as AnyRecord;
+  const social = (reportData.social || reportData.socials || reportData.socialProfiles || reportData.social_profiles || row.social || row.socials || row.socialProfiles || row.social_profiles || {}) as AnyRecord;
+  const lead = (reportData.lead || reportData.leadData || reportData.lead_data || row.lead || row.leadData || row.lead_data || {}) as AnyRecord;
+
+  const email = tfpCleanupFirstEmail(
+    row.contactEmail,
+    row.contact_email,
+    row.email,
+    row.finalEmail,
+    row.final_email,
+    row.sheetFinalEmail,
+    row.sheet_final_email,
+    reportData.contactEmail,
+    reportData.contact_email,
+    reportData.email,
+    reportData.finalEmail,
+    reportData.final_email,
+    reportData.sheetFinalEmail,
+    reportData.sheet_final_email,
+    reportData.decisionMakerEmail,
+    reportData.decision_maker_email,
+    lead.email,
+    lead.emailLower,
+    lead.email_lower
+  );
+
+  const linkedInUrl = tfpCleanupFirstLinkedInUrl(
+    row.linkedinProfileUrl,
+    row.linkedin_profile_url,
+    row.linkedinUrl,
+    row.linkedin_url,
+    row.linkedinCompanyUrl,
+    row.linkedin_company_url,
+    row.socialLink,
+    row.social_link,
+    reportData.linkedinProfileUrl,
+    reportData.linkedin_profile_url,
+    reportData.linkedinUrl,
+    reportData.linkedin_url,
+    reportData.linkedinCompanyUrl,
+    reportData.linkedin_company_url,
+    reportData.socialLink,
+    reportData.social_link,
+    person1.linkedin,
+    person1.linkedinUrl,
+    person1.linkedin_url,
+    social,
+    lead.linkedin,
+    lead.linkedinUrl,
+    lead.linkedin_url,
+    lead.socialLink,
+    lead.social_link
+  );
+
+  const linkedInName = tfpCleanupFirstContactName(
+    row.linkedinContactName,
+    row.linkedin_contact_name,
+    reportData.linkedinContactName,
+    reportData.linkedin_contact_name,
+    reportData.decisionMaker,
+    reportData.decision_maker,
+    person1.name,
+    lead.name,
+    lead.company_name,
+    reportData.companyName,
+    reportData.company_name
+  );
+
+  const output: AnyRecord = {};
+  if (email) {
+    output.contactEmail = email;
+    output.contact_email = email;
+    output.email = row.email || email;
+    output.finalEmail = row.finalEmail || row.final_email || email;
+    output.final_email = row.final_email || row.finalEmail || email;
+  }
+  if (linkedInUrl) {
+    output.linkedinProfileUrl = row.linkedinProfileUrl || row.linkedin_profile_url || linkedInUrl;
+    output.linkedin_profile_url = row.linkedin_profile_url || row.linkedinProfileUrl || linkedInUrl;
+    output.linkedinUrl = row.linkedinUrl || row.linkedin_url || linkedInUrl;
+    output.linkedin_url = row.linkedin_url || row.linkedinUrl || linkedInUrl;
+    output.socialLink = row.socialLink || row.social_link || linkedInUrl;
+    output.social_link = row.social_link || row.socialLink || linkedInUrl;
+  }
+  if (linkedInName) {
+    output.linkedinContactName = row.linkedinContactName || row.linkedin_contact_name || linkedInName;
+    output.linkedin_contact_name = row.linkedin_contact_name || row.linkedinContactName || linkedInName;
+  }
+
+  return output;
+}
+
+async function tfpCleanupEnrichRowsWithSafeContactFields(rows: AnyRecord[] = []): Promise<AnyRecord[]> {
+  const tokens = Array.from(
+    new Set(
+      rows
+        .map((row) => tfpCleanupText(row.token || row.reportToken || row.report_token).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 96))
+        .filter(Boolean)
+    )
+  );
+
+  if (!tokens.length) {
+    return rows.map((row) => ({ ...row, ...tfpCleanupPickSafeContactFields(row) }));
+  }
+
+  const reportMap = new Map<string, AnyRecord>();
+  for (let index = 0; index < tokens.length; index += 40) {
+    const chunk = tokens.slice(index, index + 40);
+    const snapshots = await Promise.all(
+      chunk.map((token) =>
+        adminDb
+          .collection("audit_reports")
+          .doc(token)
+          .get()
+          .then((snapshot) => ({ token, data: snapshot.exists ? ((snapshot.data() || {}) as AnyRecord) : {} }))
+          .catch(() => ({ token, data: {} }))
+      )
+    );
+    for (const item of snapshots) reportMap.set(item.token, item.data);
+  }
+
+  const leadIds = Array.from(
+    new Set(
+      rows
+        .map((row) => {
+          const token = tfpCleanupText(row.token || row.reportToken || row.report_token).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 96);
+          const reportData = token ? reportMap.get(token) || {} : {};
+          return tfpCleanupText(row.leadId || row.lead_id || reportData.leadId || reportData.lead_id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120);
+        })
+        .filter(Boolean)
+    )
+  );
+
+  const leadMap = new Map<string, AnyRecord>();
+  for (let index = 0; index < leadIds.length; index += 40) {
+    const chunk = leadIds.slice(index, index + 40);
+    const snapshots = await Promise.all(
+      chunk.map((leadId) =>
+        adminDb
+          .collection("leads")
+          .doc(leadId)
+          .get()
+          .then((snapshot) => ({ leadId, data: snapshot.exists ? ((snapshot.data() || {}) as AnyRecord) : {} }))
+          .catch(() => ({ leadId, data: {} }))
+      )
+    );
+    for (const item of snapshots) leadMap.set(item.leadId, item.data);
+  }
+
+  return rows.map((row) => {
+    const token = tfpCleanupText(row.token || row.reportToken || row.report_token).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 96);
+    const reportData = token ? reportMap.get(token) || {} : {};
+    const leadId = tfpCleanupText(row.leadId || row.lead_id || reportData.leadId || reportData.lead_id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120);
+    const leadData = leadId ? leadMap.get(leadId) || {} : {};
+    const safeContactFields = tfpCleanupPickSafeContactFields(row, { ...reportData, lead: leadData });
+    return { ...row, ...safeContactFields };
+  });
+}
+
 function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
   const sourceGroup = tfpCleanupSourceGroup(row);
   const channel = tfpCleanupNormalizeChannel(row);
@@ -466,32 +665,6 @@ function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
     (sourceType === "search" ? "python_search" : sourceType === "linkedin" ? "linkedin_audit" : sourceType === "manual" ? "manual_audit" : tfpCleanupText(row.source || "unknown"));
   const sourceContext = tfpCleanupText(row.sourceContext || row.source_context || auditSource);
   const sourceLabel = tfpCleanupSourceLabel(row);
-  const contactEmail = tfpCleanupEmail(tfpCleanupFirstText(
-    row.contactEmail,
-    row.contact_email,
-    row.email,
-    row.finalEmail,
-    row.final_email,
-    row.sheetFinalEmail,
-    row.sheet_final_email,
-  ));
-  const linkedinProfileUrl = tfpCleanupLinkedInUrl(tfpCleanupFirstText(
-    row.linkedinProfileUrl,
-    row.linkedin_profile_url,
-    row.linkedinUrl,
-    row.linkedin_url,
-    row.linkedinCompanyUrl,
-    row.linkedin_company_url,
-    row.socialLink,
-    row.social_link,
-  ));
-  const linkedinCompanyUrl = tfpCleanupLinkedInUrl(tfpCleanupFirstText(
-    row.linkedinCompanyUrl,
-    row.linkedin_company_url,
-    row.companyLinkedinUrl,
-    row.company_linkedin_url,
-  ));
-  const linkedinContactName = tfpCleanupFirstText(row.linkedinContactName, row.linkedin_contact_name, row.decisionMaker, row.decision_maker);
 
   return {
     ...row,
@@ -510,10 +683,6 @@ function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
     audit_source: auditSource,
     sourceContext,
     source_context: sourceContext,
-    ...(contactEmail ? { contactEmail, contact_email: contactEmail, email: row.email || contactEmail } : {}),
-    ...(linkedinProfileUrl ? { linkedinProfileUrl, linkedin_profile_url: linkedinProfileUrl, linkedinUrl: row.linkedinUrl || linkedinProfileUrl, linkedin_url: row.linkedin_url || linkedinProfileUrl } : {}),
-    ...(linkedinCompanyUrl ? { linkedinCompanyUrl, linkedin_company_url: linkedinCompanyUrl } : {}),
-    ...(linkedinContactName ? { linkedinContactName, linkedin_contact_name: linkedinContactName } : {}),
     createdAt: tfpCleanupToIso(row.createdAt || row.created_at || row.reportCreatedAt || row.report_created_at || row.registeredAt || row.registered_at) || row.createdAt,
     updatedAt: tfpCleanupToIso(row.updatedAt || row.updated_at) || row.updatedAt,
     lastActivityAt: tfpCleanupToIso(row.lastActivityAt || row.last_activity_at || row.lastSeenAt || row.last_seen_at) || row.lastActivityAt,
@@ -540,7 +709,8 @@ async function handleSecureReportsListWithCleanupFilters(req: Request) {
   const from = tfpCleanupText(url.searchParams.get("from") || url.searchParams.get("dateFrom") || url.searchParams.get("startDate"));
   const to = tfpCleanupText(url.searchParams.get("to") || url.searchParams.get("dateTo") || url.searchParams.get("endDate"));
 
-  const normalizedRows = data.rows.map((row: AnyRecord) => tfpCleanupNormalizeRow(row));
+  const enrichedRows = await tfpCleanupEnrichRowsWithSafeContactFields(data.rows as AnyRecord[]);
+  const normalizedRows = enrichedRows.map((row: AnyRecord) => tfpCleanupNormalizeRow(row));
   const filteredRows = normalizedRows
     .filter((row: AnyRecord) => tfpCleanupMatchesFilter(row, filter))
     .filter((row: AnyRecord) => tfpCleanupMatchesSearch(row, search))
@@ -9733,6 +9903,15 @@ async function handleReportRegister(req: Request) {
     sourceAuditId: report.auditId,
     storageProvider: report.storageProvider,
     contactEmail: report.contactEmail,
+    contact_email: report.contactEmail,
+    linkedinProfileUrl: report.linkedinProfileUrl,
+    linkedin_profile_url: report.linkedinProfileUrl,
+    linkedinUrl: report.linkedinUrl,
+    linkedin_url: report.linkedinUrl,
+    linkedinCompanyUrl: report.linkedinCompanyUrl,
+    linkedin_company_url: report.linkedinCompanyUrl,
+    linkedinContactName: report.linkedinContactName,
+    linkedin_contact_name: report.linkedinContactName,
     ctaUrl: report.ctaUrl,
     ctaText: report.ctaText,
     active: body?.active === false ? false : true,

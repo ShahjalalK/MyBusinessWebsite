@@ -451,29 +451,50 @@ function secureReportLinkedInUrl(report: SecureReportRow): string {
   return normalizeOptionalUrl(raw);
 }
 
-function secureReportContactActions(report: SecureReportRow): Array<{ key: string; label: string; href: string; title: string }> {
-  const actions: Array<{ key: string; label: string; href: string; title: string }> = [];
+type SecureReportContactAction = {
+  key: string;
+  label: string;
+  title: string;
+  href?: string;
+  copyText?: string;
+  external?: boolean;
+};
+
+function secureReportContactActions(report: SecureReportRow): SecureReportContactAction[] {
+  const actions: SecureReportContactAction[] = [];
   const email = secureReportContactEmail(report);
   const linkedInUrl = secureReportLinkedInUrl(report);
 
   if (email) {
     actions.push({
       key: "email",
-      label: "Email",
-      href: `mailto:${encodeURIComponent(email)}`,
+      label: "Copy email",
+      copyText: email,
       title: email,
     });
   }
   if (linkedInUrl) {
     actions.push({
       key: "linkedin",
-      label: "LinkedIn",
+      label: "LinkedIn profile",
       href: linkedInUrl,
+      external: true,
       title: firstNonEmptyReportString(report.linkedinContactName, report.linkedin_contact_name, linkedInUrl),
     });
   }
 
   return actions;
+}
+
+async function copySecureReportContactValue(value: string) {
+  const text = String(value || "").trim();
+  if (!text) return;
+
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    window.prompt("Copy this contact value", text);
+  }
 }
 
 function numberFromReport(...values: unknown[]): number {
@@ -1152,20 +1173,35 @@ export default function CleanupPanel({
                         <p className="text-[11px] font-black text-gray-600 truncate">{report.domain || report.domainSlug || report.token}</p>
                         {secureReportContactActions(report).length ? (
                           <div className="flex flex-wrap gap-1.5">
-                            {secureReportContactActions(report).map((action) => (
-                              <a
-                                key={`${report.token}-${action.key}`}
-                                href={action.href}
-                                target={action.key === "linkedin" ? "_blank" : undefined}
-                                rel={action.key === "linkedin" ? "noreferrer" : undefined}
-                                title={action.title}
-                                onClick={(event) => event.stopPropagation()}
-                                className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[9px] font-black uppercase text-blue-700 hover:bg-blue-100"
-                              >
-                                {action.label}
-                                {action.key === "linkedin" ? <ExternalLink size={9} /> : null}
-                              </a>
-                            ))}
+                            {secureReportContactActions(report).map((action) =>
+                              action.copyText ? (
+                                <button
+                                  key={`${report.token}-${action.key}`}
+                                  type="button"
+                                  title={action.title}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void copySecureReportContactValue(action.copyText || "");
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[9px] font-black uppercase text-blue-700 hover:bg-blue-100"
+                                >
+                                  {action.label}
+                                </button>
+                              ) : (
+                                <a
+                                  key={`${report.token}-${action.key}`}
+                                  href={action.href}
+                                  target={action.external ? "_blank" : undefined}
+                                  rel={action.external ? "noreferrer" : undefined}
+                                  title={action.title}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[9px] font-black uppercase text-blue-700 hover:bg-blue-100"
+                                >
+                                  {action.label}
+                                  {action.external ? <ExternalLink size={9} /> : null}
+                                </a>
+                              ),
+                            )}
                           </div>
                         ) : null}
                         <p className="text-[10px] font-bold text-gray-400 leading-4 line-clamp-2">{secureReportSourceNote(report)}</p>
