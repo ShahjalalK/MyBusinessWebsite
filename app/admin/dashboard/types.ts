@@ -524,7 +524,18 @@ export type BulkSecureReportCleanupRow = {
   [key: string]: any;
 };
 
-export type SecureReportFilter = "all" | "active" | "expired" | "viewed" | "no_view" | "search_email" | "linkedin_manual";
+export type SecureReportFilter =
+  | "all"
+  | "active"
+  | "expired"
+  | "viewed"
+  | "no_view"
+  | "search_email"
+  | "python_search"
+  | "linkedin_manual"
+  | "manual_audit"
+  | "contacted"
+  | "not_contacted";
 export type SecureReportContactStatus =
   | "not_contacted"
   | "email_sent"
@@ -633,6 +644,8 @@ export type SecureReportListState = {
   loadedAt: number | null;
   search: string;
   filter: SecureReportFilter;
+  dateFrom: string;
+  dateTo: string;
   selectedToken: string;
   selectedTokens: string[];
   rows: SecureReportRow[];

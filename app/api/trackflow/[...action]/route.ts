@@ -115,6 +115,344 @@ const {
 });
 
 
+function tfpCleanupText(value: any, fallback = ""): string {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text || fallback;
+}
+
+function tfpCleanupSourceText(row: AnyRecord = {}): string {
+  return [
+    row.sourceGroup,
+    row.sourceLabel,
+    row.channel,
+    row.source,
+    row.sourceType,
+    row.source_type,
+    row.outreachChannel,
+    row.outreach_channel,
+    row.leadSource,
+    row.lead_source,
+    row.auditSource,
+    row.audit_source,
+    row.sourceContext,
+    row.source_context,
+    row.sourceOrigin,
+    row.source_origin,
+    row.sourceRole,
+    row.source_role,
+    row.companyName,
+    row.company_name,
+    row.domain,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function tfpCleanupNormalizeChannel(row: AnyRecord = {}): "email" | "linkedin" | "manual" | "unknown" {
+  const explicit = tfpCleanupText(row.channel || row.outreachChannel || row.outreach_channel).toLowerCase();
+  const text = tfpCleanupSourceText(row);
+
+  if (explicit.includes("linkedin") || text.includes("linkedin")) return "linkedin";
+  if (explicit.includes("manual") || text.includes("manual_audit") || text.includes("manual_report") || text.includes("operator_manual")) return "manual";
+  if (explicit.includes("email") || text.includes("email") || text.includes("gmail") || text.includes("brevo") || text.includes("cold")) return "email";
+  return "unknown";
+}
+
+function tfpCleanupIsManual(row: AnyRecord = {}): boolean {
+  const text = tfpCleanupSourceText(row);
+  const sourceType = tfpCleanupText(row.sourceType || row.source_type).toLowerCase().replace(/[\s-]+/g, "_");
+  const sourceOrigin = tfpCleanupText(row.sourceOrigin || row.source_origin).toLowerCase().replace(/[\s-]+/g, "_");
+  return (
+    tfpCleanupNormalizeChannel(row) === "manual" ||
+    sourceType === "manual" ||
+    sourceOrigin === "manual" ||
+    text.includes("manual_audit") ||
+    text.includes("manual_report") ||
+    text.includes("operator_manual") ||
+    text.includes("direct_manual") ||
+    text.includes("source_type_manual")
+  );
+}
+
+function tfpCleanupIsLinkedIn(row: AnyRecord = {}): boolean {
+  const text = tfpCleanupSourceText(row);
+  return tfpCleanupNormalizeChannel(row) === "linkedin" || text.includes("linkedin") || text.includes("linked_in");
+}
+
+function tfpCleanupIsPythonSearch(row: AnyRecord = {}): boolean {
+  const text = tfpCleanupSourceText(row);
+  return (
+    text.includes("python_search") ||
+    text.includes("python") ||
+    text.includes("colab_direct") ||
+    text.includes("colab") ||
+    text.includes("search_result") ||
+    text.includes("google_search") ||
+    text.includes("website_search") ||
+    text.includes("source_type_search") ||
+    text.includes("lead_source_python_search") ||
+    text.includes("audit_source_python")
+  );
+}
+
+function tfpCleanupIsSearchEmail(row: AnyRecord = {}): boolean {
+  const text = tfpCleanupSourceText(row);
+  return (
+    tfpCleanupIsPythonSearch(row) ||
+    tfpCleanupNormalizeChannel(row) === "email" ||
+    text.includes("search_email") ||
+    text.includes("search") ||
+    text.includes("sheet") ||
+    text.includes("email") ||
+    text.includes("gmail") ||
+    text.includes("brevo") ||
+    text.includes("cold") ||
+    row.keepUnderSheetAudit === true ||
+    Number(row.sheetRowNumber || row.sheet_row_number || 0) > 0 ||
+    Boolean(row.email || row.leadId || row.lead_id)
+  );
+}
+
+function tfpCleanupSourceGroup(row: AnyRecord = {}): "search_email" | "linkedin_manual" | "other" {
+  const explicit = tfpCleanupText(row.sourceGroup || row.source_group).toLowerCase().replace(/[\s-]+/g, "_");
+  if (["search_email", "python_search", "search", "email", "sheet"].includes(explicit)) return "search_email";
+  if (["linkedin_manual", "linkedin", "manual", "manual_audit", "manual_report"].includes(explicit)) return "linkedin_manual";
+
+  if (tfpCleanupIsLinkedIn(row) || tfpCleanupIsManual(row)) return "linkedin_manual";
+  if (tfpCleanupIsSearchEmail(row)) return "search_email";
+  return "other";
+}
+
+function tfpCleanupSourceLabel(row: AnyRecord = {}): string {
+  if (row.sourceLabel || row.source_label) return tfpCleanupText(row.sourceLabel || row.source_label);
+  if (tfpCleanupIsPythonSearch(row)) return "Python search audit";
+  if (tfpCleanupIsLinkedIn(row)) return "LinkedIn / manual report";
+  if (tfpCleanupIsManual(row)) return "Manual audit";
+  if (tfpCleanupSourceGroup(row) === "search_email") return "Search / Email lead";
+  return "Secure report";
+}
+
+function tfpCleanupToIso(value: any): string {
+  if (!value) return "";
+  const ms = toMillis(value);
+  if (ms) return new Date(ms).toISOString();
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : "";
+}
+
+function tfpCleanupDateMillis(row: AnyRecord = {}): number {
+  const candidates = [
+    row.createdAt,
+    row.created_at,
+    row.reportCreatedAt,
+    row.report_created_at,
+    row.registeredAt,
+    row.registered_at,
+    row.updatedAt,
+    row.updated_at,
+    row.lastActivityAt,
+    row.last_activity_at,
+    row.lastSeenAt,
+    row.last_seen_at,
+    row.sentAt,
+    row.sent_at,
+    row.lastEngagedAt,
+    row.last_engaged_at,
+    row.lastOpenedAt,
+    row.last_opened_at,
+    row.lastClickedAt,
+    row.last_clicked_at,
+    row.lastDownloadedAt,
+    row.last_downloaded_at,
+    row.lastPdfDownloadedAt,
+    row.last_pdf_downloaded_at,
+    row.pdfExpiresAt,
+    row.pdf_expires_at,
+  ];
+
+  for (const value of candidates) {
+    const ms = toMillis(value) || Date.parse(String(value || ""));
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+
+  return 0;
+}
+
+function tfpCleanupDateBoundary(value: string, end = false): number {
+  const text = tfpCleanupText(value);
+  if (!text) return 0;
+  const ms = Date.parse(`${text}T${end ? "23:59:59.999" : "00:00:00"}`);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function tfpCleanupMatchesDate(row: AnyRecord, from: string, to: string): boolean {
+  const fromMs = tfpCleanupDateBoundary(from, false);
+  const toMs = tfpCleanupDateBoundary(to, true);
+  if (!fromMs && !toMs) return true;
+
+  const rowMs = tfpCleanupDateMillis(row);
+  if (!rowMs) return false;
+  if (fromMs && rowMs < fromMs) return false;
+  if (toMs && rowMs > toMs) return false;
+  return true;
+}
+
+function tfpCleanupIsContacted(row: AnyRecord = {}): boolean {
+  const status = tfpCleanupText(row.contactStatus || row.contact_status).toLowerCase();
+  return Boolean(
+    row.contacted === true ||
+      row.sentAt ||
+      row.sent_at ||
+      row.lastEngagedAt ||
+      row.last_engaged_at ||
+      Number(row.openCount || row.open_count || 0) > 0 ||
+      Number(row.clickCount || row.click_count || 0) > 0 ||
+      status.includes("sent") ||
+      status.includes("contacted") ||
+      status.includes("opened") ||
+      status.includes("clicked") ||
+      status.includes("replied")
+  );
+}
+
+function tfpCleanupViewed(row: AnyRecord = {}): boolean {
+  return Boolean(
+    row.reportPageViewed ||
+      row.report_page_viewed ||
+      row.pdfOpened ||
+      row.pdf_opened ||
+      row.pdfDownloaded ||
+      row.pdf_downloaded ||
+      row.videoPlayClicked ||
+      row.video_play_clicked ||
+      row.videoWatched ||
+      row.video_watched ||
+      row.chatboxOpened ||
+      row.chatbox_opened ||
+      row.chatQuestionAsked ||
+      row.chat_question_asked ||
+      row.ctaClicked ||
+      row.cta_clicked
+  );
+}
+
+function tfpCleanupIsExpired(row: AnyRecord = {}): boolean {
+  const ms = toMillis(row.pdfExpiresAt || row.pdf_expires_at) || Date.parse(String(row.pdfExpiresAt || row.pdf_expires_at || ""));
+  return Number.isFinite(ms) && ms > 0 && ms <= Date.now();
+}
+
+function tfpCleanupIsCleaned(row: AnyRecord = {}): boolean {
+  const status = tfpCleanupText(row.cleanupStatus || row.cleanup_status).toLowerCase();
+  return row.active === false || status.includes("clean") || status.includes("delete");
+}
+
+function tfpCleanupMatchesFilter(row: AnyRecord, filter: string): boolean {
+  const normalizedFilter = tfpCleanupText(filter, "all").toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalizedFilter === "all") return true;
+  if (normalizedFilter === "active") return !tfpCleanupIsCleaned(row) && !tfpCleanupIsExpired(row);
+  if (normalizedFilter === "expired") return tfpCleanupIsExpired(row);
+  if (normalizedFilter === "viewed") return tfpCleanupViewed(row);
+  if (normalizedFilter === "no_view") return !tfpCleanupViewed(row) && !tfpCleanupIsCleaned(row);
+  if (normalizedFilter === "contacted") return tfpCleanupIsContacted(row);
+  if (normalizedFilter === "not_contacted") return !tfpCleanupIsContacted(row);
+  if (normalizedFilter === "manual_audit") return tfpCleanupIsManual(row);
+  if (normalizedFilter === "python_search") return tfpCleanupIsPythonSearch(row) || (!tfpCleanupIsManual(row) && !tfpCleanupIsLinkedIn(row) && tfpCleanupIsSearchEmail(row));
+  if (normalizedFilter === "linkedin_manual") return tfpCleanupSourceGroup(row) === "linkedin_manual" || tfpCleanupIsLinkedIn(row) || tfpCleanupIsManual(row);
+  if (normalizedFilter === "search_email") return tfpCleanupSourceGroup(row) === "search_email" || tfpCleanupIsPythonSearch(row) || (!tfpCleanupIsLinkedIn(row) && !tfpCleanupIsManual(row) && tfpCleanupIsSearchEmail(row));
+  return true;
+}
+
+function tfpCleanupMatchesSearch(row: AnyRecord, search: string): boolean {
+  const query = tfpCleanupText(search).toLowerCase();
+  if (!query) return true;
+  return [
+    row.domain,
+    row.domainSlug,
+    row.domain_slug,
+    row.companyName,
+    row.company_name,
+    row.businessName,
+    row.business_name,
+    row.email,
+    row.token,
+    row.reportUrl,
+    row.report_url,
+    row.source,
+    row.sourceType,
+    row.leadSource,
+    row.auditSource,
+    row.cleanupStatus,
+    row.contactStatus,
+    row.contactStatusLabel,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(query));
+}
+
+function tfpCleanupNormalizeRow(row: AnyRecord = {}): AnyRecord {
+  const sourceGroup = tfpCleanupSourceGroup(row);
+  const channel = tfpCleanupNormalizeChannel(row);
+  return {
+    ...row,
+    sourceGroup,
+    source_group: sourceGroup,
+    sourceLabel: tfpCleanupSourceLabel(row),
+    source_label: tfpCleanupSourceLabel(row),
+    channel: channel === "unknown" ? row.channel || (sourceGroup === "search_email" ? "email" : "manual") : channel,
+    createdAt: tfpCleanupToIso(row.createdAt || row.created_at || row.reportCreatedAt || row.report_created_at || row.registeredAt || row.registered_at) || row.createdAt,
+    updatedAt: tfpCleanupToIso(row.updatedAt || row.updated_at) || row.updatedAt,
+    lastActivityAt: tfpCleanupToIso(row.lastActivityAt || row.last_activity_at || row.lastSeenAt || row.last_seen_at) || row.lastActivityAt,
+  };
+}
+
+async function handleSecureReportsListWithCleanupFilters(req: Request) {
+  const response = await handleSecureReportsList(req);
+
+  let data: AnyRecord;
+  try {
+    data = await response.clone().json();
+  } catch {
+    return response;
+  }
+
+  if (!Array.isArray(data.rows)) {
+    return json(data, response.status);
+  }
+
+  const url = new URL(req.url);
+  const filter = tfpCleanupText(url.searchParams.get("filter"), "all");
+  const search = tfpCleanupText(url.searchParams.get("search"));
+  const from = tfpCleanupText(url.searchParams.get("from") || url.searchParams.get("dateFrom") || url.searchParams.get("startDate"));
+  const to = tfpCleanupText(url.searchParams.get("to") || url.searchParams.get("dateTo") || url.searchParams.get("endDate"));
+
+  const normalizedRows = data.rows.map((row: AnyRecord) => tfpCleanupNormalizeRow(row));
+  const filteredRows = normalizedRows
+    .filter((row: AnyRecord) => tfpCleanupMatchesFilter(row, filter))
+    .filter((row: AnyRecord) => tfpCleanupMatchesSearch(row, search))
+    .filter((row: AnyRecord) => tfpCleanupMatchesDate(row, from, to));
+
+  return json(
+    {
+      ...data,
+      rows: filteredRows,
+      totalBeforeCleanupFilter: normalizedRows.length,
+      filteredCount: filteredRows.length,
+      sourceFilter: filter,
+      dateFrom: from,
+      dateTo: to,
+      message:
+        data.message ||
+        (filteredRows.length
+          ? `Loaded ${filteredRows.length} secure report(s).`
+          : "No secure reports matched this filter/date range."),
+    },
+    response.status,
+  );
+}
+
+
 type SenderConfig = {
   id?: string;
   name: string;
@@ -13783,7 +14121,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (action === "system/usage-summary") return await handleUsageSummary(req);
     if (action === "cleanup/candidates") return await handleCleanupCandidates(req);
     if (action === "cleanup/footprint-memory") return await handleFootprintMemoryList(req);
-    if (action === "cleanup/reports") return await handleSecureReportsList(req);
+    if (action === "cleanup/reports") return await handleSecureReportsListWithCleanupFilters(req);
     if (action === "cleanup/report") return await handleReportCleanupPreview(req);
     if (action === "cleanup/daily-sending-stats") return await handleDailySendingStatsCleanupPreview(req);
     if (action === "cron/cleanup-expired-reports") return await handleExpiredReportCleanupCron(req);

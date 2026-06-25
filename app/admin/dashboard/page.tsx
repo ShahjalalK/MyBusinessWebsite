@@ -244,6 +244,8 @@ function emptySecureReportListState(): SecureReportListState {
     loadedAt: null,
     search: "",
     filter: "all",
+    dateFrom: "",
+    dateTo: "",
     selectedToken: "",
     selectedTokens: [],
     rows: [],
@@ -2099,12 +2101,20 @@ export default function DashboardPage() {
 
     try {
       const params = new URLSearchParams({
-        limit: "150",
+        limit: "500",
         filter: secureReports.filter || "all",
       });
 
       if (secureReports.search.trim()) {
         params.set("search", secureReports.search.trim());
+      }
+
+      if (String(secureReports.dateFrom || "").trim()) {
+        params.set("from", String(secureReports.dateFrom || "").trim());
+      }
+
+      if (String(secureReports.dateTo || "").trim()) {
+        params.set("to", String(secureReports.dateTo || "").trim());
       }
 
       const response = await fetch(`/api/trackflow/cleanup/reports?${params.toString()}`, {

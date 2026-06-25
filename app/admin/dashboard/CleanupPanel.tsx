@@ -2,6 +2,7 @@
 
 import React, { type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
+  CalendarDays,
   CheckCircle2,
   Database,
   ExternalLink,
@@ -78,7 +79,11 @@ const SECURE_REPORT_FILTERS: Array<{ id: SecureReportFilter; label: string }> = 
   { id: "no_view", label: "No view" },
   { id: "expired", label: "Expired" },
   { id: "search_email", label: "Search / Email leads" },
+  { id: "python_search", label: "Python search audits" },
   { id: "linkedin_manual", label: "LinkedIn / Manual reports" },
+  { id: "manual_audit", label: "Manual audit only" },
+  { id: "contacted", label: "Contacted" },
+  { id: "not_contacted", label: "Not contacted" },
 ];
 
 function formatSourceLabel(sourceKind?: string, source?: string) {
@@ -86,6 +91,68 @@ function formatSourceLabel(sourceKind?: string, source?: string) {
   if (sourceKind === "test") return "Test Email";
   if (String(source || "").includes("google_sheet")) return "Sheet Lead";
   return "Cold Email";
+}
+
+function cleanupDateStartMillis(value?: string): number {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+  const ms = Date.parse(`${text}T00:00:00`);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function cleanupDateEndMillis(value?: string): number {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+  const ms = Date.parse(`${text}T23:59:59.999`);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function secureReportDateMillis(report: SecureReportRow): number {
+  const candidates = [
+    report.createdAt,
+    report.updatedAt,
+    report.lastActivityAt,
+    report.lastSeenAt,
+    report.sentAt,
+    report.lastEngagedAt,
+    report.lastOpenedAt,
+    report.lastClickedAt,
+    report.lastDownloadedAt,
+    report.lastPdfDownloadedAt,
+    report.lastPdfOpenedAt,
+    report.lastVideoPlayClickedAt,
+    report.lastVideoWatchedAt,
+    report.lastChatboxOpenedAt,
+    report.lastChatQuestionAt,
+    report.lastCtaClickedAt,
+    report.pdfExpiresAt,
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    const raw = value as any;
+    const ms =
+      typeof raw?.toMillis === "function"
+        ? raw.toMillis()
+        : typeof raw?.seconds === "number"
+          ? raw.seconds * 1000
+          : Date.parse(String(raw));
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+
+  return 0;
+}
+
+function secureReportMatchesDateRange(report: SecureReportRow, dateFrom?: string, dateTo?: string): boolean {
+  const fromMs = cleanupDateStartMillis(dateFrom);
+  const toMs = cleanupDateEndMillis(dateTo);
+  if (!fromMs && !toMs) return true;
+
+  const reportMs = secureReportDateMillis(report);
+  if (!reportMs) return false;
+  if (fromMs && reportMs < fromMs) return false;
+  if (toMs && reportMs > toMs) return false;
+  return true;
 }
 
 function reportStepTone(step: ReportCleanupStep): string {
@@ -473,9 +540,8 @@ function secureReportActivityPills(report: SecureReportRow): Array<{ label: stri
   ];
 }
 
-function secureReportMatchesSourceFilter(report: SecureReportRow, filter: "search_email" | "linkedin_manual"): boolean {
+function secureReportMatchesSourceFilter(report: SecureReportRow, filter: "search_email" | "python_search" | "linkedin_manual" | "manual_audit"): boolean {
   const group = secureReportSourceGroup(report);
-  if (group === filter) return true;
 
   const text = [
     report.sourceGroup,
@@ -489,41 +555,63 @@ function secureReportMatchesSourceFilter(report: SecureReportRow, filter: "searc
     report.sourceContext,
     report.sourceOrigin,
     report.sourceRole,
+    report.companyName,
+    report.domain,
   ]
     .filter(Boolean)
     .join(" ")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
 
-  const isLinkedInManual =
-    report.channel === "linkedin" ||
+  const sourceTypeRaw = String(report.sourceType || "").toLowerCase().replace(/[\s-]+/g, "_");
+  const sourceOriginRaw = String(report.sourceOrigin || "").toLowerCase().replace(/[\s-]+/g, "_");
+  const isManual =
     report.channel === "manual" ||
-    text.includes("linkedin") ||
-    text.includes("manual_report") ||
-    text.includes("manual report") ||
+    sourceTypeRaw === "manual" ||
+    sourceOriginRaw === "manual" ||
     text.includes("manual_audit") ||
-    text.includes("manual audit") ||
+    text.includes("manual_report") ||
+    text.includes("operator_manual") ||
+    text.includes("direct_manual") ||
+    text.includes("source_type_manual");
+
+  const isLinkedIn =
+    report.channel === "linkedin" ||
+    text.includes("linkedin") ||
+    text.includes("linked_in") ||
     text.includes("linkedin_manual") ||
-    text.includes("linkedin report");
+    text.includes("linkedin_report");
 
-  if (filter === "linkedin_manual") return isLinkedInManual;
-  if (isLinkedInManual) return false;
+  const isPythonSearch =
+    text.includes("python_search") ||
+    text.includes("python") ||
+    text.includes("colab_direct") ||
+    text.includes("colab") ||
+    text.includes("search_result") ||
+    text.includes("google_search") ||
+    text.includes("website_search") ||
+    text.includes("lead_source_python_search") ||
+    text.includes("audit_source_python") ||
+    text.includes("source_type_search");
 
-  return Boolean(
+  const isEmailOrSheet =
     report.channel === "email" ||
-      text.includes("search_email") ||
-      text.includes("search / email") ||
-      text.includes("python_search") ||
-      text.includes("google_search") ||
-      text.includes("search") ||
-      text.includes("sheet") ||
-      text.includes("email") ||
-      text.includes("gmail") ||
-      text.includes("brevo") ||
-      text.includes("cold") ||
-      report.keepUnderSheetAudit === true ||
-      Number(report.sheetRowNumber || 0) > 0 ||
-      Boolean(report.email || report.leadId),
-  );
+    text.includes("search_email") ||
+    text.includes("email") ||
+    text.includes("gmail") ||
+    text.includes("brevo") ||
+    text.includes("cold") ||
+    text.includes("sheet") ||
+    report.keepUnderSheetAudit === true ||
+    Number(report.sheetRowNumber || 0) > 0 ||
+    Boolean(report.email || report.leadId);
+
+  if (filter === "manual_audit") return isManual;
+  if (filter === "python_search") return isPythonSearch || (!isManual && !isLinkedIn && (group === "search_email" || isEmailOrSheet));
+  if (filter === "linkedin_manual") return group === "linkedin_manual" || isLinkedIn || isManual;
+  if (filter === "search_email") return group === "search_email" || isPythonSearch || (!isManual && !isLinkedIn && isEmailOrSheet);
+
+  return true;
 }
 
 function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReportFilter): boolean {
@@ -532,8 +620,12 @@ function secureReportMatchesFilter(report: SecureReportRow, filter: SecureReport
   if (filter === "expired") return isSecureReportExpired(report);
   if (filter === "viewed") return Boolean(report.reportPageViewed || report.pdfOpened || report.pdfDownloaded || report.videoPlayClicked || report.videoWatched || report.chatboxOpened || report.chatQuestionAsked || report.ctaClicked);
   if (filter === "no_view") return !report.reportPageViewed && !report.pdfOpened && !report.pdfDownloaded && !report.videoPlayClicked && !report.videoWatched && !report.chatboxOpened && !report.chatQuestionAsked && !report.ctaClicked && !isSecureReportCleaned(report);
+  if (filter === "contacted") return Boolean(report.contacted || report.sentAt || report.lastEngagedAt || Number(report.openCount || 0) || Number(report.clickCount || 0) || String(report.contactStatus || "").toLowerCase().includes("sent") || String(report.contactStatus || "").toLowerCase().includes("contacted"));
+  if (filter === "not_contacted") return !secureReportMatchesFilter(report, "contacted");
   if (filter === "search_email") return secureReportMatchesSourceFilter(report, "search_email");
+  if (filter === "python_search") return secureReportMatchesSourceFilter(report, "python_search");
   if (filter === "linkedin_manual") return secureReportMatchesSourceFilter(report, "linkedin_manual");
+  if (filter === "manual_audit") return secureReportMatchesSourceFilter(report, "manual_audit");
   return true;
 }
 
@@ -637,14 +729,24 @@ export default function CleanupPanel({
   const needsAttentionCount = reportAssetCleanup.steps.filter((step) => step.status === "warning" || step.status === "error").length;
   const doneCount = reportAssetCleanup.steps.filter((step) => step.status === "ok").length;
   const plannedCount = reportAssetCleanup.steps.filter((step) => step.status === "planned").length;
-  const filteredSecureReports = secureReports.rows
+  const filteredSecureReportsBeforeSlice = secureReports.rows
     .filter((report) => secureReportMatchesFilter(report, secureReports.filter))
     .filter((report) => secureReportMatchesSearch(report, secureReports.search))
-    .slice(0, 25);
+    .filter((report) => secureReportMatchesDateRange(report, secureReports.dateFrom, secureReports.dateTo));
+  const filteredSecureReports = filteredSecureReportsBeforeSlice.slice(0, 50);
   const selectedReportTokens = secureReports.selectedTokens || [];
   const selectedReportCount = selectedReportTokens.length;
   const allVisibleReportsSelected =
     filteredSecureReports.length > 0 && filteredSecureReports.every((report) => selectedReportTokens.includes(report.token));
+  const secureReportFilterActive = Boolean(
+    secureReports.search.trim() ||
+      secureReports.filter !== "all" ||
+      String(secureReports.dateFrom || "").trim() ||
+      String(secureReports.dateTo || "").trim(),
+  );
+  const secureReportFilterSummary = secureReportFilterActive
+    ? `${filteredSecureReportsBeforeSlice.length} matched from ${secureReports.rows.length} loaded`
+    : `${secureReports.rows.length} loaded`;
   const bulkReportActionDisabled = Boolean(secureReports.bulkLoading || selectedReportCount === 0);
   const selectedReportActionLabel =
     reportAssetCleanup.mode === "assets_only" ? "Remove Files From Selected" : "Delete Selected — No Footprint";
@@ -746,20 +848,23 @@ export default function CleanupPanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_220px_160px_160px_auto] gap-3">
             <div className="relative">
               <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={secureReports.search}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setSecureReports((prev) => ({ ...prev, search: event.target.value }))}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setSecureReports((prev) => ({ ...prev, search: event.target.value, selectedTokens: [], bulkError: "", bulkStatus: "" }))}
+                onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                  if (event.key === "Enter") loadSecureReports(true);
+                }}
                 placeholder="Search by domain, company, email, or token"
                 className="w-full pl-10 pr-4 py-3 rounded-2xl bg-white border border-gray-100 text-sm font-bold text-gray-800 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200"
               />
             </div>
             <select
               value={secureReports.filter}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) => setSecureReports((prev) => ({ ...prev, filter: event.target.value as SecureReportFilter }))}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => setSecureReports((prev) => ({ ...prev, filter: event.target.value as SecureReportFilter, selectedTokens: [], bulkError: "", bulkStatus: "" }))}
               className="w-full px-4 py-3 rounded-2xl bg-white border border-gray-100 text-xs font-black text-gray-700 outline-none"
             >
               {SECURE_REPORT_FILTERS.map((filter) => (
@@ -768,7 +873,65 @@ export default function CleanupPanel({
                 </option>
               ))}
             </select>
+            <label className="relative block">
+              <CalendarDays size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="date"
+                value={secureReports.dateFrom || ""}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setSecureReports((prev) => ({ ...prev, dateFrom: event.target.value, selectedTokens: [], bulkError: "", bulkStatus: "" }))}
+                className="w-full pl-9 pr-3 py-3 rounded-2xl bg-white border border-gray-100 text-xs font-black text-gray-700 outline-none"
+                title="From date"
+              />
+            </label>
+            <label className="relative block">
+              <CalendarDays size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="date"
+                value={secureReports.dateTo || ""}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setSecureReports((prev) => ({ ...prev, dateTo: event.target.value, selectedTokens: [], bulkError: "", bulkStatus: "" }))}
+                className="w-full pl-9 pr-3 py-3 rounded-2xl bg-white border border-gray-100 text-xs font-black text-gray-700 outline-none"
+                title="To date"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => loadSecureReports(true)}
+                disabled={secureReports.loading}
+                className="flex-1 px-4 py-3 rounded-2xl bg-slate-950 text-white text-[10px] font-black uppercase disabled:bg-gray-300 inline-flex items-center justify-center gap-2"
+              >
+                {secureReports.loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Apply
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSecureReports((prev) => ({
+                    ...prev,
+                    search: "",
+                    filter: "all",
+                    dateFrom: "",
+                    dateTo: "",
+                    selectedTokens: [],
+                    bulkError: "",
+                    bulkStatus: "",
+                  }))
+                }
+                className="px-3 py-3 rounded-2xl bg-white border border-gray-100 text-gray-500 text-[10px] font-black uppercase"
+              >
+                Clear
+              </button>
+            </div>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white border border-gray-100 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+              {secureReportFilterSummary}
+              {filteredSecureReportsBeforeSlice.length > filteredSecureReports.length ? ` · showing first ${filteredSecureReports.length}` : ""}
+            </p>
+            <p className="text-[10px] font-bold text-gray-400">
+              Date filter checks created/updated/activity timestamps. Use Refresh/Apply to request more rows from the server.
+            </p>
+          </div>
+
 
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 rounded-2xl bg-white border border-gray-100 p-3">
             <div className="flex flex-wrap items-center gap-2">
