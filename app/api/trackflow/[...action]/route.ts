@@ -9836,6 +9836,110 @@ async function handleReportDebug(req: Request) {
 }
 
 
+
+function isRegisterFirestoreSpecialValue(value: any): boolean {
+  if (!value || typeof value !== "object") return false;
+  const ctorName = String(value?.constructor?.name || "");
+  return (
+    ctorName.includes("FieldValue") ||
+    ctorName.includes("Timestamp") ||
+    ctorName.includes("DocumentReference") ||
+    ctorName.includes("GeoPoint") ||
+    typeof value?.toDate === "function" ||
+    typeof value?.toMillis === "function" ||
+    typeof value?.isEqual === "function" && ("seconds" in value || "nanoseconds" in value)
+  );
+}
+
+function sanitizeRegisterFirestoreValue(value: any, depth = 0): any {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return String(value);
+  if (typeof value === "function" || typeof value === "symbol") return undefined;
+  if (isRegisterFirestoreSpecialValue(value)) return value;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (depth > 16) return null;
+
+  if (Array.isArray(value)) {
+    const arr = value
+      .map((item) => sanitizeRegisterFirestoreValue(item, depth + 1))
+      .filter((item) => item !== undefined);
+    return arr;
+  }
+
+  if (typeof value === "object") {
+    const output: AnyRecord = {};
+    for (const [key, item] of Object.entries(value as AnyRecord)) {
+      if (!key || item === undefined) continue;
+      const cleanItem = sanitizeRegisterFirestoreValue(item, depth + 1);
+      if (cleanItem === undefined) continue;
+      output[key] = cleanItem;
+    }
+    return output;
+  }
+
+  return value;
+}
+
+function sanitizeRegisterFirestoreObject(value: AnyRecord = {}): AnyRecord {
+  const cleanValue = sanitizeRegisterFirestoreValue(value, 0);
+  return cleanValue && typeof cleanValue === "object" && !Array.isArray(cleanValue) ? cleanValue as AnyRecord : {};
+}
+
+function stripEmailPreviewFieldsForRegisterRetry(payload: AnyRecord, deleteField: any): AnyRecord {
+  const next: AnyRecord = {
+    ...payload,
+    emailPreviewImage: null,
+    email_preview_image: null,
+    emailPreviewImageUrl: "",
+    email_preview_image_url: "",
+    emailPreviewImageWebpUrl: "",
+    email_preview_image_webp_url: "",
+    emailPreviewImageB2Key: "",
+    email_preview_image_b2_key: "",
+    emailPreviewImageMimeType: "",
+    email_preview_image_mime_type: "",
+    emailPreviewImageSizeBytes: 0,
+    email_preview_image_size_bytes: 0,
+    emailPreviewImageUpdatedAt: deleteField,
+  };
+  return next;
+}
+
+async function setAuditReportPayloadResilient(input: {
+  reportRef: any;
+  payload: AnyRecord;
+  reportToken: string;
+  deleteField: any;
+}) {
+  const safePayload = sanitizeRegisterFirestoreObject(input.payload);
+  try {
+    await input.reportRef.set(safePayload, { merge: true });
+    return { payload: safePayload, emailPreviewPersisted: true, fallbackUsed: false };
+  } catch (error: any) {
+    logReportRegisterDebug("firestore_primary_set_failed", {
+      docPath: `audit_reports/${input.reportToken}`,
+      error: error?.message || String(error || ""),
+      payloadKeys: Object.keys(safePayload).sort(),
+      hasEmailPreviewImage: Boolean(safePayload.emailPreviewImage || safePayload.emailPreviewImageUrl || safePayload.emailPreviewImageB2Key),
+      retry: "strip_email_preview_metadata_once",
+    });
+
+    const retryPayload = sanitizeRegisterFirestoreObject(
+      stripEmailPreviewFieldsForRegisterRetry(input.payload, input.deleteField),
+    );
+    await input.reportRef.set(retryPayload, { merge: true });
+    logReportRegisterDebug("firestore_retry_without_email_preview_succeeded", {
+      docPath: `audit_reports/${input.reportToken}`,
+      payloadKeys: Object.keys(retryPayload).sort(),
+      note: "Secure report was registered. Email preview metadata was skipped because Firestore rejected the primary payload.",
+    });
+    return { payload: retryPayload, emailPreviewPersisted: false, fallbackUsed: true };
+  }
+}
+
 async function handleReportRegister(req: Request) {
   await requireReportRegisterAccess(req);
   const requestUrl = new URL(req.url);
@@ -10091,9 +10195,10 @@ async function handleReportRegister(req: Request) {
   });
 
   const cleanEmailPreviewImage = resolveEmailPreviewImageForRegister(report, existingData);
+  let persistedEmailPreviewImage = cleanEmailPreviewImage;
   if (
-    cleanEmailPreviewImage.b2Key &&
-    !isEmailPreviewB2KeyScopedToReportForRegister(cleanEmailPreviewImage.b2Key, report.token)
+    persistedEmailPreviewImage.b2Key &&
+    !isEmailPreviewB2KeyScopedToReportForRegister(persistedEmailPreviewImage.b2Key, report.token)
   ) {
     throw new ApiError(
       "Email preview B2 key is not scoped to the current report token/email-preview folder.",
@@ -10102,8 +10207,8 @@ async function handleReportRegister(req: Request) {
   }
   if (
     cleanEmailPreviewImage.hasIncoming &&
-    cleanEmailPreviewImage.url &&
-    !cleanEmailPreviewImage.b2Key
+    persistedEmailPreviewImage.url &&
+    !persistedEmailPreviewImage.b2Key
   ) {
     throw new ApiError(
       "Email preview URL was provided without its private B2 key metadata.",
@@ -10115,10 +10220,10 @@ async function handleReportRegister(req: Request) {
     incoming: pickReportRegisterDebugFields(report || {}),
     existing: pickReportRegisterDebugFields(existingData || {}),
     resolved: {
-      emailPreviewImageUrl: cleanEmailPreviewImage.url,
-      emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-      emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-      emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
+      emailPreviewImageUrl: persistedEmailPreviewImage.url,
+      emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+      emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+      emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
       preservedExisting:
         !cleanEmailPreviewImage.hasIncoming && cleanEmailPreviewImage.hasExisting,
     },
@@ -10157,19 +10262,19 @@ async function handleReportRegister(req: Request) {
     manualEvidenceHero: nextManualEvidenceHero || null,
     manual_evidence_hero: deleteField,
     previewImageUrl,
-    emailPreviewImage: cleanEmailPreviewImage.asset || null,
-    email_preview_image: cleanEmailPreviewImage.asset || null,
-    emailPreviewImageUrl: cleanEmailPreviewImage.url,
-    email_preview_image_url: cleanEmailPreviewImage.url,
-    emailPreviewImageWebpUrl: cleanEmailPreviewImage.webpUrl,
-    email_preview_image_webp_url: cleanEmailPreviewImage.webpUrl,
-    emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-    email_preview_image_b2_key: cleanEmailPreviewImage.b2Key,
-    emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-    email_preview_image_mime_type: cleanEmailPreviewImage.mimeType,
-    emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
-    email_preview_image_size_bytes: cleanEmailPreviewImage.sizeBytes,
-    emailPreviewImageUpdatedAt: cleanEmailPreviewImage.asset
+    emailPreviewImage: persistedEmailPreviewImage.asset || null,
+    email_preview_image: persistedEmailPreviewImage.asset || null,
+    emailPreviewImageUrl: persistedEmailPreviewImage.url,
+    email_preview_image_url: persistedEmailPreviewImage.url,
+    emailPreviewImageWebpUrl: persistedEmailPreviewImage.webpUrl,
+    email_preview_image_webp_url: persistedEmailPreviewImage.webpUrl,
+    emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+    email_preview_image_b2_key: persistedEmailPreviewImage.b2Key,
+    emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+    email_preview_image_mime_type: persistedEmailPreviewImage.mimeType,
+    emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
+    email_preview_image_size_bytes: persistedEmailPreviewImage.sizeBytes,
+    emailPreviewImageUpdatedAt: persistedEmailPreviewImage.asset
       ? admin.firestore.FieldValue.serverTimestamp()
       : deleteField,
     ogImagePathname: report.ogImagePathname,
@@ -10257,7 +10362,24 @@ async function handleReportRegister(req: Request) {
     payloadKeys: Object.keys(payload).sort(),
   });
 
-  await reportRef.set(payload, { merge: true });
+  const firestoreSetResult = await setAuditReportPayloadResilient({
+    reportRef,
+    payload,
+    reportToken: report.token,
+    deleteField,
+  });
+  const firestorePayload = firestoreSetResult.payload;
+  const emailPreviewPersisted = firestoreSetResult.emailPreviewPersisted;
+  persistedEmailPreviewImage = emailPreviewPersisted ? cleanEmailPreviewImage : {
+    asset: null,
+    url: "",
+    webpUrl: "",
+    b2Key: "",
+    mimeType: "",
+    sizeBytes: 0,
+    hasIncoming: false,
+    hasExisting: false,
+  };
 
   const savedSnap = await reportRef.get();
   const savedData = savedSnap.exists ? savedSnap.data() || {} : {};
@@ -10272,83 +10394,96 @@ async function handleReportRegister(req: Request) {
   });
 
   if (normalizedDomain) {
-    await adminDb.collection("audit_report_domains").doc(normalizedDomain).set(
-      {
-        token: report.token,
-        reportToken: report.token,
-        reportUrl: report.reportUrl,
-        reportMode: report.reportMode || report.report_mode || "",
-        trackingCase: report.trackingCase || report.tracking_case || null,
-        domain: normalizedDomain,
-        normalizedDomain,
-        domainSlug: report.domainSlug,
-        previewImageUrl,
-        emailPreviewImageUrl: cleanEmailPreviewImage.url,
-        email_preview_image_url: cleanEmailPreviewImage.url,
-        emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-        email_preview_image_b2_key: cleanEmailPreviewImage.b2Key,
-        emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-        email_preview_image_mime_type: cleanEmailPreviewImage.mimeType,
-        emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
-        email_preview_image_size_bytes: cleanEmailPreviewImage.sizeBytes,
-        ogImagePathname: report.ogImagePathname || "",
-        pdfViewUrl: report.pdfViewUrl,
-        pdfDownloadUrl: report.pdfDownloadUrl,
-        pdfStorageKey,
-        storageProvider: report.storageProvider,
-        source: "catch_all_route_register",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastRegisteredAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    logReportRegisterDebug("after_domain_index_set", {
-      docPath: `audit_report_domains/${normalizedDomain}`,
-      index: {
-        token: report.token,
-        reportUrl: report.reportUrl,
-        previewImageUrl,
-        emailPreviewImageUrl: cleanEmailPreviewImage.url,
-        emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-        emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-        emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
-        ogImagePathname: report.ogImagePathname || "",
-        pdfStorageKey,
-      },
+    const domainIndexPayload = sanitizeRegisterFirestoreObject({
+      token: report.token,
+      reportToken: report.token,
+      reportUrl: report.reportUrl,
+      reportMode: report.reportMode || report.report_mode || "",
+      trackingCase: report.trackingCase || report.tracking_case || null,
+      domain: normalizedDomain,
+      normalizedDomain,
+      domainSlug: report.domainSlug,
+      previewImageUrl,
+      emailPreviewImageUrl: persistedEmailPreviewImage.url,
+      email_preview_image_url: persistedEmailPreviewImage.url,
+      emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+      email_preview_image_b2_key: persistedEmailPreviewImage.b2Key,
+      emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+      email_preview_image_mime_type: persistedEmailPreviewImage.mimeType,
+      emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
+      email_preview_image_size_bytes: persistedEmailPreviewImage.sizeBytes,
+      ogImagePathname: report.ogImagePathname || "",
+      pdfViewUrl: report.pdfViewUrl,
+      pdfDownloadUrl: report.pdfDownloadUrl,
+      pdfStorageKey,
+      storageProvider: report.storageProvider,
+      source: "catch_all_route_register",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastRegisteredAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    try {
+      await adminDb.collection("audit_report_domains").doc(normalizedDomain).set(domainIndexPayload, { merge: true });
+      logReportRegisterDebug("after_domain_index_set", {
+        docPath: `audit_report_domains/${normalizedDomain}`,
+        index: {
+          token: report.token,
+          reportUrl: report.reportUrl,
+          previewImageUrl,
+          emailPreviewImageUrl: persistedEmailPreviewImage.url,
+          emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+          emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+          emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
+          ogImagePathname: report.ogImagePathname || "",
+          pdfStorageKey,
+        },
+      });
+    } catch (error: any) {
+      logReportRegisterDebug("domain_index_set_failed_non_fatal", {
+        docPath: `audit_report_domains/${normalizedDomain}`,
+        error: error?.message || String(error || ""),
+        note: "Main audit_reports document was already saved. Domain index can be rebuilt later.",
+      });
+    }
   }
 
   if (report.leadId) {
-    await adminDb.collection("outreach_leads").doc(report.leadId).set(
-      {
+    const leadUpdatePayload = sanitizeRegisterFirestoreObject({
+      reportToken: report.token,
+      reportUrl: report.reportUrl,
+      domainSlug: report.domainSlug,
+      emailPreviewImageUrl: persistedEmailPreviewImage.url,
+      email_preview_image_url: persistedEmailPreviewImage.url,
+      emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+      email_preview_image_b2_key: persistedEmailPreviewImage.b2Key,
+      emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+      email_preview_image_mime_type: persistedEmailPreviewImage.mimeType,
+      emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
+      email_preview_image_size_bytes: persistedEmailPreviewImage.sizeBytes,
+      ogImageUrl: report.ogImageUrl || "",
+      homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
+      pdfFileId: report.pdfFileId,
+      pdfViewUrl: report.pdfViewUrl,
+      pdfDownloadUrl: report.pdfDownloadUrl,
+      pdfExpiresAt: report.pdfExpiresAt,
+      reportReady: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      tracking_history: admin.firestore.FieldValue.arrayUnion({
+        event: "report_registered",
         reportToken: report.token,
-        reportUrl: report.reportUrl,
-        domainSlug: report.domainSlug,
-        emailPreviewImageUrl: cleanEmailPreviewImage.url,
-        email_preview_image_url: cleanEmailPreviewImage.url,
-        emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-        email_preview_image_b2_key: cleanEmailPreviewImage.b2Key,
-        emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-        email_preview_image_mime_type: cleanEmailPreviewImage.mimeType,
-        emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
-        email_preview_image_size_bytes: cleanEmailPreviewImage.sizeBytes,
-        ogImageUrl: report.ogImageUrl || "",
-        homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
-        pdfFileId: report.pdfFileId,
-        pdfViewUrl: report.pdfViewUrl,
-        pdfDownloadUrl: report.pdfDownloadUrl,
-        pdfExpiresAt: report.pdfExpiresAt,
-        reportReady: true,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        tracking_history: admin.firestore.FieldValue.arrayUnion({
-          event: "report_registered",
-          reportToken: report.token,
-          time: admin.firestore.Timestamp.now(),
-        }),
-      },
-      { merge: true },
-    );
+        time: admin.firestore.Timestamp.now(),
+      }),
+    });
+
+    try {
+      await adminDb.collection("outreach_leads").doc(report.leadId).set(leadUpdatePayload, { merge: true });
+    } catch (error: any) {
+      logReportRegisterDebug("outreach_lead_report_link_failed_non_fatal", {
+        leadId: report.leadId,
+        error: error?.message || String(error || ""),
+        note: "Main secure report stayed registered. Lead cache link can be refreshed later.",
+      });
+    }
   }
 
   let sheetUpdated = false;
@@ -10356,10 +10491,10 @@ async function handleReportRegister(req: Request) {
     await patchSheetRowSafely(Number(report.sheetRowNumber), {
       reportToken: report.token,
       reportUrl: report.reportUrl,
-      emailPreviewImageUrl: cleanEmailPreviewImage.url,
-      emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-      emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-      emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
+      emailPreviewImageUrl: persistedEmailPreviewImage.url,
+      emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+      emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+      emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
       pdfFileId: report.pdfFileId,
       pdfViewUrl: report.pdfViewUrl,
       pdfDownloadUrl: report.pdfDownloadUrl,
@@ -10384,16 +10519,16 @@ async function handleReportRegister(req: Request) {
     openGraphImageUrl: report.openGraphImageUrl || report.ogImageUrl || "",
     previewImageUrl: report.previewImageUrl || report.ogImageUrl || "",
     homepageScreenshotUrl: report.homepageScreenshotUrl || report.ogImageUrl || "",
-    emailPreviewImageUrl: cleanEmailPreviewImage.url,
-    email_preview_image_url: cleanEmailPreviewImage.url,
-    emailPreviewImageWebpUrl: cleanEmailPreviewImage.webpUrl,
-    email_preview_image_webp_url: cleanEmailPreviewImage.webpUrl,
-    emailPreviewImageB2Key: cleanEmailPreviewImage.b2Key,
-    email_preview_image_b2_key: cleanEmailPreviewImage.b2Key,
-    emailPreviewImageMimeType: cleanEmailPreviewImage.mimeType,
-    email_preview_image_mime_type: cleanEmailPreviewImage.mimeType,
-    emailPreviewImageSizeBytes: cleanEmailPreviewImage.sizeBytes,
-    email_preview_image_size_bytes: cleanEmailPreviewImage.sizeBytes,
+    emailPreviewImageUrl: persistedEmailPreviewImage.url,
+    email_preview_image_url: persistedEmailPreviewImage.url,
+    emailPreviewImageWebpUrl: persistedEmailPreviewImage.webpUrl,
+    email_preview_image_webp_url: persistedEmailPreviewImage.webpUrl,
+    emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
+    email_preview_image_b2_key: persistedEmailPreviewImage.b2Key,
+    emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
+    email_preview_image_mime_type: persistedEmailPreviewImage.mimeType,
+    emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
+    email_preview_image_size_bytes: persistedEmailPreviewImage.sizeBytes,
     ogImagePathname: report.ogImagePathname || "",
     pdfFileId: report.pdfFileId,
     pdfViewUrl: report.pdfViewUrl,
