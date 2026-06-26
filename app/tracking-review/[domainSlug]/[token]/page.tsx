@@ -1846,7 +1846,7 @@ html[data-trackflow-assistant-visible="true"] [data-trackflow-sticky-assistant-s
 
     document.addEventListener('click', function (event) {
       try {
-        var target = event.target && event.target.closest ? event.target.closest('a[href="#ask-this-review"]') : null;
+        var target = event.target && event.target.closest ? event.target.closest('a[href="#ask-this-review"], [data-trackflow-chat-question]') : null;
         if (!target) return;
 
         if (event.preventDefault) event.preventDefault();
@@ -3754,11 +3754,15 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   <a
                     key={item}
                     href="#ask-this-review"
+                    data-trackflow-chat-open="true"
+                    data-trackflow-chat-suggestion="hero_snapshot"
+                    data-trackflow-chat-question={item}
+                    aria-label={`Draft this question in the assistant: ${item}`}
                     className="group min-w-0 break-words rounded-2xl border border-white/10 bg-white/[0.05] p-3 text-xs font-bold leading-5 text-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300/40 hover:bg-blue-500/15 hover:text-white sm:p-3.5"
                   >
                     <span>{item}</span>
                     <span className="mt-2 block text-[10px] font-black uppercase tracking-[0.16em] text-blue-200 opacity-80 group-hover:text-blue-100">
-                      Ask assistant
+                      Edit & send in chat
                     </span>
                   </a>
                 ))}

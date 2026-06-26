@@ -670,6 +670,42 @@ export default function ReportChatAssistant({
     }, 180);
   }, [emitAnalyticsEvent]);
 
+  const draftSuggestedQuestion = useCallback((value: unknown, source = "suggestion") => {
+    const cleanQuestion = String(value || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 700);
+
+    if (!cleanQuestion) {
+      openAssistantChat(source);
+      return;
+    }
+
+    const questionKey = normalizeReportChatQuestionKey(cleanQuestion);
+
+    emitAnalyticsEvent({
+      eventName: "secure_report_assistant_question_drafted",
+      buttonLabel: cleanQuestion.slice(0, 120),
+      question: cleanQuestion.slice(0, 300),
+      questionKey,
+      questionSource: source,
+      messageLength: cleanQuestion.length,
+    });
+
+    setQuestion(cleanQuestion);
+    setIsOpen(true);
+
+    if (!isSending && !isDisabled) {
+      setStatusLabel("Question ready to send");
+    }
+
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(cleanQuestion.length, cleanQuestion.length);
+      resizeInput();
+    }, 180);
+  }, [emitAnalyticsEvent, isDisabled, isSending, openAssistantChat]);
+
   const storageKey = useMemo(
     () => (token && sessionId ? getMessagesStorageKey(token, sessionId) : ""),
     [token, sessionId],
@@ -866,10 +902,19 @@ export default function ReportChatAssistant({
       const target = event.target;
       if (!(target instanceof Element)) return;
 
-      const trigger = target.closest('a[href="#ask-this-review"], [data-trackflow-chat-open="true"]');
+      const trigger = target.closest('a[href="#ask-this-review"], [data-trackflow-chat-open="true"], [data-trackflow-chat-question]');
       if (!trigger) return;
 
       event.preventDefault();
+
+      const questionTrigger = trigger.closest('[data-trackflow-chat-question]') as HTMLElement | null;
+      const suggestedQuestion = questionTrigger?.dataset.trackflowChatQuestion || "";
+
+      if (suggestedQuestion) {
+        draftSuggestedQuestion(suggestedQuestion, questionTrigger?.dataset.trackflowChatSuggestion || "external_suggestion");
+        return;
+      }
+
       openAssistantChat("anchor_click");
     };
 
@@ -881,7 +926,7 @@ export default function ReportChatAssistant({
       document.removeEventListener("click", onDocumentClick);
       window.removeEventListener("hashchange", openFromHash);
     };
-  }, [openAssistantChat]);
+  }, [draftSuggestedQuestion, openAssistantChat]);
 
   const helperBadge = isDisabled
     ? "Manual review"
@@ -1179,7 +1224,7 @@ export default function ReportChatAssistant({
                               <button
                                 key={item}
                                 type="button"
-                                onClick={() => void submitQuestion(item, "follow_up")}
+                                onClick={() => draftSuggestedQuestion(item, "follow_up")}
                                 disabled={isSending || isDisabled}
                                 data-trackflow-chat-suggestion="follow_up"
                                 data-trackflow-chat-question={item}
@@ -1214,7 +1259,7 @@ export default function ReportChatAssistant({
                   <div className="mb-2 flex items-center gap-2">
                     <Sparkles className="h-4 w-4 shrink-0 text-blue-600" />
                     <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 sm:tracking-[0.18em]">
-                      Suggested questions from this review
+                      Click a question to edit and send
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-2">
@@ -1222,7 +1267,7 @@ export default function ReportChatAssistant({
                       <button
                         key={item}
                         type="button"
-                        onClick={() => void submitQuestion(item, "starter")}
+                        onClick={() => draftSuggestedQuestion(item, "starter")}
                         disabled={isSending || isDisabled}
                         data-trackflow-chat-suggestion="starter"
                         data-trackflow-chat-question={item}
