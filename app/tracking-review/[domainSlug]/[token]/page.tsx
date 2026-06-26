@@ -696,6 +696,78 @@ function getPrivateReportCopy(report: Record<string, any>): Record<string, any> 
   );
 }
 
+function getAuditCore(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Record<string, any> {
+  return getObjectCandidate(
+    report.auditCore,
+    report.audit_core,
+    privateReportCopy.auditCore,
+    privateReportCopy.audit_core,
+  );
+}
+
+function getAuditCoreManualEvidence(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Record<string, any> {
+  const auditCore = getAuditCore(report, privateReportCopy);
+  return getObjectCandidate(auditCore.manualEvidence, auditCore.manual_evidence);
+}
+
+function getAuditCoreSignalObject(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Record<string, any> {
+  const auditCore = getAuditCore(report, privateReportCopy);
+  return getObjectCandidate(auditCore.trackingSignals, auditCore.tracking_signals);
+}
+
+function getAuditCoreDetectedIds(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Record<string, any> {
+  const auditCore = getAuditCore(report, privateReportCopy);
+  return getObjectCandidate(auditCore.detectedIds, auditCore.detected_ids);
+}
+
+function manualBooleanStatusLabel(value: unknown, fallback = "Not clearly observed"): string {
+  if (value === true) return "Observed";
+  if (value === false) return "Not clearly observed";
+  const text = cleanText(value, "");
+  if (!text) return fallback;
+  if (/^(yes|true|observed|found|confirmed)$/i.test(text)) return "Observed";
+  if (/^(no|false|not_observed|not clearly observed|missing)$/i.test(text)) return "Not clearly observed";
+  return text;
+}
+
+function cleanTrackingIdList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[\s,|]+/g) : [];
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const item of raw) {
+    const text = cleanText(item, "").replace(/[^A-Za-z0-9_-]/g, "").trim();
+    if (!text) continue;
+    const key = text.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(text.slice(0, 80));
+    if (output.length >= 8) break;
+  }
+  return output;
+}
+
+function getDetectedTrackingIdBadges(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Array<{ label: string; value: string }> {
+  const ids = getAuditCoreDetectedIds(report, privateReportCopy);
+  const groups: Array<{ label: string; values: string[] }> = [
+    { label: "GA4 ID", values: cleanTrackingIdList(ids.ga4MeasurementIds || ids.ga4_measurement_ids || ids.ga4Ids || ids.ga4_ids) },
+    { label: "GTM ID", values: cleanTrackingIdList(ids.gtmContainerIds || ids.gtm_container_ids || ids.gtmIds || ids.gtm_ids) },
+    { label: "Google Ads ID", values: cleanTrackingIdList(ids.googleAdsIds || ids.google_ads_ids || ids.adsIds || ids.ads_ids) },
+    { label: "Meta Pixel ID", values: cleanTrackingIdList(ids.metaPixelIds || ids.meta_pixel_ids || ids.fbPixelIds || ids.fb_pixel_ids) },
+  ];
+  return groups.flatMap((group) => group.values.map((value) => ({ label: group.label, value })));
+}
+
+function getBaseTrackingSignalLine(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): string {
+  const signals = getAuditCoreSignalObject(report, privateReportCopy);
+  const found: string[] = [];
+  if (signals.ga4Found === true || signals.ga4_found === true) found.push("GA4");
+  if (signals.gtmFound === true || signals.gtm_found === true) found.push("GTM/Google tag");
+  if (signals.googleAdsFound === true || signals.google_ads_found === true || signals.googleAdsConversionRequestObserved === true || signals.google_ads_conversion_request_observed === true) found.push("Google Ads");
+  if (signals.metaPixelFound === true || signals.meta_pixel_found === true) found.push("Meta Pixel");
+  if (!found.length) return "";
+  return `${found.join(", ")} browser-visible base signals were found; this review focuses on whether the selected action produced the expected event.`;
+}
+
 type ManualEvidenceHero = {
   enabled: boolean;
   title: string;
@@ -775,21 +847,34 @@ function getActionSpecificManualDisclaimer(rawDisclaimer: unknown, actionKey: st
 }
 
 function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: Record<string, any>): ManualEvidenceHero | null {
+  const auditCoreManual = getAuditCoreManualEvidence(report, privateReportCopy);
   const raw = getObjectCandidate(
     privateReportCopy.manualEvidenceHero,
     privateReportCopy.manual_evidence_hero,
     report.manualEvidenceHero,
     report.manual_evidence_hero,
+    auditCoreManual,
   );
 
-  if (!raw.enabled) return null;
+  const hasAuditCoreManual = Boolean(
+    cleanText(auditCoreManual.actionLabel || auditCoreManual.action_label || auditCoreManual.expectedEvent || auditCoreManual.expected_event || auditCoreManual.observedEvent || auditCoreManual.observed_event, ""),
+  );
+  if (raw.enabled === false) return null;
+  if (!raw.enabled && !hasAuditCoreManual) return null;
 
-  const title = cleanText(raw.title || raw.headline, "");
-  const summary = cleanText(raw.summary || raw.description, "");
   const expectedEvent = cleanText(raw.expectedEvent || raw.expected_event, "");
   const observedEvent = cleanText(raw.observedEvent || raw.observed_event || raw.observedEventName || raw.observed_event_name, "");
   const actionLabel = cleanText(raw.actionLabel || raw.action_label || raw.label, "Selected conversion action");
   const actionKey = normalizeManualEvidenceActionKey(raw.actionType || raw.action_type, actionLabel);
+  const defaultTitle = expectedEvent
+    ? `${actionLabel} expected event was not clearly observed`
+    : `${actionLabel} tracking needs verification`;
+  const defaultSummary = expectedEvent
+    ? `The selected action was completed manually. Expected event: ${expectedEvent}. Observed result: ${observedEvent || "not clearly observed"}.`
+    : "The selected action was reviewed manually and should be confirmed inside the tracking accounts.";
+
+  const title = cleanText(raw.title || raw.headline, defaultTitle);
+  const summary = cleanText(raw.summary || raw.description, defaultSummary);
 
   if (!title || !summary) return null;
 
@@ -810,11 +895,11 @@ function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: R
     actionLabel,
     expectedEvent,
     observedEvent: observedEvent || "Not clearly observed",
-    tool: cleanText(raw.tool, "Manual Tag Assistant / GA4 / GTM review"),
-    actionCompleted: cleanText(raw.actionCompleted || raw.action_completed, "Unclear / needs verification"),
-    ga4Status: cleanText(raw.ga4Status || raw.ga4_status, "Unclear / needs verification"),
-    googleAdsStatus: cleanText(raw.googleAdsStatus || raw.google_ads_status, "Unclear / needs verification"),
-    gtmStatus: cleanText(raw.gtmStatus || raw.gtm_status, "Unclear / needs verification"),
+    tool: cleanText(raw.tool || raw.toolUsed || raw.tool_used, "Manual Tag Assistant / GA4 / GTM review"),
+    actionCompleted: manualBooleanStatusLabel(raw.actionCompleted ?? raw.action_completed, "Unclear / needs verification"),
+    ga4Status: manualBooleanStatusLabel(raw.ga4Status ?? raw.ga4_status ?? raw.ga4EventAfterActionObserved ?? raw.ga4_event_after_action_observed, "Unclear / needs verification"),
+    googleAdsStatus: manualBooleanStatusLabel(raw.googleAdsStatus ?? raw.google_ads_status ?? raw.googleAdsConversionAfterActionObserved ?? raw.google_ads_conversion_after_action_observed, "Unclear / needs verification"),
+    gtmStatus: manualBooleanStatusLabel(raw.gtmStatus ?? raw.gtm_status ?? raw.gtmTriggerAfterActionObserved ?? raw.gtm_trigger_after_action_observed, "Unclear / needs verification"),
     testUrl: normalizeManualHeroUrl(raw.testUrl || raw.test_url),
     operatorNote: cleanText(raw.operatorNote || raw.operator_note, ""),
     disclaimer: getActionSpecificManualDisclaimer(raw.disclaimer, actionKey),
@@ -2868,8 +2953,11 @@ function getReportPreviewImageUrl(report: Record<string, any>): string {
 
 function getReportMode(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): string {
   const trackingCase = getObjectCandidate(report.trackingCase, report.tracking_case, privateReportCopy.trackingCase, privateReportCopy.tracking_case);
+  const auditCore = getAuditCore(report, privateReportCopy);
   return cleanText(
-    trackingCase.mode ||
+    auditCore.reportMode ||
+      auditCore.report_mode ||
+      trackingCase.mode ||
       trackingCase.reportMode ||
       trackingCase.report_mode ||
       report.reportMode ||
@@ -3133,6 +3221,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
     .filter(Boolean);
   const primaryConversionFocus = cleanText(privateReportCopy.primaryActionLabel || report.primaryActionLabel || "", "") || getPrimaryConversionFocus(report, privateReportCopy);
   const manualEvidenceHero = getManualEvidenceHero(report, privateReportCopy);
+  const detectedTrackingIdBadges = getDetectedTrackingIdBadges(report, privateReportCopy);
+  const baseTrackingSignalLine = getBaseTrackingSignalLine(report, privateReportCopy);
   if (isSetupFirst) {
     auditSnapshotQuestions = [
       "Was a GA4/GTM tracking foundation clearly visible?",
@@ -3308,7 +3398,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
     ? setupPageSubheadline
     : (primaryConversionFocus ? `${primaryConversionFocus} reviewed on the selected conversion path.` : pageSubheadline));
   const heroIntroLine = polishReviewExplainerText(
-    isSetupFirst ? setupPageSubheadline : joinUniqueSentences([heroContextLine, setupPageSubheadline]),
+    isSetupFirst ? setupPageSubheadline : joinUniqueSentences([heroContextLine, baseTrackingSignalLine, setupPageSubheadline]),
   );
   const evidenceSignalBadges = cleanList(
     [
@@ -3334,11 +3424,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
         },
         {
           label: "Evidence type",
-          value: "Tag Assistant test",
+          value: "Manual Tag Assistant review",
         },
         {
           label: "Best next action",
-          value: "Confirm in accounts",
+          value: "Confirm event in accounts",
         },
       ]
     : isSetupFirst
@@ -3481,6 +3571,27 @@ export default async function ReportPage({ params }: ReportPageProps) {
                     ) : null}
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+
+            {detectedTrackingIdBadges.length ? (
+              <div className="mt-4 rounded-[1.15rem] border border-slate-200 bg-white/85 p-4 shadow-sm shadow-slate-950/5 sm:mt-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  Browser-visible tracking IDs found
+                </p>
+                <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+                  {detectedTrackingIdBadges.map((item) => (
+                    <span
+                      key={`${item.label}-${item.value}`}
+                      className="max-w-full break-all rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700"
+                    >
+                      {item.label}: {item.value}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
+                  These are browser-visible IDs captured during the review. Approved account access is still needed for final confirmation.
+                </p>
               </div>
             ) : null}
 

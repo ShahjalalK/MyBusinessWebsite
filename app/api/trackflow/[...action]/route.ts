@@ -3266,6 +3266,60 @@ function normalizeEmailPreviewImageAssetPayload(body: AnyRecord = {}, privatePag
 }
 
 
+function tfpV2774CleanIdArray(value: any, max = 8): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[\s,|]+/g) : [];
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const item of raw) {
+    const text = firstCleanString(item).replace(/[^A-Za-z0-9_-]/g, "").trim();
+    if (!text) continue;
+    const key = text.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(text.slice(0, 80));
+    if (output.length >= max) break;
+  }
+  return output;
+}
+
+function tfpV2774BuildLeanTrackingCase(report: AnyRecord = {}, body: AnyRecord = {}, auditCore: AnyRecord | null = null): AnyRecord | null {
+  const rawCase = getObjectCandidate(report.trackingCase, report.tracking_case, body.trackingCase, body.tracking_case);
+  const mode = firstCleanString(
+    auditCore?.reportMode,
+    auditCore?.report_mode,
+    report.reportMode,
+    report.report_mode,
+    rawCase.mode,
+    rawCase.reportMode,
+    rawCase.report_mode,
+    body.reportMode,
+    body.report_mode,
+  );
+  if (!mode) return null;
+
+  const signals = getObjectCandidate(auditCore?.trackingSignals, auditCore?.tracking_signals, rawCase);
+  const manual = getObjectCandidate(auditCore?.manualEvidence, auditCore?.manual_evidence);
+  const lean: AnyRecord = {
+    mode,
+    reportMode: mode,
+    ga4Found: signals.ga4Found ?? signals.ga4_found ?? null,
+    gtmFound: signals.gtmFound ?? signals.gtm_found ?? null,
+    googleAdsFound: signals.googleAdsFound ?? signals.google_ads_found ?? null,
+    metaPixelFound: signals.metaPixelFound ?? signals.meta_pixel_found ?? null,
+  };
+
+  const actionLabel = firstCleanString(manual.actionLabel, manual.action_label, rawCase.customLabel, rawCase.custom_label).slice(0, 120);
+  const expectedEvent = firstCleanString(manual.expectedEvent, manual.expected_event, rawCase.expectedEvent, rawCase.expected_event).slice(0, 120);
+  const observedEvent = firstCleanString(manual.observedEvent, manual.observed_event, rawCase.observedEvent, rawCase.observed_event).slice(0, 120);
+  if (actionLabel || expectedEvent || observedEvent) {
+    lean.actionLabel = actionLabel;
+    lean.expectedEvent = expectedEvent;
+    lean.observedEvent = observedEvent;
+    lean.manualEvidenceEnabled = Boolean(manual.enabled ?? true);
+  }
+  return lean;
+}
+
 function normalizeAuditCorePayload(...values: any[]): AnyRecord | null {
   const raw = getObjectCandidate(...values);
   if (!raw || !Object.keys(raw).length) return null;
@@ -3299,6 +3353,12 @@ function normalizeAuditCorePayload(...values: any[]): AnyRecord | null {
       meta_pixel_found: trackingSignalsRaw.meta_pixel_found ?? trackingSignalsRaw.metaPixelFound ?? null,
       observedGa4Events,
       observed_ga4_events: observedGa4Events,
+    },
+    detectedIds: {
+      ga4MeasurementIds: tfpV2774CleanIdArray(getObjectCandidate(raw.detectedIds, raw.detected_ids).ga4MeasurementIds || getObjectCandidate(raw.detectedIds, raw.detected_ids).ga4_measurement_ids || trackingSignalsRaw.ga4MeasurementIds || trackingSignalsRaw.ga4_measurement_ids || trackingSignalsRaw.ga4Ids || trackingSignalsRaw.ga4_ids || trackingSignalsRaw.measurement_ids),
+      gtmContainerIds: tfpV2774CleanIdArray(getObjectCandidate(raw.detectedIds, raw.detected_ids).gtmContainerIds || getObjectCandidate(raw.detectedIds, raw.detected_ids).gtm_container_ids || trackingSignalsRaw.gtmContainerIds || trackingSignalsRaw.gtm_container_ids || trackingSignalsRaw.gtmIds || trackingSignalsRaw.gtm_ids),
+      googleAdsIds: tfpV2774CleanIdArray(getObjectCandidate(raw.detectedIds, raw.detected_ids).googleAdsIds || getObjectCandidate(raw.detectedIds, raw.detected_ids).google_ads_ids || trackingSignalsRaw.googleAdsIds || trackingSignalsRaw.google_ads_ids || trackingSignalsRaw.adsIds || trackingSignalsRaw.ads_ids),
+      metaPixelIds: tfpV2774CleanIdArray(getObjectCandidate(raw.detectedIds, raw.detected_ids).metaPixelIds || getObjectCandidate(raw.detectedIds, raw.detected_ids).meta_pixel_ids || trackingSignalsRaw.metaPixelIds || trackingSignalsRaw.meta_pixel_ids || trackingSignalsRaw.fbPixelIds || trackingSignalsRaw.fb_pixel_ids),
     },
     manualEvidence: {
       enabled: manualRaw.enabled !== false && Boolean(firstCleanString(manualRaw.actionLabel, manualRaw.action_label, manualRaw.expectedEvent, manualRaw.expected_event, manualRaw.observedEvent, manualRaw.observed_event)),
@@ -7417,6 +7477,10 @@ const HEADERS = [
   'Decision Maker',
   'Decision Maker Title',
   'Contact Quality',
+  'Domain Age Years',
+  'CMS',
+  'Mobile Speed',
+  'Desktop Speed',
 
   // Email automation / Firestore sync
   'Tracking ID',
@@ -7644,6 +7708,19 @@ const UPDATE_KEY_MAP: Record<string, HeaderName> = {
   decisionMaker: 'Decision Maker',
   decisionMakerTitle: 'Decision Maker Title',
   contactQuality: 'Contact Quality',
+  domainAgeYears: 'Domain Age Years',
+  domain_age_years: 'Domain Age Years',
+  cmsName: 'CMS',
+  cms_name: 'CMS',
+  cms: 'CMS',
+  mobileSpeed: 'Mobile Speed',
+  mobile_speed: 'Mobile Speed',
+  mobileScore: 'Mobile Speed',
+  mobile_score: 'Mobile Speed',
+  desktopSpeed: 'Desktop Speed',
+  desktop_speed: 'Desktop Speed',
+  desktopScore: 'Desktop Speed',
+  desktop_score: 'Desktop Speed',
   trackingId: 'Tracking ID',
   firestoreLeadId: 'Firestore Lead ID',
   leadId: 'Firestore Lead ID',
@@ -9220,6 +9297,39 @@ async function patchSheetRowSafely(rowNumber: number, updates: AnyRecord) {
   }
 }
 
+function tfpV2774FirstNumber(...values: any[]): number | null {
+  for (const value of values) {
+    const numberValue = typeof value === "number" ? value : Number.parseFloat(String(value ?? "").replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return null;
+}
+
+function tfpV2774BuildSheetOnlyInternalAuditUpdates(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord {
+  const incoming = getObjectCandidate(body.sheetOnlyInternalAuditFacts, body.sheet_only_internal_audit_facts, body.internalAuditFacts, body.internal_audit_facts);
+  const domainAge = getObjectCandidate(incoming.domainAge, incoming.domain_age, body.domainAge, body.domain_age);
+  const cms = getObjectCandidate(incoming.cms, body.cms);
+  const speed = getObjectCandidate(incoming.speed, body.speed, body.websiteSpeed, body.website_speed);
+
+  const updates: AnyRecord = {
+    reportToken: report.token,
+    reportUrl: report.reportUrl,
+    pdfViewUrl: report.pdfViewUrl,
+    pdfDownloadUrl: report.pdfDownloadUrl,
+  };
+
+  const ageYears = tfpV2774FirstNumber(incoming.domainAgeYears, incoming.domain_age_years, domainAge.ageYears, domainAge.age_years, body.domainAgeYears, body.domain_age_years);
+  const cmsName = firstCleanString(incoming.cmsName, incoming.cms_name, cms.name, body.cmsName, body.cms_name, typeof body.cms === "string" ? body.cms : "").slice(0, 80);
+  const mobileSpeed = tfpV2774FirstNumber(incoming.mobileSpeed, incoming.mobile_speed, incoming.mobileScore, incoming.mobile_score, speed.mobileSpeed, speed.mobile_score, speed.mobileScore, speed.mobile);
+  const desktopSpeed = tfpV2774FirstNumber(incoming.desktopSpeed, incoming.desktop_speed, incoming.desktopScore, incoming.desktop_score, speed.desktopSpeed, speed.desktop_score, speed.desktopScore, speed.desktop);
+
+  if (ageYears !== null) updates.domainAgeYears = ageYears;
+  if (cmsName) updates.cmsName = cmsName;
+  if (mobileSpeed !== null) updates.mobileSpeed = mobileSpeed;
+  if (desktopSpeed !== null) updates.desktopSpeed = desktopSpeed;
+
+  return updates;
+}
 
 function normalizeDomainKeyForReports(...values: any[]): string {
   for (const value of values) {
@@ -10134,6 +10244,13 @@ async function handleReportRegister(req: Request) {
   const existingData = existing.exists ? existing.data() || {} : {};
   const deleteField = admin.firestore.FieldValue.delete();
   const normalizedDomain = normalizeDomainKeyForReports(report.domain, report.websiteUrl);
+  const leanTrackingCase = tfpV2774BuildLeanTrackingCase(report, body || {}, report.auditCore || report.audit_core || null);
+  const copyTemplateVersion = firstCleanString(
+    body?.copyTemplateVersion,
+    body?.copy_template_version,
+    existingData.copyTemplateVersion,
+    "secure-copy-v1",
+  ).slice(0, 80);
 
   const previewImageUrl = firstRegisterImageUrl(report.previewImageUrl, report.ogImageUrl, report.openGraphImageUrl, report.homepageScreenshotUrl, existingData.previewImageUrl, existingData.ogImageUrl, existingData.openGraphImageUrl, existingData.emailPreviewImageUrl);
   const pdfStorageKey = report.pdfStorageKey || report.b2Key || report.blobPathname || report.pdfFileId;
@@ -10243,6 +10360,49 @@ async function handleReportRegister(req: Request) {
     "lastEmailTrackingTag",
     "reportEmailStatus",
     "report_email_status",
+    // v27.74: generated secure-page copy is now rendered dynamically from auditCore.
+    // Keep Firestore as the secure-report fact/asset source of truth, not a paragraph store.
+    "headline",
+    "subheadline",
+    "mainFinding",
+    "main_finding",
+    "mainIssue",
+    "main_issue",
+    "businessImpact",
+    "business_impact",
+    "proofPoints",
+    "proof_points",
+    "problemCards",
+    "problem_cards",
+    "recommendations",
+    "verificationPlan",
+    "verification_plan",
+    "whatChecked",
+    "what_checked",
+    "auditSnapshotTitle",
+    "audit_snapshot_title",
+    "auditSnapshotQuestions",
+    "audit_snapshot_questions",
+    "trustNotes",
+    "trust_notes",
+    "howToReadTitle",
+    "how_to_read_title",
+    "howToReadParagraphs",
+    "how_to_read_paragraphs",
+    "ctaHeadline",
+    "cta_headline",
+    "manualEvidenceHero",
+    "manual_evidence_hero",
+    "manualConversionEvidence",
+    "manual_conversion_evidence",
+    "internalAuditFacts",
+    "internal_audit_facts",
+    "domainAge",
+    "domain_age",
+    "cms",
+    "speed",
+    "auditMeta",
+    "audit_meta",
   ];
 
   const sourceText = String(report.source || body?.source || "").toLowerCase();
@@ -10353,36 +10513,38 @@ async function handleReportRegister(req: Request) {
     token: report.token,
     domainSlug: report.domainSlug,
     reportUrl: report.reportUrl,
-    trackingCase: report.trackingCase || report.tracking_case || null,
-    tracking_case: report.tracking_case || report.trackingCase || null,
+    trackingCase: leanTrackingCase,
+    tracking_case: deleteField,
     reportMode: report.reportMode || report.report_mode || "",
-    report_mode: report.report_mode || report.reportMode || "",
+    report_mode: deleteField,
     auditCore: report.auditCore || null,
-    audit_core: report.auditCore || report.audit_core || null,
+    audit_core: deleteField,
     auditCoreSchemaVersion: report.auditCoreSchemaVersion || report.audit_core_schema_version || report.auditCore?.schemaVersion || "",
-    audit_core_schema_version: report.audit_core_schema_version || report.auditCoreSchemaVersion || report.auditCore?.schemaVersion || "",
+    audit_core_schema_version: deleteField,
+    copyTemplateVersion,
+    copy_template_version: deleteField,
     setupFirstOverrideApplied: Boolean(tfpV2749SetupFirstRegister),
     domain: normalizedDomain || report.domain,
     normalizedDomain,
     websiteUrl: report.websiteUrl,
     companyName: report.companyName,
-    headline: report.headline,
-    subheadline: report.subheadline,
-    mainFinding: report.mainFinding,
-    businessImpact: report.businessImpact,
-    proofPoints: report.proofPoints,
-    problemCards: report.problemCards,
-    verificationPlan: report.verificationPlan,
-    whatChecked: report.whatChecked,
-    auditSnapshotTitle: report.auditSnapshotTitle,
-    auditSnapshotQuestions: report.auditSnapshotQuestions,
-    trustNotes: report.trustNotes,
-    howToReadTitle: report.howToReadTitle,
-    howToReadParagraphs: report.howToReadParagraphs,
-    ctaHeadline: report.ctaHeadline,
-    manualConversionEvidence: nextManualConversionEvidence || null,
+    headline: deleteField,
+    subheadline: deleteField,
+    mainFinding: deleteField,
+    businessImpact: deleteField,
+    proofPoints: deleteField,
+    problemCards: deleteField,
+    verificationPlan: deleteField,
+    whatChecked: deleteField,
+    auditSnapshotTitle: deleteField,
+    auditSnapshotQuestions: deleteField,
+    trustNotes: deleteField,
+    howToReadTitle: deleteField,
+    howToReadParagraphs: deleteField,
+    ctaHeadline: deleteField,
+    manualConversionEvidence: deleteField,
     manual_conversion_evidence: deleteField,
-    manualEvidenceHero: nextManualEvidenceHero || null,
+    manualEvidenceHero: deleteField,
     manual_evidence_hero: deleteField,
     ogImageUrl: previewImageUrl,
     og_image_url: previewImageUrl,
@@ -10393,17 +10555,17 @@ async function handleReportRegister(req: Request) {
     homepageScreenshotUrl: previewImageUrl,
     homepage_screenshot_url: previewImageUrl,
     emailPreviewImage: persistedEmailPreviewImage.asset || null,
-    email_preview_image: persistedEmailPreviewImage.asset || null,
+    email_preview_image: deleteField,
     emailPreviewImageUrl: persistedEmailPreviewImage.url,
-    email_preview_image_url: persistedEmailPreviewImage.url,
+    email_preview_image_url: deleteField,
     emailPreviewImageWebpUrl: persistedEmailPreviewImage.webpUrl,
-    email_preview_image_webp_url: persistedEmailPreviewImage.webpUrl,
+    email_preview_image_webp_url: deleteField,
     emailPreviewImageB2Key: persistedEmailPreviewImage.b2Key,
-    email_preview_image_b2_key: persistedEmailPreviewImage.b2Key,
+    email_preview_image_b2_key: deleteField,
     emailPreviewImageMimeType: persistedEmailPreviewImage.mimeType,
-    email_preview_image_mime_type: persistedEmailPreviewImage.mimeType,
+    email_preview_image_mime_type: deleteField,
     emailPreviewImageSizeBytes: persistedEmailPreviewImage.sizeBytes,
-    email_preview_image_size_bytes: persistedEmailPreviewImage.sizeBytes,
+    email_preview_image_size_bytes: deleteField,
     emailPreviewImageUpdatedAt: persistedEmailPreviewImage.asset
       ? admin.firestore.FieldValue.serverTimestamp()
       : deleteField,
@@ -10442,9 +10604,9 @@ async function handleReportRegister(req: Request) {
 
   if (cleanSecurePageEvidenceAssets.length) {
     payload.securePageEvidenceAssets = cleanSecurePageEvidenceAssets;
-    payload.secure_page_evidence_assets = cleanSecurePageEvidenceAssets;
+    payload.secure_page_evidence_assets = deleteField;
     payload.securePageEvidenceAssetCount = cleanSecurePageEvidenceAssets.length;
-    payload.secure_page_evidence_asset_count = cleanSecurePageEvidenceAssets.length;
+    payload.secure_page_evidence_asset_count = deleteField;
     payload.securePageEvidenceUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
   }
 
@@ -10523,13 +10685,23 @@ async function handleReportRegister(req: Request) {
       : 0,
   });
 
+  const sheetOnlyInternalAuditUpdates = tfpV2774BuildSheetOnlyInternalAuditUpdates(report, body || {});
+  if (Number(report.sheetRowNumber || 0) > 1 && Object.keys(sheetOnlyInternalAuditUpdates).length) {
+    await patchSheetRowSafely(Number(report.sheetRowNumber), sheetOnlyInternalAuditUpdates);
+    logReportRegisterDebug("sheet_only_internal_audit_facts_patched", {
+      rowNumber: Number(report.sheetRowNumber),
+      updateKeys: Object.keys(sheetOnlyInternalAuditUpdates).sort(),
+      note: "Domain age/CMS/speed style dashboard facts are kept in Google Sheet, not Firestore.",
+    });
+  }
+
   if (normalizedDomain) {
     const domainIndexPayload = sanitizeRegisterFirestoreObject({
       token: report.token,
       reportToken: report.token,
       reportUrl: report.reportUrl,
       reportMode: report.reportMode || report.report_mode || "",
-      trackingCase: report.trackingCase || report.tracking_case || null,
+      trackingCase: leanTrackingCase,
       domain: normalizedDomain,
       normalizedDomain,
       domainSlug: report.domainSlug,
