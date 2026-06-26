@@ -3336,7 +3336,13 @@ function normalizeAuditCorePayload(...values: any[]): AnyRecord | null {
 
 function normalizeReportPayload(body: AnyRecord = {}) {
   const report = tfpV2749NormalizeReportPayloadBase(body);
-  const auditCore = normalizeAuditCorePayload(body.auditCore, body.audit_core, report.privateReportCopy?.auditCore, report.privateReportCopy?.audit_core);
+  const privateReportCopyForAuditCore = (report as AnyRecord).privateReportCopy || (report as AnyRecord).private_report_copy || {};
+  const auditCore = normalizeAuditCorePayload(
+    body.auditCore,
+    body.audit_core,
+    privateReportCopyForAuditCore.auditCore,
+    privateReportCopyForAuditCore.audit_core,
+  );
   const withAuditCore = auditCore
     ? { ...report, auditCore, audit_core: auditCore, auditCoreSchemaVersion: auditCore.schemaVersion, audit_core_schema_version: auditCore.schemaVersion }
     : report;
