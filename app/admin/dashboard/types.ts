@@ -215,6 +215,10 @@ export type SheetLead = {
   "Decision Maker"?: string;
   "Decision Maker Title"?: string;
   "Contact Quality"?: string;
+  "Domain Age Years"?: string;
+  "CMS"?: string;
+  "Mobile Speed"?: string;
+  "Desktop Speed"?: string;
   "Tracking ID"?: string;
   "Firestore Lead ID"?: string;
   "Open Count"?: string;

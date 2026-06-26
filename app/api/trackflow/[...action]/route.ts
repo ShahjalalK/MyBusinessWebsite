@@ -8612,10 +8612,30 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
 
     // v27.74 sheet-only dashboard facts.
     // These are Google Sheet columns, not Firestore secure-page fields.
-    'Domain Age Years': getExistingOrDefault(existing, 'Domain Age Years', '', lead?.domainAgeYears ?? lead?.domain_age_years),
-    CMS: getExistingOrDefault(existing, 'CMS', '', lead?.cmsName ?? lead?.cms_name ?? (typeof lead?.cms === 'string' ? lead.cms : '')),
-    'Mobile Speed': getExistingOrDefault(existing, 'Mobile Speed', '', lead?.mobileSpeed ?? lead?.mobile_speed ?? lead?.mobileScore ?? lead?.mobile_score),
-    'Desktop Speed': getExistingOrDefault(existing, 'Desktop Speed', '', lead?.desktopSpeed ?? lead?.desktop_speed ?? lead?.desktopScore ?? lead?.desktop_score),
+    'Domain Age Years': getExistingOrDefault(
+      existing,
+      'Domain Age Years',
+      '',
+      lead?.domainAgeYears ?? lead?.domain_age_years ?? audit?.domainAgeYears ?? audit?.domain_age_years ?? audit?.sheetOnlyInternalAuditFacts?.domainAgeYears ?? audit?.sheet_only_internal_audit_facts?.domain_age_years,
+    ),
+    CMS: getExistingOrDefault(
+      existing,
+      'CMS',
+      '',
+      lead?.cmsName ?? lead?.cms_name ?? (typeof lead?.cms === 'string' && lead.cms ? lead.cms : undefined) ?? audit?.cmsName ?? audit?.cms_name ?? (typeof audit?.cms === 'string' && audit.cms ? audit.cms : undefined) ?? audit?.sheetOnlyInternalAuditFacts?.cmsName ?? audit?.sheet_only_internal_audit_facts?.cms_name,
+    ),
+    'Mobile Speed': getExistingOrDefault(
+      existing,
+      'Mobile Speed',
+      '',
+      lead?.mobileSpeed ?? lead?.mobile_speed ?? lead?.mobileScore ?? lead?.mobile_score ?? audit?.mobileSpeed ?? audit?.mobile_speed ?? audit?.mobileScore ?? audit?.mobile_score ?? audit?.sheetOnlyInternalAuditFacts?.mobileSpeed ?? audit?.sheet_only_internal_audit_facts?.mobile_speed,
+    ),
+    'Desktop Speed': getExistingOrDefault(
+      existing,
+      'Desktop Speed',
+      '',
+      lead?.desktopSpeed ?? lead?.desktop_speed ?? lead?.desktopScore ?? lead?.desktop_score ?? audit?.desktopSpeed ?? audit?.desktop_speed ?? audit?.desktopScore ?? audit?.desktop_score ?? audit?.sheetOnlyInternalAuditFacts?.desktopSpeed ?? audit?.sheet_only_internal_audit_facts?.desktop_speed,
+    ),
 
     'Source Type': getExistingOrDefault(existing, 'Source Type', sourceMeta['Source Type'], lead?.sourceType || lead?.source_type),
     'Outreach Channel': getExistingOrDefault(existing, 'Outreach Channel', sourceMeta['Outreach Channel'], lead?.outreachChannel || lead?.outreach_channel),
@@ -8776,6 +8796,44 @@ function normalizeSheetRowForDashboard(row: AnyRecord): AnyRecord {
   return next;
 }
 
+function parseSheetSortTime(value: unknown): number {
+  const text = clean(value);
+  if (!text) return 0;
+
+  const parsed = Date.parse(text);
+  if (Number.isFinite(parsed)) return parsed;
+
+  const dayFirst = text.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})(?:,?\s+(.*))?$/);
+  if (dayFirst) {
+    const rebuilt = `${dayFirst[2]} ${dayFirst[1]}, ${dayFirst[3]}${dayFirst[4] ? ` ${dayFirst[4]}` : ''}`;
+    const rebuiltParsed = Date.parse(rebuilt);
+    if (Number.isFinite(rebuiltParsed)) return rebuiltParsed;
+  }
+
+  return 0;
+}
+
+function getSheetLeadSortTime(lead: AnyRecord): number {
+  return Math.max(
+    parseSheetSortTime(lead['Last Synced']),
+    parseSheetSortTime(lead['Export Date']),
+    parseSheetSortTime(lead['Gmail Last Action At']),
+    parseSheetSortTime(lead['Gmail Last Sent At']),
+    parseSheetSortTime(lead['Last Report Viewed At']),
+  );
+}
+
+function sortSheetLeadsForDashboard<T extends AnyRecord>(leads: T[]): T[] {
+  return [...leads].sort((a, b) => {
+    const timeDiff = getSheetLeadSortTime(b) - getSheetLeadSortTime(a);
+    if (timeDiff) return timeDiff;
+
+    // Existing Sheets created before the top-insert fix appended new rows at the bottom.
+    // Row-number DESC keeps those recent appended rows visible first when dates are missing.
+    return Number(b.rowNumber || 0) - Number(a.rowNumber || 0);
+  });
+}
+
 function rowObjectToArray(row: AnyRecord): string[] {
   return HEADERS.map((header) => cleanCell(row[header], ''));
 }
@@ -8903,6 +8961,41 @@ async function loadRows(sheets: any, spreadsheetId: string): Promise<any[][]> {
 
   const values = response?.data?.values;
   return Array.isArray(values) ? (values as any[][]) : [];
+}
+
+async function insertSheetRowsAfterHeader(sheets: any, spreadsheetId: string, rowCount: number) {
+  const count = Math.max(0, Math.floor(Number(rowCount || 0)));
+  if (!count) return;
+
+  const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = sheetMeta.data.sheets?.find((item: any) => item.properties?.title === SHEET_NAME);
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined || sheetId === null) throw new Error(`Sheet tab "${SHEET_NAME}" was not found.`);
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          insertDimension: {
+            range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 1 + count },
+            inheritFromBefore: false,
+          },
+        },
+      ],
+    },
+  });
+}
+
+async function writeNewSheetRowsAtTop(sheets: any, spreadsheetId: string, rows: string[][], valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW') {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  await insertSheetRowsAfterHeader(sheets, spreadsheetId, rows.length);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${SHEET_NAME}!A2:${lastColumnLetter()}${rows.length + 1}`,
+    valueInputOption,
+    requestBody: { values: rows },
+  });
 }
 
 function buildIndexes(rows: any[][]) {
@@ -9077,7 +9170,7 @@ async function handleSheetLeadsGet(req: Request) {
       return true;
     });
 
-    filtered = filtered.slice(0, max);
+    filtered = sortSheetLeadsForDashboard(filtered).slice(0, max);
 
     return NextResponse.json({
       success: true,
@@ -9160,13 +9253,7 @@ async function handleSheetLeadsPost(req: Request) {
     }
 
     if (rowsToAppend.length > 0) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: `${SHEET_NAME}!A2`,
-        valueInputOption: 'RAW',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: rowsToAppend },
-      });
+      await writeNewSheetRowsAtTop(sheets, spreadsheetId, rowsToAppend, 'RAW');
     }
 
     if (body?.applyFormatting === true) {

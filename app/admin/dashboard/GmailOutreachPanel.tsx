@@ -92,6 +92,71 @@ function getReportUrl(lead: SheetLead) {
   return normalizeOptionalUrl(sheetValue(lead, "Report URL"));
 }
 
+function parseSheetDate(value: unknown): number {
+  const text = cleanText(value);
+  if (!text) return 0;
+  const parsed = Date.parse(text);
+  if (Number.isFinite(parsed)) return parsed;
+
+  const dayFirst = text.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})(?:,?\s+(.*))?$/);
+  if (dayFirst) {
+    const rebuilt = `${dayFirst[2]} ${dayFirst[1]}, ${dayFirst[3]}${dayFirst[4] ? ` ${dayFirst[4]}` : ""}`;
+    const rebuiltParsed = Date.parse(rebuilt);
+    if (Number.isFinite(rebuiltParsed)) return rebuiltParsed;
+  }
+
+  return 0;
+}
+
+function getLeadSortTime(lead: SheetLead) {
+  return Math.max(
+    parseSheetDate(sheetValue(lead, "Last Synced")),
+    parseSheetDate(sheetValue(lead, "Export Date")),
+    parseSheetDate(sheetValue(lead, "Gmail Last Action At")),
+    parseSheetDate(sheetValue(lead, "Gmail Last Sent At")),
+    parseSheetDate(sheetValue(lead, "Last Report Viewed At")),
+  );
+}
+
+function sortSheetLeadsNewestFirst(leads: SheetLead[]) {
+  return [...leads].sort((a, b) => {
+    const timeDiff = getLeadSortTime(b) - getLeadSortTime(a);
+    if (timeDiff) return timeDiff;
+    return Number(b.rowNumber || 0) - Number(a.rowNumber || 0);
+  });
+}
+
+function buildPreviewUrlFromReportAndB2Key(lead: SheetLead) {
+  const b2Key = cleanText(sheetValue(lead, "Email Preview Image B2 Key"));
+  const reportUrl = getReportUrl(lead);
+  if (!b2Key || !reportUrl) return "";
+
+  try {
+    const url = new URL(reportUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const index = parts.findIndex((part) => part === "tracking-review");
+    const domainSlug = parts[index + 1] || "";
+    const token = parts[index + 2] || "";
+    if (!domainSlug || !token) return "";
+    return `${url.origin}/api/email-preview/${encodeURIComponent(domainSlug)}/${encodeURIComponent(token)}`;
+  } catch {
+    return "";
+  }
+}
+
+function getAuditFactChips(lead: SheetLead) {
+  const facts = [
+    { label: "CMS", value: sheetValue(lead, "CMS") },
+    { label: "Domain age", value: sheetValue(lead, "Domain Age Years") ? `${sheetValue(lead, "Domain Age Years")}y` : "" },
+    { label: "Mobile", value: sheetValue(lead, "Mobile Speed") },
+    { label: "Desktop", value: sheetValue(lead, "Desktop Speed") },
+  ];
+
+  return facts
+    .map((item) => ({ label: item.label, value: cleanText(item.value) }))
+    .filter((item) => item.value);
+}
+
 function getEmailPreviewUrl(lead: SheetLead) {
   const direct = normalizeOptionalUrl(sheetValue(lead, "Email Preview Image URL"));
   if (direct) return direct;
@@ -105,7 +170,7 @@ function getEmailPreviewUrl(lead: SheetLead) {
   const legacyPdfViewUrl = normalizeOptionalUrl(sheetValue(lead, "PDF View URL"));
   if (/\/api\/email-preview\//i.test(legacyPdfViewUrl)) return legacyPdfViewUrl;
 
-  return "";
+  return buildPreviewUrlFromReportAndB2Key(lead);
 }
 
 function escapeHtmlAttribute(value: unknown): string {
@@ -389,30 +454,34 @@ export default function GmailOutreachPanel({
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return sheetLeads
-      .filter((lead) => {
-        const stage = getGmailOutreachStage(lead);
-        if (stageFilter !== "all" && stage !== stageFilter) return false;
+    const visible = sheetLeads.filter((lead) => {
+      const stage = getGmailOutreachStage(lead);
+      if (stageFilter !== "all" && stage !== stageFilter) return false;
 
-        const source = getSheetSourceKind(lead);
-        if (sourceFilter !== "all" && source !== sourceFilter) return false;
+      const source = getSheetSourceKind(lead);
+      if (sourceFilter !== "all" && source !== sourceFilter) return false;
 
-        if (!query) return true;
-        return [
-          sheetValue(lead, "Business Name"),
-          sheetValue(lead, "Website URL"),
-          sheetValue(lead, "Final Email"),
-          sheetValue(lead, "Social Link"),
-          sheetValue(lead, "Report URL"),
-          sheetValue(lead, "Lead Source"),
-          sheetValue(lead, "Audit Source"),
-          sheetValue(lead, "Gmail Outreach Notes"),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(query);
-      })
-      .slice(0, 500);
+      if (!query) return true;
+      return [
+        sheetValue(lead, "Business Name"),
+        sheetValue(lead, "Website URL"),
+        sheetValue(lead, "Final Email"),
+        sheetValue(lead, "Social Link"),
+        sheetValue(lead, "Report URL"),
+        sheetValue(lead, "Lead Source"),
+        sheetValue(lead, "Audit Source"),
+        sheetValue(lead, "Gmail Outreach Notes"),
+        sheetValue(lead, "Domain Age Years"),
+        sheetValue(lead, "CMS"),
+        sheetValue(lead, "Mobile Speed"),
+        sheetValue(lead, "Desktop Speed"),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+
+    return sortSheetLeadsNewestFirst(visible).slice(0, 500);
   }, [sheetLeads, stageFilter, sourceFilter, search]);
 
   const copyText = async (value: string, label: string) => {
@@ -607,6 +676,7 @@ export default function GmailOutreachPanel({
   const selectedPreviewHtml = selectedLead ? buildEmailPreviewHtml(selectedLead) : "";
   const selectedPreviewPlainText = buildEmailPreviewPlainText(selectedLead);
   const selectedCurrentStage = selectedLead ? getGmailOutreachStage(selectedLead) : "ready";
+  const selectedAuditFactChips = selectedLead ? getAuditFactChips(selectedLead) : [];
   const modalLoading = selectedLead ? actionLoadingRow === Number(selectedLead.rowNumber) : false;
 
   return (
@@ -695,6 +765,7 @@ export default function GmailOutreachPanel({
           const email = getEmail(lead);
           const linkedIn = getLinkedInUrl(lead);
           const reportUrl = getReportUrl(lead);
+          const auditFactChips = getAuditFactChips(lead);
           const loading = actionLoadingRow === Number(lead.rowNumber);
           const nextStage = getNextGmailStageAfterSend(stage);
           const markLabel = stage === "ready" || stage === "initial_sent" ? "Mark Initial Sent" : `Mark ${GMAIL_OUTREACH_STAGE_LABELS[stage]} Sent`;
@@ -719,6 +790,18 @@ export default function GmailOutreachPanel({
                   <p className="mt-1 truncate text-xs font-bold text-slate-400">
                     {email || "No email"} {linkedIn ? "· LinkedIn available" : ""}
                   </p>
+                  {auditFactChips.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {auditFactChips.map((fact) => (
+                        <span
+                          key={`${lead.rowNumber}-${fact.label}`}
+                          className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500"
+                        >
+                          {fact.label}: <span className="text-slate-800">{fact.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -800,6 +883,14 @@ export default function GmailOutreachPanel({
                   <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${sourceTone(getSheetSourceKind(selectedLead))}`}>
                     {getSheetSourceLabel(selectedLead)}
                   </span>
+                  {selectedAuditFactChips.map((fact) => (
+                    <span
+                      key={`selected-${fact.label}`}
+                      className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase text-slate-500"
+                    >
+                      {fact.label}: <span className="text-slate-800">{fact.value}</span>
+                    </span>
+                  ))}
                 </div>
               </div>
               <button
