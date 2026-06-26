@@ -347,15 +347,33 @@ export async function uploadPdfToB2(input: {
     },
   });
 
-  const response = await fetch(signed.url, {
-    method: "PUT",
-    headers: signed.headers,
-    body: toFetchBody(buffer),
-  });
+  const attempts = numberEnv("B2_UPLOAD_RETRY_ATTEMPTS", 4, 2, 6);
+  const baseDelayMs = numberEnv("B2_UPLOAD_RETRY_BASE_DELAY_MS", 900, 100, 5000);
+  let response: Response | null = null;
+  let lastError = "";
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Backblaze B2 PDF upload failed (${response.status}): ${text.slice(0, 500)}`);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      response = await fetch(signed.url, {
+        method: "PUT",
+        headers: signed.headers,
+        body: toFetchBody(buffer),
+      });
+
+      if (response.ok) break;
+
+      const text = await response.text().catch(() => "");
+      lastError = `Backblaze B2 PDF upload failed (${response.status}): ${text.slice(0, 500)}`;
+      if (response.status < 500 && response.status !== 408 && response.status !== 425 && response.status !== 429) break;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error || "Unknown B2 PDF upload error");
+    }
+
+    if (attempt < attempts) await sleep(baseDelayMs * attempt);
+  }
+
+  if (!response?.ok) {
+    throw new Error(lastError || "Backblaze B2 PDF upload failed.");
   }
 
   return {

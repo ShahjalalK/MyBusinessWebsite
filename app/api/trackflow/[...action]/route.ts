@@ -1627,9 +1627,69 @@ function sanitizeLocalRedirectTarget(value: any): string {
   return "/contact";
 }
 
+function cleanStringCandidateForRegister(value: any): string {
+  if (value === null || value === undefined || value === "") return "";
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    const text = cleanCell(value);
+    return text === "[object Object]" ? "" : text;
+  }
+
+  if (value instanceof Date) return cleanCell(value.toISOString());
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = cleanStringCandidateForRegister(item);
+      if (text) return text;
+    }
+    return "";
+  }
+
+  if (typeof value === "object") {
+    const record = value as AnyRecord;
+    const candidateKeys = [
+      "pathname",
+      "path",
+      "key",
+      "b2Key",
+      "b2_key",
+      "pdfStorageKey",
+      "pdf_storage_key",
+      "blobPathname",
+      "blob_pathname",
+      "fileId",
+      "file_id",
+      "id",
+      "url",
+      "publicUrl",
+      "public_url",
+      "downloadUrl",
+      "download_url",
+      "viewUrl",
+      "view_url",
+      "href",
+      "name",
+      "label",
+      "title",
+    ];
+
+    for (const key of candidateKeys) {
+      const candidate = record[key];
+      if (typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "boolean") {
+        const text = cleanCell(candidate);
+        if (text && text !== "[object Object]") return text;
+      }
+    }
+
+    return "";
+  }
+
+  return "";
+}
+
 function firstCleanString(...values: any[]): string {
   for (const value of values) {
-    const text = cleanCell(value || "");
+    const text = cleanStringCandidateForRegister(value);
     if (text) return text;
   }
   return "";
@@ -10050,6 +10110,51 @@ function normalizeSecurePageEvidenceAssetsForRegister(...values: any[]): AnyReco
   return output;
 }
 
+
+function secureEvidenceMergeSlotKey(item: AnyRecord, index: number): string {
+  const id = cleanCell(item.id || item.assetId || item.asset_id || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "")
+    .slice(0, 96);
+  if (id) return `id:${id}`;
+
+  const role = cleanCell(item.role || item.kind || item.type || "browser_side_proof")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "browser_side_proof";
+  const displayOrder = Number(item.displayOrder || item.display_order || index + 1) || index + 1;
+  return `slot:${displayOrder}:${role}`;
+}
+
+function mergeSecurePageEvidenceAssetsForRegister(incoming: AnyRecord[], existing: AnyRecord[], maxItems = 12): AnyRecord[] {
+  // v27.81: if a re-audit uploads only one of two evidence screenshots because B2
+  // had a transient fetch failure, preserve the previous metadata for the missing
+  // slot instead of overwriting Firestore with an incomplete evidence list.
+  const output: AnyRecord[] = [];
+  const seenSlots = new Set<string>();
+  const seenKeys = new Set<string>();
+
+  const add = (items: AnyRecord[]) => {
+    for (const [index, item] of items.entries()) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const slotKey = secureEvidenceMergeSlotKey(item, index);
+      const b2Key = cleanCell(item.b2Key || item.b2_key || item.storageKey || item.storage_key || item.key || "").toLowerCase();
+      if ((slotKey && seenSlots.has(slotKey)) || (b2Key && seenKeys.has(b2Key))) continue;
+      seenSlots.add(slotKey);
+      if (b2Key) seenKeys.add(b2Key);
+      output.push(item);
+      if (output.length >= maxItems) break;
+    }
+  };
+
+  add(incoming);
+  if (output.length < maxItems) add(existing);
+
+  return output
+    .sort((a, b) => (Number(a.displayOrder || a.display_order || 999) || 999) - (Number(b.displayOrder || b.display_order || 999) || 999))
+    .slice(0, maxItems);
+}
+
 function logReportRegisterDebug(stage: string, details: AnyRecord = {}) {
   try {
     console.log(
@@ -10551,7 +10656,7 @@ async function handleReportRegister(req: Request) {
     preservedExistingManualEvidence: shouldPreserveExistingManualEvidence,
   });
 
-  const cleanSecurePageEvidenceAssets = normalizeSecurePageEvidenceAssetsForRegister(
+  const incomingSecurePageEvidenceAssets = normalizeSecurePageEvidenceAssetsForRegister(
     report.securePageEvidenceAssets,
     report.secure_page_evidence_assets,
     body?.securePageEvidenceAssets,
@@ -10559,12 +10664,23 @@ async function handleReportRegister(req: Request) {
     report.privateReportCopy?.securePageEvidenceAssets,
     report.privateReportCopy?.secure_page_evidence_assets,
   );
+  const existingSecurePageEvidenceAssets = normalizeSecurePageEvidenceAssetsForRegister(
+    existingData.securePageEvidenceAssets,
+    existingData.secure_page_evidence_assets,
+  );
+  const cleanSecurePageEvidenceAssets = mergeSecurePageEvidenceAssetsForRegister(
+    incomingSecurePageEvidenceAssets,
+    existingSecurePageEvidenceAssets,
+  );
 
   logReportRegisterDebug("secure_evidence_firestore_resolution", {
     incomingCount: Array.isArray(body?.securePageEvidenceAssets || body?.secure_page_evidence_assets) ? (body.securePageEvidenceAssets || body.secure_page_evidence_assets).length : 0,
+    incomingNormalizedCount: incomingSecurePageEvidenceAssets.length,
+    existingNormalizedCount: existingSecurePageEvidenceAssets.length,
     normalizedCount: cleanSecurePageEvidenceAssets.length,
     roles: cleanSecurePageEvidenceAssets.map((item) => String(item.role || "")),
-    note: "Firestore stores B2 metadata only, never dataUrl/base64 image data.",
+    preservedExistingMissingSlots: cleanSecurePageEvidenceAssets.length > incomingSecurePageEvidenceAssets.length,
+    note: "Firestore stores B2 metadata only. Missing evidence slots from a partial upload preserve previous B2 metadata.",
   });
 
   const cleanEmailPreviewImage = resolveEmailPreviewImageForRegister(report, existingData);
