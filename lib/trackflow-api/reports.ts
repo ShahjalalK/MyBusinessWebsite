@@ -580,6 +580,255 @@ function normalizeTrackingSignalCardsForFirestore(value: any, maxItems = 8): Any
   return output;
 }
 
+// v27.72: manual-event Firestore presentation guard.
+// Keeps secure page + question generator data aligned with the professional PDF
+// when GA4/GTM exists and an operator/manual conversion test was supplied.
+const TFP_V2772_EVENT_REPORT_MODES = new Set(["ga4_event_verification", "event_positive_snapshot"]);
+
+function tfpV2772FirstText(...values: any[]): string {
+  for (const value of values) {
+    const text = reportCleanString(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function tfpV2772PlainObject(value: any): AnyRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : {};
+}
+
+function tfpV2772StatusText(value: any): string {
+  return reportCleanString(value).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function tfpV2772IsPositive(value: any): boolean {
+  const text = tfpV2772StatusText(value);
+  return ["1", "true", "yes", "y", "observed", "found", "fired", "confirmed", "complete", "completed"].includes(text);
+}
+
+function tfpV2772TitleCase(value: string): string {
+  return reportCleanString(value)
+    .split(/\s+/g)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (["ga4", "gtm", "crm", "ads"].includes(lower)) return lower.toUpperCase();
+      if (["and", "or", "the", "on", "in", "for", "of", "to", "a", "an"].includes(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function tfpV2772ManualPrimary(input: { report?: AnyRecord; body?: AnyRecord; manualConversionEvidence?: AnyRecord }): AnyRecord {
+  const report = tfpV2772PlainObject(input.report);
+  const body = tfpV2772PlainObject(input.body);
+  const manual = tfpV2772PlainObject(
+    input.manualConversionEvidence ||
+      report.manualConversionEvidence ||
+      report.manual_conversion_evidence ||
+      body.manualConversionEvidence ||
+      body.manual_conversion_evidence ||
+      tfpV2772PlainObject(report.privateReportCopy || report.private_report_copy).manualConversionEvidence ||
+      tfpV2772PlainObject(report.privateReportCopy || report.private_report_copy).manual_conversion_evidence,
+  );
+  return tfpV2772PlainObject(manual.primaryAction || manual.primary_action || manual.primary);
+}
+
+function tfpV2772ManualHero(input: { report?: AnyRecord; body?: AnyRecord; manualEvidenceHero?: AnyRecord }): AnyRecord {
+  const report = tfpV2772PlainObject(input.report);
+  const body = tfpV2772PlainObject(input.body);
+  return tfpV2772PlainObject(
+    input.manualEvidenceHero ||
+      report.manualEvidenceHero ||
+      report.manual_evidence_hero ||
+      body.manualEvidenceHero ||
+      body.manual_evidence_hero ||
+      tfpV2772PlainObject(report.privateReportCopy || report.private_report_copy).manualEvidenceHero ||
+      tfpV2772PlainObject(report.privateReportCopy || report.private_report_copy).manual_evidence_hero,
+  );
+}
+
+function tfpV2772BuildManualEventFirestoreFields(input: {
+  report: AnyRecord;
+  body: AnyRecord;
+  trackingCase: AnyRecord | null;
+  manualConversionEvidence: AnyRecord | null;
+  manualEvidenceHero: AnyRecord | null;
+}): AnyRecord | null {
+  const trackingCase = tfpV2772PlainObject(input.trackingCase);
+  const rawMode = tfpV2772FirstText(trackingCase.mode, trackingCase.reportMode, trackingCase.report_mode, input.report.reportMode, input.report.report_mode).toLowerCase();
+  if (!TFP_V2772_EVENT_REPORT_MODES.has(rawMode)) return null;
+
+  const primary = tfpV2772ManualPrimary({ report: input.report, body: input.body, manualConversionEvidence: input.manualConversionEvidence || undefined });
+  const hero = tfpV2772ManualHero({ report: input.report, body: input.body, manualEvidenceHero: input.manualEvidenceHero || undefined });
+  const hasManualEvidence = Boolean(Object.keys(primary).length || Object.keys(hero).length || trackingCase.manualEvidenceStrong || trackingCase.manual_evidence_strong);
+  if (!hasManualEvidence) return null;
+
+  const label = tfpV2772FirstText(
+    trackingCase.customLabel,
+    trackingCase.custom_label,
+    input.report.primaryActionLabel,
+    input.report.primary_action_label,
+    primary.label,
+    primary.actionLabel,
+    primary.action_label,
+    hero.actionLabel,
+    hero.action_label,
+    hero.label,
+    "Selected conversion action",
+  );
+  const actionLabel = label === "Selected conversion action" ? label : tfpV2772TitleCase(label);
+  const expectedEvent = tfpV2772FirstText(
+    trackingCase.expectedEvent,
+    trackingCase.expected_event,
+    primary.expectedEvent,
+    primary.expected_event,
+    hero.expectedEvent,
+    hero.expected_event,
+    "generate_lead",
+  );
+  const observedEvent = tfpV2772FirstText(
+    trackingCase.observedEvent,
+    trackingCase.observed_event,
+    primary.observedEventName,
+    primary.observed_event_name,
+    primary.observedEvent,
+    primary.observed_event,
+    hero.observedEvent,
+    hero.observed_event,
+    "not clearly observed",
+  );
+  const tool = tfpV2772FirstText(primary.tool, hero.tool, "Tag Assistant");
+  const isPositive = rawMode === "event_positive_snapshot" || tfpV2772IsPositive(primary.trackingObserved || primary.tracking_observed || primary.ga4EventObserved || primary.ga4_event_observed);
+  const finalMode = isPositive ? "event_positive_snapshot" : "ga4_event_verification";
+
+  const mainFinding = isPositive
+    ? `${actionLabel} appears to trigger ${expectedEvent} during the browser-visible/manual review.`
+    : `${actionLabel} was completed manually, but the expected event ${expectedEvent} was not clearly observed.`;
+  const businessImpact = isPositive
+    ? `The ${actionLabel.toLowerCase()} event appears visible from the manual/browser-side review, but final account-side confirmation is still recommended before relying on it for reporting or optimization.`
+    : `If ${actionLabel.toLowerCase()} is an important lead action, reporting and optimization decisions may be less reliable until ${expectedEvent} is confirmed inside GA4, GTM, Google Ads, CRM, or server records.`;
+
+  const proofPoints = [
+    `${actionLabel} was completed manually using ${tool}.`,
+    `Expected event: ${expectedEvent}.`,
+    `Observed result: ${observedEvent}.`,
+    "Browser-visible/manual evidence should be separated from final account-side confirmation.",
+  ];
+
+  const problemCards = [
+    {
+      title: isPositive ? `${actionLabel} should be confirmed inside the accounts` : `${actionLabel} did not clearly show ${expectedEvent}`,
+      finding: mainFinding,
+      summary: mainFinding,
+      businessMeaning: businessImpact,
+      business_meaning: businessImpact,
+      whyItMatters: businessImpact,
+      why_it_matters: businessImpact,
+      nextCheck: `Repeat one controlled ${actionLabel} test, then check ${expectedEvent} inside GA4 DebugView/events, GTM Preview, Google Ads diagnostics, and CRM/server records.`,
+      next_check: `Repeat one controlled ${actionLabel} test, then check ${expectedEvent} inside GA4 DebugView/events, GTM Preview, Google Ads diagnostics, and CRM/server records.`,
+      evidence: [`Expected: ${expectedEvent}`, `Observed: ${observedEvent}`],
+      severity: isPositive ? "review" : "high",
+    },
+    {
+      title: `Observed result was ${observedEvent}`,
+      finding: `The browser-visible/manual test showed ${observedEvent} after the selected action, while the expected event was ${expectedEvent}.`,
+      summary: `The browser-visible/manual test showed ${observedEvent} after the selected action, while the expected event was ${expectedEvent}.`,
+      businessMeaning: "Clear expected-versus-observed wording keeps the report useful without overclaiming final account-side conversion failure.",
+      business_meaning: "Clear expected-versus-observed wording keeps the report useful without overclaiming final account-side conversion failure.",
+      whyItMatters: "Clear expected-versus-observed wording keeps the report useful without overclaiming final account-side conversion failure.",
+      why_it_matters: "Clear expected-versus-observed wording keeps the report useful without overclaiming final account-side conversion failure.",
+      nextCheck: "Verify the event name, trigger, parameters, key-event/conversion marking, and downstream reporting for the same test action.",
+      next_check: "Verify the event name, trigger, parameters, key-event/conversion marking, and downstream reporting for the same test action.",
+      evidence: [`Tool: ${tool}`],
+      severity: "review",
+    },
+    {
+      title: "Final recording still needs account-side confirmation",
+      finding: "Browser-visible evidence is useful context, but final conversion recording must be checked inside the actual tracking accounts and backend systems.",
+      summary: "Browser-visible evidence is useful context, but final conversion recording must be checked inside the actual tracking accounts and backend systems.",
+      businessMeaning: "CRM, form inbox, booking/ecommerce records, call tracking, or server logs should match the same test before final decisions are made.",
+      business_meaning: "CRM, form inbox, booking/ecommerce records, call tracking, or server logs should match the same test before final decisions are made.",
+      whyItMatters: "CRM, form inbox, booking/ecommerce records, call tracking, or server logs should match the same test before final decisions are made.",
+      why_it_matters: "CRM, form inbox, booking/ecommerce records, call tracking, or server logs should match the same test before final decisions are made.",
+      nextCheck: "Compare the same controlled action inside GA4, GTM, Google Ads, CRM/form inbox, call tracking, booking/ecommerce records, or server logs.",
+      next_check: "Compare the same controlled action inside GA4, GTM, Google Ads, CRM/form inbox, call tracking, booking/ecommerce records, or server logs.",
+      evidence: [],
+      severity: "review",
+    },
+  ];
+
+  const verificationPlan = [
+    { priority: "Priority 1", title: `Repeat one controlled ${actionLabel} test.`, description: "Complete the same customer action once from the reviewed page or path.", estimatedEffort: "Short review" },
+    { priority: "Priority 2", title: `Confirm whether ${expectedEvent} appears in GA4 DebugView or GA4 events.`, description: `Do not treat ordinary ${observedEvent} activity as proof of the selected conversion action.`, estimatedEffort: "Short review" },
+    { priority: "Priority 3", title: "Check the matching GTM trigger and Google Ads conversion action.", description: "Confirm the intended trigger/label, not only general tag or remarketing activity.", estimatedEffort: "Short review" },
+    { priority: "Priority 4", title: "Compare the same test with CRM, form inbox, booking/ecommerce records, call tracking, or server logs.", description: "Final account-side confirmation should match the browser-visible/manual test.", estimatedEffort: "Short review" },
+  ];
+
+  const whatChecked = [
+    `Manual review focus: ${actionLabel}.`,
+    `Tool used: ${tool}.`,
+    `Expected event: ${expectedEvent}.`,
+    `Observed result: ${observedEvent}.`,
+    "Whether the same action appears inside GA4, GTM, Google Ads, CRM, form/booking/ecommerce records, call tracking, or server logs.",
+  ];
+
+  const auditSnapshotTitle = `${actionLabel} tracking snapshot`;
+  const auditSnapshotQuestions = [
+    `Was ${expectedEvent} observed after the ${actionLabel} review?`,
+    `Why does the observed result (${observedEvent}) matter for Google Ads or GA4 reporting?`,
+    `What should be checked inside GA4, GTM, Google Ads, and backend records for this ${actionLabel}?`,
+    "Could reporting or optimization decisions be affected if this action is used for campaigns?",
+  ];
+
+  const trackingCaseOut = {
+    ...trackingCase,
+    mode: finalMode,
+    reportMode: finalMode,
+    report_mode: finalMode,
+    customLabel: actionLabel,
+    custom_label: actionLabel,
+    expectedEvent,
+    expected_event: expectedEvent,
+    observedEvent,
+    observed_event: observedEvent,
+    mainFinding,
+    main_finding: mainFinding,
+    safePrimaryClaim: mainFinding,
+    safe_primary_claim: mainFinding,
+    manualEvidenceStrong: true,
+    manual_evidence_strong: true,
+    useExpectedObservedCopy: true,
+    use_expected_observed_copy: true,
+  };
+
+  return {
+    headline: isPositive ? "Private tracking verification snapshot" : "Private conversion tracking review",
+    mainFinding,
+    businessImpact,
+    proofPoints,
+    problemCards,
+    businessProblems: problemCards,
+    verificationPlan,
+    recommendations: verificationPlan,
+    whatChecked,
+    auditSnapshotTitle,
+    auditSnapshotQuestions,
+    primaryActionLabel: actionLabel,
+    primaryPageLabel: "Reviewed page",
+    primaryPageUrl: tfpV2772FirstText(primary.testUrl, primary.test_url, hero.testUrl, hero.test_url, input.report.primaryPageUrl, input.report.primary_page_url),
+    ctaHeadline: isPositive ? "Want this event confirmed inside the actual accounts?" : "Want this conversion event verified and fixed?",
+    ctaText: isPositive ? "Request tracking verification" : "Request conversion tracking review",
+    reportMode: finalMode,
+    report_mode: finalMode,
+    trackingCase: trackingCaseOut,
+    tracking_case: trackingCaseOut,
+    setupFirstOverrideApplied: false,
+  };
+}
+
+
 function normalizeEvidenceVideoForFirestore(value: any, report: AnyRecord = {}): AnyRecord | null {
   const raw = value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : {};
   const enabled = raw.enabled !== false && Boolean(raw.videoId || raw.video_id || raw.youtubeVideoId || raw.youtube_video_id || raw.videoUrl || raw.video_url || report.evidenceVideoUrl);
@@ -1095,6 +1344,27 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       resolved: pickManualEvidenceDebugFields({ manualConversionEvidence: resolvedManualConversionEvidence, manualEvidenceHero: resolvedManualEvidenceHero }),
       preservedExistingManualEvidence: shouldPreserveExistingManualEvidence,
     });
+
+    const tfpV2772ManualEventFields = tfpV2772BuildManualEventFirestoreFields({
+      report,
+      body: body || {},
+      trackingCase: tfpV2749TrackingCase,
+      manualConversionEvidence: resolvedManualConversionEvidence,
+      manualEvidenceHero: resolvedManualEvidenceHero,
+    });
+    const reportForFirestore: AnyRecord = tfpV2772ManualEventFields ? { ...report, ...tfpV2772ManualEventFields } : report;
+    const tfpV2772TrackingCaseForFirestore = tfpV2772PlainObject(reportForFirestore.trackingCase || reportForFirestore.tracking_case || tfpV2749TrackingCase);
+    const tfpV2772RegisterModeForFirestore = reportCleanString(reportForFirestore.reportMode || reportForFirestore.report_mode || tfpV2749RegisterMode);
+
+    logModularReportDebug("manual_event_firestore_presentation_guard", {
+      applied: Boolean(tfpV2772ManualEventFields),
+      mode: tfpV2772RegisterModeForFirestore,
+      actionLabel: reportForFirestore.primaryActionLabel || "",
+      expectedEvent: tfpV2772TrackingCaseForFirestore.expectedEvent || tfpV2772TrackingCaseForFirestore.expected_event || "",
+      observedEvent: tfpV2772TrackingCaseForFirestore.observedEvent || tfpV2772TrackingCaseForFirestore.observed_event || "",
+      problemCardCount: Array.isArray(reportForFirestore.problemCards) ? reportForFirestore.problemCards.length : 0,
+      proofPointCount: Array.isArray(reportForFirestore.proofPoints) ? reportForFirestore.proofPoints.length : 0,
+    });
     const legacyReportFieldsToDelete = [
       "domain_slug",
       "normalized_domain",
@@ -1196,9 +1466,9 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       "manual_evidence_hero",
     ];
 
-    const cleanProblemCards = normalizeProblemCardsForFirestore(report.problemCards);
-    const cleanVerificationPlan = normalizeVerificationPlanForFirestore(report.verificationPlan);
-    const cleanTrackingSignalCards = normalizeTrackingSignalCardsForFirestore(report.trackingSignalCards);
+    const cleanProblemCards = normalizeProblemCardsForFirestore(reportForFirestore.problemCards);
+    const cleanVerificationPlan = normalizeVerificationPlanForFirestore(reportForFirestore.verificationPlan);
+    const cleanTrackingSignalCards = normalizeTrackingSignalCardsForFirestore(reportForFirestore.trackingSignalCards);
     const cleanSecurePageEvidenceAssets = normalizeSecurePageEvidenceAssetsForFirestore(
       report.securePageEvidenceAssets || report.secure_page_evidence_assets || body?.securePageEvidenceAssets || body?.secure_page_evidence_assets,
     );
@@ -1246,37 +1516,37 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       domainSlug: report.domainSlug,
       reportUrl: report.reportUrl,
       trackingCase: tfpV2749TrackingCase,
-      tracking_case: tfpV2749TrackingCase,
-      reportMode: tfpV2749RegisterMode,
-      report_mode: tfpV2749RegisterMode,
+      tracking_case: tfpV2772TrackingCaseForFirestore,
+      reportMode: tfpV2772RegisterModeForFirestore,
+      report_mode: tfpV2772RegisterModeForFirestore,
       setupFirstOverrideApplied: Boolean(tfpV2749SetupFirstRegister),
       domain: normalizedDomain || report.domain,
       normalizedDomain,
       websiteUrl: report.websiteUrl,
       companyName: report.companyName,
-      headline: report.headline,
-      subheadline: report.subheadline,
-      mainFinding: report.mainFinding,
-      businessImpact: report.businessImpact,
-      proofPoints: report.proofPoints,
+      headline: reportForFirestore.headline,
+      subheadline: reportForFirestore.subheadline,
+      mainFinding: reportForFirestore.mainFinding,
+      businessImpact: reportForFirestore.businessImpact,
+      proofPoints: reportForFirestore.proofPoints,
       problemCards: cleanProblemCards,
       verificationPlan: cleanVerificationPlan,
-      whatChecked: report.whatChecked,
-      primaryActionLabel: report.primaryActionLabel || "",
-      primaryPageLabel: report.primaryPageLabel || "",
-      primaryPageUrl: report.primaryPageUrl || "",
-      reviewedPageUrls: Array.isArray(report.reviewedPageUrls) ? report.reviewedPageUrls : [],
+      whatChecked: reportForFirestore.whatChecked,
+      primaryActionLabel: reportForFirestore.primaryActionLabel || "",
+      primaryPageLabel: reportForFirestore.primaryPageLabel || "",
+      primaryPageUrl: reportForFirestore.primaryPageUrl || "",
+      reviewedPageUrls: Array.isArray(reportForFirestore.reviewedPageUrls) ? reportForFirestore.reviewedPageUrls : [],
       trackingSignalCards: cleanTrackingSignalCards,
       manualConversionEvidence: resolvedManualConversionEvidence || null,
       manual_conversion_evidence: deleteField,
       manualEvidenceHero: resolvedManualEvidenceHero || null,
       manual_evidence_hero: deleteField,
-      auditSnapshotTitle: report.auditSnapshotTitle,
-      auditSnapshotQuestions: report.auditSnapshotQuestions,
+      auditSnapshotTitle: reportForFirestore.auditSnapshotTitle,
+      auditSnapshotQuestions: reportForFirestore.auditSnapshotQuestions,
       trustNotes: report.trustNotes,
       howToReadTitle: report.howToReadTitle,
       howToReadParagraphs: report.howToReadParagraphs,
-      ctaHeadline: report.ctaHeadline,
+      ctaHeadline: reportForFirestore.ctaHeadline,
       ogImageUrl: previewImageUrl,
       og_image_url: previewImageUrl,
       openGraphImageUrl: previewImageUrl,
@@ -1336,7 +1606,7 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       storageProvider: report.storageProvider,
       contactEmail: report.contactEmail,
       ctaUrl: report.ctaUrl,
-      ctaText: report.ctaText,
+      ctaText: reportForFirestore.ctaText,
       active: body?.active === false ? false : true,
       reportReady: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

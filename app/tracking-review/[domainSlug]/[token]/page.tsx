@@ -822,6 +822,72 @@ function getManualEvidenceHero(report: Record<string, any>, privateReportCopy: R
   };
 }
 
+function getManualEvidenceFocusedPageSections(manualEvidenceHero: ManualEvidenceHero | null): {
+  mainFinding: string;
+  businessImpact: string;
+  whatChecked: string[];
+  proofPoints: string[];
+  recommendations: string[];
+  auditSnapshotTitle: string;
+  auditSnapshotQuestions: string[];
+} | null {
+  if (!manualEvidenceHero) return null;
+
+  const actionLabel = cleanText(manualEvidenceHero.actionLabel, "selected conversion action");
+  const expectedEvent = cleanText(manualEvidenceHero.expectedEvent, "the expected event");
+  const observedEvent = cleanText(manualEvidenceHero.observedEvent, "not clearly observed");
+  const tool = cleanText(manualEvidenceHero.tool, "Tag Assistant");
+  const positive = /observed|found|confirmed/i.test([
+    manualEvidenceHero.ga4Status,
+    manualEvidenceHero.googleAdsStatus,
+    manualEvidenceHero.gtmStatus,
+  ].join(" ")) && !/not clearly|no|unclear/i.test([
+    manualEvidenceHero.ga4Status,
+    manualEvidenceHero.googleAdsStatus,
+    manualEvidenceHero.gtmStatus,
+  ].join(" "));
+
+  const mainFinding = positive
+    ? `${actionLabel} appears to trigger ${expectedEvent} during the browser-visible/manual review.`
+    : `${actionLabel} was completed manually, but the expected event ${expectedEvent} was not clearly observed.`;
+  const businessImpact = manualEvidenceHero.businessImpact || (
+    positive
+      ? `The ${actionLabel.toLowerCase()} event appears visible from the manual/browser-side review, but final account-side confirmation is still recommended before relying on it.`
+      : `If ${actionLabel.toLowerCase()} is an important lead action, reporting and optimization decisions may be less reliable until ${expectedEvent} is confirmed inside GA4, GTM, Google Ads, CRM, or server records.`
+  );
+
+  return {
+    mainFinding,
+    businessImpact,
+    whatChecked: [
+      `Manual review focus: ${actionLabel}.`,
+      `Tool used: ${tool}.`,
+      `Expected event: ${expectedEvent}.`,
+      `Observed result: ${observedEvent}.`,
+      "Whether the same action appears inside GA4, GTM, Google Ads, CRM, form/booking/ecommerce records, call tracking, or server logs.",
+    ],
+    proofPoints: [
+      `${actionLabel} was completed manually using ${tool}.`,
+      `Expected event: ${expectedEvent}.`,
+      `Observed result: ${observedEvent}.`,
+      "Browser-visible/manual evidence should be separated from final account-side confirmation.",
+    ],
+    recommendations: [
+      `Repeat one controlled ${actionLabel} test from the reviewed page or path.`,
+      `Confirm whether ${expectedEvent} appears in GA4 DebugView or GA4 events, not only ${observedEvent}.`,
+      "Check the matching GTM trigger and Google Ads conversion action for the same test.",
+      "Compare the same test with CRM, form inbox, booking/ecommerce records, call tracking, or server logs.",
+    ],
+    auditSnapshotTitle: `${actionLabel} tracking snapshot`,
+    auditSnapshotQuestions: [
+      `Was ${expectedEvent} observed after the ${actionLabel} review?`,
+      `Why does the observed result (${observedEvent}) matter for reporting or optimization?`,
+      `What should be checked inside GA4, GTM, Google Ads, and backend records for this ${actionLabel}?`,
+    ],
+  };
+}
+
+
 function cleanListItemText(item: unknown): string {
   if (item && typeof item === "object" && !Array.isArray(item)) {
     const record = item as Record<string, any>;
@@ -2770,8 +2836,6 @@ function getAppBaseUrl(): string {
 }
 
 function sanitizeMetadataImageUrl(value: unknown): string {
-  if (typeof value !== "string" && typeof value !== "number") return "";
-
   const raw = cleanText(value, "");
   if (!raw) return "";
 
@@ -2787,57 +2851,17 @@ function sanitizeMetadataImageUrl(value: unknown): string {
   }
 }
 
-function metadataImageUrlFrom(value: unknown): string {
-  const direct = sanitizeMetadataImageUrl(value);
-  if (direct) return direct;
-
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-
-  const record = value as Record<string, unknown>;
-  const nestedCandidates = [
-    record.url,
-    record.publicUrl,
-    record.public_url,
-    record.src,
-    record.href,
-    record.imageUrl,
-    record.image_url,
-    record.ogImageUrl,
-    record.og_image_url,
-    record.openGraphImageUrl,
-    record.open_graph_image_url,
-    record.previewImageUrl,
-    record.preview_image_url,
-  ];
-
-  for (const candidate of nestedCandidates) {
-    const url = sanitizeMetadataImageUrl(candidate);
-    if (url) return url;
-  }
-
-  return "";
-}
-
-function firstMetadataImageUrl(...values: unknown[]): string {
-  for (const value of values) {
-    const url = metadataImageUrlFrom(value);
-    if (url) return url;
-  }
-  return "";
-}
-
 function getReportPreviewImageUrl(report: Record<string, any>): string {
-  return firstMetadataImageUrl(
-    report.ogImageUrl,
-    report.og_image_url,
-    report.openGraphImageUrl,
-    report.open_graph_image_url,
-    report.previewImageUrl,
-    report.preview_image_url,
-    report.homepageScreenshotUrl,
-    report.homepage_screenshot_url,
-    report.emailPreviewImageUrl,
-    report.email_preview_image_url,
+  return sanitizeMetadataImageUrl(
+    report.ogImageUrl ||
+      report.og_image_url ||
+      report.openGraphImageUrl ||
+      report.open_graph_image_url ||
+      report.previewImageUrl ||
+      report.preview_image_url ||
+      report.homepageScreenshotUrl ||
+      report.homepage_screenshot_url ||
+      "",
   );
 }
 
@@ -3116,11 +3140,22 @@ export default async function ReportPage({ params }: ReportPageProps) {
       "What should be checked next?",
     ];
   } else if (manualEvidenceHero) {
-    auditSnapshotQuestions = [
-      "What did the Tag Assistant test show?",
-      "What should be checked inside GA4, GTM, and Google Ads?",
-      "What is the safest next verification step?",
-    ];
+    const manualFocusedSections = getManualEvidenceFocusedPageSections(manualEvidenceHero);
+    if (manualFocusedSections) {
+      mainFinding = manualFocusedSections.mainFinding;
+      businessImpact = manualFocusedSections.businessImpact;
+      whatChecked = manualFocusedSections.whatChecked;
+      proofPoints = manualFocusedSections.proofPoints;
+      recommendations = manualFocusedSections.recommendations;
+      auditSnapshotTitle = manualFocusedSections.auditSnapshotTitle;
+      auditSnapshotQuestions = manualFocusedSections.auditSnapshotQuestions;
+    } else {
+      auditSnapshotQuestions = [
+        "What did the Tag Assistant test show?",
+        "What should be checked inside GA4, GTM, and Google Ads?",
+        "What is the safest next verification step?",
+      ];
+    }
   }
   const hasCallTrackingContext = [primaryConversionFocus, ...whatChecked, ...proofPoints]
     .join(" ")
