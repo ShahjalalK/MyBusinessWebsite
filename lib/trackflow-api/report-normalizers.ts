@@ -3041,7 +3041,7 @@ function tfpV2749ApplyReportModeFirestoreOverrides(report: AnyRecord = {}, body:
   const mode = tfpV2749FirstString(trackingCase.mode, report.reportMode, report.report_mode);
   if (!mode) return report;
 
-  const trackingCaseOut = {
+  const trackingCaseOut: AnyRecord = {
     ...trackingCase,
     mode,
     reportMode: mode,
