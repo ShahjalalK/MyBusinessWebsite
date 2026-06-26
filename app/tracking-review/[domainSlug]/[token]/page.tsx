@@ -103,12 +103,12 @@ const DEFAULT_CHECKS = [
 
 const DEFAULT_PROOF_POINTS = [
   "The review is based on Tag Assistant and browser test evidence captured during the review.",
-  "Approved account access can confirm the same signals in GA4, GTM, Google Ads, CRM, or server records.",
+  "The same test can be matched inside the approved tracking tools or lead records when the business is ready.",
 ];
 
 const DEFAULT_RECOMMENDATIONS = [
-  "Verify the main lead journey inside GTM Preview, GA4 DebugView, and Google Ads conversion diagnostics.",
-  "Compare the same test inside GA4, GTM, Google Ads, CRM, or server records before making final tracking decisions.",
+  "Repeat one controlled customer-action test from the reviewed page.",
+  "Check whether the expected event appears after that test inside the approved tracking tools and lead records.",
 ];
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_TRACKFLOW_CONTACT_EMAIL || "shahjalal@trackflowpro.com";
@@ -126,7 +126,7 @@ const MAILING_ADDRESS =
 const TRUST_SIGNALS = [
   "Reviewed with Tag Assistant and browser testing",
   "No GA4, GTM, Google Ads, CRM, or server login was used",
-  "Approved account check can confirm final recording",
+  "No billing or payment access is needed for verification",
 ];
 
 
@@ -223,7 +223,7 @@ function getEvidenceVideoDisplay(report: Record<string, any>): EvidenceVideoDisp
     title: cleanText(report.evidenceVideoTitle || report.evidence_video_title || raw.title, "Short Tag Assistant evidence walkthrough"),
     description: cleanText(
       report.evidenceVideoDescription || report.evidence_video_description || raw.description,
-      "This optional video shows the review evidence captured during the test. Approved account access can confirm the same recording in GA4, GTM, Google Ads, CRM, or server records.",
+      "This optional video shows the review evidence captured during the test. The same action can be matched later inside the approved tracking tools or lead records.",
     ),
   };
 }
@@ -326,7 +326,7 @@ function getModeAwareSecureEvidenceDisplayCopy({
     if (expectedEvent && cleanMode === "event_positive_snapshot") {
       return {
         roleLabel: `Tag Assistant after ${actionLabel}`,
-        caption: `Expected event ${expectedEvent} was observed during the browser-visible/manual review. Final account-side confirmation is still recommended.`,
+        caption: `Expected event ${expectedEvent} was observed during the Tag Assistant/manual review. The same test can be matched inside the approved tracking tools.`,
       };
     }
 
@@ -339,7 +339,7 @@ function getModeAwareSecureEvidenceDisplayCopy({
 
     return {
       roleLabel: `Tag Assistant after ${actionLabel}`,
-      caption: `The Tag Assistant result should be compared with GA4/GTM and account-side records for ${actionLabel}.`,
+      caption: `The Tag Assistant result should be matched with GA4/GTM and the relevant lead records for ${actionLabel}.`,
     };
   }
 
@@ -467,11 +467,11 @@ function getSecureEvidenceSectionCopy({
       "These screenshots show the selected action context and the Tag Assistant view captured during the manual test.",
     noteTitle: "How to read this evidence",
     noteText:
-      "Use these images as visual context from the test. The same action can be confirmed later inside GA4, GTM, Google Ads, and the relevant lead records.",
+      "Use these images as visual context from the test. The next step is to match this exact action inside the tracking tools or lead records the business already uses.",
     summaryCards: [
       { label: "Review focus", value: actionLabel },
       { label: "Evidence type", value: "Tag Assistant screenshots" },
-      { label: "Next check", value: "Confirm in accounts" },
+      { label: "Next check", value: "Match same test" },
     ],
     analyticsLabel: "Tag Assistant manual test proof screenshots visible",
   };
@@ -490,14 +490,18 @@ function getBusinessImpactArticle({
 }): BusinessImpactArticle {
   const actionLabel = cleanText(manualEvidenceHero?.actionLabel || setupActionLabel || reviewFocusLabel, "the selected business action");
   const expectedEvent = cleanText(manualEvidenceHero?.expectedEvent, "");
-  const expectedEventPhrase = expectedEvent ? `the expected conversion event, ${expectedEvent}` : "the expected conversion event";
+  const expectedEventPhrase = expectedEvent ? `${expectedEvent}` : "the expected event";
+  const observedEvent = getObservedEventDisplay(manualEvidenceHero?.observedEvent);
+  const actionKey = getManualEvidenceActionKeyFromHero(manualEvidenceHero) || normalizeManualEvidenceActionKey("", actionLabel);
+  const actionOutcome = getActionOutcomeLabel(actionKey);
+  const recordsLabel = getActionRecordsLabel(actionKey);
 
   if (isSetupFirst) {
     return {
       eyebrow: "Business impact",
       title: "Business impact if the GA4/GTM tracking foundation is not set up",
       summary:
-        "GA4 and Google Tag Manager are not only useful for Google Ads or Facebook/Meta Ads. They are the measurement foundation that helps a business understand website activity, lead actions, channel quality, and reporting performance.",
+        "GA4 and Google Tag Manager are the measurement foundation for website activity, customer actions, channel quality, and reporting. If that foundation is not clearly set up, individual conversion events should not be judged yet.",
       highlights: [
         { label: "Website clarity", value: "Visitor behavior and page performance may be harder to understand." },
         { label: "Lead tracking", value: "Key actions need the foundation before they can be measured reliably." },
@@ -505,73 +509,42 @@ function getBusinessImpactArticle({
         { label: "Dashboard readiness", value: "Looker Studio needs reliable GA4/GTM data behind it." },
       ],
       modalIntro: [
-        "GA4 and Google Tag Manager are not only useful for Google Ads or Facebook/Meta Ads. They are the measurement foundation that helps a business understand what people are doing on the website, which pages are working, and which actions are creating real business value.",
-        "In this review, the Tag Assistant check did not show a clear GA4/GTM tracking foundation for the website. Because the foundation itself needs to be set up or verified first, this review does not judge individual events such as generate_lead, form_submit, phone_click, booking, or purchase yet.",
-        "The first priority is to confirm the analytics foundation. After that, the main business actions can be tested properly.",
+        "GA4 and Google Tag Manager are not only for ads. They help a business understand what people do on the website, which pages work, and which actions create real business value.",
+        "In this review, the Tag Assistant check did not show a clear GA4/GTM tracking foundation for the website. Because the foundation itself needs to be set up or verified first, this review does not claim that any individual event failed.",
+        "The first priority is to confirm the analytics foundation. After that, the selected customer action can be tested properly.",
       ],
       sections: [
         {
           title: "Website performance may be difficult to understand",
           body: [
             "The business may be getting visitors, but without a proper analytics foundation, it becomes difficult to see what those visitors are actually doing.",
-            "For example, it may be unclear which pages people visit most, where they lose interest, which service pages perform better, or which pages help turn visitors into enquiries.",
+            "It may be unclear which pages people visit most, where they lose interest, and which pages help turn visitors into enquiries.",
           ],
         },
         {
           title: "Lead tracking may not be ready",
           body: [
             "Important actions such as form submissions, phone clicks, WhatsApp enquiries, bookings, purchases, or enquiry button clicks need a proper tracking foundation before they can be measured reliably.",
-            "Without GA4/GTM in place, the business may receive leads, but those actions may not be recorded clearly inside analytics or reporting dashboards.",
+            "The selected action should be treated as a future test target until the GA4/GTM foundation is confirmed.",
           ],
         },
         {
           title: "Marketing channel reporting may be incomplete",
           body: [
-            "This is not only a paid ads issue. Even if the business is not running Google Ads or Facebook Ads, GA4/GTM still helps show which channels are bringing quality visitors.",
-            "That can include Google Search, Facebook, Instagram, LinkedIn, referral websites, email campaigns, direct traffic, and other marketing sources.",
+            "Even without paid ads, GA4/GTM helps show which channels bring quality visitors. That can include Google Search, social, referral websites, email, direct traffic, and paid sources.",
             "Without this foundation, it becomes harder to understand which channels are helping the business grow.",
           ],
         },
         {
-          title: "Paid ads decisions may be harder",
+          title: "Paid ads and reporting decisions may be harder",
           body: [
-            "For businesses running Google Ads, Facebook Ads, Meta Ads, or other paid campaigns, the ad platforms may still show clicks, impressions, reach, and spend.",
-            "But the business also needs to know what happened after those people reached the website. Did they view the right page? Did they submit a form? Did they call? Did they book? Did they become a lead?",
-            "Without GA4/GTM and properly tested events, it becomes harder to connect ad spend with real customer actions.",
-          ],
-        },
-        {
-          title: "Landing page performance may be unclear",
-          body: [
-            "A landing page can receive traffic but still fail to produce enquiries. Without analytics and event tracking, it becomes harder to see which pages are helping visitors take action and which pages need improvement.",
-            "This can make website and campaign optimization slower and less accurate.",
-          ],
-        },
-        {
-          title: "Looker Studio reporting may not have reliable website data",
-          body: [
-            "Looker Studio can be a very useful reporting dashboard, but it depends on the quality of the data behind it.",
-            "If GA4/GTM is not set up and key actions are not configured, the dashboard may show limited information. It may not clearly show website behavior, lead actions, conversion paths, landing page performance, or channel-level results.",
-            "A stronger dashboard starts with a stronger tracking foundation.",
-          ],
-        },
-        {
-          title: "Historical data may be missed",
-          body: [
-            "If GA4 is not set up today, the business cannot go back later and recover the website behavior data that was missed.",
-            "Setting up tracking early helps create a baseline. That baseline can be used later to compare performance before and after website updates, SEO work, advertising campaigns, landing page changes, or conversion improvements.",
-          ],
-        },
-        {
-          title: "Business decisions may depend too much on guesswork",
-          body: [
-            "Without a clear measurement foundation, the business may have to rely on partial signals such as inbox messages, calls, ad platform numbers, or manual assumptions.",
-            "Those signals are useful, but they do not always show the full website-to-lead journey. A proper GA4/GTM setup helps connect traffic, pages, actions, and business outcomes in a more structured way.",
+            "Ad platforms may still show clicks, impressions, reach, and spend, but the business also needs to know what happened after people reached the website.",
+            "A proper tracking foundation helps connect traffic, pages, actions, and business outcomes in a more structured way.",
           ],
         },
       ],
       recommendedStep:
-        "Set up or verify the GA4/GTM tracking foundation first. After the foundation is confirmed, test the selected business action in a controlled way, such as form submission, phone click, WhatsApp click, booking, checkout, purchase, or another key customer action. Once the foundation and key events are verified, the business can use the data more confidently for GA4 reporting, Google Ads and Facebook/Meta Ads optimization, Looker Studio dashboards, cost-per-lead analysis, landing page improvement, remarketing audiences, and better marketing decisions.",
+        "Set up or verify the GA4/GTM tracking foundation first. After the foundation is confirmed, test the selected business action in a controlled way and then use the data for GA4 reporting, ads optimization, Looker Studio dashboards, cost-per-lead analysis, and better marketing decisions.",
       analyticsLabel: "Business impact modal for tracking foundation setup",
     };
   }
@@ -580,87 +553,68 @@ function getBusinessImpactArticle({
     eyebrow: "Business impact",
     title: "Business impact if the expected conversion event is not recorded",
     summary:
-      `${actionLabel} reached the completion/success state during the manual test, but ${expectedEventPhrase} was not observed in the Tag Assistant result. This can affect lead reporting, paid ads optimization, cost-per-lead analysis, remarketing, and Looker Studio reporting.`,
+      `${actionLabel} appeared to work during the manual test, but ${expectedEventPhrase} was not clearly seen in the Tag Assistant result. The business action may still happen, while analytics or ad tools may only show ${observedEvent}.`,
     highlights: [
-      { label: "Lead reporting", value: "Traffic may be visible, but completed lead actions may not be counted clearly." },
-      { label: "Paid ads", value: "Google Ads and Meta Ads may be judged by surface-level activity instead of real enquiries." },
-      { label: "Cost per lead", value: "Ad spend may be harder to connect with actual form submissions, calls, bookings, or enquiries." },
-      { label: "Looker Studio", value: "Dashboards may show activity but miss the final visitor-to-lead result." },
+      { label: "Real results may be undercounted", value: `The ${actionOutcome} can happen, but reports may not count it clearly.` },
+      { label: "Ads may learn from weak signals", value: "Google Ads or Meta may see visits instead of completed business actions." },
+      { label: "Good traffic may look weaker", value: "A campaign or page bringing real enquiries may look less valuable if the event is not recorded." },
+      { label: "Reports may miss the outcome", value: "GA4 or Looker Studio may show activity but miss the final customer action." },
     ],
     modalIntro: [
-      "GA4 or Google Tag Manager may already be installed on the website, but installation alone does not always mean the most important business actions are being measured correctly.",
-      "For a business, the real value is not only knowing that someone visited the website. The important question is whether completed actions — such as form submissions, phone clicks, WhatsApp enquiries, bookings, purchases, or other lead actions — are being recorded clearly after the visitor completes them.",
-      `In this review, the selected action was tested manually. The action reached the completion/success state, but ${expectedEventPhrase} was not observed in the Tag Assistant result.`,
+      "GA4 or Google Tag Manager may already be installed on the website, but installation alone does not guarantee that the most important business actions are measured correctly.",
+      `In this review, ${actionLabel} was tested manually. The action appeared to work from the visitor side, but ${expectedEventPhrase} was not clearly seen after the test. The visible result showed ${observedEvent}.`,
+      `That can create a reporting gap: the ${actionOutcome} may happen, but the tracking tools may not clearly count it as the expected conversion event.`,
     ],
     sections: [
       {
-        title: "Lead reporting may be incomplete",
+        title: "Real customer actions may be undercounted",
         body: [
-          "The website may still receive real enquiries or form submissions, but GA4 may not record those actions clearly as leads.",
-          "This means the business can see traffic, page views, and engagement, but may not have a clear count of how many visitors actually became leads.",
+          `The website may still receive the ${actionOutcome}, but GA4 or ad platforms may not record that action clearly as ${expectedEventPhrase}.`,
+          "This means reports can show traffic, page views, and engagement while missing the final action that matters to the business.",
         ],
       },
       {
-        title: "Paid ads may be harder to optimize",
+        title: "Paid ads may optimize toward weaker signals",
         body: [
           "For businesses running Google Ads, Facebook Ads, Meta Ads, or other paid campaigns, accurate conversion tracking is especially important.",
-          "Ad platforms can show clicks, impressions, reach, and engagement, but the business still needs to know what happened after the click.",
-          "If the expected lead event is not recorded, it becomes harder to understand which campaign, audience, keyword, creative, or landing page is producing real enquiries. Paid campaigns may then be judged by surface-level activity instead of completed business actions.",
+          `If ${expectedEventPhrase} is not recorded, ad platforms may optimize around clicks, visits, or engagement instead of the completed business action.`,
         ],
       },
       {
-        title: "Cost per lead may be difficult to measure",
+        title: "Cost per lead or cost per action may be harder to trust",
         body: [
-          "Ad spend is only meaningful when it can be connected to real outcomes.",
-          "If form submissions, calls, bookings, WhatsApp clicks, or other lead actions are not passed correctly as conversions, the business may know how much was spent but may not clearly know which spend produced actual enquiries.",
-          "This makes cost-per-lead reporting less reliable and can make budget decisions harder.",
+          "Ad spend is only useful when it can be connected to real outcomes.",
+          `If the ${actionOutcome} is not passed correctly as a conversion, the business may know how much was spent but not clearly know which spend produced the action.`,
         ],
       },
       {
         title: "Good traffic and weak traffic may look similar",
         body: [
-          "When only page views, sessions, or engagement events are visible, a visitor who simply browses the website can look very similar to a visitor who submits a form or becomes a real lead.",
-          "This can make reporting less accurate because the final business action is missing from the journey.",
+          `When only ${observedEvent} or engagement signals are visible, a visitor who simply browses can look similar to someone who completes ${actionLabel}.`,
+          "That makes it harder to judge campaigns, landing pages, keywords, audiences, and creative performance.",
         ],
       },
       {
-        title: "Campaign and landing page performance may be unclear",
+        title: "Looker Studio may miss the final result",
         body: [
-          "A proper conversion event helps show which campaigns and landing pages are moving visitors toward action.",
-          "Without that event, it becomes harder to identify which pages are generating enquiries and which pages need improvement.",
-          "The business may see traffic coming in, but the final step from visitor to lead may remain unclear.",
+          "Looker Studio can turn GA4, Google Ads, Meta Ads, and other data into a clear dashboard, but the dashboard depends on the data behind it.",
+          `If ${expectedEventPhrase} is missing, the dashboard may still show visits and page views while missing the final ${actionOutcome}.`,
         ],
       },
       {
-        title: "Remarketing audiences may be less accurate",
+        title: "The next check should be practical",
         body: [
-          "A clear lead event helps separate people who completed a key action from people who only visited the website.",
-          "Without that separation, remarketing audiences may be incomplete or less useful.",
-          "This can affect future Google Ads, Facebook/Meta Ads, and retargeting campaigns because the business may not be able to properly include or exclude the right users.",
-        ],
-      },
-      {
-        title: "Looker Studio reports may miss the final business result",
-        body: [
-          "Looker Studio can turn GA4, Google Ads, Meta Ads, and other data into a clear business dashboard. But the dashboard is only as useful as the data behind it.",
-          "If the expected conversion event is missing, a Looker Studio report may still show traffic, sessions, clicks, landing pages, and engagement — but it may miss the most important step: which visitors actually became leads.",
-          "This can make client reporting look complete on the surface while still missing the final business outcome.",
-        ],
-      },
-      {
-        title: "Business decisions may be based on partial data",
-        body: [
-          "When the selected business action is not tracked correctly, the business may make decisions using incomplete information.",
-          "A campaign may look weak because the leads are not being recorded properly. Another campaign may look strong because it brings traffic, even if it does not produce real enquiries.",
-          "This can make it harder to decide where to increase budget, where to reduce spend, and which parts of the website need improvement.",
+          `Repeat the same ${actionLabel} test once, then check whether ${expectedEventPhrase} appears after that test.`,
+          `Match the test with ${recordsLabel}. No billing or payment access is needed for this verification.`,
         ],
       },
     ],
     recommendedStep:
-      "Test the selected action again inside GTM Preview, GA4 DebugView, Google Ads conversion diagnostics, and the relevant lead records such as the form inbox, CRM, booking platform, call records, WhatsApp records, or backend records. If the expected event is missing, adjust the setup so that the correct conversion event fires only after the successful completion of the selected business action. Once the event is verified, the business can use the data more confidently for GA4 reporting, Google Ads and Facebook/Meta Ads optimization, Looker Studio dashboards, cost-per-lead analysis, remarketing audiences, and better marketing decisions.",
+      `Repeat one controlled ${actionLabel} test and check whether ${expectedEventPhrase} appears after that action, not only ${observedEvent}. Then match the same test with GTM Preview, GA4 DebugView, Google Ads conversion diagnostics where relevant, and ${recordsLabel}.`,
     analyticsLabel: "Business impact modal for expected conversion event not recorded",
   };
 }
+
 
 function escapeHtmlAttribute(value: unknown): string {
   return String(value || "")
@@ -826,21 +780,83 @@ function isGenericManualEvidenceDisclaimer(value: string): boolean {
   );
 }
 
+
+function getActionOutcomeLabel(actionKey: string): string {
+  if (actionKey === "phone_call") return "phone call interest";
+  if (actionKey === "booking") return "booking request";
+  if (actionKey === "ecommerce") return "checkout or purchase action";
+  if (actionKey === "whatsapp") return "WhatsApp enquiry";
+  if (actionKey === "email_click") return "email enquiry";
+  return "form lead";
+}
+
+function getActionRecordsLabel(actionKey: string): string {
+  if (actionKey === "phone_call") return "call-tracking records, CRM records, or phone lead records";
+  if (actionKey === "booking") return "booking platform, CRM, or appointment records";
+  if (actionKey === "ecommerce") return "ecommerce platform, order records, or backend records";
+  if (actionKey === "whatsapp") return "WhatsApp, CRM, or enquiry records";
+  if (actionKey === "email_click") return "inbox, CRM, or email enquiry records";
+  return "form inbox, CRM, or lead notification records";
+}
+
+function getApprovedMeasurementToolsLabel(actionKey: string): string {
+  const records = getActionRecordsLabel(actionKey);
+  if (actionKey === "phone_call") return `GA4, GTM, Google Ads call conversions, and ${records}`;
+  if (actionKey === "booking") return `GA4, GTM, Google Ads, and ${records}`;
+  if (actionKey === "ecommerce") return `GA4, GTM, Google Ads, and ${records}`;
+  if (actionKey === "whatsapp") return `GA4, GTM, Google Ads, and ${records}`;
+  if (actionKey === "email_click") return `GA4, GTM, Google Ads, and ${records}`;
+  return `GA4, GTM, Google Ads, and ${records}`;
+}
+
+function getManualEvidenceActionKeyFromHero(manualEvidenceHero: ManualEvidenceHero | null): string {
+  return normalizeManualEvidenceActionKey("", manualEvidenceHero?.actionLabel || "");
+}
+
+function getExpectedEventDisplay(value: unknown): string {
+  return cleanText(value, "the expected event");
+}
+
+function getObservedEventDisplay(value: unknown): string {
+  return cleanText(value, "not clearly observed");
+}
+
+function getBaseSignalsPlainLine(baseTrackingSignalLine: string): string {
+  const text = cleanText(baseTrackingSignalLine, "");
+  if (!text) return "";
+  return text
+    .replace(/;\s*this review focuses on whether the selected action produced the expected event\.?/i, ".")
+    .replace(/browser-visible base signals/gi, "tracking signals")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getManualEvidenceHeroIntroLine(manualEvidenceHero: ManualEvidenceHero | null, baseTrackingSignalLine = ""): string {
+  if (!manualEvidenceHero) return "";
+  const actionLabel = cleanText(manualEvidenceHero.actionLabel, "the selected action");
+  const expectedEvent = getExpectedEventDisplay(manualEvidenceHero.expectedEvent);
+  const observedEvent = getObservedEventDisplay(manualEvidenceHero.observedEvent);
+  const baseLine = getBaseSignalsPlainLine(baseTrackingSignalLine);
+  return joinUniqueSentences([
+    `We manually tested ${actionLabel}.`,
+    baseLine,
+    `The website action appeared to work from the visitor side, but ${expectedEvent} was not clearly seen after the action.`,
+    `The visible result showed ${observedEvent}.`,
+  ]);
+}
+
+function getManualEvidenceHeroSupportLine(manualEvidenceHero: ManualEvidenceHero | null): string {
+  if (!manualEvidenceHero) return "";
+  const actionLabel = cleanText(manualEvidenceHero.actionLabel, "the selected action");
+  const expectedEvent = getExpectedEventDisplay(manualEvidenceHero.expectedEvent);
+  const observedEvent = getObservedEventDisplay(manualEvidenceHero.observedEvent);
+  return `The screenshots below show the manual ${actionLabel} test. The key issue is simple: ${expectedEvent} was not clearly visible after the action, while the review showed ${observedEvent}.`;
+}
+
 function getActionSpecificManualDisclaimer(rawDisclaimer: unknown, actionKey: string): string {
   const provided = cleanText(rawDisclaimer, "");
-
-  const dynamicDisclaimer =
-    actionKey === "phone_call"
-      ? "This review used manual Tag Assistant/browser testing. Call tracking can be confirmed inside GA4, GTM, Google Ads call conversions, the call-tracking platform, CRM, or server records."
-      : actionKey === "booking"
-        ? "This review used manual Tag Assistant/browser testing. Booking recording can be confirmed inside GA4, GTM, Google Ads, the booking platform, CRM, or server records."
-        : actionKey === "ecommerce"
-          ? "This review used manual Tag Assistant/browser testing. Cart, checkout, or purchase recording can be confirmed inside GA4, GTM, Google Ads, the ecommerce platform, order records, or server records."
-          : actionKey === "whatsapp"
-            ? "This review used manual Tag Assistant/browser testing. WhatsApp enquiry recording can be confirmed inside GA4, GTM, Google Ads, WhatsApp or CRM records, and server records where relevant."
-            : actionKey === "email_click"
-              ? "This review used manual Tag Assistant/browser testing. Email enquiry recording can be confirmed inside GA4, GTM, Google Ads, the CRM, inbox records, or server records."
-              : "This review used manual Tag Assistant/browser testing. Lead or form submission recording can be confirmed inside GA4, GTM, Google Ads, the CRM, form inbox, email notification records, or server records.";
+  const tools = getApprovedMeasurementToolsLabel(actionKey);
+  const dynamicDisclaimer = `This review used manual Tag Assistant/browser testing. The same action can be matched inside ${tools}. No billing or payment access is needed for that verification.`;
 
   if (provided && !isGenericManualEvidenceDisclaimer(provided)) return provided;
   return dynamicDisclaimer;
@@ -919,9 +935,12 @@ function getManualEvidenceFocusedPageSections(manualEvidenceHero: ManualEvidence
   if (!manualEvidenceHero) return null;
 
   const actionLabel = cleanText(manualEvidenceHero.actionLabel, "selected conversion action");
-  const expectedEvent = cleanText(manualEvidenceHero.expectedEvent, "the expected event");
-  const observedEvent = cleanText(manualEvidenceHero.observedEvent, "not clearly observed");
+  const expectedEvent = getExpectedEventDisplay(manualEvidenceHero.expectedEvent);
+  const observedEvent = getObservedEventDisplay(manualEvidenceHero.observedEvent);
   const tool = cleanText(manualEvidenceHero.tool, "Tag Assistant");
+  const actionKey = getManualEvidenceActionKeyFromHero(manualEvidenceHero);
+  const actionOutcome = getActionOutcomeLabel(actionKey);
+  const approvedTools = getApprovedMeasurementToolsLabel(actionKey);
   const positive = /observed|found|confirmed/i.test([
     manualEvidenceHero.ga4Status,
     manualEvidenceHero.googleAdsStatus,
@@ -933,41 +952,41 @@ function getManualEvidenceFocusedPageSections(manualEvidenceHero: ManualEvidence
   ].join(" "));
 
   const mainFinding = positive
-    ? `${actionLabel} appears to trigger ${expectedEvent} during the browser-visible/manual review.`
-    : `${actionLabel} was completed manually, but the expected event ${expectedEvent} was not clearly observed.`;
+    ? `${actionLabel} appears to trigger ${expectedEvent} during the Tag Assistant/manual review.`
+    : `${actionLabel} appeared to work from the visitor side, but ${expectedEvent} was not clearly seen after the action. The visible result showed ${observedEvent}.`;
   const businessImpact = manualEvidenceHero.businessImpact || (
     positive
-      ? `The ${actionLabel.toLowerCase()} event appears visible from the manual/browser-side review, but final account-side confirmation is still recommended before relying on it.`
-      : `If ${actionLabel.toLowerCase()} is an important lead action, reporting and optimization decisions may be less reliable until ${expectedEvent} is confirmed inside GA4, GTM, Google Ads, CRM, or server records.`
+      ? `This is a positive signal for ${actionOutcome}, but the same test should still be matched inside the approved tracking tools before using it for reporting or campaign decisions.`
+      : `The ${actionOutcome} may still happen, but analytics and ad tools may not clearly count it as ${expectedEvent}. Reports may show ${observedEvent} while the real business action is missed or undercounted.`
   );
 
   return {
     mainFinding,
     businessImpact,
     whatChecked: [
-      `Manual review focus: ${actionLabel}.`,
+      `Manual test completed: ${actionLabel}.`,
       `Tool used: ${tool}.`,
-      `Expected event: ${expectedEvent}.`,
-      `Observed result: ${observedEvent}.`,
-      "Whether the same action appears inside GA4, GTM, Google Ads, CRM, form/booking/ecommerce records, call tracking, or server logs.",
+      `Expected tracking event: ${expectedEvent}.`,
+      `Visible result after the action: ${observedEvent}.`,
+      `Where to match the same test: ${approvedTools}.`,
     ],
     proofPoints: [
-      `${actionLabel} was completed manually using ${tool}.`,
+      `${actionLabel} was tested manually using ${tool}.`,
       `Expected event: ${expectedEvent}.`,
-      `Observed result: ${observedEvent}.`,
-      "Browser-visible/manual evidence should be separated from final account-side confirmation.",
+      `Visible result: ${observedEvent}.`,
+      `The next step is to match this exact test inside ${approvedTools}.`,
     ],
     recommendations: [
       `Repeat one controlled ${actionLabel} test from the reviewed page or path.`,
-      `Confirm whether ${expectedEvent} appears in GA4 DebugView or GA4 events, not only ${observedEvent}.`,
-      "Check the matching GTM trigger and Google Ads conversion action for the same test.",
-      "Compare the same test with CRM, form inbox, booking/ecommerce records, call tracking, or server logs.",
+      `Check whether ${expectedEvent} appears after that test, not only ${observedEvent}.`,
+      "Confirm the matching GTM trigger and Google Ads conversion action for the same test where those tools are used.",
+      `Compare the same test with ${getActionRecordsLabel(actionKey)}.`,
     ],
     auditSnapshotTitle: `${actionLabel} tracking snapshot`,
     auditSnapshotQuestions: [
-      `Was ${expectedEvent} observed after the ${actionLabel} review?`,
-      `Why does the observed result (${observedEvent}) matter for reporting or optimization?`,
-      `What should be checked inside GA4, GTM, Google Ads, and backend records for this ${actionLabel}?`,
+      `Did ${expectedEvent} appear after the ${actionLabel} test?`,
+      `Why does ${observedEvent} matter for reporting or optimization?`,
+      `Where should this ${actionLabel} test be matched next?`,
     ],
   };
 }
@@ -3035,12 +3054,13 @@ function polishAuthorityScopeText(value: unknown): string {
     .replace(/browser-side screenshots/gi, "Tag Assistant screenshots")
     .replace(/browser-side evidence/gi, "Tag Assistant evidence")
     .replace(/browser-visible signals/gi, "tracking signals")
-    .replace(/account-level verification/gi, "account check")
-    .replace(/account-level confirmation/gi, "account check")
-    .replace(/final account-side confirmation/gi, "account-side confirmation")
-    .replace(/Final recording still needs confirmation inside/gi, "Confirm the same recording inside")
-    .replace(/Final confirmation still requires/gi, "Approved access can confirm")
-    .replace(/Final confirmation requires/gi, "Approved access can confirm")
+    .replace(/account-level verification/gi, "approved tool check")
+    .replace(/account-level confirmation/gi, "approved tool check")
+    .replace(/account-side confirmation/gi, "approved tool confirmation")
+    .replace(/final account-side confirmation/gi, "approved tool confirmation")
+    .replace(/Final recording still needs confirmation inside/gi, "Match the same recording inside")
+    .replace(/Final confirmation still requires/gi, "Approved measurement access can confirm")
+    .replace(/Final confirmation requires/gi, "Approved measurement access can confirm")
     .replace(/Final call tracking should be confirmed inside/gi, "Call tracking can be confirmed inside")
     .replace(/Final booking recording should be confirmed inside/gi, "Booking recording can be confirmed inside")
     .replace(/Final cart, checkout, or purchase recording should be confirmed inside/gi, "Cart, checkout, or purchase recording can be confirmed inside")
@@ -3263,7 +3283,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const howToReadParagraphs = cleanList(
     privateReportCopy.howToReadParagraphs || report.howToReadParagraphs || report.how_to_read_paragraphs || report.howToReadThisReview,
     [
-      "Review scope: this page is based on Tag Assistant/browser testing and operator evidence, not a login-based account audit.",
+      "Review scope: this page is based on Tag Assistant/browser testing and operator evidence, not a login-based tool audit.",
       "TrackFlow Pro is not affiliated with Google, Meta, or the reviewed business.",
     ],
     3,
@@ -3299,11 +3319,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
   });
   const bookingHeadline = cleanText(
     privateReportCopy.bookingHeadline || report.bookingHeadline || report.booking_headline,
-    isSetupFirst ? "Ready to set up and verify tracking live?" : "Ready to verify this tracking setup live?",
+    isSetupFirst ? "Ready to set up and verify tracking live?" : "Ready to verify this customer action live?",
   );
   const bookingDescription = cleanText(
     privateReportCopy.bookingDescription || report.bookingDescription || report.booking_description,
-    isSetupFirst ? "Book a setup review to confirm GA4/GTM, then define and test the next customer action with approved access." : "Book a short verification call to review GA4, Google Ads, GTM, CRM, or server-side recording with approved account access.",
+    isSetupFirst ? "Book a setup review to confirm GA4/GTM, then define and test the next customer action with approved measurement access." : "Book a short verification call to repeat the same action and match it inside the approved tracking tools or lead records. No billing or payment access is needed.",
   );
 
   const reportDate =
@@ -3342,9 +3362,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
 
   const heroHeadline = isSetupFirst
     ? "Private tracking readiness review"
-    : companyName === "this website"
-      ? "Private tracking review"
-      : `Private tracking review for ${companyName}`;
+    : manualEvidenceHero
+      ? `${manualEvidenceHero.actionLabel || "Selected action"} tracking review${companyName === "this website" ? "" : ` for ${companyName}`}`
+      : companyName === "this website"
+        ? "Private tracking review"
+        : `Private tracking review for ${companyName}`;
 
   try {
     console.log("[TFP_SECURE_PAGE_CONTENT_TRACE]", JSON.stringify({
@@ -3398,8 +3420,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
     ? setupPageSubheadline
     : (primaryConversionFocus ? `${primaryConversionFocus} reviewed on the selected conversion path.` : pageSubheadline));
   const heroIntroLine = polishReviewExplainerText(
-    isSetupFirst ? setupPageSubheadline : joinUniqueSentences([heroContextLine, baseTrackingSignalLine, setupPageSubheadline]),
+    isSetupFirst
+      ? setupPageSubheadline
+      : manualEvidenceHero
+        ? getManualEvidenceHeroIntroLine(manualEvidenceHero, baseTrackingSignalLine)
+        : joinUniqueSentences([heroContextLine, baseTrackingSignalLine, setupPageSubheadline]),
   );
+  const manualEvidenceSupportLine = getManualEvidenceHeroSupportLine(manualEvidenceHero);
   const evidenceSignalBadges = cleanList(
     [
       ...trackingSignalItems,
@@ -3457,7 +3484,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
           },
           {
             label: "Best next action",
-            value: "Controlled test + account check",
+            value: "Controlled test + tool check",
           },
         ];
 
@@ -3554,7 +3581,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 </div>
 
                 <p className="mt-3 max-w-3xl text-sm font-semibold leading-7 text-blue-950/80">
-                  The selected action was tested manually. The screenshots below show the result captured during the review, and the same action can be checked inside GA4, GTM, Google Ads, and the relevant lead records.
+                  {manualEvidenceSupportLine || "The selected action was tested manually. The screenshots below show what happened during the review."}
                 </p>
 
                 {manualEvidenceHero.tool || manualEvidenceHero.testUrl ? (
@@ -3577,7 +3604,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
             {detectedTrackingIdBadges.length ? (
               <div className="mt-4 rounded-[1.15rem] border border-slate-200 bg-white/85 p-4 shadow-sm shadow-slate-950/5 sm:mt-5">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  Browser-visible tracking IDs found
+                  Tracking IDs detected on the website
                 </p>
                 <div className="mt-3 flex min-w-0 flex-wrap gap-2">
                   {detectedTrackingIdBadges.map((item) => (
@@ -3590,7 +3617,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   ))}
                 </div>
                 <p className="mt-3 text-xs font-semibold leading-6 text-slate-500">
-                  These are browser-visible IDs captured during the review. Approved account access is still needed for final confirmation.
+                  These IDs were visible during the review. They show that tracking tools are present; the next check is whether the tested action is recorded as the right event. No billing or payment access is needed for that verification.
                 </p>
               </div>
             ) : null}
@@ -3792,7 +3819,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                 Private review assistant
               </p>
               <p className="mt-3 text-sm font-bold leading-7 text-blue-950">
-                The assistant can explain this saved review in plain English and point to the next account checks when needed.
+                The assistant can explain this saved review in plain English and point to the exact next tool or lead-record check when needed.
               </p>
             </div>
           </div>
@@ -4188,7 +4215,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
               <div className="mt-5 grid min-w-0 gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
                 {[
                   "Review the finding",
-                  "Check account-side evidence",
+                  "Match the same test",
                   "Confirm the next action",
                 ].map((item, index) => (
                   <div key={item} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -4207,7 +4234,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
                   Best after reading the review
                 </p>
                 <p className="mt-3 text-sm font-semibold leading-7 text-slate-300">
-                  Use the assistant first for a plain-English explanation. Then book a call when you are ready to confirm whether this conversion action is recorded correctly inside the approved tools.
+                  Use the assistant first for a plain-English explanation. Then book a call when you are ready to repeat the same customer action and confirm whether it is recorded correctly inside the approved tracking tools.
                 </p>
               </div>
 
