@@ -696,37 +696,6 @@ function getPrivateReportCopy(report: Record<string, any>): Record<string, any> 
   );
 }
 
-
-function getAuditCore(report: Record<string, any>, privateReportCopy: Record<string, any> = {}): Record<string, any> {
-  return getObjectCandidate(
-    privateReportCopy.auditCore,
-    privateReportCopy.audit_core,
-    report.auditCore,
-    report.audit_core,
-  );
-}
-
-function truthyTrackingSignal(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value > 0;
-  const text = String(value || "").trim().toLowerCase();
-  return ["1", "true", "yes", "found", "detected", "observed", "confirmed", "request observed", "tag/request found"].includes(text);
-}
-
-function getBaseTrackingSignalLine(report: Record<string, any>, privateReportCopy: Record<string, any>): string {
-  const auditCore = getAuditCore(report, privateReportCopy);
-  const trackingSignals = getObjectCandidate(auditCore.trackingSignals, auditCore.tracking_signals);
-  const trackingCase = getObjectCandidate(report.trackingCase, report.tracking_case, privateReportCopy.trackingCase, privateReportCopy.tracking_case);
-  const found: string[] = [];
-
-  if (truthyTrackingSignal(trackingSignals.ga4Found ?? trackingSignals.ga4_found ?? trackingCase.ga4Found ?? trackingCase.ga4_found)) found.push("GA4");
-  if (truthyTrackingSignal(trackingSignals.gtmFound ?? trackingSignals.gtm_found ?? trackingCase.gtmFound ?? trackingCase.gtm_found)) found.push("GTM/Google tag");
-  if (truthyTrackingSignal(trackingSignals.googleAdsFound ?? trackingSignals.google_ads_found ?? trackingCase.googleAdsFound ?? trackingCase.google_ads_found)) found.push("Google Ads");
-
-  if (!found.length) return "";
-  return `${found.join(", ")} browser-visible base signals were found; this review focuses on whether the selected action produced the expected event.`;
-}
-
 type ManualEvidenceHero = {
   enabled: boolean;
   title: string;
@@ -3281,6 +3250,12 @@ export default async function ReportPage({ params }: ReportPageProps) {
     !isSetupFirst && !manualEvidenceHero && /ga4_event_verification|event_positive_snapshot/i.test(reportMode) ? "event_mode_missing_manual_evidence_hero" : "",
   ].filter(Boolean);
 
+  const heroHeadline = isSetupFirst
+    ? "Private tracking readiness review"
+    : companyName === "this website"
+      ? "Private tracking review"
+      : `Private tracking review for ${companyName}`;
+
   try {
     console.log("[TFP_SECURE_PAGE_CONTENT_TRACE]", JSON.stringify({
       version: "v27.73-secure-page-content-trace-2026-06-26",
@@ -3325,11 +3300,6 @@ export default async function ReportPage({ params }: ReportPageProps) {
     setupActionLabel,
     reviewFocusLabel,
   });
-  const heroHeadline = isSetupFirst
-    ? "Private tracking readiness review"
-    : companyName === "this website"
-      ? "Private tracking review"
-      : `Private tracking review for ${companyName}`;
   const preparedForLabel = companyName === "this website" ? "the reviewed website" : companyName;
   const manualReviewContextLine = manualEvidenceHero?.actionLabel
     ? `Manual review focus: ${manualEvidenceHero.actionLabel}. Visual proof from the test is shown below.`
@@ -3337,9 +3307,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const heroContextLine = manualReviewContextLine || (isSetupFirst
     ? setupPageSubheadline
     : (primaryConversionFocus ? `${primaryConversionFocus} reviewed on the selected conversion path.` : pageSubheadline));
-  const baseTrackingSignalLine = !isSetupFirst && manualEvidenceHero ? getBaseTrackingSignalLine(report, privateReportCopy) : "";
   const heroIntroLine = polishReviewExplainerText(
-    isSetupFirst ? setupPageSubheadline : joinUniqueSentences([heroContextLine, baseTrackingSignalLine, setupPageSubheadline]),
+    isSetupFirst ? setupPageSubheadline : joinUniqueSentences([heroContextLine, setupPageSubheadline]),
   );
   const evidenceSignalBadges = cleanList(
     [
@@ -3365,11 +3334,11 @@ export default async function ReportPage({ params }: ReportPageProps) {
         },
         {
           label: "Evidence type",
-          value: "Manual Tag Assistant review",
+          value: "Tag Assistant test",
         },
         {
           label: "Best next action",
-          value: "Confirm event in accounts",
+          value: "Confirm in accounts",
         },
       ]
     : isSetupFirst
