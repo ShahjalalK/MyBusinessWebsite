@@ -3265,9 +3265,82 @@ function normalizeEmailPreviewImageAssetPayload(body: AnyRecord = {}, privatePag
   };
 }
 
+
+function normalizeAuditCorePayload(...values: any[]): AnyRecord | null {
+  const raw = getObjectCandidate(...values);
+  if (!raw || !Object.keys(raw).length) return null;
+  const trackingSignalsRaw = getObjectCandidate(raw.trackingSignals, raw.tracking_signals);
+  const manualRaw = getObjectCandidate(raw.manualEvidence, raw.manual_evidence);
+  const accessRaw = getObjectCandidate(raw.accessContext, raw.access_context);
+  const observedEventsRaw = trackingSignalsRaw.observedGa4Events || trackingSignalsRaw.observed_ga4_events || [];
+  const observedGa4Events = Array.isArray(observedEventsRaw)
+    ? observedEventsRaw.map((item) => firstCleanString(item).slice(0, 80)).filter(Boolean).slice(0, 8)
+    : typeof observedEventsRaw === "string"
+      ? observedEventsRaw.split(",").map((item) => firstCleanString(item).slice(0, 80)).filter(Boolean).slice(0, 8)
+      : [];
+
+  const schemaVersion = firstCleanString(raw.schemaVersion, raw.schema_version, "trackflow-audit-core-v1");
+  const reportMode = firstCleanString(raw.reportMode, raw.report_mode);
+  return {
+    schemaVersion,
+    schema_version: schemaVersion,
+    reportMode,
+    report_mode: reportMode,
+    trackingSignals: {
+      ga4Found: trackingSignalsRaw.ga4Found ?? trackingSignalsRaw.ga4_found ?? null,
+      ga4_found: trackingSignalsRaw.ga4_found ?? trackingSignalsRaw.ga4Found ?? null,
+      gtmFound: trackingSignalsRaw.gtmFound ?? trackingSignalsRaw.gtm_found ?? null,
+      gtm_found: trackingSignalsRaw.gtm_found ?? trackingSignalsRaw.gtmFound ?? null,
+      googleAdsFound: trackingSignalsRaw.googleAdsFound ?? trackingSignalsRaw.google_ads_found ?? null,
+      google_ads_found: trackingSignalsRaw.google_ads_found ?? trackingSignalsRaw.googleAdsFound ?? null,
+      googleAdsConversionRequestObserved: trackingSignalsRaw.googleAdsConversionRequestObserved ?? trackingSignalsRaw.google_ads_conversion_request_observed ?? null,
+      google_ads_conversion_request_observed: trackingSignalsRaw.google_ads_conversion_request_observed ?? trackingSignalsRaw.googleAdsConversionRequestObserved ?? null,
+      metaPixelFound: trackingSignalsRaw.metaPixelFound ?? trackingSignalsRaw.meta_pixel_found ?? null,
+      meta_pixel_found: trackingSignalsRaw.meta_pixel_found ?? trackingSignalsRaw.metaPixelFound ?? null,
+      observedGa4Events,
+      observed_ga4_events: observedGa4Events,
+    },
+    manualEvidence: {
+      enabled: manualRaw.enabled !== false && Boolean(firstCleanString(manualRaw.actionLabel, manualRaw.action_label, manualRaw.expectedEvent, manualRaw.expected_event, manualRaw.observedEvent, manualRaw.observed_event)),
+      actionLabel: firstCleanString(manualRaw.actionLabel, manualRaw.action_label).slice(0, 120),
+      action_label: firstCleanString(manualRaw.actionLabel, manualRaw.action_label).slice(0, 120),
+      actionType: firstCleanString(manualRaw.actionType, manualRaw.action_type).slice(0, 80),
+      action_type: firstCleanString(manualRaw.actionType, manualRaw.action_type).slice(0, 80),
+      actionCompleted: firstCleanString(manualRaw.actionCompleted, manualRaw.action_completed).slice(0, 80),
+      action_completed: firstCleanString(manualRaw.actionCompleted, manualRaw.action_completed).slice(0, 80),
+      toolUsed: firstCleanString(manualRaw.toolUsed, manualRaw.tool_used, manualRaw.tool).slice(0, 80),
+      tool_used: firstCleanString(manualRaw.toolUsed, manualRaw.tool_used, manualRaw.tool).slice(0, 80),
+      expectedEvent: firstCleanString(manualRaw.expectedEvent, manualRaw.expected_event).slice(0, 120),
+      expected_event: firstCleanString(manualRaw.expectedEvent, manualRaw.expected_event).slice(0, 120),
+      observedEvent: firstCleanString(manualRaw.observedEvent, manualRaw.observed_event, manualRaw.observedEventName, manualRaw.observed_event_name).slice(0, 120),
+      observed_event: firstCleanString(manualRaw.observedEvent, manualRaw.observed_event, manualRaw.observedEventName, manualRaw.observed_event_name).slice(0, 120),
+      ga4EventAfterActionObserved: manualRaw.ga4EventAfterActionObserved ?? manualRaw.ga4_event_after_action_observed ?? null,
+      ga4_event_after_action_observed: manualRaw.ga4_event_after_action_observed ?? manualRaw.ga4EventAfterActionObserved ?? null,
+      gtmTriggerAfterActionObserved: manualRaw.gtmTriggerAfterActionObserved ?? manualRaw.gtm_trigger_after_action_observed ?? null,
+      gtm_trigger_after_action_observed: manualRaw.gtm_trigger_after_action_observed ?? manualRaw.gtmTriggerAfterActionObserved ?? null,
+      googleAdsConversionAfterActionObserved: manualRaw.googleAdsConversionAfterActionObserved ?? manualRaw.google_ads_conversion_after_action_observed ?? null,
+      google_ads_conversion_after_action_observed: manualRaw.google_ads_conversion_after_action_observed ?? manualRaw.googleAdsConversionAfterActionObserved ?? null,
+      testUrl: sanitizeOptionalUrl(firstCleanString(manualRaw.testUrl, manualRaw.test_url)),
+      test_url: sanitizeOptionalUrl(firstCleanString(manualRaw.testUrl, manualRaw.test_url)),
+    },
+    accessContext: {
+      accessLimited: Boolean(accessRaw.accessLimited || accessRaw.access_limited),
+      access_limited: Boolean(accessRaw.accessLimited || accessRaw.access_limited),
+      attemptedUrl: sanitizeOptionalUrl(firstCleanString(accessRaw.attemptedUrl, accessRaw.attempted_url)),
+      attempted_url: sanitizeOptionalUrl(firstCleanString(accessRaw.attemptedUrl, accessRaw.attempted_url)),
+      statusCode: Number(accessRaw.statusCode || accessRaw.status_code || 0) || null,
+      status_code: Number(accessRaw.statusCode || accessRaw.status_code || 0) || null,
+    },
+  };
+}
+
 function normalizeReportPayload(body: AnyRecord = {}) {
   const report = tfpV2749NormalizeReportPayloadBase(body);
-  return tfpV2749ApplyReportModeFirestoreOverrides(report, body);
+  const auditCore = normalizeAuditCorePayload(body.auditCore, body.audit_core, report.privateReportCopy?.auditCore, report.privateReportCopy?.audit_core);
+  const withAuditCore = auditCore
+    ? { ...report, auditCore, audit_core: auditCore, auditCoreSchemaVersion: auditCore.schemaVersion, audit_core_schema_version: auditCore.schemaVersion }
+    : report;
+  return tfpV2749ApplyReportModeFirestoreOverrides(withAuditCore, body);
 }
 
 type SignatureMode = "full" | "compact" | "none";
@@ -10278,6 +10351,10 @@ async function handleReportRegister(req: Request) {
     tracking_case: report.tracking_case || report.trackingCase || null,
     reportMode: report.reportMode || report.report_mode || "",
     report_mode: report.report_mode || report.reportMode || "",
+    auditCore: report.auditCore || null,
+    audit_core: report.auditCore || report.audit_core || null,
+    auditCoreSchemaVersion: report.auditCoreSchemaVersion || report.audit_core_schema_version || report.auditCore?.schemaVersion || "",
+    audit_core_schema_version: report.audit_core_schema_version || report.auditCoreSchemaVersion || report.auditCore?.schemaVersion || "",
     setupFirstOverrideApplied: Boolean(tfpV2749SetupFirstRegister),
     domain: normalizedDomain || report.domain,
     normalizedDomain,
