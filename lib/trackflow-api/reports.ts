@@ -128,6 +128,59 @@ function logModularReportDebug(stage: string, details: AnyRecord = {}) {
   }
 }
 
+// v27.73: compact content trace helpers for debugging Firestore / secure-page mismatches.
+function tfpContentTraceText(value: any, fallback = ""): string {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text || fallback;
+}
+
+function tfpContentTraceTitles(items: any, maxItems = 6): string[] {
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, maxItems).map((item) => {
+    const obj = item && typeof item === "object" && !Array.isArray(item) ? item as AnyRecord : {};
+    return tfpContentTraceText(obj.title || obj.finding || obj.summary || (typeof item === "string" ? item : "")).slice(0, 180);
+  }).filter(Boolean);
+}
+
+function tfpContentTraceStrings(items: any, maxItems = 6): string[] {
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, maxItems).map((item) => tfpContentTraceText(typeof item === "string" ? item : item?.title || item?.finding || item?.summary || "").slice(0, 180)).filter(Boolean);
+}
+
+function tfpContentTraceIsGenericTitle(value: any): boolean {
+  const text = tfpContentTraceText(value).toLowerCase();
+  return Boolean(
+    text && (
+      /^evidence item \d+$/.test(text) ||
+      text === "tracking evidence to verify" ||
+      text === "evidence to verify" ||
+      text === "review the finding" ||
+      text === "tracking evidence"
+    )
+  );
+}
+
+function tfpContentTraceManualHeroSummary(value: AnyRecord | null | undefined): AnyRecord {
+  const hero = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    enabled: Boolean(hero.enabled),
+    actionLabel: tfpContentTraceText(hero.actionLabel || hero.action_label || hero.label),
+    expectedEvent: tfpContentTraceText(hero.expectedEvent || hero.expected_event),
+    observedEvent: tfpContentTraceText(hero.observedEvent || hero.observed_event),
+    ga4Status: tfpContentTraceText(hero.ga4Status || hero.ga4_status),
+    googleAdsStatus: tfpContentTraceText(hero.googleAdsStatus || hero.google_ads_status),
+    gtmStatus: tfpContentTraceText(hero.gtmStatus || hero.gtm_status),
+  };
+}
+
+function tfpContentTraceSecureAssets(value: any): AnyRecord {
+  const items = Array.isArray(value) ? value : [];
+  return {
+    count: items.length,
+    roles: items.map((item: AnyRecord) => tfpContentTraceText(item?.role || item?.type || item?.id)).filter(Boolean).slice(0, 8),
+  };
+}
+
 function reportCleanString(value: any, fallback = ""): string {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value).replace(/\s+/g, " ").trim() || fallback;
@@ -1356,14 +1409,24 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
     const tfpV2772TrackingCaseForFirestore = tfpV2772PlainObject(reportForFirestore.trackingCase || reportForFirestore.tracking_case || tfpV2749TrackingCase);
     const tfpV2772RegisterModeForFirestore = reportCleanString(reportForFirestore.reportMode || reportForFirestore.report_mode || tfpV2749RegisterMode);
 
+    const tfpV2773ProblemTitlesBeforeFirestore = tfpContentTraceTitles(reportForFirestore.problemCards);
+    const tfpV2773GenericProblemTitlesBeforeFirestore = tfpV2773ProblemTitlesBeforeFirestore.filter((title) => tfpContentTraceIsGenericTitle(title));
     logModularReportDebug("manual_event_firestore_presentation_guard", {
       applied: Boolean(tfpV2772ManualEventFields),
       mode: tfpV2772RegisterModeForFirestore,
       actionLabel: reportForFirestore.primaryActionLabel || "",
       expectedEvent: tfpV2772TrackingCaseForFirestore.expectedEvent || tfpV2772TrackingCaseForFirestore.expected_event || "",
       observedEvent: tfpV2772TrackingCaseForFirestore.observedEvent || tfpV2772TrackingCaseForFirestore.observed_event || "",
+      manualHero: tfpContentTraceManualHeroSummary(resolvedManualEvidenceHero),
       problemCardCount: Array.isArray(reportForFirestore.problemCards) ? reportForFirestore.problemCards.length : 0,
+      problemCardTitles: tfpV2773ProblemTitlesBeforeFirestore,
+      genericProblemCardTitles: tfpV2773GenericProblemTitlesBeforeFirestore,
       proofPointCount: Array.isArray(reportForFirestore.proofPoints) ? reportForFirestore.proofPoints.length : 0,
+      proofPointPreview: tfpContentTraceStrings(reportForFirestore.proofPoints),
+      issueFlags: [
+        Boolean(tfpV2772ManualEventFields) ? "manual_event_guard_applied" : "manual_event_guard_not_applied",
+        tfpV2773GenericProblemTitlesBeforeFirestore.length ? "generic_problem_cards_still_present_before_firestore" : "problem_cards_event_specific_before_firestore",
+      ],
     });
     const legacyReportFieldsToDelete = [
       "domain_slug",
@@ -1624,6 +1687,29 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
       payload.securePageEvidenceUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
     }
 
+    const tfpV2773PayloadProblemTitles = tfpContentTraceTitles(payload.problemCards);
+    const tfpV2773PayloadGenericProblemTitles = tfpV2773PayloadProblemTitles.filter((title) => tfpContentTraceIsGenericTitle(title));
+    logModularReportDebug("content_integrity_trace_before_firestore_set", {
+      tokenSuffix: report.token ? String(report.token).slice(-8) : "",
+      domainSlug: report.domainSlug,
+      mode: payload.reportMode || payload.report_mode,
+      trackingCaseMode: payload.tracking_case?.mode || payload.trackingCase?.mode || "",
+      setupFirstOverrideApplied: Boolean(payload.setupFirstOverrideApplied),
+      manualHero: tfpContentTraceManualHeroSummary(payload.manualEvidenceHero),
+      problemCardTitles: tfpV2773PayloadProblemTitles,
+      genericProblemCardTitles: tfpV2773PayloadGenericProblemTitles,
+      proofPointPreview: tfpContentTraceStrings(payload.proofPoints),
+      whatCheckedPreview: tfpContentTraceStrings(payload.whatChecked),
+      auditSnapshotQuestions: tfpContentTraceStrings(payload.auditSnapshotQuestions, 4),
+      secureEvidence: tfpContentTraceSecureAssets(payload.securePageEvidenceAssets || payload.secure_page_evidence_assets),
+      issueFlags: [
+        payload.reportMode === "tracking_foundation_setup" && payload.manualEvidenceHero ? "setup_first_should_not_have_manual_hero" : "",
+        payload.reportMode === "tracking_foundation_setup" && cleanSecurePageEvidenceAssets.length ? "setup_first_has_secure_evidence_assets_firestore_ok_but_page_should_hide" : "",
+        (payload.reportMode === "ga4_event_verification" || payload.reportMode === "event_positive_snapshot") && tfpV2773PayloadGenericProblemTitles.length ? "manual_event_has_generic_problem_cards" : "",
+        (payload.reportMode === "ga4_event_verification" || payload.reportMode === "event_positive_snapshot") && !payload.manualEvidenceHero ? "manual_event_missing_manual_hero" : "",
+      ].filter(Boolean),
+    });
+
     for (const field of legacyReportFieldsToDelete) {
       payload[field] = deleteField;
     }
@@ -1666,10 +1752,27 @@ export function createReportHandlers(deps: ReportHandlerDeps) {
 
     const savedSnap = await reportRef.get();
     const savedData = savedSnap.exists ? savedSnap.data() || {} : {};
+    const tfpV2773SavedProblemTitles = tfpContentTraceTitles(savedData?.problemCards);
+    const tfpV2773SavedGenericProblemTitles = tfpV2773SavedProblemTitles.filter((title) => tfpContentTraceIsGenericTitle(title));
     logModularReportDebug("after_firestore_set", {
       saved: pickModularReportDebugFields(savedData || {}),
       savedKeys: savedData && typeof savedData === "object" ? Object.keys(savedData).sort() : [],
       hasSavedOgImageUrl: Boolean(savedData?.ogImageUrl),
+      contentTrace: {
+        mode: savedData?.reportMode || savedData?.report_mode || "",
+        trackingCaseMode: savedData?.tracking_case?.mode || savedData?.trackingCase?.mode || "",
+        manualHero: tfpContentTraceManualHeroSummary(savedData?.manualEvidenceHero),
+        problemCardTitles: tfpV2773SavedProblemTitles,
+        genericProblemCardTitles: tfpV2773SavedGenericProblemTitles,
+        proofPointPreview: tfpContentTraceStrings(savedData?.proofPoints),
+        whatCheckedPreview: tfpContentTraceStrings(savedData?.whatChecked),
+        auditSnapshotQuestions: tfpContentTraceStrings(savedData?.auditSnapshotQuestions, 4),
+      },
+      issueFlags: [
+        (savedData?.reportMode === "ga4_event_verification" || savedData?.reportMode === "event_positive_snapshot") && tfpV2773SavedGenericProblemTitles.length ? "saved_manual_event_has_generic_problem_cards" : "",
+        savedData?.reportMode === "tracking_foundation_setup" && savedData?.manualEvidenceHero ? "saved_setup_first_has_manual_hero" : "",
+        savedData?.reportMode === "tracking_foundation_setup" && Array.isArray(savedData?.securePageEvidenceAssets || savedData?.secure_page_evidence_assets) ? "saved_setup_first_has_evidence_assets_page_should_hide" : "",
+      ].filter(Boolean),
       secureEvidenceSavedCount: Array.isArray(savedData?.securePageEvidenceAssets || savedData?.secure_page_evidence_assets)
         ? (savedData.securePageEvidenceAssets || savedData.secure_page_evidence_assets).length
         : 0,

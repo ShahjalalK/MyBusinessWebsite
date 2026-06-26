@@ -3223,13 +3223,18 @@ export default async function ReportPage({ params }: ReportPageProps) {
   const businessTypeLabel = getBusinessTypeLabel(report, privateReportCopy);
   const reviewFocusLabel = isSetupFirst ? "Tracking setup readiness" : (primaryConversionFocus || businessTypeLabel || "Conversion path review");
   const evidenceVideo = getEvidenceVideoDisplay(report);
-  const secureEvidenceAssets = getSecureEvidenceAssetDisplays(report, token, {
+  const rawSecureEvidenceAssets = getSecureEvidenceAssetDisplays(report, token, {
     isSetupFirst,
     manualEvidenceHero,
     setupActionLabel,
     reviewFocusLabel,
     reportMode,
   });
+  const hideSetupFirstEvidenceAssets = Boolean(isSetupFirst && !manualEvidenceHero);
+  const secureEvidenceAssets = hideSetupFirstEvidenceAssets ? [] : rawSecureEvidenceAssets;
+  const secureEvidenceHiddenReason = hideSetupFirstEvidenceAssets && rawSecureEvidenceAssets.length
+    ? "setup_first_without_manual_evidence"
+    : "";
   const secureEvidenceCopy = getSecureEvidenceSectionCopy({
     isSetupFirst,
     manualEvidenceHero,
@@ -3237,6 +3242,52 @@ export default async function ReportPage({ params }: ReportPageProps) {
     reviewFocusLabel,
     reportMode,
   });
+
+  const securePageIssueFlags = [
+    hideSetupFirstEvidenceAssets && rawSecureEvidenceAssets.length ? "setup_first_evidence_assets_hidden_from_page" : "",
+    isSetupFirst && manualEvidenceHero ? "setup_first_has_manual_evidence_hero_unexpected" : "",
+    !isSetupFirst && manualEvidenceHero && !secureEvidenceAssets.length ? "manual_event_has_no_visible_secure_evidence_assets" : "",
+    !isSetupFirst && !manualEvidenceHero && /ga4_event_verification|event_positive_snapshot/i.test(reportMode) ? "event_mode_missing_manual_evidence_hero" : "",
+  ].filter(Boolean);
+
+  try {
+    console.log("[TFP_SECURE_PAGE_CONTENT_TRACE]", JSON.stringify({
+      version: "v27.73-secure-page-content-trace-2026-06-26",
+      tokenSuffix: token ? String(token).slice(-8) : "",
+      domainSlug,
+      domain,
+      companyName,
+      reportMode,
+      isSetupFirst,
+      manualEvidenceHero: manualEvidenceHero ? {
+        actionLabel: manualEvidenceHero.actionLabel || "",
+        expectedEvent: manualEvidenceHero.expectedEvent || "",
+        observedEvent: manualEvidenceHero.observedEvent || "",
+        ga4Status: manualEvidenceHero.ga4Status || "",
+        googleAdsStatus: manualEvidenceHero.googleAdsStatus || "",
+        gtmStatus: manualEvidenceHero.gtmStatus || "",
+      } : null,
+      content: {
+        headline: heroHeadline,
+        mainFinding,
+        businessImpact,
+        proofPoints: clientFacingProofPoints.slice(0, 6),
+        whatChecked: whatChecked.slice(0, 8),
+        auditSnapshotTitle,
+        auditSnapshotQuestions: auditSnapshotQuestions.slice(0, 4),
+      },
+      secureEvidence: {
+        rawCount: rawSecureEvidenceAssets.length,
+        visibleCount: secureEvidenceAssets.length,
+        hiddenReason: secureEvidenceHiddenReason,
+        rawRoles: rawSecureEvidenceAssets.map((item) => item.role).filter(Boolean),
+        visibleRoles: secureEvidenceAssets.map((item) => item.role).filter(Boolean),
+      },
+      issueFlags: securePageIssueFlags,
+    }));
+  } catch {
+    console.log("[TFP_SECURE_PAGE_CONTENT_TRACE]", "v27.73-secure-page-content-trace-2026-06-26", token);
+  }
   const businessImpactArticle = getBusinessImpactArticle({
     isSetupFirst,
     manualEvidenceHero,
@@ -3636,7 +3687,9 @@ export default async function ReportPage({ params }: ReportPageProps) {
         </div>
       </section>
 
-      <SecureEvidenceGallery assets={secureEvidenceAssets} sectionCopy={secureEvidenceCopy} />
+      {secureEvidenceAssets.length ? (
+        <SecureEvidenceGallery assets={secureEvidenceAssets} sectionCopy={secureEvidenceCopy} />
+      ) : null}
 
       <section className="mx-auto hidden w-full max-w-7xl overflow-hidden px-4 py-4 sm:block sm:px-6 sm:py-8 lg:px-8">
         <div className="grid min-w-0 gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3 sm:rounded-[2rem] sm:p-4 lg:p-5">
