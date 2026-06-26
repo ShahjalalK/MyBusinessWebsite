@@ -8610,6 +8610,13 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
     'Decision Maker Title': decisionMaker.title,
     'Contact Quality': getContactQuality(audit, lead),
 
+    // v27.74 sheet-only dashboard facts.
+    // These are Google Sheet columns, not Firestore secure-page fields.
+    'Domain Age Years': getExistingOrDefault(existing, 'Domain Age Years', '', lead?.domainAgeYears ?? lead?.domain_age_years),
+    CMS: getExistingOrDefault(existing, 'CMS', '', lead?.cmsName ?? lead?.cms_name ?? (typeof lead?.cms === 'string' ? lead.cms : '')),
+    'Mobile Speed': getExistingOrDefault(existing, 'Mobile Speed', '', lead?.mobileSpeed ?? lead?.mobile_speed ?? lead?.mobileScore ?? lead?.mobile_score),
+    'Desktop Speed': getExistingOrDefault(existing, 'Desktop Speed', '', lead?.desktopSpeed ?? lead?.desktop_speed ?? lead?.desktopScore ?? lead?.desktop_score),
+
     'Source Type': getExistingOrDefault(existing, 'Source Type', sourceMeta['Source Type'], lead?.sourceType || lead?.source_type),
     'Outreach Channel': getExistingOrDefault(existing, 'Outreach Channel', sourceMeta['Outreach Channel'], lead?.outreachChannel || lead?.outreach_channel),
     'Lead Source': getExistingOrDefault(existing, 'Lead Source', sourceMeta['Lead Source'], lead?.leadSource || lead?.lead_source),
