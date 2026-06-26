@@ -2710,6 +2710,220 @@ function tfpV2751ManualActionContext(report: AnyRecord = {}, body: AnyRecord = {
   };
 }
 
+
+// ============================================================
+// v27.71 - Event-verification Firestore copy guard
+// Purpose:
+// Preserve the old professional rule:
+// - no GA4/GTM => setup-first presentation
+// - GA4 present + controlled manual evidence => event-verification presentation
+// This prevents generic browser-signal proofPoints from becoming the Firestore
+// problemCards used by the secure page, PDF metadata, and question generator.
+// ============================================================
+
+const TFP_V2771_EVENT_MODES = new Set(["ga4_event_verification", "event_positive_snapshot"]);
+
+function tfpV2771ManualPrimary(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord {
+  const manual = tfpV2749Object(
+    report.manualConversionEvidence ||
+      report.manual_conversion_evidence ||
+      body.manualConversionEvidence ||
+      body.manual_conversion_evidence ||
+      report.privateReportCopy?.manualConversionEvidence ||
+      report.privateReportCopy?.manual_conversion_evidence ||
+      report.private_report_copy?.manualConversionEvidence ||
+      report.private_report_copy?.manual_conversion_evidence,
+  );
+  return tfpV2749Object(manual.primaryAction || manual.primary_action || manual.primary);
+}
+
+function tfpV2771ManualHero(report: AnyRecord = {}, body: AnyRecord = {}): AnyRecord {
+  return tfpV2749Object(
+    report.manualEvidenceHero ||
+      report.manual_evidence_hero ||
+      body.manualEvidenceHero ||
+      body.manual_evidence_hero ||
+      report.privateReportCopy?.manualEvidenceHero ||
+      report.privateReportCopy?.manual_evidence_hero ||
+      report.private_report_copy?.manualEvidenceHero ||
+      report.private_report_copy?.manual_evidence_hero,
+  );
+}
+
+function tfpV2771Truthy(value: any): boolean {
+  return ["yes", "y", "true", "1", "observed", "found", "complete", "completed"].includes(String(value || "").trim().toLowerCase());
+}
+
+function tfpV2771CleanLabel(...values: any[]): string {
+  return tfpV2751CleanManualActionLabel(tfpV2749FirstString(...values)) || "Selected conversion action";
+}
+
+function tfpV2771CleanEvent(value: any, fallback: string): string {
+  return tfpV2749CleanString(value, fallback).replace(/\s+/g, " ").trim() || fallback;
+}
+
+function tfpV2771ProblemCard(title: string, finding: string, businessMeaning: string, nextCheck: string, severity = "review"): AnyRecord {
+  return {
+    title: tfpV2749CleanString(title, "Tracking item to verify").slice(0, 140),
+    finding: tfpV2749CleanString(finding).slice(0, 280),
+    summary: tfpV2749CleanString(finding).slice(0, 280),
+    businessMeaning: tfpV2749CleanString(businessMeaning).slice(0, 320),
+    business_meaning: tfpV2749CleanString(businessMeaning).slice(0, 320),
+    whyItMatters: tfpV2749CleanString(businessMeaning).slice(0, 320),
+    why_it_matters: tfpV2749CleanString(businessMeaning).slice(0, 320),
+    nextCheck: tfpV2749CleanString(nextCheck).slice(0, 360),
+    next_check: tfpV2749CleanString(nextCheck).slice(0, 360),
+    recommendedCheck: tfpV2749CleanString(nextCheck).slice(0, 360),
+    recommended_check: tfpV2749CleanString(nextCheck).slice(0, 360),
+    severity,
+    evidence: [],
+  };
+}
+
+function tfpV2771BuildEventFields(report: AnyRecord = {}, body: AnyRecord = {}, trackingCase: AnyRecord = {}): AnyRecord | null {
+  const mode = tfpV2749FirstString(trackingCase.mode, report.reportMode, report.report_mode);
+  if (!TFP_V2771_EVENT_MODES.has(mode)) return null;
+
+  const primary = tfpV2771ManualPrimary(report, body);
+  const hero = tfpV2771ManualHero(report, body);
+  const hasManualEvidence = Boolean(
+    Object.keys(primary).length ||
+      Object.keys(hero).length ||
+      trackingCase.manualEvidenceStrong ||
+      trackingCase.manual_evidence_strong ||
+      report.manualConversionEvidence ||
+      report.manual_conversion_evidence,
+  );
+  if (!hasManualEvidence) return null;
+
+  const label = tfpV2771CleanLabel(
+    trackingCase.customLabel,
+    trackingCase.custom_label,
+    trackingCase.primaryConversionLabel,
+    trackingCase.primary_conversion_label,
+    primary.label,
+    primary.actionLabel,
+    primary.action_label,
+    hero.actionLabel,
+    hero.action_label,
+    hero.label,
+    report.primaryActionLabel,
+    report.primary_action_label,
+  );
+  const expected = tfpV2771CleanEvent(
+    tfpV2749FirstString(trackingCase.expectedEvent, trackingCase.expected_event, primary.expectedEvent, primary.expected_event, hero.expectedEvent, hero.expected_event),
+    "the expected event",
+  );
+  const observed = tfpV2771CleanEvent(
+    tfpV2749FirstString(trackingCase.observedEvent, trackingCase.observed_event, primary.observedEventName, primary.observed_event_name, primary.observedEvent, primary.observed_event, hero.observedEvent, hero.observed_event),
+    "not clearly observed",
+  );
+  const tool = tfpV2749FirstString(primary.tool, hero.tool, "Tag Assistant");
+  const positive = mode === "event_positive_snapshot" || Boolean(trackingCase.trackingObserved || trackingCase.tracking_observed || primary.trackingObserved || primary.tracking_observed || tfpV2771Truthy(primary.ga4EventObserved || primary.ga4_event_observed));
+  const finalMode = positive ? "event_positive_snapshot" : "ga4_event_verification";
+  const mainFinding = positive
+    ? tfpV2749FirstString(trackingCase.mainFinding, trackingCase.main_finding, report.mainFinding, `${label} appears to trigger the expected ${expected} event from the browser-visible/manual review.`)
+    : tfpV2749FirstString(trackingCase.mainFinding, trackingCase.main_finding, report.mainFinding, `${label} was completed manually, but the expected event ${expected} was not clearly observed.`);
+  const businessImpact = positive
+    ? "The selected event appears visible from the manual/browser-side review, but final account-side confirmation is still recommended before relying on it."
+    : "If the selected customer action is not recorded clearly, reporting and optimization decisions can become less reliable.";
+  const proofPoints = [
+    `${label} was completed manually using ${tool}.`,
+    `Expected event: ${expected}.`,
+    `Observed result: ${observed}.`,
+    "Browser-visible/manual evidence should be separated from final account-side confirmation.",
+  ];
+  const problemCards = [
+    tfpV2771ProblemCard(
+      positive ? `${label} event should be confirmed account-side` : `${label} event needs verification`,
+      mainFinding,
+      businessImpact,
+      "Run the same action in GTM Preview and GA4 DebugView, then compare it with Google Ads, CRM, and server/backend records where relevant.",
+      positive ? "review" : "high",
+    ),
+    tfpV2771ProblemCard(
+      "Expected and observed event should be compared",
+      `The expected event was ${expected}; the browser-visible/manual result was ${observed}.`,
+      "Clear expected/observed separation helps avoid overclaiming final conversion recording.",
+      "Verify the event name, trigger, parameters, key-event/conversion marking, and downstream account reporting.",
+      "review",
+    ),
+  ];
+  const verificationPlan = [
+    {
+      priority: "Priority 1",
+      title: `Repeat one controlled ${label} test.`,
+      description: "Complete the same customer action once from the reviewed page or path.",
+      estimatedEffort: "Short review",
+    },
+    {
+      priority: "Priority 2",
+      title: `Confirm whether ${expected} appears in GA4 DebugView or GA4 events.`,
+      description: "Do not treat ordinary page_view activity as proof of the selected conversion action.",
+      estimatedEffort: "Short review",
+    },
+    {
+      priority: "Priority 3",
+      title: "Check the matching GTM trigger and Google Ads conversion action.",
+      description: "Confirm the intended trigger/label, not only general tag or remarketing activity.",
+      estimatedEffort: "Short review",
+    },
+    {
+      priority: "Priority 4",
+      title: "Compare the same test with CRM, form inbox, booking/ecommerce records, call tracking, or server logs.",
+      description: "Final account-side confirmation should match the browser-visible/manual test.",
+      estimatedEffort: "Short review",
+    },
+  ];
+  const whatChecked = [
+    `Selected action: ${label}.`,
+    `Expected event: ${expected}.`,
+    `Browser-visible/manual result: ${observed}.`,
+    "Whether the same action appears inside GA4, GTM, Google Ads, CRM, form/booking/ecommerce records, call tracking, or server logs.",
+  ];
+  const auditSnapshotQuestions = [
+    `Does ${label} trigger ${expected}?`,
+    `What exactly appeared as the observed event/result: ${observed}?`,
+    "Does the same action appear in the final account/backend records?",
+    "Could reporting or optimization decisions be affected if this action is used for campaigns?",
+  ];
+
+  return {
+    headline: positive ? `Private tracking verification snapshot` : `Private conversion tracking review`,
+    mainFinding,
+    main_finding: mainFinding,
+    businessImpact,
+    business_impact: businessImpact,
+    proofPoints,
+    proof_points: proofPoints,
+    problemCards,
+    problem_cards: problemCards,
+    businessProblems: problemCards,
+    business_problems: problemCards,
+    verificationPlan,
+    verification_plan: verificationPlan,
+    recommendations: verificationPlan,
+    whatChecked,
+    what_checked: whatChecked,
+    auditSnapshotTitle: positive ? "Tracking verification snapshot" : `${label} tracking snapshot`,
+    audit_snapshot_title: positive ? "Tracking verification snapshot" : `${label} tracking snapshot`,
+    auditSnapshotQuestions,
+    audit_snapshot_questions: auditSnapshotQuestions,
+    primaryActionLabel: label,
+    primary_action_label: label,
+    primaryConversionLabel: label,
+    primary_conversion_label: label,
+    ctaHeadline: positive ? "Want the event confirmed inside the actual accounts?" : "Want this conversion event verified and fixed?",
+    cta_headline: positive ? "Want the event confirmed inside the actual accounts?" : "Want this conversion event verified and fixed?",
+    ctaText: positive ? "Request tracking verification" : "Request conversion tracking review",
+    cta_text: positive ? "Request tracking verification" : "Request conversion tracking review",
+    setupFirstOverrideApplied: false,
+    setup_first_override_applied: false,
+    reportMode: finalMode,
+    report_mode: finalMode,
+  };
+}
+
 function tfpV2749SetupFirstFields(report: AnyRecord, body: AnyRecord, trackingCase: AnyRecord): AnyRecord {
   const mode = tfpV2749FirstString(trackingCase.mode, report.reportMode, report.report_mode);
   const primary = tfpV2749ManualPrimaryAction(report, body);
@@ -2849,7 +3063,47 @@ function tfpV2749ApplyReportModeFirestoreOverrides(report: AnyRecord = {}, body:
     },
   };
 
-  if (!tfpV2749IsSetupFirstMode(mode)) return output;
+  if (!tfpV2749IsSetupFirstMode(mode)) {
+    const eventFields = tfpV2771BuildEventFields(output, body, trackingCaseOut);
+    if (!eventFields) return output;
+    const finalMode = tfpV2749FirstString(eventFields.reportMode, mode);
+    const finalTrackingCase = {
+      ...trackingCaseOut,
+      mode: finalMode,
+      reportMode: finalMode,
+      report_mode: finalMode,
+      customLabel: eventFields.primaryActionLabel || trackingCaseOut.customLabel,
+      custom_label: eventFields.primaryActionLabel || trackingCaseOut.custom_label,
+      expectedEvent: trackingCaseOut.expectedEvent || trackingCaseOut.expected_event,
+      expected_event: trackingCaseOut.expected_event || trackingCaseOut.expectedEvent,
+      observedEvent: trackingCaseOut.observedEvent || trackingCaseOut.observed_event,
+      observed_event: trackingCaseOut.observed_event || trackingCaseOut.observedEvent,
+      mainFinding: eventFields.mainFinding,
+      main_finding: eventFields.mainFinding,
+      manualEvidenceStrong: true,
+      manual_evidence_strong: true,
+    };
+    const privateCopy = {
+      ...(tfpV2749Object(output.privateReportCopy || output.private_report_copy)),
+      ...eventFields,
+      trackingCase: finalTrackingCase,
+      tracking_case: finalTrackingCase,
+      reportMode: finalMode,
+      report_mode: finalMode,
+    };
+    return {
+      ...output,
+      ...eventFields,
+      trackingCase: finalTrackingCase,
+      tracking_case: finalTrackingCase,
+      reportMode: finalMode,
+      report_mode: finalMode,
+      privateReportCopy: privateCopy,
+      private_report_copy: privateCopy,
+      securePageCopy: privateCopy,
+      secure_page_copy: privateCopy,
+    };
+  }
 
   const setupFields = tfpV2749SetupFirstFields(output, body, trackingCaseOut);
   const privateCopy = {
