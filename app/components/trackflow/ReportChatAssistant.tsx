@@ -62,7 +62,7 @@ type ReportChatAssistantProps = {
 };
 
 const GREETING =
-  "Hi — I can help explain what was tested, what the evidence suggests, and what to verify next. I’ll keep the answers practical and stay within this review’s evidence.";
+  "Hi — I can help explain this private tracking review, the evidence points, and the safest next verification steps. I’ll stay within the browser-visible evidence shown here.";
 
 function createId(prefix = "msg"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -315,8 +315,6 @@ const ASSISTANT_DISPLAY_HEADINGS = [
   "Business risk",
   "Impact on reporting",
   "What to verify next",
-  "What should happen",
-  "What was seen",
   "Important note",
   "Evidence to review",
   "Next step",
@@ -408,7 +406,7 @@ function isAssistantHeading(value: string): boolean {
   const text = cleanDisplayLine(value).replace(/[:：]\s*$/, "");
   if (!text || text.length > 62) return false;
 
-  return /^(short answer|what this means|business impact|why this matters|what i would check next|quick note|safe note|business risk|impact on reporting|what to verify next|what should happen|what was seen|important note|evidence to review|next step|best next step|recommended first step|why it matters|how to think about it|recommended action|verification plan|minimum access for diagnosis|only if you approve implementation|not needed|best practice|how we reduce risk|what we do not need|recommended access order|when higher access may be needed|safer way|why this is safer|what we may need instead|safety note|access safety|what we may need|what we can do without access|for this review|if campaign work is approved|if campaign management is approved|how we normally approach it|for campaign review|for campaign setup or management|what we can review safely|what we will not do in read-only mode|recommended order|best way to contact|book a call|direct contact|marketplace option|before sharing access|what to prepare|how we would proceed|contact email)$/i.test(
+  return /^(short answer|what this means|business impact|why this matters|what i would check next|quick note|safe note|business risk|impact on reporting|what to verify next|important note|evidence to review|next step|best next step|recommended first step|why it matters|how to think about it|recommended action|verification plan|minimum access for diagnosis|only if you approve implementation|not needed|best practice|how we reduce risk|what we do not need|recommended access order|when higher access may be needed|safer way|why this is safer|what we may need instead|safety note|access safety|what we may need|what we can do without access|for this review|if campaign work is approved|if campaign management is approved|how we normally approach it|for campaign review|for campaign setup or management|what we can review safely|what we will not do in read-only mode|recommended order|best way to contact|book a call|direct contact|marketplace option|before sharing access|what to prepare|how we would proceed|contact email)$/i.test(
     text,
   );
 }
@@ -416,7 +414,7 @@ function isAssistantHeading(value: string): boolean {
 function splitKnownHeading(value: string): { title: string; body: string } | null {
   const cleaned = cleanDisplayLine(value);
   const match = cleaned.match(
-    /^(Short answer|What this means|Business impact|Why this matters|What I would check next|Quick note|Safe note|Business risk|Impact on reporting|What to verify next|What should happen|What was seen|Important note|Evidence to review|Next step|Best next step|Recommended first step|Why it matters|How to think about it|Recommended action|Verification plan|Minimum access for diagnosis|Only if you approve implementation|Not needed|Best practice|How we reduce risk|What we do not need|Recommended access order|When higher access may be needed|Safer way|Why this is safer|What we may need instead|Safety note|Access safety|What we may need|What we can do without access|For this review|If campaign work is approved|If campaign management is approved|How we normally approach it|For campaign review|For campaign setup or management|What we can review safely|What we will not do in read-only mode|Recommended order|Best way to contact|Book a call|Direct contact|Marketplace option|Before sharing access|What to prepare|How we would proceed|Contact email)\s*[:：]\s*(.+)$/i,
+    /^(Short answer|What this means|Business impact|Why this matters|What I would check next|Quick note|Safe note|Business risk|Impact on reporting|What to verify next|Important note|Evidence to review|Next step|Best next step|Recommended first step|Why it matters|How to think about it|Recommended action|Verification plan|Minimum access for diagnosis|Only if you approve implementation|Not needed|Best practice|How we reduce risk|What we do not need|Recommended access order|When higher access may be needed|Safer way|Why this is safer|What we may need instead|Safety note|Access safety|What we may need|What we can do without access|For this review|If campaign work is approved|If campaign management is approved|How we normally approach it|For campaign review|For campaign setup or management|What we can review safely|What we will not do in read-only mode|Recommended order|Best way to contact|Book a call|Direct contact|Marketplace option|Before sharing access|What to prepare|How we would proceed|Contact email)\s*[:：]\s*(.+)$/i,
   );
 
   if (!match) return null;

@@ -65,22 +65,22 @@ const DEFAULT_STARTER_QUESTIONS = [
   "What should we verify first?",
   "Can you explain the main finding?",
   "What evidence was visible in the review?",
-  "What access is safest for verification?",
+  "What needs account access to confirm?",
 ];
 
 const DEFAULT_FOLLOW_UP_QUESTIONS = [
   "What is the safest next step?",
-  "What access is safest to confirm this?",
+  "What access is needed to confirm this?",
   "Can TrackFlow Pro verify this for us?",
 ];
 
 const BROAD_FALLBACK_POOL = [
   "What evidence was visible in the review?",
-  "Why should this be matched inside the tracking tools?",
+  "Why does this need account access?",
   "What should we check inside GA4?",
   "What should we check in GTM Preview?",
   "What should we check in Google Ads?",
-  "Which customer action should we test first?",
+  "Which lead path should we test first?",
   "Can this affect lead reporting?",
   "How could this affect business decisions?",
   "Why does this matter for future campaigns?",
@@ -261,12 +261,12 @@ function humanizeAuditSnapshotQuestion(question: string, context?: ReportChatQue
   if (observedMatch) {
     const expected = cleanText(context?.manualExpectedEvent || observedMatch[1]);
     const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || observedMatch[2]);
-    if (expected && action) return `Was the expected ${expected} event clearly observed for ${action}?`;
+    if (expected && action) return `Was ${expected} clearly seen for ${action}?`;
   }
 
   if (/^What should we test on the lead path\?$/i.test(clean)) {
     const action = cleanText(context?.manualActionLabel || context?.primaryConversionFocus || "");
-    return action ? `Should ${action} be the first lead path to verify?` : "Which customer action should we test first?";
+    return action ? `Should ${action} be the first lead path to verify?` : "Which lead path should we test first?";
   }
 
   return clean;
@@ -294,13 +294,13 @@ function getManualEvidenceQuestionRules(context?: ReportChatQuestionContext): Qu
     pushQuestion(
       rules,
       Boolean(action),
-      `What evidence suggests ${action} recorded correctly?`,
+      `What evidence suggests the event was observed for ${action}?`,
       198,
     );
     pushQuestion(
       rules,
       true,
-      "What still needs to be matched in the tracking tools?",
+      "What still needs to be matched in the approved tools?",
       195,
     );
     pushQuestion(
@@ -321,48 +321,47 @@ function getManualEvidenceQuestionRules(context?: ReportChatQuestionContext): Qu
   pushQuestion(
     rules,
     Boolean(action && expected),
-    `Did ${expected} appear after the ${action} test?`,
+    `Was ${expected} clearly seen for ${action}?`,
     198,
+  );
+
+  pushQuestion(
+    rules,
+    Boolean(observed),
+    `Why does ${observed} matter for reporting?`,
+    195,
   );
 
   pushQuestion(
     rules,
     Boolean(action),
     `Where should this ${action} test be matched next?`,
-    196,
-  );
-
-  pushQuestion(
-    rules,
-    Boolean(observed),
-    `What does ${observed} mean for this test?`,
-    194,
-  );
-
-  pushQuestion(
-    rules,
-    Boolean(action),
-    `What should GA4 and GTM show for ${action}?`,
     192,
   );
 
   pushQuestion(
     rules,
+    Boolean(action),
+    "What should GTM Preview and Google Ads confirm?",
+    190,
+  );
+
+  pushQuestion(
+    rules,
     Boolean(context?.manualGoogleAdsStatus || context?.businessImpact || observed),
-    "How could this affect lead reporting or ads optimization?",
+    "How could this affect reporting or ads optimization?",
     188,
   );
 
   pushQuestion(
     rules,
     true,
-    "What access is safest to confirm this?",
+    "Should this be confirmed before campaign optimization?",
     184,
   );
 
   return rules.filter((rule) => isSafeReportQuestion(rule.question));
 }
-
 function getScoreQuestion(context?: ReportChatQuestionContext): QuestionRule[] {
   const hasScore =
     context?.score !== undefined ||
@@ -654,7 +653,7 @@ function buildAccessSecurityFollowUpRules(text: string): QuestionRule[] {
   );
 
   rules.push(
-    { question: "What access is safest to confirm this?", priority: 94 },
+    { question: "What access is needed to confirm this?", priority: 94 },
     { question: "Can you also manage Google Ads campaigns?", priority: 90 },
     { question: "What should we verify first?", priority: 88 },
     { question: "Can TrackFlow Pro verify this for us?", priority: 82 },
@@ -766,11 +765,11 @@ function looksLikeSafestNextStepAnswer(text: string): boolean {
 
 function buildSafestNextStepFollowUpRules(_text: string): QuestionRule[] {
   return [
-    { question: "What access is safest to confirm this?", priority: 100 },
+    { question: "What access is needed to confirm this?", priority: 100 },
     { question: "What should we check inside GA4?", priority: 96 },
     { question: "What should we check in GTM Preview?", priority: 94 },
     { question: "What should we check in Google Ads?", priority: 92 },
-    { question: "Which customer action should we test first?", priority: 90 },
+    { question: "Which lead path should we test first?", priority: 90 },
     { question: "How could this affect lead reporting?", priority: 88 },
     { question: "Can we book a verification call?", priority: 86 },
   ];
@@ -829,21 +828,21 @@ function buildFollowUpRules(latestAssistantContent: string, context?: ReportChat
   pushQuestion(
     rules,
     hasAny(text, [/\bform\b/, /\blead\b/, /\benquiry\b/, /\binquiry\b/, /\bbooking\b/]),
-    "Which customer action should we test first?",
+    "Which lead path should we test first?",
     90,
   );
 
   pushQuestion(
     rules,
     hasAny(text, [/\baccount access\b/, /\bserver access\b/, /\bcrm\b/, /\bserver logs\b/]),
-    "What access is safest to confirm this?",
+    "What access is needed to confirm this?",
     88,
   );
 
   rules.push(
     { question: "What is the safest next step?", priority: 84 },
     { question: "How could this affect lead reporting?", priority: 83 },
-    { question: "Why should this be matched inside the tracking tools?", priority: 82 },
+    { question: "Why does this need account access?", priority: 82 },
     { question: "Should tracking be fixed before campaign changes?", priority: 78 },
     { question: "Can we book a verification call?", priority: 76 },
     { question: "Can TrackFlow Pro verify this for us?", priority: 74 },
@@ -867,7 +866,7 @@ export function buildReportChatQuestionSuggestions({
   const manualEvidenceQuestions = getManualEvidenceQuestionRules(context).map((rule) => rule.question);
   const contextQuestions = buildContextQuestionRules(context).map((rule) => rule.question);
   const followUpQuestions = buildFollowUpRules(latestAssistantContent, context).map((rule) => rule.question);
-  const reportSpecificQuestions = [...setupFirstQuestions, ...manualEvidenceQuestions, ...snapshotQuestions];
+  const reportSpecificQuestions = [...setupFirstQuestions, ...snapshotQuestions, ...manualEvidenceQuestions];
 
   return {
     closedQuestions: getUnaskedQuestions({
