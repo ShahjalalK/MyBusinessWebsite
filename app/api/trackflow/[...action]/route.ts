@@ -97,7 +97,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TFP_REPORT_REGISTER_DEBUG_VERSION = "v27.93-video-only-safe-existing-update";
+const TFP_REPORT_REGISTER_DEBUG_VERSION = "v27.96-sheet-verified-identity-sync";
 
 
 const {
@@ -7975,29 +7975,61 @@ function lastColumnLetter(): string {
   return columnLetter(HEADERS.length);
 }
 
+function mergeNonBlankContactObjects(...items: any[]): AnyRecord {
+  const output: AnyRecord = {};
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    for (const [key, value] of Object.entries(item as AnyRecord)) {
+      if (!isValidValue(value)) continue;
+      output[key] = value;
+    }
+  }
+  return output;
+}
+
 function getManualUpdate(audit?: AnyRecord, lead?: AnyRecord): AnyRecord {
-  return (
-    audit?.manual_decision_maker_update ||
-    audit?.manual_contact_update ||
-    audit?.manual_update ||
-    lead?.manual_decision_maker_update ||
-    lead?.manualContact ||
-    lead?.manual_contact_update ||
-    {}
+  // v27.96: Gmail Outreach depends on Google Sheet, so the verified Identity tab
+  // must be the highest-priority contact source. Merge non-blank values only so a
+  // partial refresh cannot erase verified name/email/LinkedIn fields.
+  return mergeNonBlankContactObjects(
+    lead?.person1,
+    audit?.person1,
+    audit?.decision_makers?.best_match,
+    audit?.decision_maker_safety,
+    audit?.nextjs_payload?.decision_maker_safety,
+    lead?.manualContact,
+    lead?.manual_contact,
+    lead?.manual_contact_update,
+    lead?.manualContactUpdate,
+    lead?.manual_decision_maker_update,
+    audit?.manual_update,
+    audit?.manualContact,
+    audit?.manual_contact,
+    audit?.manualContactUpdate,
+    audit?.manual_contact_update,
+    audit?.manual_decision_maker_update,
   );
 }
 
 function getBusinessName(audit?: AnyRecord, lead?: AnyRecord): string {
   const manual = getManualUpdate(audit, lead);
   return cleanCell(
-    manual?.business_name ||
+    manual?.businessName ||
+      manual?.business_name ||
+      manual?.companyName ||
       manual?.company_name ||
+      lead?.manualBusinessName ||
+      lead?.manualCompanyName ||
+      lead?.businessName ||
+      lead?.companyName ||
+      audit?.manualBusinessName ||
+      audit?.manual_business_name ||
+      audit?.manualCompanyName ||
+      audit?.manual_company_name ||
       audit?.company_name ||
       audit?.business_name ||
       audit?.email_intelligence?.company_name ||
       audit?.nextjs_payload?.lead?.['Company Name'] ||
-      lead?.businessName ||
-      lead?.companyName ||
       lead?.title ||
       audit?.domain,
     'N/A',
@@ -8045,10 +8077,17 @@ function getFinalEmail(audit?: AnyRecord, lead?: AnyRecord): { email: string; so
   // 1) Manual email always wins because you verified/edited it before export.
   const manualEmail = clean(
     manual?.email ||
+      manual?.emailAddress ||
+      manual?.email_address ||
       manual?.verified_email ||
+      manual?.verifiedEmail ||
       manual?.web_email ||
+      manual?.webEmail ||
+      manual?.finalEmail ||
+      manual?.final_email ||
       lead?.manualEmail ||
       lead?.finalEmail ||
+      lead?.final_email ||
       lead?.email,
   );
 
@@ -8075,7 +8114,25 @@ function getBestSocial(audit?: AnyRecord, lead?: AnyRecord): BestSocial {
   const social = audit?.social_links || {};
 
   const candidates: BestSocial[] = [
-    { platform: 'LinkedIn', url: manual?.linkedin || manual?.personal_linkedin || audit?.person1?.linkedin || social?.linkedin || lead?.linkedin },
+    {
+      platform: 'LinkedIn',
+      url:
+        manual?.linkedin ||
+        manual?.linkedinUrl ||
+        manual?.linkedin_url ||
+        manual?.profileUrl ||
+        manual?.profile_url ||
+        manual?.personal_linkedin ||
+        audit?.person1?.linkedin ||
+        social?.linkedin ||
+        lead?.linkedinProfileUrl ||
+        lead?.linkedin_profile_url ||
+        lead?.linkedinUrl ||
+        lead?.linkedin_url ||
+        lead?.socialLink ||
+        lead?.social_link ||
+        lead?.linkedin,
+    },
     { platform: 'Facebook', url: manual?.facebook || social?.facebook || lead?.facebook },
     { platform: 'Instagram', url: manual?.instagram || social?.instagram || lead?.instagram },
     { platform: 'Twitter/X', url: manual?.twitter_x || manual?.twitter || social?.twitter_x || social?.twitter || lead?.twitter_x || lead?.twitter },
@@ -8424,8 +8481,19 @@ function getDecisionMaker(audit?: AnyRecord, lead?: AnyRecord): { name: string; 
   return {
     name: cleanCell(
       manual?.name ||
+        manual?.contactName ||
+        manual?.contact_name ||
+        manual?.decisionMaker ||
+        manual?.decision_maker ||
         manual?.decision_maker_name ||
+        manual?.selected_name ||
+        manual?.selectedName ||
         lead?.decisionMaker ||
+        lead?.decision_maker ||
+        lead?.contactName ||
+        lead?.contact_name ||
+        lead?.linkedinContactName ||
+        lead?.linkedin_contact_name ||
         lead?.founder ||
         safeName ||
         audit?.person1?.name ||
@@ -8434,8 +8502,18 @@ function getDecisionMaker(audit?: AnyRecord, lead?: AnyRecord): { name: string; 
     ),
     title: cleanCell(
       manual?.title ||
+        manual?.contactTitle ||
+        manual?.contact_title ||
+        manual?.decisionMakerTitle ||
         manual?.decision_maker_title ||
+        manual?.selected_title ||
+        manual?.selectedTitle ||
         lead?.decisionMakerTitle ||
+        lead?.decision_maker_title ||
+        lead?.contactTitle ||
+        lead?.contact_title ||
+        lead?.linkedinContactTitle ||
+        lead?.linkedin_contact_title ||
         lead?.personTitle ||
         safeTitle ||
         audit?.person1?.title ||
@@ -8633,10 +8711,10 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
     'Export Date': todayDhaka(),
     'Business Name': getBusinessName(audit, lead),
     'Website URL': getWebsiteUrl(audit, lead),
-    'Final Email': cleanCell(finalEmail.email),
-    'Email Source': cleanCell(finalEmail.source),
-    'Social Platform': cleanCell(social.platform),
-    'Social Link': cleanCell(social.url),
+    'Final Email': getExistingOrDefault(existing, 'Final Email', cleanCell(finalEmail.email), finalEmail.email),
+    'Email Source': getExistingOrDefault(existing, 'Email Source', cleanCell(finalEmail.source), finalEmail.source),
+    'Social Platform': getExistingOrDefault(existing, 'Social Platform', cleanCell(social.platform), social.platform),
+    'Social Link': getExistingOrDefault(existing, 'Social Link', cleanCell(social.url), social.url),
     WhatsApp: getWhatsApp(audit, lead),
     'ChatGPT Prompt': getChatGptPrompt(audit, lead),
 
@@ -8666,9 +8744,9 @@ function buildLeadObject(lead: AnyRecord, existing?: AnyRecord): Record<HeaderNa
     'Last CTA Clicked At': getExistingOrDefault(existing, 'Last CTA Clicked At', '', lead?.lastCtaClickedAt),
     'Email Subject': getEmailSubject(audit, lead),
     'Email Body': getEmailBody(audit, lead),
-    'Decision Maker': decisionMaker.name,
-    'Decision Maker Title': decisionMaker.title,
-    'Contact Quality': getContactQuality(audit, lead),
+    'Decision Maker': getExistingOrDefault(existing, 'Decision Maker', decisionMaker.name, decisionMaker.name),
+    'Decision Maker Title': getExistingOrDefault(existing, 'Decision Maker Title', decisionMaker.title, decisionMaker.title),
+    'Contact Quality': getExistingOrDefault(existing, 'Contact Quality', getContactQuality(audit, lead), getContactQuality(audit, lead)),
 
     // v27.74 sheet-only dashboard facts.
     // These are Google Sheet columns, not Firestore secure-page fields.
@@ -9481,6 +9559,202 @@ function tfpV2774BuildSheetOnlyInternalAuditUpdates(report: AnyRecord = {}, body
   if (cmsName) updates.cmsName = cmsName;
   if (mobileSpeed !== null) updates.mobileSpeed = mobileSpeed;
   if (desktopSpeed !== null) updates.desktopSpeed = desktopSpeed;
+
+  return updates;
+}
+
+
+function tfpV2796FirstValidEmailForSheet(...values: any[]): string {
+  for (const value of values) {
+    const email = normalizeEmail(value);
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
+  }
+  return "";
+}
+
+function tfpV2796FirstLinkedInUrlForSheet(...values: any[]): string {
+  for (const value of values) {
+    const text = firstCleanString(value);
+    if (!text || !/linkedin\.com/i.test(text)) continue;
+    const url = sanitizeOptionalUrl(text);
+    if (url && /linkedin\.com/i.test(url)) return url;
+  }
+  return "";
+}
+
+function tfpV2796BuildVerifiedIdentitySheetUpdates(report: AnyRecord = {}, body: AnyRecord = {}, existingData: AnyRecord = {}): AnyRecord {
+  const reportManual = getObjectCandidate(report.manualContact, report.manual_contact, report.manualContactUpdate, report.manual_contact_update, report.manualDecisionMakerUpdate, report.manual_decision_maker_update);
+  const bodyManual = getObjectCandidate(body.manualContact, body.manual_contact, body.manualContactUpdate, body.manual_contact_update, body.manualDecisionMakerUpdate, body.manual_decision_maker_update);
+  const existingManual = getObjectCandidate(existingData.manualContact, existingData.manual_contact, existingData.manualContactUpdate, existingData.manual_contact_update);
+  const person1 = getObjectCandidate(report.person1, report.person_1, body.person1, body.person_1, existingData.person1, existingData.person_1);
+  const safety = getObjectCandidate(report.decisionMakerSafety, report.decision_maker_safety, body.decisionMakerSafety, body.decision_maker_safety, existingData.decisionMakerSafety, existingData.decision_maker_safety);
+  const privatePage = getObjectCandidate(report.privateReportCopy, report.private_report_copy, body.privateReportCopy, body.private_report_copy, existingData.privateReportCopy, existingData.private_report_copy);
+
+  const businessName = firstCleanString(
+    bodyManual.businessName,
+    bodyManual.business_name,
+    bodyManual.companyName,
+    bodyManual.company_name,
+    reportManual.businessName,
+    reportManual.business_name,
+    reportManual.companyName,
+    reportManual.company_name,
+    body.businessName,
+    body.business_name,
+    body.companyName,
+    body.company_name,
+    report.businessName,
+    report.business_name,
+    report.companyName,
+    report.company_name,
+    existingData.businessName,
+    existingData.companyName,
+  ).slice(0, 180);
+
+  const websiteUrl = sanitizeOptionalUrl(firstCleanString(body.websiteUrl, body.website_url, body.website, report.websiteUrl, report.website_url, report.domain, existingData.websiteUrl, existingData.domain));
+
+  const contactName = firstCleanString(
+    bodyManual.name,
+    bodyManual.contactName,
+    bodyManual.contact_name,
+    bodyManual.decisionMaker,
+    bodyManual.decision_maker,
+    bodyManual.selectedName,
+    bodyManual.selected_name,
+    reportManual.name,
+    reportManual.contactName,
+    reportManual.contact_name,
+    reportManual.decisionMaker,
+    reportManual.decision_maker,
+    reportManual.selectedName,
+    reportManual.selected_name,
+    body.contactName,
+    body.contact_name,
+    body.linkedinContactName,
+    body.linkedin_contact_name,
+    report.linkedinContactName,
+    report.linkedin_contact_name,
+    report.decisionMaker,
+    report.decision_maker,
+    person1.name,
+    safety.selectedName,
+    safety.selected_name,
+    privatePage.linkedinContactName,
+    privatePage.linkedin_contact_name,
+    existingData.linkedinContactName,
+  ).replace(/\s+/g, " ").trim().slice(0, 160);
+
+  const contactTitle = firstCleanString(
+    bodyManual.title,
+    bodyManual.contactTitle,
+    bodyManual.contact_title,
+    bodyManual.decisionMakerTitle,
+    bodyManual.decision_maker_title,
+    bodyManual.selectedTitle,
+    bodyManual.selected_title,
+    reportManual.title,
+    reportManual.contactTitle,
+    reportManual.contact_title,
+    reportManual.decisionMakerTitle,
+    reportManual.decision_maker_title,
+    reportManual.selectedTitle,
+    reportManual.selected_title,
+    body.contactTitle,
+    body.contact_title,
+    body.linkedinContactTitle,
+    body.linkedin_contact_title,
+    report.decisionMakerTitle,
+    report.decision_maker_title,
+    person1.title,
+    safety.selectedTitle,
+    safety.selected_title,
+  ).replace(/\s+/g, " ").trim().slice(0, 160);
+
+  const contactEmail = tfpV2796FirstValidEmailForSheet(
+    bodyManual.email,
+    bodyManual.emailAddress,
+    bodyManual.email_address,
+    bodyManual.finalEmail,
+    bodyManual.final_email,
+    reportManual.email,
+    reportManual.emailAddress,
+    reportManual.email_address,
+    reportManual.finalEmail,
+    reportManual.final_email,
+    body.finalEmail,
+    body.final_email,
+    body.email,
+    body.contactEmail,
+    body.contact_email,
+    report.finalEmail,
+    report.final_email,
+    report.email,
+    report.contactEmail,
+    report.contact_email,
+    person1.web_email,
+    person1.email,
+    existingData.finalEmail,
+    existingData.email,
+    existingData.contactEmail,
+  );
+
+  const linkedinUrl = tfpV2796FirstLinkedInUrlForSheet(
+    bodyManual.linkedin,
+    bodyManual.linkedinUrl,
+    bodyManual.linkedin_url,
+    bodyManual.profileUrl,
+    bodyManual.profile_url,
+    reportManual.linkedin,
+    reportManual.linkedinUrl,
+    reportManual.linkedin_url,
+    reportManual.profileUrl,
+    reportManual.profile_url,
+    body.linkedinProfileUrl,
+    body.linkedin_profile_url,
+    body.linkedinUrl,
+    body.linkedin_url,
+    body.socialLink,
+    body.social_link,
+    report.linkedinProfileUrl,
+    report.linkedin_profile_url,
+    report.linkedinUrl,
+    report.linkedin_url,
+    report.socialLink,
+    report.social_link,
+    person1.linkedin,
+    privatePage.linkedinProfileUrl,
+    privatePage.linkedin_profile_url,
+    existingData.linkedinProfileUrl,
+    existingData.linkedinUrl,
+  );
+
+  const updates: AnyRecord = {};
+  if (businessName) {
+    updates.businessName = businessName;
+    updates.companyName = businessName;
+  }
+  if (websiteUrl) updates.websiteUrl = websiteUrl;
+  if (contactEmail) {
+    updates.finalEmail = contactEmail;
+    updates.email = contactEmail;
+    updates.emailSource = firstCleanString(bodyManual.emailSource, reportManual.emailSource, body.emailSource, report.emailSource, "Manual verified identity");
+    updates.emailOutreachAllowed = "Yes";
+    updates.outreachChannel = "email";
+  }
+  if (linkedinUrl) {
+    updates.socialPlatform = "LinkedIn";
+    updates.socialLink = linkedinUrl;
+    updates.linkedinUrl = linkedinUrl;
+    updates.linkedinProfileUrl = linkedinUrl;
+    updates.linkedinOutreachAllowed = "Yes";
+    if (!updates.outreachChannel) updates.outreachChannel = "linkedin";
+  }
+  if (contactName) {
+    updates.decisionMaker = contactName;
+    updates.linkedinContactName = contactName;
+  }
+  if (contactTitle) updates.decisionMakerTitle = contactTitle;
+  if (contactName || contactEmail || linkedinUrl) updates.contactQuality = firstCleanString(bodyManual.contactQuality, reportManual.contactQuality, body.contactQuality, report.contactQuality, "verified");
 
   return updates;
 }
@@ -11257,12 +11531,17 @@ async function handleReportRegister(req: Request) {
   });
 
   const sheetOnlyInternalAuditUpdates = tfpV2774BuildSheetOnlyInternalAuditUpdates(report, body || {});
-  if (Number(report.sheetRowNumber || 0) > 1 && Object.keys(sheetOnlyInternalAuditUpdates).length) {
-    await patchSheetRowSafely(Number(report.sheetRowNumber), sheetOnlyInternalAuditUpdates);
-    logReportRegisterDebug("sheet_only_internal_audit_facts_patched", {
-      rowNumber: Number(report.sheetRowNumber),
-      updateKeys: Object.keys(sheetOnlyInternalAuditUpdates).sort(),
-      note: "Domain age/CMS/speed style dashboard facts are kept in Google Sheet, not Firestore.",
+  const verifiedIdentitySheetUpdates = tfpV2796BuildVerifiedIdentitySheetUpdates(report, body || {}, existingData || {});
+  const sheetRegisterUpdates = { ...verifiedIdentitySheetUpdates, ...sheetOnlyInternalAuditUpdates };
+  const registerSheetRowNumber = Number(report.sheetRowNumber || body?.sheetRowNumber || body?.sheet_row_number || existingData.sheetRowNumber || existingData.sheet_row_number || 0);
+  if (registerSheetRowNumber > 1 && Object.keys(sheetRegisterUpdates).length) {
+    await patchSheetRowSafely(registerSheetRowNumber, sheetRegisterUpdates);
+    logReportRegisterDebug("sheet_verified_identity_and_internal_facts_patched", {
+      rowNumber: registerSheetRowNumber,
+      updateKeys: Object.keys(sheetRegisterUpdates).sort(),
+      identityKeys: Object.keys(verifiedIdentitySheetUpdates).sort(),
+      internalFactKeys: Object.keys(sheetOnlyInternalAuditUpdates).sort(),
+      note: "Verified identity goes to Google Sheet for Gmail/LinkedIn outreach. Domain age/CMS/speed stay Sheet-only, not Firestore.",
     });
   }
 
