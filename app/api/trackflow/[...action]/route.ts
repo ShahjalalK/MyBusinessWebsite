@@ -10407,18 +10407,68 @@ function tfpV2792BuildRegisterReadinessBlockers(report: AnyRecord = {}, body: An
     firstCleanString(report.emailPreviewImageB2Key, report.email_preview_image_b2_key, body.emailPreviewImageB2Key, body.email_preview_image_b2_key) &&
       firstCleanString(report.emailPreviewImageUrl, report.email_preview_image_url, report.emailPreviewImageWebpUrl, report.email_preview_image_webp_url, body.emailPreviewImageUrl, body.email_preview_image_url),
   );
+  const reportManualContact = (report.manual_contact_update || report.manualContactUpdate || report.manualContact || report.manual_contact || {}) as AnyRecord;
+  const bodyManualContact = (body.manual_contact_update || body.manualContactUpdate || body.manualContact || body.manual_contact || {}) as AnyRecord;
+  const reportSafety = (report.decision_maker_safety || report.decisionMakerSafety || {}) as AnyRecord;
+  const bodySafety = (body.decision_maker_safety || body.decisionMakerSafety || {}) as AnyRecord;
+  const reportEmails = Array.isArray(report.contact?.web_emails) ? report.contact.web_emails : [];
+  const bodyEmails = Array.isArray(body.contact?.web_emails) ? body.contact.web_emails : [];
   const contactName = firstCleanString(
     report.linkedinContactName,
     report.linkedin_contact_name,
+    report.contactName,
+    report.contact_name,
+    reportManualContact.name,
+    reportManualContact.contactName,
+    reportManualContact.contact_name,
+    reportSafety.selected_name,
+    reportSafety.selectedName,
+    report.person1?.name,
     body.contactName,
     body.contact_name,
     body.linkedinContactName,
     body.linkedin_contact_name,
+    bodyManualContact.name,
+    bodyManualContact.contactName,
+    bodyManualContact.contact_name,
+    bodySafety.selected_name,
+    bodySafety.selectedName,
+    body.person1?.name,
   );
-  const linkedInUrl = firstCleanString(report.linkedinProfileUrl, report.linkedin_profile_url, body.linkedinProfileUrl, body.linkedin_profile_url);
-  const email = normalizeEmail(firstCleanString(report.email, body.email, body.finalEmail, body.final_email));
+  const linkedInUrl = firstCleanString(
+    report.linkedinProfileUrl,
+    report.linkedin_profile_url,
+    report.linkedinUrl,
+    report.linkedin_url,
+    reportManualContact.linkedin,
+    report.person1?.linkedin,
+    report.social_links?.linkedin,
+    body.linkedinProfileUrl,
+    body.linkedin_profile_url,
+    body.linkedinUrl,
+    body.linkedin_url,
+    bodyManualContact.linkedin,
+    body.person1?.linkedin,
+    body.social_links?.linkedin,
+  );
+  const email = normalizeEmail(firstCleanString(
+    report.email,
+    report.finalEmail,
+    report.final_email,
+    reportManualContact.email,
+    reportManualContact.emailAddress,
+    report.person1?.web_email,
+    ...reportEmails,
+    body.email,
+    body.finalEmail,
+    body.final_email,
+    bodyManualContact.email,
+    bodyManualContact.emailAddress,
+    body.person1?.web_email,
+    ...bodyEmails,
+  ));
 
-  if (!firstCleanString(report.companyName, report.company_name, body.companyName, body.company_name, body.businessName, body.business_name)) missing.push("Business name");
+  if (!firstCleanString(report.companyName, report.company_name, report.businessName, report.business_name, body.companyName, body.company_name, body.businessName, body.business_name)) missing.push("Business name");
   if (!contactName) missing.push("Contact name");
   if (!email && !linkedInUrl) missing.push("Email or LinkedIn URL");
   if (!firstCleanString(report.websiteUrl, report.website_url, report.domain, body.websiteUrl, body.website_url, body.domain)) missing.push("Website URL");
