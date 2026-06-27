@@ -97,7 +97,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TFP_REPORT_REGISTER_DEBUG_VERSION = "v18.79-email-preview-private-b2-register-2026-06-22";
+const TFP_REPORT_REGISTER_DEBUG_VERSION = "v27.93-video-only-safe-existing-update";
 
 
 const {
@@ -10375,6 +10375,292 @@ async function setAuditReportPayloadResilient(input: {
   }
 }
 
+
+function tfpV2792CountSecureEvidenceAssetsForRegister(report: AnyRecord = {}, body: AnyRecord = {}): number {
+  const candidates = [
+    report.securePageEvidenceAssets,
+    report.secure_page_evidence_assets,
+    report.privateReportCopy?.securePageEvidenceAssets,
+    report.privateReportCopy?.secure_page_evidence_assets,
+    report.private_report_copy?.securePageEvidenceAssets,
+    report.private_report_copy?.secure_page_evidence_assets,
+    body.securePageEvidenceAssets,
+    body.secure_page_evidence_assets,
+    body.privateReportCopy?.securePageEvidenceAssets,
+    body.privateReportCopy?.secure_page_evidence_assets,
+    body.private_report_copy?.securePageEvidenceAssets,
+    body.private_report_copy?.secure_page_evidence_assets,
+  ];
+  let maxCount = 0;
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    const count = candidate.filter((item: any) => item && typeof item === "object" && !Array.isArray(item) && firstCleanString(item.b2Key, item.b2_key, item.id, item.assetId, item.asset_id)).length;
+    maxCount = Math.max(maxCount, count);
+  }
+  return maxCount;
+}
+
+function tfpV2792BuildRegisterReadinessBlockers(report: AnyRecord = {}, body: AnyRecord = {}): string[] {
+  const missing: string[] = [];
+  const secureEvidenceCount = tfpV2792CountSecureEvidenceAssetsForRegister(report, body);
+  const emailPreviewReady = Boolean(
+    firstCleanString(report.emailPreviewImageB2Key, report.email_preview_image_b2_key, body.emailPreviewImageB2Key, body.email_preview_image_b2_key) &&
+      firstCleanString(report.emailPreviewImageUrl, report.email_preview_image_url, report.emailPreviewImageWebpUrl, report.email_preview_image_webp_url, body.emailPreviewImageUrl, body.email_preview_image_url),
+  );
+  const contactName = firstCleanString(
+    report.linkedinContactName,
+    report.linkedin_contact_name,
+    body.contactName,
+    body.contact_name,
+    body.linkedinContactName,
+    body.linkedin_contact_name,
+  );
+  const linkedInUrl = firstCleanString(report.linkedinProfileUrl, report.linkedin_profile_url, body.linkedinProfileUrl, body.linkedin_profile_url);
+  const email = normalizeEmail(firstCleanString(report.email, body.email, body.finalEmail, body.final_email));
+
+  if (!firstCleanString(report.companyName, report.company_name, body.companyName, body.company_name, body.businessName, body.business_name)) missing.push("Business name");
+  if (!contactName) missing.push("Contact name");
+  if (!email && !linkedInUrl) missing.push("Email or LinkedIn URL");
+  if (!firstCleanString(report.websiteUrl, report.website_url, report.domain, body.websiteUrl, body.website_url, body.domain)) missing.push("Website URL");
+  if (!report.pdfViewUrl && !report.pdfDownloadUrl) missing.push("Hosted PDF URL");
+  if (secureEvidenceCount < 2) missing.push("Secure Page Proof screenshots (2 required)");
+  if (!emailPreviewReady) missing.push("Email Preview Source Screenshot / generated email preview image");
+
+  return missing;
+}
+
+
+function tfpV2793HasIncomingEvidenceVideoForRegister(body: AnyRecord = {}): boolean {
+  const keys = [
+    "evidenceVideo",
+    "evidence_video",
+    "videoEvidence",
+    "video_evidence",
+    "video",
+    "evidenceVideoUrl",
+    "evidence_video_url",
+    "videoUrl",
+    "video_url",
+    "youtubeUrl",
+    "youtube_url",
+    "youtubeVideoId",
+    "youtube_video_id",
+    "evidenceVideoTitle",
+    "evidence_video_title",
+    "evidenceVideoStatus",
+    "evidence_video_status",
+    "evidenceVideoDescription",
+    "evidence_video_description",
+    "clearEvidenceVideo",
+    "clear_evidence_video",
+    "removeEvidenceVideo",
+    "remove_evidence_video",
+    "deleteEvidenceVideo",
+    "delete_evidence_video",
+  ];
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(body, key));
+}
+
+function tfpV2793HasIncomingPdfOrRequiredAssetForRegister(body: AnyRecord = {}): boolean {
+  const scalarKeys = [
+    "pdfViewUrl",
+    "pdf_view_url",
+    "pdfDownloadUrl",
+    "pdf_download_url",
+    "pdfUrl",
+    "pdf_url",
+    "blobUrl",
+    "blob_url",
+    "blobDownloadUrl",
+    "blob_download_url",
+    "b2Key",
+    "b2_key",
+    "pdfStorageKey",
+    "pdf_storage_key",
+    "securePageEvidenceAssets",
+    "secure_page_evidence_assets",
+    "emailPreviewImage",
+    "email_preview_image",
+    "emailPreviewImageUrl",
+    "email_preview_image_url",
+    "emailPreviewImageWebpUrl",
+    "email_preview_image_webp_url",
+    "emailPreviewImageB2Key",
+    "email_preview_image_b2_key",
+  ];
+  for (const key of scalarKeys) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    const value = body[key];
+    if (Array.isArray(value) && value.length > 0) return true;
+    if (value && typeof value === "object" && Object.keys(value).length > 0) return true;
+    if (firstCleanString(value)) return true;
+  }
+
+  const nestedCandidates = [
+    body.privateReportCopy,
+    body.private_report_copy,
+    body.securePageCopy,
+    body.secure_page_copy,
+  ];
+  return nestedCandidates.some((candidate) => {
+    const nested = candidate && typeof candidate === "object" && !Array.isArray(candidate) ? candidate as AnyRecord : null;
+    if (!nested) return false;
+    return Boolean(
+      firstCleanString(
+        nested.emailPreviewImageUrl,
+        nested.email_preview_image_url,
+        nested.emailPreviewImageB2Key,
+        nested.email_preview_image_b2_key,
+      ) ||
+        (Array.isArray(nested.securePageEvidenceAssets) && nested.securePageEvidenceAssets.length > 0) ||
+        (Array.isArray(nested.secure_page_evidence_assets) && nested.secure_page_evidence_assets.length > 0),
+    );
+  });
+}
+
+function tfpV2793BuildMergedRegisterReadinessData(input: {
+  report: AnyRecord;
+  body: AnyRecord;
+  existingData: AnyRecord;
+}): { report: AnyRecord; body: AnyRecord } {
+  return {
+    report: {
+      ...input.existingData,
+      ...input.report,
+      privateReportCopy: {
+        ...(input.existingData.privateReportCopy || input.existingData.private_report_copy || {}),
+        ...(input.report.privateReportCopy || input.report.private_report_copy || {}),
+      },
+      private_report_copy: {
+        ...(input.existingData.private_report_copy || input.existingData.privateReportCopy || {}),
+        ...(input.report.private_report_copy || input.report.privateReportCopy || {}),
+      },
+    },
+    body: {
+      ...input.existingData,
+      ...input.body,
+      privateReportCopy: {
+        ...(input.existingData.privateReportCopy || input.existingData.private_report_copy || {}),
+        ...(input.body.privateReportCopy || input.body.private_report_copy || {}),
+      },
+      private_report_copy: {
+        ...(input.existingData.private_report_copy || input.existingData.privateReportCopy || {}),
+        ...(input.body.private_report_copy || input.body.privateReportCopy || {}),
+      },
+    },
+  };
+}
+
+function tfpV2793IsExistingVideoOnlyRegisterUpdate(input: {
+  body: AnyRecord;
+  existingExists: boolean;
+}): boolean {
+  if (!input.existingExists) return false;
+  if (!tfpV2793HasIncomingEvidenceVideoForRegister(input.body)) return false;
+  return !tfpV2793HasIncomingPdfOrRequiredAssetForRegister(input.body);
+}
+
+async function tfpV2793HandleExistingVideoOnlyRegisterUpdate(input: {
+  reportRef: any;
+  report: AnyRecord;
+  body: AnyRecord;
+  existingData: AnyRecord;
+  debugRequested: boolean;
+}): Promise<NextResponse> {
+  const deleteField = admin.firestore.FieldValue.delete();
+  const readinessData = tfpV2793BuildMergedRegisterReadinessData({
+    report: input.report,
+    body: input.body,
+    existingData: input.existingData,
+  });
+  const readinessBlockers = tfpV2792BuildRegisterReadinessBlockers(readinessData.report, readinessData.body);
+  if (readinessBlockers.length) {
+    throw new ApiError(
+      `Secure report video update blocked because the existing secure page is missing required item${readinessBlockers.length === 1 ? "" : "s"}: ${readinessBlockers.join(", ")}.`,
+      400,
+      { missingRequired: readinessBlockers },
+    );
+  }
+
+  const video = input.report.evidenceVideo || normalizeEvidenceVideoPayload(input.body, input.existingData.privateReportCopy || input.existingData.securePageCopy || {});
+  const payload: AnyRecord = {
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastRegisteredAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (video?.clear) {
+    payload.evidenceVideo = deleteField;
+    payload.evidence_video = deleteField;
+    payload.evidenceVideoUrl = deleteField;
+    payload.evidence_video_url = deleteField;
+    payload.evidenceVideoEmbedUrl = deleteField;
+    payload.evidence_video_embed_url = deleteField;
+    payload.evidenceVideoProvider = deleteField;
+    payload.evidence_video_provider = deleteField;
+    payload.evidenceVideoId = deleteField;
+    payload.evidence_video_id = deleteField;
+    payload.evidenceVideoTitle = deleteField;
+    payload.evidence_video_title = deleteField;
+    payload.evidenceVideoVisibility = deleteField;
+    payload.evidence_video_visibility = deleteField;
+    payload.evidenceVideoStatus = "removed";
+    payload.evidence_video_status = deleteField;
+    payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+  } else if (video?.enabled && video.embedUrl) {
+    payload.evidenceVideo = video;
+    payload.evidence_video = deleteField;
+    payload.evidenceVideoUrl = video.videoUrl;
+    payload.evidence_video_url = deleteField;
+    payload.evidenceVideoEmbedUrl = video.embedUrl;
+    payload.evidence_video_embed_url = deleteField;
+    payload.evidenceVideoProvider = video.provider || "youtube";
+    payload.evidence_video_provider = deleteField;
+    payload.evidenceVideoId = video.videoId || video.youtubeVideoId || "";
+    payload.evidence_video_id = deleteField;
+    payload.evidenceVideoTitle = video.title || "Short browser-side evidence walkthrough";
+    payload.evidence_video_title = deleteField;
+    payload.evidenceVideoVisibility = "unlisted";
+    payload.evidence_video_visibility = deleteField;
+    payload.evidenceVideoStatus = video.status || "ready";
+    payload.evidence_video_status = deleteField;
+    payload.evidenceVideoUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
+  } else {
+    throw new ApiError("A valid YouTube video URL or video id is required for this secure report video update.", 400);
+  }
+
+  await input.reportRef.set(sanitizeRegisterFirestoreObject(payload), { merge: true });
+
+  const responsePayload: AnyRecord = {
+    success: true,
+    message: video?.clear ? "Evidence video removed successfully." : "Evidence video updated successfully.",
+    token: input.report.token,
+    reportToken: input.report.token,
+    domainSlug: firstCleanString(input.existingData.domainSlug, input.existingData.domain_slug, input.report.domainSlug),
+    domain_slug: firstCleanString(input.existingData.domainSlug, input.existingData.domain_slug, input.report.domainSlug),
+    reportUrl: firstCleanString(input.existingData.reportUrl, input.existingData.report_url, input.report.reportUrl),
+    evidenceVideoProvider: payload.evidenceVideoProvider || "",
+    evidenceVideoUrl: payload.evidenceVideoUrl || "",
+    evidenceVideoId: payload.evidenceVideoId || "",
+    evidenceVideoEmbedUrl: payload.evidenceVideoEmbedUrl || "",
+    evidenceVideoVisibility: payload.evidenceVideoVisibility || "",
+    evidenceVideoTitle: payload.evidenceVideoTitle || "",
+    evidenceVideoStatus: payload.evidenceVideoStatus || "",
+    debugVersion: TFP_REPORT_REGISTER_DEBUG_VERSION,
+    registerDebug: {
+      requested: input.debugRequested,
+      branch: "v2793_video_only_existing_update",
+      docPath: `audit_reports/${input.report.token}`,
+      preservedExistingAssets: true,
+      existing: pickReportRegisterDebugFields(input.existingData || {}),
+      incoming: pickReportRegisterDebugFields(input.body || {}),
+      updatedKeys: Object.keys(payload).sort(),
+    },
+  };
+
+  logReportRegisterDebug("video_only_existing_update_response", responsePayload.registerDebug);
+  return json(responsePayload);
+}
+
 async function handleReportRegister(req: Request) {
   await requireReportRegisterAccess(req);
   const requestUrl = new URL(req.url);
@@ -10425,23 +10711,50 @@ async function handleReportRegister(req: Request) {
     },
   });
 
-  if (!report.domain && !report.websiteUrl) {
-    throw new ApiError("domain or websiteUrl is required for report registration", 400);
-  }
-  if (!report.companyName) {
-    throw new ApiError("companyName or businessName is required for report registration", 400);
-  }
-  if (!report.pdfViewUrl && !report.pdfDownloadUrl) {
-    throw new ApiError("pdfViewUrl or pdfDownloadUrl is required", 400);
-  }
-  if (!report.reportUrl || isLocalOrUnsafeReportUrl(report.reportUrl)) {
-    throw new ApiError("A secure public reportUrl is required. Use NEXT_PUBLIC_APP_URL/tracking-review/{domainSlug}/{token}, not localhost or a direct PDF URL.", 400);
-  }
-
   const reportRef = adminDb.collection("audit_reports").doc(report.token);
   const existing = await reportRef.get();
   const existingData = existing.exists ? existing.data() || {} : {};
   const deleteField = admin.firestore.FieldValue.delete();
+
+  if (tfpV2793IsExistingVideoOnlyRegisterUpdate({ body: body || {}, existingExists: existing.exists })) {
+    return await tfpV2793HandleExistingVideoOnlyRegisterUpdate({
+      reportRef,
+      report,
+      body: body || {},
+      existingData,
+      debugRequested,
+    });
+  }
+
+  const readinessData = tfpV2793BuildMergedRegisterReadinessData({
+    report,
+    body: body || {},
+    existingData,
+  });
+
+  if (!firstCleanString(readinessData.report.domain, readinessData.report.websiteUrl, readinessData.body.domain, readinessData.body.websiteUrl, readinessData.body.website_url)) {
+    throw new ApiError("domain or websiteUrl is required for report registration", 400);
+  }
+  if (!firstCleanString(readinessData.report.companyName, readinessData.report.company_name, readinessData.body.companyName, readinessData.body.company_name, readinessData.body.businessName, readinessData.body.business_name)) {
+    throw new ApiError("companyName or businessName is required for report registration", 400);
+  }
+  if (!firstCleanString(readinessData.report.pdfViewUrl, readinessData.report.pdfDownloadUrl, readinessData.body.pdfViewUrl, readinessData.body.pdf_view_url, readinessData.body.pdfDownloadUrl, readinessData.body.pdf_download_url)) {
+    throw new ApiError("pdfViewUrl or pdfDownloadUrl is required", 400);
+  }
+  const safeReportUrlForValidation = firstCleanString(readinessData.report.reportUrl, readinessData.report.report_url, readinessData.body.reportUrl, readinessData.body.report_url);
+  if (!safeReportUrlForValidation || isLocalOrUnsafeReportUrl(safeReportUrlForValidation)) {
+    throw new ApiError("A secure public reportUrl is required. Use NEXT_PUBLIC_APP_URL/tracking-review/{domainSlug}/{token}, not localhost or a direct PDF URL.", 400);
+  }
+
+  const readinessBlockers = tfpV2792BuildRegisterReadinessBlockers(readinessData.report, readinessData.body);
+  if (readinessBlockers.length) {
+    throw new ApiError(
+      `Secure report registration blocked. Missing required item${readinessBlockers.length === 1 ? "" : "s"}: ${readinessBlockers.join(", ")}.`,
+      400,
+      { missingRequired: readinessBlockers },
+    );
+  }
+
   const normalizedDomain = normalizeDomainKeyForReports(report.domain, report.websiteUrl);
   const leanTrackingCase = tfpV2774BuildLeanTrackingCase(report, body || {}, report.auditCore || report.audit_core || null);
   const copyTemplateVersion = firstCleanString(
