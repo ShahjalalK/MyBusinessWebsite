@@ -10578,7 +10578,6 @@ async function tfpV2793HandleExistingVideoOnlyRegisterUpdate(input: {
     throw new ApiError(
       `Secure report video update blocked because the existing secure page is missing required item${readinessBlockers.length === 1 ? "" : "s"}: ${readinessBlockers.join(", ")}.`,
       400,
-      { missingRequired: readinessBlockers },
     );
   }
 
@@ -10751,7 +10750,6 @@ async function handleReportRegister(req: Request) {
     throw new ApiError(
       `Secure report registration blocked. Missing required item${readinessBlockers.length === 1 ? "" : "s"}: ${readinessBlockers.join(", ")}.`,
       400,
-      { missingRequired: readinessBlockers },
     );
   }
 
