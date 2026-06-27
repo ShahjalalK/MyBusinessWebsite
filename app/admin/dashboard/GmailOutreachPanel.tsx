@@ -82,6 +82,59 @@ function getEmail(lead: SheetLead) {
   return cleanText(sheetValue(lead, "Final Email")).toLowerCase();
 }
 
+function firstNonEmptySheetValue(lead: SheetLead, headers: string[]) {
+  for (const header of headers) {
+    const value = cleanText(sheetValue(lead, header));
+    if (value) return value;
+  }
+  return "";
+}
+
+function getDecisionMakerName(lead: SheetLead) {
+  return firstNonEmptySheetValue(lead, [
+    "Decision Maker",
+    "Decision Maker Name",
+    "Contact Name",
+    "LinkedIn Contact Name",
+  ]);
+}
+
+function getDecisionMakerTitle(lead: SheetLead) {
+  return firstNonEmptySheetValue(lead, [
+    "Decision Maker Title",
+    "Decision Maker Role",
+    "Contact Title",
+    "LinkedIn Contact Title",
+  ]);
+}
+
+function getContactQuality(lead: SheetLead) {
+  return firstNonEmptySheetValue(lead, ["Contact Quality", "Email Source", "Email Quality"]);
+}
+
+function getDecisionMakerSummary(lead: SheetLead) {
+  const name = getDecisionMakerName(lead);
+  const title = getDecisionMakerTitle(lead);
+  const quality = getContactQuality(lead);
+
+  return {
+    name,
+    title,
+    quality,
+    hasAny: Boolean(name || title || quality),
+    copyText: [name, title, quality ? `Contact quality: ${quality}` : ""].filter(Boolean).join("\n"),
+    inlineText: [name, title, quality].filter(Boolean).join(" · "),
+  };
+}
+
+function contactQualityTone(value: string) {
+  const text = cleanText(value).toLowerCase();
+  if (/^(strong|high|verified|good)$/i.test(text)) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (/^(medium|possible|ok|fair)$/i.test(text)) return "border-amber-200 bg-amber-50 text-amber-700";
+  if (/^(weak|low|unverified|risky)$/i.test(text)) return "border-slate-200 bg-slate-50 text-slate-600";
+  return "border-blue-100 bg-blue-50 text-blue-700";
+}
+
 function getLinkedInUrl(lead: SheetLead) {
   const raw = cleanText(sheetValue(lead, "Social Link"));
   if (!raw || !/linkedin\.com/i.test(raw)) return "";
@@ -471,6 +524,9 @@ export default function GmailOutreachPanel({
         sheetValue(lead, "Lead Source"),
         sheetValue(lead, "Audit Source"),
         sheetValue(lead, "Gmail Outreach Notes"),
+        sheetValue(lead, "Decision Maker"),
+        sheetValue(lead, "Decision Maker Title"),
+        sheetValue(lead, "Contact Quality"),
         sheetValue(lead, "Domain Age Years"),
         sheetValue(lead, "CMS"),
         sheetValue(lead, "Mobile Speed"),
@@ -677,6 +733,7 @@ export default function GmailOutreachPanel({
   const selectedPreviewPlainText = buildEmailPreviewPlainText(selectedLead);
   const selectedCurrentStage = selectedLead ? getGmailOutreachStage(selectedLead) : "ready";
   const selectedAuditFactChips = selectedLead ? getAuditFactChips(selectedLead) : [];
+  const selectedDecisionMaker = selectedLead ? getDecisionMakerSummary(selectedLead) : { name: "", title: "", quality: "", hasAny: false, copyText: "", inlineText: "" };
   const modalLoading = selectedLead ? actionLoadingRow === Number(selectedLead.rowNumber) : false;
 
   return (
@@ -766,6 +823,7 @@ export default function GmailOutreachPanel({
           const linkedIn = getLinkedInUrl(lead);
           const reportUrl = getReportUrl(lead);
           const auditFactChips = getAuditFactChips(lead);
+          const decisionMaker = getDecisionMakerSummary(lead);
           const loading = actionLoadingRow === Number(lead.rowNumber);
           const nextStage = getNextGmailStageAfterSend(stage);
           const markLabel = stage === "ready" || stage === "initial_sent" ? "Mark Initial Sent" : `Mark ${GMAIL_OUTREACH_STAGE_LABELS[stage]} Sent`;
@@ -790,6 +848,22 @@ export default function GmailOutreachPanel({
                   <p className="mt-1 truncate text-xs font-bold text-slate-400">
                     {email || "No email"} {linkedIn ? "· LinkedIn available" : ""}
                   </p>
+                  {decisionMaker.hasAny && (
+                    <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 px-3 py-2 text-xs font-bold text-indigo-800">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-500">Decision maker</span>
+                        {decisionMaker.quality && (
+                          <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${contactQualityTone(decisionMaker.quality)}`}>
+                            {decisionMaker.quality}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 truncate text-sm font-black text-slate-950">
+                        {decisionMaker.name || "Name not set"}
+                        {decisionMaker.title ? <span className="font-bold text-slate-500"> · {decisionMaker.title}</span> : null}
+                      </div>
+                    </div>
+                  )}
                   {auditFactChips.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {auditFactChips.map((fact) => (
@@ -883,6 +957,21 @@ export default function GmailOutreachPanel({
                   <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${sourceTone(getSheetSourceKind(selectedLead))}`}>
                     {getSheetSourceLabel(selectedLead)}
                   </span>
+                  {selectedDecisionMaker.name && (
+                    <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[10px] font-black uppercase text-indigo-700">
+                      Decision maker: <span className="text-slate-900">{selectedDecisionMaker.name}</span>
+                    </span>
+                  )}
+                  {selectedDecisionMaker.title && (
+                    <span className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase text-slate-500">
+                      Role: <span className="text-slate-800">{selectedDecisionMaker.title}</span>
+                    </span>
+                  )}
+                  {selectedDecisionMaker.quality && (
+                    <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${contactQualityTone(selectedDecisionMaker.quality)}`}>
+                      Contact: {selectedDecisionMaker.quality}
+                    </span>
+                  )}
                   {selectedAuditFactChips.map((fact) => (
                     <span
                       key={`selected-${fact.label}`}
@@ -905,6 +994,37 @@ export default function GmailOutreachPanel({
 
             <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[280px_minmax(0,1fr)]">
               <aside className="border-b border-slate-100 bg-slate-50/70 p-4 lg:border-b-0 lg:border-r">
+                <div className="mb-4 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Decision maker</div>
+                  <div className="mt-2 text-base font-black text-slate-950">{selectedDecisionMaker.name || "Not added"}</div>
+                  {selectedDecisionMaker.title ? (
+                    <div className="mt-1 text-xs font-bold text-slate-500">{selectedDecisionMaker.title}</div>
+                  ) : (
+                    <div className="mt-1 text-xs font-bold text-slate-400">Title missing</div>
+                  )}
+                  {selectedDecisionMaker.quality && (
+                    <span className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${contactQualityTone(selectedDecisionMaker.quality)}`}>
+                      {selectedDecisionMaker.quality}
+                    </span>
+                  )}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => copyText(selectedDecisionMaker.name, "Decision maker name")}
+                      className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase text-slate-600"
+                    >
+                      Copy name
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyText(selectedDecisionMaker.copyText, "Decision maker details")}
+                      className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-[10px] font-black uppercase text-indigo-700"
+                    >
+                      Copy details
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid gap-2">
                   <button
                     type="button"
