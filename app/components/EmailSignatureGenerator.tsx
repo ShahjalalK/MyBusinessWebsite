@@ -200,7 +200,7 @@ function getSignatureParts(form: SignatureForm, imageMode: ImageMode, allowDataI
   ].filter((link) => link.url);
 
   const credit = form.includeCredit
-    ? `<div style="margin-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#64748b;">Created with <a href="https://trackflowpro.com/tools/free-email-signature-generator" style="color:${color};text-decoration:none;font-weight:700;">TrackFlow Pro</a></div>`
+    ? `<tr><td colspan="3" style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:14px;mso-line-height-rule:exactly;color:#64748b;">Created with <a href="https://trackflowpro.com/tools/free-email-signature-generator" style="color:${color};text-decoration:none;font-weight:bold;">TrackFlow Pro</a></td></tr>`
     : "";
 
   return {
@@ -226,86 +226,108 @@ function getSignatureParts(form: SignatureForm, imageMode: ImageMode, allowDataI
   };
 }
 
-function imageBlock(parts: ReturnType<typeof getSignatureParts>, size = 92, radius = "999px", border = true) {
+function tableReset(extraStyle = "") {
+  return `border-collapse:collapse;border-spacing:0;mso-table-lspace:0pt;mso-table-rspace:0pt;${extraStyle}`;
+}
+
+function textStyle(size: number, lineHeight: number, color = "#334155", weight = "normal", family = "Arial,Helvetica,sans-serif") {
+  return `font-family:${family};font-size:${size}px;line-height:${lineHeight}px;mso-line-height-rule:exactly;color:${color};font-weight:${weight};`;
+}
+
+function linkStyle(color = "#334155", weight = "normal") {
+  return `color:${color};text-decoration:none;font-weight:${weight};`;
+}
+
+function imageBlock(parts: ReturnType<typeof getSignatureParts>, size = 76, radius = "8px", border = true) {
   const safeRadius = radius;
+  const borderStyle = border ? `border:2px solid ${parts.color};` : "border:0;";
+
   if (parts.imageUrl) {
-    return `<img src="${parts.imageUrl}" width="${size}" height="${size}" alt="${parts.name}" style="display:block;width:${size}px;height:${size}px;max-width:${size}px;border-radius:${safeRadius};object-fit:cover;${border ? `border:2px solid ${parts.color};` : ""}">`;
+    return `<img src="${parts.imageUrl}" width="${size}" height="${size}" alt="${parts.name}" style="display:block;width:${size}px;height:${size}px;max-width:${size}px;border-radius:${safeRadius};${borderStyle}outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">`;
   }
 
-  const fontSize = Math.max(17, Math.round(size * 0.28));
-  return `<div style="width:${size}px;height:${size}px;border-radius:${safeRadius};background:${parts.color};color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:${fontSize}px;font-weight:700;line-height:${size}px;text-align:center;">${parts.initials}</div>`;
+  const fontSize = Math.max(16, Math.round(size * 0.28));
+  return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="${size}" height="${size}" style="${tableReset(`width:${size}px;height:${size}px;`)}"><tr><td width="${size}" height="${size}" align="center" valign="middle" bgcolor="${parts.color}" style="width:${size}px;height:${size}px;border-radius:${safeRadius};${textStyle(fontSize, size, "#ffffff", "bold")}">${parts.initials}</td></tr></table>`;
 }
 
 function socialTextLinks(parts: ReturnType<typeof getSignatureParts>, divider = " | ") {
   if (!parts.socialLinks.length) return "";
-  return `<div style="margin-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;">${parts.socialLinks
+
+  return `<tr><td colspan="3" style="padding:7px 0 0 0;${textStyle(12, 16)}">${parts.socialLinks
     .map(
       (link, index) =>
-        `${index ? `<span style="color:#94a3b8;">${divider}</span>` : ""}<a href="${link.url}" style="color:${parts.color};text-decoration:none;font-weight:700;">${escapeHtml(link.label)}</a>`,
+        `${index ? `<span style="color:#94a3b8;">${divider}</span>` : ""}<a href="${link.url}" style="${linkStyle(parts.color, "bold")}">${escapeHtml(link.label)}</a>`,
     )
-    .join("")}</div>`;
+    .join("")}</td></tr>`;
 }
 
 function socialCircleLinks(parts: ReturnType<typeof getSignatureParts>) {
   if (!parts.socialLinks.length) return "";
-  return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;margin-top:8px;"><tr>${parts.socialLinks
+
+  return `<tr><td colspan="3" style="padding:7px 0 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}"><tr>${parts.socialLinks
     .map(
       (link) =>
-        `<td style="padding-right:5px;"><a href="${link.url}" aria-label="${escapeHtml(link.label)}" style="display:block;width:23px;height:23px;border-radius:999px;border:1px solid ${parts.color};font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;line-height:23px;text-align:center;color:${parts.color};text-decoration:none;">${escapeHtml(link.short)}</a></td>`,
+        `<td style="padding:0 5px 0 0;"><a href="${link.url}" aria-label="${escapeHtml(link.label)}" style="display:block;width:22px;height:22px;border:1px solid ${parts.color};border-radius:999px;${textStyle(10, 22, parts.color, "bold")}text-align:center;text-decoration:none;">${escapeHtml(link.short)}</a></td>`,
     )
-    .join("")}</tr></table>`;
+    .join("")}</tr></table></td></tr>`;
 }
 
 function contactLine(label: string, value: string, url: string, color: string) {
   if (!value) return "";
   const content = url
-    ? `<a href="${url}" style="color:${color};text-decoration:none;font-weight:600;">${value}</a>`
+    ? `<a href="${url}" style="${linkStyle("#334155", "normal")}">${value}</a>`
     : `<span style="color:#334155;">${value}</span>`;
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:19px;color:#334155;"><span style="color:#64748b;font-weight:700;">${label}:</span> ${content}</div>`;
+
+  return `<tr><td valign="top" style="padding:0 0 3px 0;${textStyle(12, 17, "#64748b", "bold")};white-space:nowrap;">${label}:&nbsp;</td><td valign="top" style="padding:0 0 3px 0;${textStyle(12, 17)}">${content}</td></tr>`;
 }
 
 function contactInline(parts: ReturnType<typeof getSignatureParts>) {
   const items = [
-    parts.phone ? `<a href="${parts.phoneHref}" style="color:#334155;text-decoration:none;font-weight:600;">${parts.phone}</a>` : "",
-    parts.email ? `<a href="${parts.emailHref}" style="color:#334155;text-decoration:none;font-weight:600;">${parts.email}</a>` : "",
-    parts.websiteLabel && parts.websiteUrl
-      ? `<a href="${parts.websiteUrl}" style="color:#334155;text-decoration:none;font-weight:600;">${parts.websiteLabel}</a>`
-      : "",
+    parts.phone ? `<a href="${parts.phoneHref}" style="${linkStyle("#334155", "normal")}">${parts.phone}</a>` : "",
+    parts.email ? `<a href="${parts.emailHref}" style="${linkStyle("#334155", "normal")}">${parts.email}</a>` : "",
+    parts.websiteLabel && parts.websiteUrl ? `<a href="${parts.websiteUrl}" style="${linkStyle("#334155", "normal")}">${parts.websiteLabel}</a>` : "",
   ].filter(Boolean);
 
   if (!items.length) return "";
-  return `<div style="margin-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#334155;">${items.join(
-    `<span style="color:${parts.color};font-weight:700;"> &nbsp;•&nbsp; </span>`,
-  )}</div>`;
+
+  return `<tr><td colspan="3" style="padding:6px 0 0 0;${textStyle(12, 17)}">${items.join(
+    `<span style="color:${parts.color};font-weight:bold;"> &nbsp;•&nbsp; </span>`,
+  )}</td></tr>`;
+}
+
+function addressRow(parts: ReturnType<typeof getSignatureParts>) {
+  if (!parts.address) return "";
+  return `<tr><td colspan="3" style="padding:4px 0 0 0;${textStyle(11, 15, "#64748b")}">${parts.address}</td></tr>`;
 }
 
 function ctaButton(parts: ReturnType<typeof getSignatureParts>, variant: "pill" | "bar" = "pill") {
   if (!parts.ctaUrl || !parts.ctaText) return "";
 
   if (variant === "bar") {
-    return `<div style="margin-top:10px;"><a href="${parts.ctaUrl}" style="display:block;background:${parts.color};color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;line-height:18px;text-decoration:none;text-align:center;padding:9px 12px;border-radius:8px;">${parts.ctaText}</a></div>`;
+    return `<tr><td colspan="3" style="padding:9px 0 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="${tableReset("width:100%;")}"><tr><td bgcolor="${parts.color}" align="center" style="padding:8px 12px;border-radius:6px;${textStyle(12, 16, "#ffffff", "bold")}"><a href="${parts.ctaUrl}" style="color:#ffffff;text-decoration:none;font-weight:bold;display:block;">${parts.ctaText}</a></td></tr></table></td></tr>`;
   }
 
-  return `<div style="margin-top:10px;"><a href="${parts.ctaUrl}" style="display:inline-block;border-radius:999px;background:${parts.color};color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:16px;text-decoration:none;padding:8px 12px;">${parts.ctaText}</a></div>`;
+  return `<tr><td colspan="3" style="padding:9px 0 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}"><tr><td bgcolor="${parts.color}" style="padding:7px 11px;border-radius:6px;${textStyle(12, 16, "#ffffff", "bold")}"><a href="${parts.ctaUrl}" style="color:#ffffff;text-decoration:none;font-weight:bold;">${parts.ctaText}</a></td></tr></table></td></tr>`;
 }
 
 function buildModernSignature(parts: ReturnType<typeof getSignatureParts>) {
   return `
-<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="520" style="${tableReset("width:520px;max-width:520px;margin:0;padding:0;")}">
   <tr>
-    <td style="vertical-align:middle;padding:0 15px 0 0;">${imageBlock(parts, 92, parts.imageMode === "url" ? "18px" : "999px")}</td>
-    <td style="vertical-align:middle;border-left:2px solid ${parts.color};padding:0 0 0 15px;">
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:23px;font-weight:700;color:#0f172a;">${parts.name}</div>
-      ${parts.titleLine ? `<div style="margin-top:2px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;font-weight:600;color:#475569;">${parts.titleLine}</div>` : ""}
-      <div style="margin-top:8px;">
+    <td width="86" valign="top" style="width:86px;padding:0 12px 0 0;margin:0;">${imageBlock(parts, 76, "8px")}</td>
+    <td width="2" bgcolor="${parts.color}" style="width:2px;font-size:0;line-height:0;padding:0;margin:0;">&nbsp;</td>
+    <td valign="top" style="padding:0 0 0 14px;margin:0;">
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset("margin:0;padding:0;")}">
+        <tr><td colspan="3" style="padding:0 0 2px 0;${textStyle(18, 22, "#0f172a", "bold")}">${parts.name}</td></tr>
+        ${parts.titleLine ? `<tr><td colspan="3" style="padding:0 0 7px 0;${textStyle(13, 17, "#475569", "bold")}">${parts.titleLine}</td></tr>` : ""}
         ${contactLine("Email", parts.email, parts.emailHref, parts.color)}
         ${contactLine("Phone", parts.phone, parts.phoneHref, parts.color)}
         ${parts.websiteLabel && parts.websiteUrl ? contactLine("Web", parts.websiteLabel, parts.websiteUrl, parts.color) : ""}
-        ${parts.address ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:19px;color:#64748b;">${parts.address}</div>` : ""}
-      </div>
-      ${socialTextLinks(parts)}
-      ${ctaButton(parts)}
-      ${parts.credit}
+        ${addressRow(parts)}
+        ${socialTextLinks(parts)}
+        ${ctaButton(parts)}
+        ${parts.credit}
+      </table>
     </td>
   </tr>
 </table>`.trim();
@@ -313,26 +335,31 @@ function buildModernSignature(parts: ReturnType<typeof getSignatureParts>) {
 
 function buildExecutiveSignature(parts: ReturnType<typeof getSignatureParts>) {
   return `
-<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;max-width:590px;">
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="560" style="${tableReset("width:560px;max-width:560px;margin:0;padding:0;")}">
+  <tr><td bgcolor="${parts.color}" height="4" style="height:4px;font-size:0;line-height:0;padding:0;margin:0;">&nbsp;</td></tr>
   <tr>
-    <td style="border-top:4px solid ${parts.color};border-bottom:1px solid #e2e8f0;padding:16px 18px 14px 18px;background:#ffffff;">
-      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;width:100%;">
+    <td style="padding:14px 16px 12px 16px;border-bottom:1px solid #e2e8f0;background-color:#ffffff;">
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="${tableReset("width:100%;")}">
         <tr>
-          <td style="vertical-align:middle;padding-right:16px;width:82px;">${imageBlock(parts, 76, "16px")}</td>
-          <td style="vertical-align:middle;padding-right:14px;">
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:21px;line-height:25px;font-weight:700;color:${parts.color};">${parts.name}</div>
-            ${parts.titleLine ? `<div style="margin-top:3px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#334155;font-weight:600;">${parts.titleLine}</div>` : ""}
-            ${socialCircleLinks(parts)}
+          <td width="76" valign="top" style="width:76px;padding:0 14px 0 0;">${imageBlock(parts, 66, "8px")}</td>
+          <td valign="top" style="padding:0 14px 0 0;">
+            <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}">
+              <tr><td colspan="3" style="padding:0 0 2px 0;${textStyle(20, 24, parts.color, "bold", "Georgia,'Times New Roman',serif")}">${parts.name}</td></tr>
+              ${parts.titleLine ? `<tr><td colspan="3" style="padding:0 0 5px 0;${textStyle(13, 17, "#334155", "bold")}">${parts.titleLine}</td></tr>` : ""}
+              ${socialCircleLinks(parts)}
+              ${addressRow(parts)}
+              ${parts.credit}
+            </table>
           </td>
-          <td style="vertical-align:middle;border-left:1px solid #e2e8f0;padding-left:14px;min-width:190px;">
-            ${contactLine("P", parts.phone, parts.phoneHref, parts.color)}
-            ${contactLine("E", parts.email, parts.emailHref, parts.color)}
-            ${parts.websiteLabel && parts.websiteUrl ? contactLine("W", parts.websiteLabel, parts.websiteUrl, parts.color) : ""}
+          <td width="185" valign="top" style="width:185px;border-left:1px solid #e2e8f0;padding:0 0 0 14px;">
+            <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}">
+              ${contactLine("P", parts.phone, parts.phoneHref, parts.color)}
+              ${contactLine("E", parts.email, parts.emailHref, parts.color)}
+              ${parts.websiteLabel && parts.websiteUrl ? contactLine("W", parts.websiteLabel, parts.websiteUrl, parts.color) : ""}
+            </table>
           </td>
         </tr>
       </table>
-      ${parts.address ? `<div style="margin-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#64748b;">${parts.address}</div>` : ""}
-      ${parts.credit}
     </td>
   </tr>
 </table>`.trim();
@@ -340,23 +367,25 @@ function buildExecutiveSignature(parts: ReturnType<typeof getSignatureParts>) {
 
 function buildClassicSignature(parts: ReturnType<typeof getSignatureParts>) {
   return `
-<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;max-width:620px;border-bottom:2px solid ${parts.color};padding-bottom:8px;">
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="560" style="${tableReset("width:560px;max-width:560px;margin:0;padding:0;")}">
   <tr>
-    <td style="vertical-align:top;padding:0 12px 8px 0;">${imageBlock(parts, 86, "8px", false)}</td>
-    <td style="vertical-align:top;padding:0 0 8px 0;width:100%;">
-      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;width:100%;">
+    <td width="84" valign="top" style="width:84px;padding:0 12px 8px 0;">${imageBlock(parts, 74, "6px", false)}</td>
+    <td valign="top" style="padding:0 0 8px 0;">
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="${tableReset("width:100%;border-bottom:2px solid " + parts.color + ";")}">
         <tr>
-          <td style="vertical-align:top;padding-right:10px;">
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:22px;font-weight:700;color:#111827;">${parts.name}</div>
-            ${parts.titleLine ? `<div style="margin-top:2px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:17px;color:#475569;">${parts.titleLine}</div>` : ""}
+          <td valign="top" style="padding:0 10px 0 0;">
+            <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}">
+              <tr><td colspan="3" style="padding:0 0 2px 0;${textStyle(18, 22, "#111827", "bold", "Georgia,'Times New Roman',serif")}">${parts.name}</td></tr>
+              ${parts.titleLine ? `<tr><td colspan="3" style="padding:0 0 5px 0;${textStyle(12, 16, "#475569")}">${parts.titleLine}</td></tr>` : ""}
+              ${contactInline(parts)}
+              ${addressRow(parts)}
+              ${ctaButton(parts)}
+              ${parts.credit}
+            </table>
           </td>
-          <td style="vertical-align:top;text-align:right;white-space:nowrap;">${socialCircleLinks(parts)}</td>
+          <td valign="top" align="right" style="padding:0;white-space:nowrap;">${socialCircleLinks(parts)}</td>
         </tr>
       </table>
-      ${contactInline(parts)}
-      ${parts.address ? `<div style="margin-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#64748b;">${parts.address}</div>` : ""}
-      ${ctaButton(parts)}
-      ${parts.credit}
     </td>
   </tr>
 </table>`.trim();
@@ -364,14 +393,16 @@ function buildClassicSignature(parts: ReturnType<typeof getSignatureParts>) {
 
 function buildCompactSignature(parts: ReturnType<typeof getSignatureParts>) {
   return `
-<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;max-width:520px;">
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="500" style="${tableReset("width:500px;max-width:500px;margin:0;padding:0;")}">
   <tr>
-    <td style="vertical-align:middle;padding-right:10px;">${imageBlock(parts, 54, "999px")}</td>
-    <td style="vertical-align:middle;">
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:19px;font-weight:700;color:#0f172a;">${parts.name}${parts.company ? ` <span style="font-weight:500;color:#64748b;">| ${parts.company}</span>` : ""}</div>
-      ${parts.jobTitle ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:17px;color:#475569;">${parts.jobTitle}</div>` : ""}
-      ${contactInline(parts)}
-      ${parts.credit}
+    <td width="58" valign="top" style="width:58px;padding:0 10px 0 0;">${imageBlock(parts, 48, "999px")}</td>
+    <td valign="top" style="padding:0;margin:0;">
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}">
+        <tr><td colspan="3" style="padding:0 0 2px 0;${textStyle(15, 19, "#0f172a", "bold")}">${parts.name}${parts.company ? ` <span style="font-weight:normal;color:#64748b;">| ${parts.company}</span>` : ""}</td></tr>
+        ${parts.jobTitle ? `<tr><td colspan="3" style="padding:0 0 4px 0;${textStyle(12, 16, "#475569")}">${parts.jobTitle}</td></tr>` : ""}
+        ${contactInline(parts)}
+        ${parts.credit}
+      </table>
     </td>
   </tr>
 </table>`.trim();
@@ -379,20 +410,21 @@ function buildCompactSignature(parts: ReturnType<typeof getSignatureParts>) {
 
 function buildCreativeSignature(parts: ReturnType<typeof getSignatureParts>) {
   return `
-<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;max-width:585px;">
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="540" style="${tableReset("width:540px;max-width:540px;margin:0;padding:0;")}">
   <tr>
-    <td style="vertical-align:middle;padding:0 14px 0 0;">${imageBlock(parts, 104, "18px")}</td>
-    <td style="vertical-align:middle;padding:0 0 0 14px;border-left:5px solid ${parts.color};">
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:24px;line-height:27px;font-weight:800;letter-spacing:-0.5px;color:${parts.color};">${parts.name}</div>
-      ${parts.titleLine ? `<div style="margin-top:3px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#111827;font-weight:600;">${parts.titleLine}</div>` : ""}
-      ${socialCircleLinks(parts)}
-      <div style="margin-top:8px;">
-        ${parts.email ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#334155;"><a href="${parts.emailHref}" style="color:#334155;text-decoration:none;">${parts.email}</a></div>` : ""}
-        ${parts.phone ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#334155;"><a href="${parts.phoneHref}" style="color:#334155;text-decoration:none;">${parts.phone}</a></div>` : ""}
-        ${parts.websiteLabel && parts.websiteUrl ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#334155;"><a href="${parts.websiteUrl}" style="color:${parts.color};text-decoration:none;font-weight:700;">${parts.websiteLabel}</a></div>` : ""}
-      </div>
-      ${ctaButton(parts)}
-      ${parts.credit}
+    <td width="92" valign="top" style="width:92px;padding:0 12px 0 0;">${imageBlock(parts, 82, "10px")}</td>
+    <td width="4" bgcolor="${parts.color}" style="width:4px;font-size:0;line-height:0;padding:0;margin:0;">&nbsp;</td>
+    <td valign="top" style="padding:0 0 0 13px;">
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}">
+        <tr><td colspan="3" style="padding:0 0 2px 0;${textStyle(21, 24, parts.color, "bold")}">${parts.name}</td></tr>
+        ${parts.titleLine ? `<tr><td colspan="3" style="padding:0 0 6px 0;${textStyle(13, 18, "#111827", "bold")}">${parts.titleLine}</td></tr>` : ""}
+        ${parts.email ? contactLine("Email", parts.email, parts.emailHref, parts.color) : ""}
+        ${parts.phone ? contactLine("Phone", parts.phone, parts.phoneHref, parts.color) : ""}
+        ${parts.websiteLabel && parts.websiteUrl ? contactLine("Web", parts.websiteLabel, parts.websiteUrl, parts.color) : ""}
+        ${socialCircleLinks(parts)}
+        ${ctaButton(parts)}
+        ${parts.credit}
+      </table>
     </td>
   </tr>
 </table>`.trim();
@@ -400,25 +432,33 @@ function buildCreativeSignature(parts: ReturnType<typeof getSignatureParts>) {
 
 function buildBannerSignature(parts: ReturnType<typeof getSignatureParts>) {
   return `
-<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;max-width:600px;">
+<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="540" style="${tableReset("width:540px;max-width:540px;margin:0;padding:0;")}">
   <tr>
-    <td style="padding:0 0 9px 0;">
-      <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;width:100%;">
+    <td style="padding:0;margin:0;">
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="${tableReset("width:100%;")}">
         <tr>
-          <td style="vertical-align:middle;padding-right:13px;width:78px;">${imageBlock(parts, 72, "14px")}</td>
-          <td style="vertical-align:middle;">
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:19px;line-height:23px;font-weight:800;color:#0f172a;">${parts.name}</div>
-            ${parts.titleLine ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#475569;font-weight:600;">${parts.titleLine}</div>` : ""}
-            ${contactInline(parts)}
+          <td width="74" valign="top" style="width:74px;padding:0 12px 0 0;">${imageBlock(parts, 64, "8px")}</td>
+          <td valign="top" style="padding:0;margin:0;">
+            <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}">
+              <tr><td colspan="3" style="padding:0 0 2px 0;${textStyle(18, 22, "#0f172a", "bold")}">${parts.name}</td></tr>
+              ${parts.titleLine ? `<tr><td colspan="3" style="padding:0 0 4px 0;${textStyle(13, 17, "#475569", "bold")}">${parts.titleLine}</td></tr>` : ""}
+              ${contactInline(parts)}
+            </table>
           </td>
         </tr>
       </table>
-      ${ctaButton(parts, "bar")}
-      ${parts.address ? `<div style="margin-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#64748b;">${parts.address}</div>` : ""}
-      ${parts.credit}
+      <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%" style="${tableReset("width:100%;")}">
+        ${ctaButton(parts, "bar")}
+        ${addressRow(parts)}
+        ${parts.credit}
+      </table>
     </td>
   </tr>
 </table>`.trim();
+}
+
+function buildClipboardHtml(fragment: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">${fragment}</body></html>`;
 }
 
 function buildSignatureHtml(
@@ -559,7 +599,7 @@ export default function EmailSignatureGenerator() {
     setCopyStatus("idle");
     try {
       if (typeof window !== "undefined" && "ClipboardItem" in window && navigator.clipboard?.write) {
-        const htmlBlob = new Blob([signatureHtml], { type: "text/html" });
+        const htmlBlob = new Blob([buildClipboardHtml(signatureHtml)], { type: "text/html" });
         const textBlob = new Blob([plainText], { type: "text/plain" });
         await navigator.clipboard.write([
           new ClipboardItem({
