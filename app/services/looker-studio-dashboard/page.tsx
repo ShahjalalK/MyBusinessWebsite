@@ -283,16 +283,18 @@ export default function LookerStudioDashboardPage() {
   return (
     <>
       <Navbar />
-      <main className="overflow-x-hidden bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+      <main className="overflow-x-hidden bg-white pb-20 text-slate-950 dark:bg-slate-950 dark:text-white lg:pb-0">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <HeroSection />
         <DataSourceStrip />
+        <RelatedServiceRail active="Looker Studio Dashboard" />
         <ProblemsSection />
         <DashboardTypesSection />
         <FeaturesSection />
         <ProcessSection />
         <FaqSection />
         <FinalCtaSection />
+        <MobileStickyCta primaryLabel="Plan dashboard" />
       </main>
       <Footer />
     </>
@@ -608,6 +610,118 @@ function FinalCtaSection() {
     </section>
   );
 }
+
+
+function RelatedServiceRail({ active }: { active: string }) {
+  const links = [
+    {
+      title: "Google Ads Conversion Tracking",
+      label: "Google Ads",
+      href: "/services/google-ads-conversion-tracking",
+      description: "Tags, enhanced conversions, leads, calls, and ecommerce tracking.",
+    },
+    {
+      title: "GA4 & GTM Audit",
+      label: "GA4 + GTM",
+      href: "/services/ga4-gtm-audit",
+      description: "Events, tags, triggers, data layer, and conversion validation.",
+    },
+    {
+      title: "Server-Side Tracking",
+      label: "Server-side",
+      href: "/services/server-side-tracking",
+      description: "First-party measurement, server events, and signal validation.",
+    },
+    {
+      title: "Meta CAPI Setup",
+      label: "Meta CAPI",
+      href: "/services/meta-capi",
+      description: "Pixel, Conversions API, event quality, and deduplication.",
+    },
+    {
+      title: "Looker Studio Dashboard",
+      label: "Looker Studio",
+      href: "/services/looker-studio-dashboard",
+      description: "PPC dashboards for Google Ads, GA4, Meta, leads, and revenue.",
+    },
+  ];
+
+  return (
+    <section className="relative z-10 border-y border-slate-800 bg-slate-950 px-4 py-5 text-white sm:px-6 lg:px-8 lg:py-7">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-300">Service paths</p>
+            <h2 className="mt-1 text-xl font-black tracking-[-0.04em] text-white sm:text-2xl">
+              Tracking, reporting, and measurement support in one focused stack.
+            </h2>
+          </div>
+          <Link
+            href="/services"
+            className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-black text-slate-200 transition hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-white"
+          >
+            View all services <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 md:grid-cols-3 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden">
+          {links.map((item) => {
+            const isCurrent = active === item.title;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isCurrent ? "page" : undefined}
+                className={cn(
+                  "group min-w-[78vw] rounded-[1.35rem] border p-4 transition sm:min-w-0 sm:rounded-[1.5rem] sm:p-5",
+                  isCurrent
+                    ? "border-blue-400/50 bg-blue-500/15 shadow-xl shadow-blue-950/30"
+                    : "border-white/10 bg-white/[0.035] hover:-translate-y-0.5 hover:border-blue-400/40 hover:bg-white/[0.06]"
+                )}
+              >
+                <span className="inline-flex rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">
+                  {isCurrent ? "Current" : item.label}
+                </span>
+                <span className="mt-4 block text-base font-black tracking-[-0.03em] text-white">
+                  {item.title}
+                </span>
+                <span className="mt-2 block text-sm font-medium leading-6 text-slate-400">
+                  {item.description}
+                </span>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-black text-blue-300">
+                  Open service <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MobileStickyCta({ primaryLabel }: { primaryLabel: string }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[80] border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-18px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/95 lg:hidden">
+      <div className="mx-auto flex max-w-lg gap-2">
+        <Link
+          href="/free-tracking-audit"
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+        >
+          {primaryLabel}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+        <Link
+          href="/contact"
+          className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-950 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+        >
+          Contact
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 
 function SectionHeader({
   eyebrow,
