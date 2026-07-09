@@ -64,6 +64,10 @@ const company = [
     href: "/contact",
   },
   {
+    label: "Free Email Signature Generator",
+    href: "/tools/free-email-signature-generator",
+  },
+  {
     label: "Privacy Policy",
     href: "/privacy-policy",
   },

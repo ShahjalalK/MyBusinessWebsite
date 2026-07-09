@@ -53,6 +53,16 @@ const routes = [
     priority: 0.9,
     changeFrequency: "weekly" as const,
   },
+  {
+    path: "/tools",
+    priority: 0.65,
+    changeFrequency: "monthly" as const,
+  },
+  {
+    path: "/tools/free-email-signature-generator",
+    priority: 0.75,
+    changeFrequency: "weekly" as const,
+  },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
