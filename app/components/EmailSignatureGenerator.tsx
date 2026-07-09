@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent, ReactNode, RefObject } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -556,7 +556,62 @@ const WIZARD_STEPS: Array<{
   },
 ];
 
+const STORAGE_KEY = "trackflowpro-email-signature-draft-v1";
+const AUTOSAVE_DELAY_MS = 300;
+
+type SavedSignatureDraft = {
+  form?: Partial<SignatureForm>;
+  imageMode?: ImageMode;
+  imageKind?: ImageKind;
+  outputFormat?: OutputFormat;
+  quality?: number;
+  activeStep?: WizardStep;
+  selectedTemplate?: SignatureTemplate;
+};
+
+function loadSavedDraft(): SavedSignatureDraft | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return parsed as SavedSignatureDraft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft: SavedSignatureDraft) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // If the browser blocks storage or storage is full, the generator still works.
+  }
+}
+
+function clearSavedDraft() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function hasMinimumSignatureDetails(form: SignatureForm) {
+  return Boolean(form.fullName.trim()) && Boolean(form.email.trim() || form.phone.trim() || form.website.trim());
+}
+
+
 export default function EmailSignatureGenerator() {
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [form, setForm] = useState<SignatureForm>(DEFAULT_FORM);
   const [imageMode, setImageMode] = useState<ImageMode>("initials");
   const [imageKind, setImageKind] = useState<ImageKind>("profile");
@@ -584,11 +639,48 @@ export default function EmailSignatureGenerator() {
     return buildSignatureHtml({ ...form, imageUrl: optimizedDataUrl }, imageMode, true, selectedTemplate);
   }, [form, imageMode, optimizedDataUrl, selectedTemplate, signatureHtml]);
 
+  const canCopy = hasMinimumSignatureDetails(form);
+
+  useEffect(() => {
+    const savedDraft = loadSavedDraft();
+
+    if (savedDraft?.form) {
+      setForm({ ...DEFAULT_FORM, ...savedDraft.form });
+    }
+    if (savedDraft?.imageMode) setImageMode(savedDraft.imageMode);
+    if (savedDraft?.imageKind) setImageKind(savedDraft.imageKind);
+    if (savedDraft?.outputFormat) setOutputFormat(savedDraft.outputFormat);
+    if (typeof savedDraft?.quality === "number") setQuality(savedDraft.quality);
+    if (savedDraft?.activeStep) setActiveStep(savedDraft.activeStep);
+    if (savedDraft?.selectedTemplate) setSelectedTemplate(savedDraft.selectedTemplate);
+
+    setDraftLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoaded) return;
+
+    const timer = window.setTimeout(() => {
+      saveDraft({
+        form,
+        imageMode,
+        imageKind,
+        outputFormat,
+        quality,
+        activeStep,
+        selectedTemplate,
+      });
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [draftLoaded, form, imageMode, imageKind, outputFormat, quality, activeStep, selectedTemplate]);
+
   function updateField<K extends keyof SignatureForm>(key: K, value: SignatureForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
   function resetForm() {
+    clearSavedDraft();
     setForm(DEFAULT_FORM);
     setImageMode("initials");
     setImageKind("profile");
@@ -607,6 +699,8 @@ export default function EmailSignatureGenerator() {
   }
 
   async function copyRichSignature() {
+    if (!canCopy) return;
+
     setCopyStatus("idle");
     try {
       if (typeof window !== "undefined" && "ClipboardItem" in window && navigator.clipboard?.write) {
@@ -629,6 +723,8 @@ export default function EmailSignatureGenerator() {
   }
 
   async function copyHtml() {
+    if (!canCopy) return;
+
     try {
       await navigator.clipboard.writeText(signatureHtml);
       setHtmlCopied(true);
@@ -639,6 +735,8 @@ export default function EmailSignatureGenerator() {
   }
 
   function downloadHtml() {
+    if (!canCopy) return;
+
     const blob = new Blob([signatureHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -714,7 +812,7 @@ export default function EmailSignatureGenerator() {
         setOptimizedFileName(`${nextKind === "profile" ? "signature-profile" : "signature-logo"}.${extension}`);
         setImageMode("upload");
         setImageNotice(
-          "Image optimized in your browser. Download it, upload it to your own public image host, then paste that public image URL below.",
+          "Image optimized locally. Download it and use initials now, or paste a public image URL if you want the image to appear for Gmail/Outlook recipients.",
         );
       };
       img.onerror = () => setImageNotice("This image could not be opened. Please try another image.");
@@ -795,20 +893,20 @@ export default function EmailSignatureGenerator() {
               Create once. Preview every design live.
             </h2>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
-              Add a few details step by step, then switch through six polished signatures from the preview panel. Your data stays in the browser.
+              Add a few details step by step, then switch through six polished signatures. Your draft auto-saves in this browser only.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <InfoPill icon={<ShieldCheck className="h-4 w-4" />} label="No data stored" />
+            <InfoPill icon={<ShieldCheck className="h-4 w-4" />} label="Draft saved locally" />
             <InfoPill icon={<ImageUp className="h-4 w-4" />} label="No image hosting cost" />
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
-        <div className="lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)]">
-          <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+      <div className="grid gap-6 lg:grid-cols-[minmax(430px,0.98fr)_minmax(0,1.02fr)] lg:items-start">
+        <div className="lg:sticky lg:top-20">
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
             <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
@@ -853,7 +951,7 @@ export default function EmailSignatureGenerator() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="p-4 sm:p-5">
               <StepContent
                 activeStep={activeStep}
                 form={form}
@@ -892,12 +990,18 @@ export default function EmailSignatureGenerator() {
                 <button
                   type="button"
                   onClick={isLastStep ? copyRichSignature : goNextStep}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
+                  disabled={isLastStep && !canCopy}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {isLastStep ? (copyStatus === "copied" ? "Copied for Gmail" : "Copy final signature") : "Continue"}
                   {isLastStep ? copyStatus === "copied" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
                 </button>
               </div>
+              {isLastStep && !canCopy ? (
+                <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                  Add your full name and at least one contact method before copying.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -916,7 +1020,7 @@ export default function EmailSignatureGenerator() {
 
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-300">
                   <ShieldCheck className="h-4 w-4" />
-                  No data stored
+                  No server storage
                 </div>
               </div>
             </div>
@@ -951,7 +1055,7 @@ export default function EmailSignatureGenerator() {
 
               {imageMode === "upload" && !publicImageReady ? (
                 <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
-                  Preview can show your optimized local image. For Gmail/Outlook copy, paste a public image URL so the image loads for recipients.
+                  Local uploads are for preview and optimization only. For a real image in Gmail/Outlook, paste a public image URL; otherwise initials will still work.
                 </div>
               ) : null}
 
@@ -998,7 +1102,8 @@ export default function EmailSignatureGenerator() {
                 <button
                   type="button"
                   onClick={copyRichSignature}
-                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 sm:col-span-1"
+                  disabled={!canCopy}
+                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-45 sm:col-span-1"
                 >
                   {copyStatus === "copied" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copyStatus === "copied" ? "Copied" : "Copy signature"}
@@ -1007,7 +1112,8 @@ export default function EmailSignatureGenerator() {
                 <button
                   type="button"
                   onClick={copyHtml}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-blue-500/10"
+                  disabled={!canCopy}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-blue-500/10"
                 >
                   <Clipboard className="h-4 w-4" />
                   {htmlCopied ? "HTML copied" : "Copy HTML"}
@@ -1016,12 +1122,25 @@ export default function EmailSignatureGenerator() {
                 <button
                   type="button"
                   onClick={downloadHtml}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-white/[0.06]"
+                  disabled={!canCopy}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-white/[0.06]"
                 >
                   <ArrowDownToLine className="h-4 w-4" />
                   Download
                 </button>
               </div>
+
+              {copyStatus === "copied" ? (
+                <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  Copied! Now open Gmail or Outlook signature settings, paste it, save, and send yourself one test email.
+                </p>
+              ) : null}
+
+              {!canCopy ? (
+                <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                  Add your full name and at least one contact method before copying.
+                </p>
+              ) : null}
 
               {copyStatus === "failed" ? (
                 <p className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
@@ -1110,7 +1229,7 @@ function StepContent({
         <StepNote
           icon={<ImageUp className="h-5 w-5" />}
           title="Image without hosting cost"
-          description="We optimize the image in your browser. You download it, host it yourself, then paste the public image URL."
+          description="Use initials for a zero-cost setup, or paste a public image URL when you want a real photo/logo in Gmail or Outlook."
         />
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -1291,12 +1410,12 @@ function InfoPill({ icon, label }: { icon: ReactNode; label: string }) {
 
 function StepNote({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-4 dark:border-blue-400/20 dark:bg-blue-500/10">
+    <div className="rounded-[1.25rem] border border-blue-200 bg-blue-50 p-3 dark:border-blue-400/20 dark:bg-blue-500/10">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">{icon}</div>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">{icon}</div>
         <div>
-          <h4 className="text-base font-black text-slate-950 dark:text-white">{title}</h4>
-          <p className="mt-1 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-300">{description}</p>
+          <h4 className="text-sm font-black text-slate-950 dark:text-white">{title}</h4>
+          <p className="mt-0.5 text-xs font-semibold leading-5 text-slate-700 dark:text-slate-300">{description}</p>
         </div>
       </div>
     </div>

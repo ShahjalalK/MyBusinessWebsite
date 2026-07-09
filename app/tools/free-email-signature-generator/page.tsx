@@ -73,8 +73,8 @@ const features = [
   },
   {
     icon: <ShieldCheck className="h-5 w-5" />,
-    title: "No storage or login",
-    text: "The generator runs in your browser. We do not upload, host, or store your signature details or preview image.",
+    title: "No server storage or login",
+    text: "The generator runs in your browser. Draft details can auto-save on the user’s own device, but they are not sent to our server.",
   },
   {
     icon: <ClipboardCheck className="h-5 w-5" />,
@@ -119,7 +119,7 @@ const faqs = [
   {
     question: "Do you store my personal information?",
     answer:
-      "No. The information you type is used only inside your browser to create the live preview and copyable signature. It is not saved to our server.",
+      "No. The information you type is used inside your browser to create the preview and copyable signature. The tool can save a private draft in your browser’s local storage so refresh does not erase your work, but it is not saved to our server.",
   },
 ];
 
@@ -232,7 +232,7 @@ export default function FreeEmailSignatureGeneratorPage() {
 
             <div className="mx-auto mt-8 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
               <HeroPoint text="No login required" />
-              <HeroPoint text="Image optimized in browser" />
+              <HeroPoint text="Draft saved on device" />
               <HeroPoint text="Gmail & Outlook friendly" />
             </div>
           </div>
