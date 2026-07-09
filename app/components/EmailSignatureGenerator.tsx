@@ -1,25 +1,32 @@
 "use client";
 
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode, RefObject } from "react";
 import { useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clipboard,
   Copy,
   ImageUp,
   LayoutTemplate,
+  Link2,
+  Mail,
+  Palette,
   RefreshCcw,
   ShieldCheck,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 
 type ImageMode = "initials" | "url" | "upload";
 type ImageKind = "profile" | "logo";
 type OutputFormat = "image/jpeg" | "image/png";
 type CopyStatus = "idle" | "copied" | "failed";
-type BuilderStep = "details" | "templates";
+type WizardStep = "personal" | "contact" | "image" | "links" | "style" | "copy";
 type SignatureTemplate = "modern" | "executive" | "classic" | "compact" | "creative" | "banner";
 
 type SignatureForm = {
@@ -454,6 +461,50 @@ function buildPlainText(form: SignatureForm) {
   return lines.join("\n");
 }
 
+const WIZARD_STEPS: Array<{
+  id: WizardStep;
+  label: string;
+  title: string;
+  description: string;
+}> = [
+  {
+    id: "personal",
+    label: "Details",
+    title: "Start with the basics",
+    description: "Add the name and role that should appear first in the signature.",
+  },
+  {
+    id: "contact",
+    label: "Contact",
+    title: "Add contact information",
+    description: "Keep the contact line clear and easy to click from Gmail or Outlook.",
+  },
+  {
+    id: "image",
+    label: "Image",
+    title: "Prepare the image",
+    description: "Use initials, a public image URL, or optimize an image without uploading it to our server.",
+  },
+  {
+    id: "links",
+    label: "Links",
+    title: "Add social links and CTA",
+    description: "Add only the links that matter so the signature stays clean.",
+  },
+  {
+    id: "style",
+    label: "Style",
+    title: "Choose brand color",
+    description: "Match the signature with the brand color and credit preference.",
+  },
+  {
+    id: "copy",
+    label: "Copy",
+    title: "Copy and install",
+    description: "Copy the final signature, paste it into Gmail or Outlook, and send a test email.",
+  },
+];
+
 export default function EmailSignatureGenerator() {
   const [form, setForm] = useState<SignatureForm>(DEFAULT_FORM);
   const [imageMode, setImageMode] = useState<ImageMode>("initials");
@@ -467,7 +518,7 @@ export default function EmailSignatureGenerator() {
   const [imageNotice, setImageNotice] = useState("");
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [htmlCopied, setHtmlCopied] = useState(false);
-  const [builderStep, setBuilderStep] = useState<BuilderStep>("details");
+  const [activeStep, setActiveStep] = useState<WizardStep>("personal");
   const [selectedTemplate, setSelectedTemplate] = useState<SignatureTemplate>("modern");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -481,14 +532,6 @@ export default function EmailSignatureGenerator() {
     if (form.imageUrl || !optimizedDataUrl || imageMode !== "upload") return signatureHtml;
     return buildSignatureHtml({ ...form, imageUrl: optimizedDataUrl }, imageMode, true, selectedTemplate);
   }, [form, imageMode, optimizedDataUrl, selectedTemplate, signatureHtml]);
-
-  function getTemplatePreview(template: SignatureTemplate) {
-    if (form.imageUrl || !optimizedDataUrl || imageMode !== "upload") {
-      return buildSignatureHtml(form, imageMode, false, template);
-    }
-
-    return buildSignatureHtml({ ...form, imageUrl: optimizedDataUrl }, imageMode, true, template);
-  }
 
   function updateField<K extends keyof SignatureForm>(key: K, value: SignatureForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -507,7 +550,7 @@ export default function EmailSignatureGenerator() {
     setImageNotice("");
     setCopyStatus("idle");
     setHtmlCopied(false);
-    setBuilderStep("details");
+    setActiveStep("personal");
     setSelectedTemplate("modern");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -620,7 +663,7 @@ export default function EmailSignatureGenerator() {
         setOptimizedFileName(`${nextKind === "profile" ? "signature-profile" : "signature-logo"}.${extension}`);
         setImageMode("upload");
         setImageNotice(
-          "Image optimized in your browser. Download it, upload it to your own public image host, then paste that image URL below.",
+          "Image optimized in your browser. Download it, upload it to your own public image host, then paste that public image URL below.",
         );
       };
       img.onerror = () => setImageNotice("This image could not be opened. Please try another image.");
@@ -653,377 +696,568 @@ export default function EmailSignatureGenerator() {
     if (file) processImage(file, imageKind, outputFormat, nextQuality);
   }
 
+  function goToStep(step: WizardStep) {
+    setActiveStep(step);
+  }
+
+  function goNextStep() {
+    const currentIndex = WIZARD_STEPS.findIndex((step) => step.id === activeStep);
+    const nextStep = WIZARD_STEPS[Math.min(WIZARD_STEPS.length - 1, currentIndex + 1)];
+    setActiveStep(nextStep.id);
+  }
+
+  function goPreviousStep() {
+    const currentIndex = WIZARD_STEPS.findIndex((step) => step.id === activeStep);
+    const previousStep = WIZARD_STEPS[Math.max(0, currentIndex - 1)];
+    setActiveStep(previousStep.id);
+  }
+
+  function goTemplate(direction: "previous" | "next") {
+    const currentIndex = SIGNATURE_TEMPLATES.findIndex((template) => template.id === selectedTemplate);
+    const nextIndex =
+      direction === "next"
+        ? (currentIndex + 1) % SIGNATURE_TEMPLATES.length
+        : (currentIndex - 1 + SIGNATURE_TEMPLATES.length) % SIGNATURE_TEMPLATES.length;
+    setSelectedTemplate(SIGNATURE_TEMPLATES[nextIndex].id);
+  }
+
   const savedPercent = originalSize && optimizedSize ? Math.max(0, Math.round(((originalSize - optimizedSize) / originalSize) * 100)) : 0;
   const publicImageReady = Boolean(form.imageUrl.trim());
-  const selectedTemplateDetails = SIGNATURE_TEMPLATES.find((template) => template.id === selectedTemplate) || SIGNATURE_TEMPLATES[0];
+  const activeStepIndex = WIZARD_STEPS.findIndex((step) => step.id === activeStep);
+  const activeStepDetails = WIZARD_STEPS[activeStepIndex] || WIZARD_STEPS[0];
+  const progressPercent = Math.round(((activeStepIndex + 1) / WIZARD_STEPS.length) * 100);
+  const selectedTemplateIndex = SIGNATURE_TEMPLATES.findIndex((template) => template.id === selectedTemplate);
+  const selectedTemplateDetails = SIGNATURE_TEMPLATES[selectedTemplateIndex] || SIGNATURE_TEMPLATES[0];
+  const isFirstStep = activeStepIndex === 0;
+  const isLastStep = activeStepIndex === WIZARD_STEPS.length - 1;
 
   return (
     <section id="signature-generator" className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-      <div className="mb-5 grid gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/50 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none sm:grid-cols-2 sm:p-4">
-        <button
-          type="button"
-          onClick={() => setBuilderStep("details")}
-          className={`rounded-2xl px-4 py-3 text-left transition ${
-            builderStep === "details"
-              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-              : "bg-slate-50 text-slate-700 hover:bg-blue-50 dark:bg-white/[0.03] dark:text-slate-300 dark:hover:bg-blue-500/10"
-          }`}
-        >
-          <span className="block text-xs font-black uppercase tracking-[0.18em] opacity-80">Step 1</span>
-          <span className="mt-1 block text-sm font-black">Add information & image</span>
-        </button>
+      <div className="mb-5 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+        <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300">
+              <Sparkles className="h-3.5 w-3.5" />
+              Premium signature builder
+            </div>
+            <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">
+              Create once. Preview every design live.
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
+              Add a few details step by step, then switch through six polished signatures from the preview panel. Your data stays in the browser.
+            </p>
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setBuilderStep("templates")}
-          className={`rounded-2xl px-4 py-3 text-left transition ${
-            builderStep === "templates"
-              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-              : "bg-slate-50 text-slate-700 hover:bg-blue-50 dark:bg-white/[0.03] dark:text-slate-300 dark:hover:bg-blue-500/10"
-          }`}
-        >
-          <span className="block text-xs font-black uppercase tracking-[0.18em] opacity-80">Step 2</span>
-          <span className="mt-1 block text-sm font-black">Choose 1 of 6 professional designs</span>
-        </button>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <InfoPill icon={<ShieldCheck className="h-4 w-4" />} label="No data stored" />
+            <InfoPill icon={<ImageUp className="h-4 w-4" />} label="No image hosting cost" />
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none sm:p-6">
-          {builderStep === "details" ? (
-            <>
-              <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
+        <div className="lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)]">
+          <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+            <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
+              <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">Signature details</p>
-                  <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">Build your signature</h2>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
+                    Step {activeStepIndex + 1} of {WIZARD_STEPS.length}
+                  </p>
+                  <h3 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">{activeStepDetails.title}</h3>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">{activeStepDetails.description}</p>
                 </div>
 
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-blue-500/10"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-blue-500/10"
                 >
                   <RefreshCcw className="h-4 w-4" />
                   Reset
                 </button>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <TextInput label="Full name" value={form.fullName} onChange={(value) => updateField("fullName", value)} />
-                <TextInput label="Job title" value={form.jobTitle} onChange={(value) => updateField("jobTitle", value)} />
-                <TextInput label="Company" value={form.company} onChange={(value) => updateField("company", value)} />
-                <TextInput label="Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} />
-                <TextInput label="Phone" value={form.phone} onChange={(value) => updateField("phone", value)} />
-                <TextInput label="Website" value={form.website} onChange={(value) => updateField("website", value)} />
-                <div className="sm:col-span-2">
-                  <TextInput label="Address or short note" value={form.address} onChange={(value) => updateField("address", value)} />
-                </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${progressPercent}%` }} />
               </div>
 
-              <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
-                    <ImageUp className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-slate-950 dark:text-white">Image setup without hosting cost</h3>
-                    <p className="mt-1 text-sm font-medium leading-6 text-slate-600 dark:text-slate-400">
-                      Crop and optimize the image here, download it, upload it to your own public image host, then paste the final image URL. Nothing is uploaded to TrackFlow Pro.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <RadioCard label="Use initials" active={imageMode === "initials"} onClick={() => setImageMode("initials")} />
-                  <RadioCard label="Use image URL" active={imageMode === "url"} onClick={() => setImageMode("url")} />
-                  <RadioCard label="Crop & download" active={imageMode === "upload"} onClick={() => setImageMode("upload")} />
-                </div>
-
-                <div className="mt-4">
-                  <TextInput
-                    label="Public image URL for final signature"
-                    value={form.imageUrl}
-                    placeholder="https://example.com/profile-photo.jpg"
-                    onChange={(value) => {
-                      updateField("imageUrl", value);
-                      if (value.trim()) setImageMode("url");
-                    }}
-                  />
-                  <p className="mt-2 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-500">
-                    Gmail and Outlook need a public image URL. Uploaded files here are only processed locally in your browser.
-                  </p>
-                </div>
-
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white p-4 dark:border-white/10 dark:bg-slate-950/70">
-                  <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-                    <div>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="block w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-black file:text-white hover:file:bg-blue-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
-                      />
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <SelectBox
-                          label="Image type"
-                          value={imageKind}
-                          onChange={(value) => handleKindChange(value as ImageKind)}
-                          options={[
-                            { label: "Profile photo", value: "profile" },
-                            { label: "Logo", value: "logo" },
-                          ]}
-                        />
-                        <SelectBox
-                          label="Output format"
-                          value={outputFormat}
-                          onChange={(value) => handleFormatChange(value as OutputFormat)}
-                          options={[
-                            { label: "JPG - smaller", value: "image/jpeg" },
-                            { label: "PNG - transparent", value: "image/png" },
-                          ]}
-                        />
-                      </div>
-
-                      <label className="mt-4 block text-sm font-black text-slate-800 dark:text-slate-200">
-                        Quality: {quality}%
-                        <input
-                          type="range"
-                          min="60"
-                          max="92"
-                          value={quality}
-                          onChange={(event) => handleQualityChange(Number(event.target.value))}
-                          className="mt-3 block w-full accent-blue-600"
-                        />
-                      </label>
-
-                      {imageNotice ? (
-                        <p className="mt-3 rounded-2xl bg-blue-50 px-4 py-3 text-xs font-bold leading-5 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200">
-                          {imageNotice}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Optimized image</p>
-                      <div className="mt-4 flex min-h-28 items-center justify-center rounded-2xl bg-white p-4 dark:bg-slate-950">
-                        {optimizedDataUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={optimizedDataUrl} alt="Optimized signature asset preview" className="max-h-32 max-w-full rounded-2xl object-contain" />
-                        ) : (
-                          <div className="text-center text-sm font-bold text-slate-500">Upload an image to create a lightweight signature asset.</div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                        <Metric label="Before" value={formatBytes(originalSize)} />
-                        <Metric label="After" value={formatBytes(optimizedSize)} />
-                        <Metric label="Saved" value={savedPercent ? `${savedPercent}%` : "—"} />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={downloadOptimizedImage}
-                        disabled={!optimizedDataUrl}
-                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
-                      >
-                        <ArrowDownToLine className="h-4 w-4" />
-                        Download optimized image
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-4 hidden grid-cols-6 gap-2 sm:grid">
+                {WIZARD_STEPS.map((step, index) => (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={() => goToStep(step.id)}
+                    className={`rounded-2xl border px-2 py-2 text-center text-[11px] font-black transition ${
+                      activeStep === step.id
+                        ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-200"
+                        : index < activeStepIndex
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                          : "border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400"
+                    }`}
+                  >
+                    {step.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <TextInput label="LinkedIn URL" value={form.linkedin} onChange={(value) => updateField("linkedin", value)} />
-                <TextInput label="Facebook URL" value={form.facebook} onChange={(value) => updateField("facebook", value)} />
-                <TextInput label="Instagram URL" value={form.instagram} onChange={(value) => updateField("instagram", value)} />
-                <TextInput label="YouTube URL" value={form.youtube} onChange={(value) => updateField("youtube", value)} />
-                <TextInput label="CTA text" value={form.ctaText} onChange={(value) => updateField("ctaText", value)} />
-                <TextInput label="CTA link" value={form.ctaUrl} onChange={(value) => updateField("ctaUrl", value)} />
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <StepContent
+                activeStep={activeStep}
+                form={form}
+                imageMode={imageMode}
+                imageKind={imageKind}
+                outputFormat={outputFormat}
+                quality={quality}
+                fileInputRef={fileInputRef}
+                originalSize={originalSize}
+                optimizedSize={optimizedSize}
+                optimizedDataUrl={optimizedDataUrl}
+                imageNotice={imageNotice}
+                savedPercent={savedPercent}
+                onUpdateField={updateField}
+                onSetImageMode={setImageMode}
+                onFileChange={handleFileChange}
+                onKindChange={handleKindChange}
+                onFormatChange={handleFormatChange}
+                onQualityChange={handleQualityChange}
+                onDownloadOptimizedImage={downloadOptimizedImage}
+              />
+            </div>
+
+            <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={goPreviousStep}
+                  disabled={isFirstStep}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-blue-500/10"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+
+                <button
+                  type="button"
+                  onClick={isLastStep ? copyRichSignature : goNextStep}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
+                >
+                  {isLastStep ? (copyStatus === "copied" ? "Copied for Gmail" : "Copy final signature") : "Continue"}
+                  {isLastStep ? copyStatus === "copied" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
 
-              <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-                <p className="text-sm font-black text-slate-950 dark:text-white">Brand color</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {BRAND_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => updateField("brandColor", color)}
-                      className="h-10 w-10 rounded-2xl border-4 border-white shadow ring-1 ring-slate-200 transition hover:-translate-y-0.5 dark:border-slate-950 dark:ring-white/10"
-                      style={{ backgroundColor: color }}
-                      aria-label={`Use ${color} as brand color`}
-                    />
-                  ))}
-                  <input
-                    type="color"
-                    value={form.brandColor}
-                    onChange={(event) => updateField("brandColor", event.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-950"
-                    aria-label="Custom brand color"
-                  />
-                </div>
-
-                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={form.includeCredit}
-                    onChange={(event) => updateField("includeCredit", event.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>Include “Created with TrackFlow Pro” credit link. Keeping this on helps us keep the tool free.</span>
-                </label>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setBuilderStep("templates")}
-                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
-              >
-                Next: choose professional design
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </>
-          ) : (
-            <div>
-              <div className="mb-6 flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
-                  <LayoutTemplate className="h-5 w-5" />
-                </div>
+        <div className="lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)]">
+          <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+            <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">Design templates</p>
-                  <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">Choose a professional signature style</h2>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
-                    Same information, six polished layouts. Pick the one that fits the brand, then copy it for Gmail or Outlook.
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300"><LayoutTemplate className="h-4 w-4" />Live preview</div>
+                  <h3 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">{selectedTemplateDetails.name}</h3>
+                  <p className="mt-1 max-w-xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
+                    {selectedTemplateDetails.description} <span className="text-blue-600 dark:text-blue-300">Best for: {selectedTemplateDetails.bestFor}.</span>
                   </p>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <ShieldCheck className="h-4 w-4" />
+                  No data stored
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="mb-4 grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => goTemplate("previous")}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100 dark:hover:bg-blue-500/10"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-center dark:border-blue-400/20 dark:bg-blue-500/10">
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">
+                    Design {selectedTemplateIndex + 1} of {SIGNATURE_TEMPLATES.length}
+                  </div>
+                  <div className="mt-1 text-sm font-black text-slate-950 dark:text-white">Click next to compare with the same information</div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => goTemplate("next")}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
+                >
+                  Next design
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {imageMode === "upload" && !publicImageReady ? (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+                  Preview can show your optimized local image. For Gmail/Outlook copy, paste a public image URL so the image loads for recipients.
+                </div>
+              ) : null}
+
+              <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-100 p-3 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+                <div className="overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-200">
+                  <div className="space-y-3 border-b border-slate-200 px-5 py-4">
+                    <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
+                      <span className="w-16 text-slate-500">To:</span>
+                      <span className="h-px flex-1 bg-slate-200" />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
+                      <span className="w-16 text-slate-500">Subject:</span>
+                      <span className="h-px flex-1 bg-slate-200" />
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto px-5 py-6">
+                    <div className="min-w-[520px]" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid gap-4">
-                {SIGNATURE_TEMPLATES.map((template) => (
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                {SIGNATURE_TEMPLATES.map((template, index) => (
                   <button
                     key={template.id}
                     type="button"
                     onClick={() => setSelectedTemplate(template.id)}
-                    className={`overflow-hidden rounded-[1.5rem] border p-4 text-left transition hover:-translate-y-0.5 ${
+                    className={`rounded-2xl border px-3 py-3 text-left transition hover:-translate-y-0.5 ${
                       selectedTemplate === template.id
-                        ? "border-blue-300 bg-blue-50 shadow-lg shadow-blue-100 dark:border-blue-400/40 dark:bg-blue-500/10 dark:shadow-none"
-                        : "border-slate-200 bg-slate-50 hover:border-blue-200 hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+                        ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-200"
+                        : "border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-slate-950 dark:text-white">{template.name}</span>
-                          {selectedTemplate === template.id ? (
-                            <span className="rounded-full bg-blue-600 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-white">Selected</span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">{template.description}</p>
-                        <p className="mt-2 text-xs font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-300">Best for: {template.bestFor}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 h-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10">
-                      <div style={{ transform: "scale(0.58)", transformOrigin: "top left", width: "760px" }} dangerouslySetInnerHTML={{ __html: getTemplatePreview(template.id) }} />
-                    </div>
+                    <span className="block text-[10px] font-black uppercase tracking-[0.16em] opacity-70">Design {index + 1}</span>
+                    <span className="mt-1 block text-xs font-black leading-5">{template.name}</span>
                   </button>
                 ))}
               </div>
-
-              <button
-                type="button"
-                onClick={() => setBuilderStep("details")}
-                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100 dark:hover:bg-blue-500/10"
-              >
-                Edit information
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="sticky top-24 space-y-5">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none sm:p-6">
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">Live preview</p>
-                <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">{selectedTemplateDetails.name}</h2>
-                <p className="mt-1 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">{selectedTemplateDetails.description}</p>
-              </div>
-
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-300">
-                <ShieldCheck className="h-4 w-4" />
-                No data stored
-              </div>
             </div>
 
-            {imageMode === "upload" && !publicImageReady ? (
-              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
-                Preview can show your optimized local image, but final Gmail/Outlook copy needs a public image URL. Paste the hosted image URL before copying if you want the image to appear everywhere.
+            <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={copyRichSignature}
+                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 sm:col-span-1"
+                >
+                  {copyStatus === "copied" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copyStatus === "copied" ? "Copied" : "Copy signature"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={copyHtml}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-blue-500/10"
+                >
+                  <Clipboard className="h-4 w-4" />
+                  {htmlCopied ? "HTML copied" : "Copy HTML"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={downloadHtml}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-white/[0.06]"
+                >
+                  <ArrowDownToLine className="h-4 w-4" />
+                  Download
+                </button>
               </div>
-            ) : null}
 
-            <div className="overflow-x-auto rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/[0.03]">
-              <div className="min-w-[520px] rounded-2xl bg-white p-5 dark:bg-white">
-                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={copyRichSignature}
-                className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
-              >
-                {copyStatus === "copied" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {copyStatus === "copied" ? "Copied for Gmail" : "Copy signature"}
-              </button>
-
-              <button
-                type="button"
-                onClick={copyHtml}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100 dark:hover:bg-blue-500/10"
-              >
-                <Clipboard className="h-4 w-4" />
-                {htmlCopied ? "HTML copied" : "Copy HTML"}
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={downloadHtml}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100 dark:hover:bg-white/[0.06]"
-            >
-              <ArrowDownToLine className="h-4 w-4" />
-              Download HTML file
-            </button>
-
-            {copyStatus === "failed" ? (
-              <p className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-                Clipboard permission was blocked. Use “Copy HTML” or download the HTML file instead.
-              </p>
-            ) : null}
-          </div>
-
-          <div className="rounded-[2rem] border border-blue-200 bg-blue-50 p-5 dark:border-blue-400/20 dark:bg-blue-500/10 sm:p-6">
-            <div className="flex items-start gap-3">
-              <Sparkles className="mt-1 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-300" />
-              <div>
-                <h3 className="text-base font-black text-slate-950 dark:text-white">Best result checklist</h3>
-                <ul className="mt-3 space-y-2 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-300">
-                  <li>Choose the template after adding the real information.</li>
-                  <li>Use JPG for profile photos and PNG for transparent logos.</li>
-                  <li>Use a public image URL, not a private Google Drive preview link.</li>
-                  <li>Test the signature by sending one email to yourself first.</li>
-                </ul>
-              </div>
+              {copyStatus === "failed" ? (
+                <p className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                  Clipboard permission was blocked. Use “Copy HTML” or download the HTML file instead.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function StepContent({
+  activeStep,
+  form,
+  imageMode,
+  imageKind,
+  outputFormat,
+  quality,
+  fileInputRef,
+  originalSize,
+  optimizedSize,
+  optimizedDataUrl,
+  imageNotice,
+  savedPercent,
+  onUpdateField,
+  onSetImageMode,
+  onFileChange,
+  onKindChange,
+  onFormatChange,
+  onQualityChange,
+  onDownloadOptimizedImage,
+}: {
+  activeStep: WizardStep;
+  form: SignatureForm;
+  imageMode: ImageMode;
+  imageKind: ImageKind;
+  outputFormat: OutputFormat;
+  quality: number;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  originalSize: number;
+  optimizedSize: number;
+  optimizedDataUrl: string;
+  imageNotice: string;
+  savedPercent: number;
+  onUpdateField: <K extends keyof SignatureForm>(key: K, value: SignatureForm[K]) => void;
+  onSetImageMode: (mode: ImageMode) => void;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onKindChange: (kind: ImageKind) => void;
+  onFormatChange: (format: OutputFormat) => void;
+  onQualityChange: (quality: number) => void;
+  onDownloadOptimizedImage: () => void;
+}) {
+  if (activeStep === "personal") {
+    return (
+      <div className="space-y-5">
+        <StepNote icon={<UserRound className="h-5 w-5" />} title="Keep it clear" description="The first line should instantly tell people who you are and what you do." />
+        <div className="grid gap-4">
+          <TextInput label="Full name" value={form.fullName} onChange={(value) => onUpdateField("fullName", value)} />
+          <TextInput label="Job title" value={form.jobTitle} onChange={(value) => onUpdateField("jobTitle", value)} />
+          <TextInput label="Company" value={form.company} onChange={(value) => onUpdateField("company", value)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (activeStep === "contact") {
+    return (
+      <div className="space-y-5">
+        <StepNote icon={<Mail className="h-5 w-5" />} title="Make contact easy" description="Use the exact phone, email, and website you want people to click." />
+        <div className="grid gap-4">
+          <TextInput label="Email" type="email" value={form.email} onChange={(value) => onUpdateField("email", value)} />
+          <TextInput label="Phone" value={form.phone} onChange={(value) => onUpdateField("phone", value)} />
+          <TextInput label="Website" value={form.website} onChange={(value) => onUpdateField("website", value)} />
+          <TextInput label="Address or short note" value={form.address} onChange={(value) => onUpdateField("address", value)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (activeStep === "image") {
+    return (
+      <div className="space-y-5">
+        <StepNote
+          icon={<ImageUp className="h-5 w-5" />}
+          title="Image without hosting cost"
+          description="We optimize the image in your browser. You download it, host it yourself, then paste the public image URL."
+        />
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <RadioCard label="Use initials" active={imageMode === "initials"} onClick={() => onSetImageMode("initials")} />
+          <RadioCard label="Use image URL" active={imageMode === "url"} onClick={() => onSetImageMode("url")} />
+          <RadioCard label="Crop & download" active={imageMode === "upload"} onClick={() => onSetImageMode("upload")} />
+        </div>
+
+        <TextInput
+          label="Public image URL for final signature"
+          value={form.imageUrl}
+          placeholder="https://example.com/profile-photo.jpg"
+          onChange={(value) => {
+            onUpdateField("imageUrl", value);
+            if (value.trim()) onSetImageMode("url");
+          }}
+        />
+
+        <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={onFileChange}
+            className="block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-black file:text-white hover:file:bg-blue-500 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300"
+          />
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <SelectBox
+              label="Image type"
+              value={imageKind}
+              onChange={(value) => onKindChange(value as ImageKind)}
+              options={[
+                { label: "Profile photo", value: "profile" },
+                { label: "Logo", value: "logo" },
+              ]}
+            />
+            <SelectBox
+              label="Output format"
+              value={outputFormat}
+              onChange={(value) => onFormatChange(value as OutputFormat)}
+              options={[
+                { label: "JPG - smaller", value: "image/jpeg" },
+                { label: "PNG - transparent", value: "image/png" },
+              ]}
+            />
+          </div>
+
+          <label className="mt-4 block text-sm font-black text-slate-800 dark:text-slate-200">
+            Quality: {quality}%
+            <input
+              type="range"
+              min="60"
+              max="92"
+              value={quality}
+              onChange={(event) => onQualityChange(Number(event.target.value))}
+              className="mt-3 block w-full accent-blue-600"
+            />
+          </label>
+
+          {imageNotice ? (
+            <p className="mt-3 rounded-2xl bg-blue-50 px-4 py-3 text-xs font-bold leading-5 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200">
+              {imageNotice}
+            </p>
+          ) : null}
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-950/70">
+            <div className="flex min-h-28 items-center justify-center rounded-2xl bg-slate-50 p-4 dark:bg-white/[0.03]">
+              {optimizedDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={optimizedDataUrl} alt="Optimized signature asset preview" className="max-h-32 max-w-full rounded-2xl object-contain" />
+              ) : (
+                <div className="text-center text-sm font-bold text-slate-500">Upload an image to create a lightweight signature asset.</div>
+              )}
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <Metric label="Before" value={formatBytes(originalSize)} />
+              <Metric label="After" value={formatBytes(optimizedSize)} />
+              <Metric label="Saved" value={savedPercent ? `${savedPercent}%` : "—"} />
+            </div>
+
+            <button
+              type="button"
+              onClick={onDownloadOptimizedImage}
+              disabled={!optimizedDataUrl}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
+            >
+              <ArrowDownToLine className="h-4 w-4" />
+              Download optimized image
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeStep === "links") {
+    return (
+      <div className="space-y-5">
+        <StepNote icon={<Link2 className="h-5 w-5" />} title="Add only useful links" description="A clean signature usually performs better than a crowded one." />
+        <div className="grid gap-4">
+          <TextInput label="LinkedIn URL" value={form.linkedin} onChange={(value) => onUpdateField("linkedin", value)} />
+          <TextInput label="Facebook URL" value={form.facebook} onChange={(value) => onUpdateField("facebook", value)} />
+          <TextInput label="Instagram URL" value={form.instagram} onChange={(value) => onUpdateField("instagram", value)} />
+          <TextInput label="YouTube URL" value={form.youtube} onChange={(value) => onUpdateField("youtube", value)} />
+          <TextInput label="CTA button text" value={form.ctaText} onChange={(value) => onUpdateField("ctaText", value)} />
+          <TextInput label="CTA button link" value={form.ctaUrl} onChange={(value) => onUpdateField("ctaUrl", value)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (activeStep === "style") {
+    return (
+      <div className="space-y-5">
+        <StepNote icon={<Palette className="h-5 w-5" />} title="Make it feel branded" description="Choose a color that matches the business. The preview updates instantly." />
+
+        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <p className="text-sm font-black text-slate-950 dark:text-white">Brand color</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {BRAND_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => onUpdateField("brandColor", color)}
+                className={`h-10 w-10 rounded-2xl border-4 border-white shadow ring-1 transition hover:-translate-y-0.5 dark:border-slate-950 ${
+                  form.brandColor === color ? "ring-4 ring-blue-300" : "ring-slate-200 dark:ring-white/10"
+                }`}
+                style={{ backgroundColor: color }}
+                aria-label={`Use ${color} as brand color`}
+              />
+            ))}
+            <input
+              type="color"
+              value={form.brandColor}
+              onChange={(event) => onUpdateField("brandColor", event.target.value)}
+              className="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-slate-950"
+              aria-label="Custom brand color"
+            />
+          </div>
+
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={form.includeCredit}
+              onChange={(event) => onUpdateField("includeCredit", event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>Include “Created with TrackFlow Pro” credit link. Keeping this on helps us keep the tool free.</span>
+          </label>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <StepNote icon={<CheckCircle2 className="h-5 w-5" />} title="Ready to use" description="Copy the signature from the preview panel, paste it into Gmail or Outlook, then send a test email to yourself." />
+
+      <div className="grid gap-3">
+        <InstallTip title="Gmail" description="Settings → See all settings → Signature → Create new → paste the signature → Save changes." />
+        <InstallTip title="Outlook" description="Settings → Mail → Compose and reply → Email signature → paste the signature → Save." />
+        <InstallTip title="Image check" description="If the image does not appear, use a public image URL instead of a private preview or local file path." />
+      </div>
+    </div>
+  );
+}
+
+function InfoPill({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+      <span className="text-blue-600 dark:text-blue-300">{icon}</span>
+      {label}
+    </div>
+  );
+}
+
+function StepNote({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return (
+    <div className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-4 dark:border-blue-400/20 dark:bg-blue-500/10">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">{icon}</div>
+        <div>
+          <h4 className="text-base font-black text-slate-950 dark:text-white">{title}</h4>
+          <p className="mt-1 text-sm font-semibold leading-6 text-slate-700 dark:text-slate-300">{description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InstallTip({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+      <p className="text-sm font-black text-slate-950 dark:text-white">{title}</p>
+      <p className="mt-1 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">{description}</p>
+    </div>
   );
 }
 
