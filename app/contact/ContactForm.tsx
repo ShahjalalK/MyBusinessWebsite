@@ -260,7 +260,7 @@ export default function ContactForm() {
       onPointerDownCapture={() => {
         if (needsTurnstile) setSecurityCheckRequested(true);
       }}
-      className="w-full max-w-full min-w-0 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 sm:rounded-[2rem] sm:p-8"
+      className="w-full max-w-full min-w-0 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-950 sm:rounded-[2rem] sm:p-8"
     >
       <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-6 sm:tracking-[0.2em]">
         <ShieldCheck className="h-3.5 w-3.5" />
@@ -316,6 +316,7 @@ export default function ContactForm() {
             <option>GA4 & GTM Audit</option>
             <option>Server-Side Tracking</option>
             <option>Meta CAPI Setup</option>
+            <option>Looker Studio Dashboard</option>
             <option>Not sure yet</option>
           </select>
         </label>

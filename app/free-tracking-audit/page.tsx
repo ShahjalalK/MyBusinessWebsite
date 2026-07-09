@@ -20,20 +20,20 @@ import FreeAuditRequestForm from "./FreeAuditRequestForm";
 export const metadata: Metadata = {
   title: "Free Google Ads Tracking Audit | GA4, GTM & Conversion Tracking Review",
   description:
-    "Request a free Google Ads tracking audit for GA4, GTM, enhanced conversions, Meta CAPI, and server-side tracking issues. No login required for the first review.",
+    "Request a free Google Ads tracking audit for GA4, GTM, enhanced conversions, Meta CAPI, server-side tracking, and Looker Studio reporting issues. No login required for the first review.",
   alternates: {
-    canonical: "/free-tracking-audit",
+    canonical: "https://trackflowpro.com/free-tracking-audit",
   },
   openGraph: {
     title: "Free Google Ads Tracking Audit | TrackFlow Pro",
     description:
-      "Get an evidence-based review of Google Ads conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, and server-side measurement issues.",
+      "Get an evidence-based review of Google Ads conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, server-side measurement, and Looker Studio reporting issues.",
     url: "https://trackflowpro.com/free-tracking-audit",
     siteName: "TrackFlow Pro",
     type: "website",
     images: [
       {
-        url: "/meta/trackflowpro-advanced-tracking-solutions.webp",
+        url: "https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp",
         width: 1200,
         height: 630,
         alt: "TrackFlow Pro - Free Google Ads Tracking Audit",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Free Google Ads Tracking Audit | TrackFlow Pro",
     description:
-      "Request a free Google Ads audit for conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, and server-side tracking.",
+      "Request a free Google Ads audit for conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, server-side tracking, and Looker Studio dashboard reporting.",
     images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
@@ -76,6 +76,11 @@ const auditScope = [
     icon: <Database className="h-5 w-5" />,
   },
   {
+    title: "Looker Studio reporting readiness",
+    description: "Check whether Google Ads, GA4, Meta Ads, lead, and revenue data are clean enough for a reliable dashboard.",
+    icon: <LineChart className="h-5 w-5" />,
+  },
+  {
     title: "Audit report summary",
     description: "A clear summary of what was detected, what it likely means, and what needs account-level confirmation.",
     icon: <BarChart3 className="h-5 w-5" />,
@@ -91,6 +96,7 @@ const checklistItems = [
   "Form, call, ecommerce, and thank-you page tracking",
   "Server-side tracking and first-party measurement signals",
   "Consent behavior and browser-visible tracking evidence",
+  "Looker Studio dashboard and PPC reporting readiness",
 ];
 
 const processSteps = [
@@ -170,7 +176,7 @@ const jsonLd = {
       },
       areaServed: "Worldwide",
       description:
-        "Evidence-based review of Google Ads conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, and server-side measurement issues.",
+        "Evidence-based review of Google Ads conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, server-side measurement, and Looker Studio reporting issues.",
     },
     {
       "@type": "FAQPage",
@@ -239,10 +245,11 @@ function HeroSection() {
     { label: "Request time", value: "2 min" },
     { label: "First review", value: "Free" },
     { label: "File handling", value: "Email only" },
+    { label: "Reporting", value: "Looker ready" },
   ];
 
   return (
-    <section className="relative isolate overflow-hidden px-4 pb-8 pt-20 sm:px-6 sm:pb-14 sm:pt-24 lg:px-8 lg:pb-20 lg:pt-24">
+    <section className="relative isolate overflow-hidden px-4 pb-10 pt-24 sm:px-6 sm:pb-16 sm:pt-24 lg:px-8 lg:pb-24 lg:pt-28">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_34%),radial-gradient(circle_at_85%_20%,rgba(14,165,233,0.12),transparent_28%),linear-gradient(to_bottom,#ffffff,#f8fafc)] dark:bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.28),transparent_34%),radial-gradient(circle_at_85%_18%,rgba(14,165,233,0.18),transparent_30%),linear-gradient(to_bottom,#020617,#0f172a)]" />
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
       <div className="absolute -left-28 top-24 -z-10 h-72 w-72 rounded-full bg-blue-100/70 blur-3xl dark:bg-blue-900/20" />
@@ -257,11 +264,11 @@ function HeroSection() {
 
           <h1 className="text-balance text-[1.95rem] font-black leading-[1.04] tracking-[-0.045em] text-slate-950 dark:text-white min-[390px]:text-[2.15rem] sm:text-5xl sm:leading-[1.02] md:text-6xl xl:text-[4.55rem]">
             <span className="sm:hidden">Free Google Ads Tracking Audit</span>
-            <span className="hidden sm:inline">Free Google Ads tracking audit for clearer conversion data.</span>
+            <span className="hidden sm:inline">Free Google Ads tracking audit for clearer conversion data and reporting.</span>
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-[15px] font-semibold leading-7 text-slate-600 dark:text-slate-300 sm:mt-6 sm:text-lg sm:leading-8 lg:mx-0">
-            Send your website and main tracking concern. I will review public browser-visible evidence before asking for account access.
+            Send your website and main tracking concern. I will review public browser-visible evidence before asking for account access, then explain what it means for tracking and reporting.
           </p>
 
           <div className="mt-6 flex flex-col gap-3 sm:mt-7 sm:flex-row sm:justify-center lg:justify-start">
@@ -280,7 +287,7 @@ function HeroSection() {
             </a>
           </div>
 
-          <div className="mt-7 hidden gap-3 sm:grid sm:grid-cols-3 lg:mt-8">
+          <div className="mt-7 hidden gap-3 sm:grid sm:grid-cols-2 lg:mt-8 lg:grid-cols-4">
             {heroStats.map((item) => (
               <div key={item.label} className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-left shadow-sm shadow-slate-950/5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
                 <div className="text-xl font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">{item.value}</div>
@@ -338,8 +345,8 @@ function AuditScopeSection() {
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Google Ads audit service"
-          title="What the free Google Ads audit checks."
-          description="The review is designed for businesses running paid traffic that need cleaner conversion data before increasing budget."
+          title="What the free Google Ads audit checks before reporting decisions."
+          description="The review is designed for businesses running paid traffic that need cleaner conversion data and reliable dashboard reporting before increasing budget."
         />
 
         <div className="mt-8 grid gap-4 sm:mt-10 md:grid-cols-2 lg:grid-cols-3 lg:gap-6">
@@ -436,7 +443,7 @@ function ReportPreviewSection() {
         <div>
           <SectionHeader
             eyebrow="Evidence before assumptions"
-            title="The audit separates detected evidence from final confirmation."
+            title="The audit separates detected evidence from final confirmation and reporting readiness."
             description="Instead of making unsupported claims, the report explains what was detected, what it likely means, and what needs account-level validation before a final conclusion."
           />
           <div className="mt-8">
@@ -458,7 +465,7 @@ function ProcessSection() {
         <SectionHeader
           eyebrow="Audit process"
           title="How the free tracking review works."
-          description="The process is designed to build trust before access is requested. First evidence, then diagnosis, then a clear fix path."
+          description="The process is designed to build trust before access is requested. First evidence, then diagnosis, then a clear fix and reporting path."
           dark
         />
 
@@ -516,7 +523,7 @@ function FinalCtaSection() {
               Find out what is really happening with your conversion tracking.
             </h2>
             <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
-              Request a free tracking-first audit for Google Ads, GA4, GTM, Meta CAPI, enhanced conversions, and server-side measurement issues.
+              Request a free tracking-first audit for Google Ads, GA4, GTM, Meta CAPI, enhanced conversions, server-side measurement, and Looker Studio reporting issues.
             </p>
           </div>
           <div className="flex flex-col gap-3">

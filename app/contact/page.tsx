@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -29,20 +30,20 @@ const BUSINESS_WHATSAPP_DISPLAY = "+880 1329-532551";
 export const metadata: Metadata = {
   title: "Contact TrackFlow Pro | Google Ads Tracking Specialist",
   description:
-    "Contact TrackFlow Pro for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, server-side tracking support, direct email, or WhatsApp.",
+    "Contact TrackFlow Pro for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, server-side tracking, Looker Studio dashboards, direct email, or WhatsApp.",
   alternates: {
-    canonical: "/contact",
+    canonical: "https://trackflowpro.com/contact",
   },
   openGraph: {
     title: "Contact TrackFlow Pro | Google Ads Tracking Specialist",
     description:
-      "Talk to a tracking specialist about Google Ads conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, and server-side measurement.",
+      "Talk to a tracking specialist about Google Ads conversion tracking, GA4, GTM, Meta CAPI, enhanced conversions, server-side measurement, and Looker Studio reporting.",
     url: "https://trackflowpro.com/contact",
     siteName: "TrackFlow Pro",
     type: "website",
     images: [
       {
-        url: "/meta/trackflowpro-advanced-tracking-solutions.webp",
+        url: "https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp",
         width: 1200,
         height: 630,
         alt: "TrackFlow Pro contact page - Google Ads tracking specialist",
@@ -53,7 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Contact TrackFlow Pro | Google Ads Tracking Specialist",
     description:
-      "Need help with Google Ads conversion tracking, GA4/GTM, Meta CAPI, or server-side tracking? Contact TrackFlow Pro.",
+      "Need help with Google Ads conversion tracking, GA4/GTM, Meta CAPI, server-side tracking, or Looker Studio reporting? Contact TrackFlow Pro.",
     images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
@@ -77,12 +78,19 @@ const contactReasons = [
       "Validate Meta Pixel, Conversions API, deduplication, event quality, and server-side tracking signals.",
     icon: <Zap className="h-5 w-5" />,
   },
+  {
+    title: "Looker Studio reports do not feel trustworthy",
+    description:
+      "Review whether Google Ads, GA4, Meta Ads, lead, and revenue data are clean enough for dashboard reporting.",
+    icon: <BarChart3 className="h-5 w-5" />,
+  },
 ];
 
 const trustPoints = [
   "No login required for the first review",
   "Public browser-visible evidence first",
   "Clear next steps before any implementation",
+  "Tracking and reporting context in one place",
   "Final confirmation only after approved access",
 ];
 
@@ -91,7 +99,7 @@ const nextSteps = [
     step: "01",
     title: "Send your tracking issue",
     description:
-      "Share your website URL, business type, and the tracking problem you are seeing in Google Ads, GA4, GTM, Meta, or server-side reports.",
+      "Share your website URL, business type, and the tracking or dashboard problem you are seeing in Google Ads, GA4, GTM, Meta, server-side reports, or Looker Studio.",
   },
   {
     step: "02",
@@ -103,7 +111,7 @@ const nextSteps = [
     step: "03",
     title: "You get a practical direction",
     description:
-      "You receive a clear explanation of what looks broken, what needs validation, and what access is required if you want the setup fixed.",
+      "You receive a clear explanation of what looks broken, what needs validation, and what access is required if you want the setup or reporting fixed.",
   },
 ];
 
@@ -133,6 +141,11 @@ const faqs = [
     answer:
       "Yes. If a booking link is available, you can book a tracking review call. For the best review, send the website URL and issue first so the call is more useful.",
   },
+  {
+    question: "Can I contact you for a Looker Studio dashboard?",
+    answer:
+      "Yes. You can contact TrackFlow Pro for Looker Studio dashboards connected to Google Ads, GA4, Meta Ads, leads, revenue, and tracking-health data.",
+  },
 ];
 
 const serviceCards = [
@@ -156,6 +169,11 @@ const serviceCards = [
     href: "/services/meta-capi",
     icon: <MousePointerClick className="h-5 w-5" />,
   },
+  {
+    title: "Looker Studio Dashboard",
+    href: "/services/looker-studio-dashboard",
+    icon: <BarChart3 className="h-5 w-5" />,
+  },
 ];
 
 export default function ContactPage() {
@@ -170,7 +188,7 @@ export default function ContactPage() {
         url: "https://trackflowpro.com/contact",
         name: "Contact TrackFlow Pro",
         description:
-          "Contact TrackFlow Pro for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, server-side tracking support, direct email, or WhatsApp.",
+          "Contact TrackFlow Pro for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, server-side tracking, Looker Studio dashboards, direct email, or WhatsApp.",
         isPartOf: {
           "@id": "https://trackflowpro.com/#website",
         },
@@ -180,6 +198,7 @@ export default function ContactPage() {
           "Meta Conversions API",
           "Server-side tracking",
           "Enhanced conversions",
+          "Looker Studio dashboards",
         ],
       },
       {
@@ -257,7 +276,7 @@ export default function ContactPage() {
 
 function ContactHero({ calendlyUrl }: { calendlyUrl: string }) {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-14 pt-24 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.2),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 sm:py-20 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.16),transparent_34%),radial-gradient(circle_at_10%_18%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-16 pt-24 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.24),transparent_34%),radial-gradient(circle_at_10%_18%,rgba(14,165,233,0.14),transparent_30%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
       <div className="mx-auto grid w-full max-w-7xl min-w-0 items-center gap-9 lg:grid-cols-[1.02fr_0.98fr] lg:gap-12">
         <div className="min-w-0">
@@ -271,7 +290,7 @@ function ContactHero({ calendlyUrl }: { calendlyUrl: string }) {
 
           <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 dark:text-slate-300 sm:mt-7 sm:text-lg sm:leading-8">
             Use this page to contact TrackFlow Pro about Google Ads conversion tracking,
-            GA4/GTM audits, Meta CAPI, enhanced conversions, or server-side tracking issues.
+            GA4/GTM audits, Meta CAPI, enhanced conversions, server-side tracking, or Looker Studio dashboards.
             The first review starts with public browser-visible evidence.
           </p>
 
@@ -280,7 +299,7 @@ function ContactHero({ calendlyUrl }: { calendlyUrl: string }) {
               href="#contact-form"
               className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black text-white sm:w-auto shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
-              Send Tracking Issue
+              Send Tracking or Reporting Issue
               <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
             </a>
 
@@ -347,7 +366,7 @@ function ContactProofCard() {
             },
             {
               label: "Current tools",
-              text: "Mention GA4, GTM, Google Ads, Meta Pixel, Shopify, WooCommerce, or CRM if known.",
+              text: "Mention GA4, GTM, Google Ads, Meta Pixel, Looker Studio, Shopify, WooCommerce, or CRM if known.",
               icon: <ShieldCheck className="h-5 w-5" />,
             },
             {
@@ -529,7 +548,7 @@ function ContactMiniCard({
   title,
   text,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   text: string;
 }) {
@@ -556,11 +575,11 @@ function WhyContactSection() {
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="When to contact"
-          title="If the numbers do not feel trustworthy, do not guess."
-          description="A tracking problem can make campaigns look worse or better than they really are. These are the most common reasons to contact TrackFlow Pro."
+          title="If the numbers or dashboards do not feel trustworthy, do not guess."
+          description="A tracking or reporting problem can make campaigns look worse or better than they really are. These are the most common reasons to contact TrackFlow Pro."
         />
 
-        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 lg:grid-cols-4">
           {contactReasons.map((reason) => (
             <div
               key={reason.title}
@@ -618,11 +637,11 @@ function ServiceIntentSection() {
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Service focus"
-          title="Choose the closest tracking problem."
-          description="If you are not sure which service fits, select General tracking issue in the contact form. The first review will help identify the correct path."
+          title="Choose the closest tracking or reporting problem."
+          description="If you are not sure which service fits, select General tracking issue in the contact form. The first review will help identify the correct tracking or reporting path."
         />
 
-        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid gap-4 sm:mt-12 sm:gap-6 md:grid-cols-2 xl:grid-cols-5">
           {serviceCards.map((service) => (
             <Link
               key={service.href}

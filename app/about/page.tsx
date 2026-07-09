@@ -24,14 +24,14 @@ import Image from "next/image";
 export const metadata: Metadata = {
   title: "About TrackFlow Pro | Google Ads Conversion Tracking Specialist",
   description:
-    "Learn about TrackFlow Pro, a tracking-first specialist focused on Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement.",
+    "Learn about TrackFlow Pro, a tracking-first specialist focused on Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, server-side measurement, and Looker Studio dashboard reporting.",
   alternates: {
     canonical: "https://trackflowpro.com/about",
   },
   openGraph: {
     title: "About TrackFlow Pro | Tracking & Attribution Specialist",
     description:
-      "TrackFlow Pro helps businesses validate Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, and server-side tracking with evidence-first audits.",
+      "TrackFlow Pro helps businesses validate Google Ads conversion tracking, GA4/GTM events, Meta CAPI, server-side tracking, and Looker Studio reporting with evidence-first audits.",
     url: "https://trackflowpro.com/about",
     siteName: "TrackFlow Pro",
     type: "website",
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "About TrackFlow Pro | Google Ads Conversion Tracking Specialist",
     description:
-      "Tracking-first support for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement.",
+      "Tracking-first support for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, server-side measurement, and Looker Studio dashboards.",
     images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
@@ -77,6 +77,12 @@ const coreSystems = [
     description:
       "Review Meta Pixel, Conversions API, event match quality, browser-side signal loss, and server event consistency.",
     icon: <Zap className="h-5 w-5" />,
+  },
+  {
+    title: "Looker Studio Dashboards",
+    description:
+      "Connect clean Google Ads, GA4, Meta Ads, lead, revenue, and tracking-health data into decision-ready reporting dashboards.",
+    icon: <BarChart3 className="h-5 w-5" />,
   },
 ];
 
@@ -140,6 +146,7 @@ const proofCards = [
   "Enhanced conversions review",
   "Server-side tracking signal review",
   "Meta CAPI and Pixel signal checks",
+  "Looker Studio PPC dashboard reporting",
   "Clear reporting for technical and non-technical teams",
 ];
 
@@ -167,6 +174,12 @@ const importantPages = [
     href: "/services/meta-capi",
     description:
       "Improve Meta Pixel and Conversions API event quality, deduplication, and server-side signals.",
+  },
+  {
+    title: "Looker Studio Dashboard",
+    href: "/services/looker-studio-dashboard",
+    description:
+      "Build clean PPC and analytics dashboards for Google Ads, GA4, Meta Ads, leads, revenue, and tracking health.",
   },
   {
     title: "Free Tracking Audit",
@@ -202,6 +215,11 @@ const faqs = [
     question: "Can you help if Google Ads conversions are not tracking?",
     answer:
       "Yes. The review can cover Google Ads conversion actions, GTM tags, GA4 key events, enhanced conversions, form and call tracking, ecommerce events, and server-side conversion paths.",
+  },
+  {
+    question: "Do you also build Looker Studio dashboards?",
+    answer:
+      "Yes. After tracking is reviewed or fixed, TrackFlow Pro can help turn Google Ads, GA4, Meta Ads, lead, revenue, and tracking-health data into a clean Looker Studio reporting dashboard.",
   },
 ];
 
@@ -246,6 +264,8 @@ const jsonLd = [
       "Meta Conversions API",
       "Server-side tracking",
       "Enhanced conversions",
+      "Looker Studio dashboards",
+      "PPC reporting dashboards",
     ],
   },
   {
@@ -257,7 +277,7 @@ const jsonLd = [
     logo: "https://trackflowpro.com/android-chrome-512x512.png",
     sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
     description:
-      "TrackFlow Pro helps businesses review and improve Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, and server-side measurement.",
+      "TrackFlow Pro helps businesses review and improve Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, server-side measurement, and Looker Studio reporting dashboards.",
   },
   {
     "@context": "https://schema.org",
@@ -323,7 +343,7 @@ export default function AboutPage() {
 
 function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.13),transparent_36%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 py-20 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.2),transparent_36%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.16),transparent_36%),radial-gradient(circle_at_8%_20%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pb-16 pt-24 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.24),transparent_36%),radial-gradient(circle_at_8%_20%,rgba(14,165,233,0.14),transparent_30%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 lg:px-8 lg:pb-24 lg:pt-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
       <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div>
@@ -334,12 +354,12 @@ function HeroSection() {
 
           <h1 className="max-w-5xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
             About TrackFlow Pro: built for businesses that need to trust their{" "}
-            <span className="text-blue-600 dark:text-blue-400">conversion tracking</span> before scaling ads.
+            <span className="text-blue-600 dark:text-blue-400">tracking and reporting</span> before scaling ads.
           </h1>
 
           <p className="mt-7 max-w-2xl text-lg font-medium leading-8 text-slate-600 dark:text-slate-300">
             TrackFlow Pro is a tracking-first specialist brand focused on Google Ads conversion tracking, GA4/GTM audits,
-            Meta CAPI, enhanced conversions, and server-side measurement quality.
+            Meta CAPI, enhanced conversions, server-side measurement quality, and Looker Studio dashboard reporting.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -359,7 +379,7 @@ function HeroSection() {
           </div>
 
           <div className="mt-8 grid max-w-3xl gap-3 sm:grid-cols-3">
-            {["Tracking-first focus", "No login required first", "Evidence-based review"].map((item) => (
+            {["Tracking-first focus", "No login required first", "Evidence-based reporting"].map((item) => (
               <div key={item} className="flex items-start gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
                 <span>{item}</span>
@@ -394,6 +414,7 @@ function AboutSignalCard() {
             { label: "GA4 & GTM", value: "Event validation", icon: <FileSearch className="h-5 w-5" /> },
             { label: "Meta CAPI", value: "Server event quality", icon: <MousePointerClick className="h-5 w-5" /> },
             { label: "Server-Side", value: "First-party measurement", icon: <Database className="h-5 w-5" /> },
+            { label: "Looker Studio", value: "PPC dashboard reporting", icon: <BarChart3 className="h-5 w-5" /> },
           ].map((item) => (
             <div
               key={item.label}
@@ -421,12 +442,12 @@ function AboutSignalCard() {
 
 function PositioningSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
         <SectionHeader
           eyebrow="Not a generic ads agency"
           title="TrackFlow Pro is built around tracking accuracy, attribution clarity, and measurement confidence."
-          description="When conversion data is unreliable, campaign decisions become harder. TrackFlow Pro focuses on the measurement layer that supports Google Ads, GA4, GTM, Meta CAPI, enhanced conversions, and server-side tracking."
+          description="When conversion data is unreliable, campaign decisions become harder. TrackFlow Pro focuses on the measurement and reporting layer that supports Google Ads, GA4, GTM, Meta CAPI, enhanced conversions, server-side tracking, and Looker Studio dashboards."
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -435,6 +456,7 @@ function PositioningSection() {
             "Evidence-based Google Ads audit approach",
             "GA4 and Google Tag Manager validation",
             "Server-side and first-party measurement review",
+            "Looker Studio dashboard reporting",
           ].map((item) => (
             <div
               key={item}
@@ -452,7 +474,7 @@ function PositioningSection() {
 
 function FounderSection() {
   return (
-   <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+   <section className="bg-slate-50/80 px-4 py-16 dark:bg-slate-900/25 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
   <div className="mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/5 dark:border-slate-800 dark:bg-slate-950 lg:grid-cols-[0.9fr_1.1fr] lg:p-10">
     <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 p-6 dark:border-slate-800 dark:from-blue-950/25 dark:via-slate-950 dark:to-slate-900">
       <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl" />
@@ -479,7 +501,7 @@ function FounderSection() {
               Shahjalal Khan
             </h2>
             <p className="mx-auto mt-3 max-w-sm text-sm font-medium leading-6 text-slate-600 dark:text-slate-400">
-              Focused on Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement.
+              Focused on Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, server-side measurement, and Looker Studio dashboards.
             </p>
 
             <a
@@ -500,6 +522,7 @@ function FounderSection() {
             "Public evidence first",
             "GA4 & GTM validation",
             "Server-side measurement",
+            "Looker Studio reporting",
           ].map((item) => (
             <div
               key={item}
@@ -524,8 +547,8 @@ function FounderSection() {
       <div className="mt-6 space-y-4 text-base font-medium leading-8 text-slate-600 dark:text-slate-400">
         <p>
           Many paid traffic problems are not only campaign problems. Sometimes the real issue is missing conversions,
-          duplicate events, weak event quality, GA4 and Google Ads mismatch, Meta Pixel signal loss, or server-side
-          tracking that has not been properly validated.
+          duplicate events, weak event quality, GA4 and Google Ads mismatch, Meta Pixel signal loss, server-side
+          tracking that has not been properly validated, or dashboards built on unclear data.
         </p>
 
         <p>
@@ -540,7 +563,7 @@ function FounderSection() {
         </p>
         <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
           The first review starts with public browser-visible evidence. Final confirmation may require GA4, GTM,
-          Google Ads, Meta, CRM, or server-side log access.
+          Google Ads, Meta, CRM, server-side log access, or Looker Studio data-source validation.
         </p>
       </div>
 
@@ -568,7 +591,7 @@ function FounderSection() {
 
 function TrustPrinciplesSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Trust-first principles"
@@ -598,18 +621,18 @@ function TrustPrinciplesSection() {
 
 function SystemsSection() {
   return (
-    <section className="bg-slate-950 px-4 py-20 text-white sm:px-6 lg:px-8 lg:py-28">
+    <section className="relative overflow-hidden bg-slate-950 px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Systems reviewed"
-          title="Focused support for the tracking systems that affect paid performance."
-          description="The goal is not to make a generic marketing checklist. The goal is to identify the tracking issues that can change reporting, bidding, optimization, and lead quality decisions."
+          title="Focused support for the tracking and reporting systems that affect paid performance."
+          description="The goal is not to make a generic marketing checklist. The goal is to identify the tracking and reporting issues that can change bidding, optimization, dashboard quality, and lead decisions."
           dark
         />
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {coreSystems.map((item) => (
-            <div key={item.title} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-7">
+            <div key={item.title} className="group rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/10 transition hover:-translate-y-1 hover:border-blue-400/30 hover:bg-white/[0.06] sm:p-7">
               <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">
                 {item.icon}
               </div>
@@ -625,7 +648,7 @@ function SystemsSection() {
 
 function WorkflowSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="How the review works"
@@ -638,7 +661,7 @@ function WorkflowSection() {
           {workflow.map((item) => (
             <div
               key={item.step}
-              className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"
+              className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5 transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-blue-900/70"
             >
               <div className="mb-8 text-5xl font-black tracking-[-0.06em] text-blue-600 dark:text-blue-400">
                 {item.step}
@@ -655,7 +678,7 @@ function WorkflowSection() {
 
 function ProofSection() {
   return (
-    <section className="bg-slate-50 px-4 py-20 dark:bg-slate-900/25 sm:px-6 lg:px-8 lg:py-28">
+    <section className="bg-slate-50/80 px-4 py-16 dark:bg-slate-900/25 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1.1fr] lg:items-center">
         <div>
           <SectionHeader
@@ -698,11 +721,11 @@ function ProofSection() {
 
 function ExploreTrackFlowSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Explore TrackFlow Pro"
-          title="Important pages for tracking, attribution, GA4, GTM, Meta CAPI, and server-side measurement."
+          title="Important pages for tracking, reporting, attribution, GA4, GTM, Meta CAPI, and server-side measurement."
           description="These pages help visitors and search engines understand the core TrackFlow Pro services and contact paths."
           centered
         />
@@ -736,7 +759,7 @@ function ExploreTrackFlowSection() {
 
 function FaqSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="mx-auto max-w-4xl">
         <SectionHeader
           eyebrow="FAQ"
@@ -774,7 +797,7 @@ function FinalCtaSection() {
               Get a focused review before you make bigger ad decisions.
             </h2>
             <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-slate-400">
-              Start with public browser-visible evidence. Final validation only happens after access is approved.
+              Start with public browser-visible evidence. Final validation and dashboard reporting only happen after the right access is approved.
             </p>
           </div>
 
@@ -817,7 +840,7 @@ function SectionHeader({
       <p className="mb-4 text-[11px] font-black uppercase tracking-[0.24em] text-blue-600 dark:text-blue-300">
         {eyebrow}
       </p>
-      <h2 className={cn("text-4xl font-black tracking-[-0.05em] sm:text-5xl", dark ? "text-white" : "text-slate-950 dark:text-white")}>
+      <h2 className={cn("text-balance text-[2rem] font-black leading-[1.05] tracking-[-0.05em] sm:text-5xl sm:leading-[1.02]", dark ? "text-white" : "text-slate-950 dark:text-white")}>
         {title}
       </h2>
       <p className={cn("mt-5 text-base font-medium leading-8", dark ? "text-slate-400" : "text-slate-600 dark:text-slate-400")}>

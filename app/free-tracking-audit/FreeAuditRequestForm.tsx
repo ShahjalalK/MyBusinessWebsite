@@ -375,7 +375,7 @@ export default function FreeAuditRequestForm() {
                 Request your free tracking review
               </h2>
               <p className="mt-2 text-[13px] font-semibold leading-6 text-blue-100/90 sm:text-sm">
-                Fill in the essentials first. Optional screenshot/PDF can be attached under 2 MB.
+                Fill in the essentials first. Optional screenshot/PDF can be attached under 2 MB for tracking or dashboard evidence.
               </p>
             </div>
             <span className="hidden rounded-full border border-emerald-300/30 bg-emerald-400/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-100 sm:inline-flex">
@@ -443,6 +443,7 @@ export default function FreeAuditRequestForm() {
               <option value="Enhanced conversions review">Enhanced conversions review</option>
               <option value="Meta CAPI or Pixel issue">Meta CAPI or Pixel issue</option>
               <option value="Server-side tracking validation">Server-side tracking validation</option>
+              <option value="Looker Studio dashboard or reporting issue">Looker Studio dashboard or reporting issue</option>
               <option value="Not sure yet">Not sure yet</option>
             </select>
           </Field>
@@ -453,7 +454,7 @@ export default function FreeAuditRequestForm() {
               value={form.message}
               onChange={(event) => updateField("message", event.target.value)}
               rows={4}
-              placeholder="Example: Google Ads shows fewer conversions than GA4, or form submissions are not counted."
+              placeholder="Example: Google Ads shows fewer conversions than GA4, form submissions are not counted, or the Looker Studio dashboard does not match source data."
               required
               className="w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500"
             />
@@ -504,6 +505,7 @@ export default function FreeAuditRequestForm() {
                     <option>Google Ads only</option>
                     <option>GA4 + GTM</option>
                     <option>Meta Pixel / CAPI</option>
+                    <option>Looker Studio dashboard</option>
                     <option>Shopify / ecommerce tracking</option>
                     <option>WordPress / form tracking</option>
                     <option>Not sure</option>
