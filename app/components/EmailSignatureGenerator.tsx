@@ -904,7 +904,7 @@ export default function EmailSignatureGenerator() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(430px,0.98fr)_minmax(0,1.02fr)] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.05fr)] lg:items-start">
         <div className="lg:sticky lg:top-20">
           <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
             <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
@@ -1006,8 +1006,8 @@ export default function EmailSignatureGenerator() {
           </div>
         </div>
 
-        <div className="lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)]">
-          <div className="flex h-full flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+        <div id="signature-preview-panel" className="scroll-mt-24 lg:sticky lg:top-20 lg:self-start">
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
             <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -1025,28 +1025,28 @@ export default function EmailSignatureGenerator() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-              <div className="mb-4 grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+            <div className="p-4 sm:p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="button"
                   onClick={() => goTemplate("previous")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100 dark:hover:bg-blue-500/10"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-100 dark:hover:bg-blue-500/10"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Previous
                 </button>
 
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-center dark:border-blue-400/20 dark:bg-blue-500/10">
+                <div className="order-first rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-center dark:border-blue-400/20 dark:bg-blue-500/10 sm:order-none sm:flex-1">
                   <div className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">
                     Design {selectedTemplateIndex + 1} of {SIGNATURE_TEMPLATES.length}
                   </div>
-                  <div className="mt-1 text-sm font-black text-slate-950 dark:text-white">Click next to compare with the same information</div>
+                  <div className="mt-1 text-xs font-black leading-5 text-slate-950 dark:text-white sm:text-sm">Same details, different layout</div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => goTemplate("next")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
                 >
                   Next design
                   <ChevronRight className="h-4 w-4" />
@@ -1059,7 +1059,7 @@ export default function EmailSignatureGenerator() {
                 </div>
               ) : null}
 
-              <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-100 p-3 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+              <div className="max-h-[420px] overflow-auto overscroll-contain rounded-[1.75rem] border border-slate-200 bg-slate-100 p-3 [scrollbar-width:thin] dark:border-white/10 dark:bg-white/[0.03] sm:max-h-[520px] sm:p-5 lg:max-h-[460px] xl:max-h-[520px]">
                 <div className="overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-200">
                   <div className="space-y-3 border-b border-slate-200 px-5 py-4">
                     <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
@@ -1078,13 +1078,13 @@ export default function EmailSignatureGenerator() {
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="mt-5 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin] sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
                 {SIGNATURE_TEMPLATES.map((template, index) => (
                   <button
                     key={template.id}
                     type="button"
                     onClick={() => setSelectedTemplate(template.id)}
-                    className={`rounded-2xl border px-3 py-3 text-left transition hover:-translate-y-0.5 ${
+                    className={`min-w-[150px] rounded-2xl border px-3 py-3 text-left transition hover:-translate-y-0.5 sm:min-w-0 ${
                       selectedTemplate === template.id
                         ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400/30 dark:bg-blue-500/10 dark:text-blue-200"
                         : "border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"

@@ -32,6 +32,7 @@ function withCalendlyParams(url: string) {
 
 export default function BookingConcierge() {
   const pathname = usePathname();
+  const shouldHideFloatingWidget = pathname === "/tools/free-email-signature-generator";
   const [isOpen, setIsOpen] = useState(false);
   const [isSchedulerOpen, setIsSchedulerOpen] = useState(false);
   const [hasPassedHero, setHasPassedHero] = useState(false);
@@ -85,6 +86,13 @@ export default function BookingConcierge() {
   }, [pathname]);
 
   useEffect(() => {
+    if (shouldHideFloatingWidget) {
+      setHasPassedHero(false);
+      setIsOpen(false);
+      setIsSchedulerOpen(false);
+      return;
+    }
+
     const getHeroEnd = () => {
       const heroSection = document.querySelector("main > section") as HTMLElement | null;
       if (!heroSection) return Math.max(520, window.innerHeight * 0.82);
@@ -115,7 +123,7 @@ export default function BookingConcierge() {
       window.removeEventListener("scroll", updateVisibility);
       window.removeEventListener("resize", updateVisibility);
     };
-  }, [pathname]);
+  }, [pathname, shouldHideFloatingWidget]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -143,6 +151,10 @@ export default function BookingConcierge() {
   function openScheduler() {
     setIsOpen(false);
     setIsSchedulerOpen(true);
+  }
+
+  if (shouldHideFloatingWidget) {
+    return null;
   }
 
   return (
