@@ -20,14 +20,28 @@ function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function withCalendlyParams(url: string) {
+  try {
+    const nextUrl = new URL(url);
+    nextUrl.searchParams.set("hide_gdpr_banner", "1");
+    return nextUrl.toString();
+  } catch {
+    return url;
+  }
+}
+
 export default function BookingConcierge() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isSchedulerOpen, setIsSchedulerOpen] = useState(false);
+  const [hasPassedHero, setHasPassedHero] = useState(false);
 
   const calendlyUrl =
     process.env.NEXT_PUBLIC_TRACKFLOW_CALENDLY_URL ||
     "https://calendly.com/trackflowpro/tracking-verification-call";
+
+  const schedulerUrl = useMemo(() => withCalendlyParams(calendlyUrl), [calendlyUrl]);
+  const isServicePage = pathname.startsWith("/services/");
 
   const pageContext = useMemo(() => {
     if (pathname === "/free-tracking-audit") {
@@ -71,6 +85,39 @@ export default function BookingConcierge() {
   }, [pathname]);
 
   useEffect(() => {
+    const getHeroEnd = () => {
+      const heroSection = document.querySelector("main > section") as HTMLElement | null;
+      if (!heroSection) return Math.max(520, window.innerHeight * 0.82);
+
+      const rect = heroSection.getBoundingClientRect();
+      return window.scrollY + rect.top + heroSection.offsetHeight;
+    };
+
+    const updateVisibility = () => {
+      const triggerPoint = Math.max(360, getHeroEnd() - 72);
+      const nextHasPassedHero = window.scrollY >= triggerPoint;
+
+      setHasPassedHero(nextHasPassedHero);
+
+      if (!nextHasPassedHero) {
+        setIsOpen(false);
+      }
+    };
+
+    updateVisibility();
+    const timer = window.setTimeout(updateVisibility, 450);
+
+    window.addEventListener("scroll", updateVisibility, { passive: true });
+    window.addEventListener("resize", updateVisibility);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("scroll", updateVisibility);
+      window.removeEventListener("resize", updateVisibility);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsOpen(false);
@@ -93,9 +140,24 @@ export default function BookingConcierge() {
     };
   }, [isSchedulerOpen]);
 
+  function openScheduler() {
+    setIsOpen(false);
+    setIsSchedulerOpen(true);
+  }
+
   return (
     <>
-      <div className="fixed bottom-4 right-3 z-[95] lg:bottom-5 lg:right-5">
+      <div
+        className={cn(
+          "fixed right-3 z-[95] transition-all duration-300 sm:right-5 lg:right-5",
+          isServicePage
+            ? "bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] sm:bottom-5"
+            : "bottom-[calc(env(safe-area-inset-bottom)+1rem)] sm:bottom-5",
+          hasPassedHero
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-5 opacity-0"
+        )}
+      >
         <div
           className={cn(
             "mb-3 w-[calc(100vw-1.5rem)] max-w-sm origin-bottom-right overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-blue-400/10 transition-all duration-200 dark:border-slate-800 sm:w-[380px]",
@@ -146,7 +208,7 @@ export default function BookingConcierge() {
 
             <button
               type="button"
-              onClick={() => setIsSchedulerOpen(true)}
+              onClick={openScheduler}
               className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
             >
               {pageContext.primary}
@@ -200,46 +262,60 @@ export default function BookingConcierge() {
       </div>
 
       {isSchedulerOpen && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/80 p-2 backdrop-blur-sm sm:items-center sm:p-5">
-          <div className="relative flex h-[88dvh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl shadow-black/40 dark:border-slate-800 dark:bg-slate-950 sm:h-[86vh] sm:rounded-[2rem]">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950 sm:px-5">
+        <div className="fixed inset-0 z-[300] flex items-stretch justify-center bg-slate-950/80 p-0 backdrop-blur-md sm:items-center sm:p-4 lg:p-6">
+          <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl shadow-black/40 dark:bg-slate-950 sm:h-[calc(100dvh-2rem)] sm:max-h-[840px] sm:max-w-6xl sm:rounded-[2rem] sm:border sm:border-slate-200 dark:sm:border-slate-800">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.85rem)] dark:border-slate-800 dark:bg-slate-950 sm:px-5 sm:pt-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-300 sm:text-[10px] sm:tracking-[0.18em]">
                   TrackFlow Pro Calendar
                 </p>
-                <h2 className="truncate text-base font-black text-slate-950 dark:text-white sm:text-lg">
+                <h2 className="truncate text-sm font-black text-slate-950 dark:text-white sm:text-lg">
                   Book a 15-minute tracking verification call
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsSchedulerOpen(false)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                aria-label="Close Calendly scheduler"
-              >
-                <X className="h-5 w-5" />
-              </button>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <a
+                  href={calendlyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-black text-slate-950 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800 sm:inline-flex"
+                >
+                  Open
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSchedulerOpen(false)}
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  aria-label="Close Calendly scheduler"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 bg-slate-50 dark:bg-slate-900">
               <iframe
-                src={calendlyUrl}
+                src={schedulerUrl}
                 title="TrackFlow Pro 15-minute tracking verification call Calendly booking"
                 className="h-full w-full border-0"
                 loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
               />
             </div>
 
-            <div className="flex flex-col gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950 sm:flex-row sm:items-center sm:justify-between">
+            <div className="hidden border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950 sm:flex sm:items-center sm:justify-between sm:gap-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                Secure booking through Calendly. No ad account login required to book.
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                <span>Secure booking through Calendly. No ad account login required to book.</span>
               </div>
               <a
                 href={calendlyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-950 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-950 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
               >
                 Open in new tab
                 <ExternalLink className="h-3.5 w-3.5" />
