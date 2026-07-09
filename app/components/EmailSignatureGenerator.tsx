@@ -69,6 +69,13 @@ const DEFAULT_FORM: SignatureForm = {
 
 const BRAND_COLORS = ["#2563eb", "#0f766e", "#7c3aed", "#ea580c", "#be123c", "#0f172a"];
 
+const SOCIAL_ICON_URLS = {
+  facebook: "https://cdn.jsdelivr.net/gh/ShahjalalK/signature-test@master/facebook.png",
+  linkedin: "https://cdn.jsdelivr.net/gh/ShahjalalK/annadavid-signature@master/img/linkedin.png",
+  instagram: "https://cdn.jsdelivr.net/gh/ShahjalalK/annadavid-signature@master/img/instagram.png",
+  youtube: "https://cdn.jsdelivr.net/gh/ShahjalalK/annadavid-signature@master/img/youtube.png",
+} as const;
+
 const SIGNATURE_TEMPLATES: Array<{
   id: SignatureTemplate;
   name: string;
@@ -193,10 +200,10 @@ function getSignatureParts(form: SignatureForm, imageMode: ImageMode, allowDataI
   const titleLine = [jobTitle, company].filter(Boolean).join(" · ");
 
   const socialLinks = [
-    { label: "LinkedIn", short: "in", url: safeUrl(form.linkedin) },
-    { label: "Facebook", short: "f", url: safeUrl(form.facebook) },
-    { label: "Instagram", short: "ig", url: safeUrl(form.instagram) },
-    { label: "YouTube", short: "yt", url: safeUrl(form.youtube) },
+    { label: "LinkedIn", icon: SOCIAL_ICON_URLS.linkedin, url: safeUrl(form.linkedin) },
+    { label: "Facebook", icon: SOCIAL_ICON_URLS.facebook, url: safeUrl(form.facebook) },
+    { label: "Instagram", icon: SOCIAL_ICON_URLS.instagram, url: safeUrl(form.instagram) },
+    { label: "YouTube", icon: SOCIAL_ICON_URLS.youtube, url: safeUrl(form.youtube) },
   ].filter((link) => link.url);
 
   const credit = form.includeCredit
@@ -250,15 +257,19 @@ function imageBlock(parts: ReturnType<typeof getSignatureParts>, size = 76, radi
   return `<table cellpadding="0" cellspacing="0" border="0" role="presentation" width="${size}" height="${size}" style="${tableReset(`width:${size}px;height:${size}px;`)}"><tr><td width="${size}" height="${size}" align="center" valign="middle" bgcolor="${parts.color}" style="width:${size}px;height:${size}px;border-radius:${safeRadius};${textStyle(fontSize, size, "#ffffff", "bold")}">${parts.initials}</td></tr></table>`;
 }
 
-function socialTextLinks(parts: ReturnType<typeof getSignatureParts>, divider = " | ") {
+function socialIconImg(link: { label: string; icon: string; url: string }, size = 20) {
+  return `<img src="${escapeHtml(link.icon)}" width="${size}" height="${size}" alt="${escapeHtml(link.label)}" style="display:block;width:${size}px;height:${size}px;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">`;
+}
+
+function socialTextLinks(parts: ReturnType<typeof getSignatureParts>) {
   if (!parts.socialLinks.length) return "";
 
-  return `<tr><td colspan="3" style="padding:7px 0 0 0;${textStyle(12, 16)}">${parts.socialLinks
+  return `<tr><td colspan="3" style="padding:7px 0 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}"><tr>${parts.socialLinks
     .map(
-      (link, index) =>
-        `${index ? `<span style="color:#94a3b8;">${divider}</span>` : ""}<a href="${link.url}" style="${linkStyle(parts.color, "bold")}">${escapeHtml(link.label)}</a>`,
+      (link) =>
+        `<td style="padding:0 7px 0 0;"><a href="${link.url}" aria-label="${escapeHtml(link.label)}" style="display:block;text-decoration:none;border:0;line-height:0;">${socialIconImg(link, 19)}</a></td>`,
     )
-    .join("")}</td></tr>`;
+    .join("")}</tr></table></td></tr>`;
 }
 
 function socialCircleLinks(parts: ReturnType<typeof getSignatureParts>) {
@@ -267,7 +278,7 @@ function socialCircleLinks(parts: ReturnType<typeof getSignatureParts>) {
   return `<tr><td colspan="3" style="padding:7px 0 0 0;"><table cellpadding="0" cellspacing="0" border="0" role="presentation" style="${tableReset()}"><tr>${parts.socialLinks
     .map(
       (link) =>
-        `<td style="padding:0 5px 0 0;"><a href="${link.url}" aria-label="${escapeHtml(link.label)}" style="display:block;width:22px;height:22px;border:1px solid ${parts.color};border-radius:999px;${textStyle(10, 22, parts.color, "bold")}text-align:center;text-decoration:none;">${escapeHtml(link.short)}</a></td>`,
+        `<td style="padding:0 6px 0 0;"><a href="${link.url}" aria-label="${escapeHtml(link.label)}" style="display:block;text-decoration:none;border:0;line-height:0;">${socialIconImg(link, 21)}</a></td>`,
     )
     .join("")}</tr></table></td></tr>`;
 }
