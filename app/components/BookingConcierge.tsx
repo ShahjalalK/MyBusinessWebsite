@@ -149,7 +149,7 @@ export default function BookingConcierge() {
     <>
       <div
         className={cn(
-          "fixed right-3 z-[95] transition-all duration-300 sm:right-5 lg:right-5",
+          "pointer-events-none fixed right-3 z-[95] transition-all duration-300 sm:right-5 lg:right-5",
           isServicePage
             ? "bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] sm:bottom-5"
             : "bottom-[calc(env(safe-area-inset-bottom)+1rem)] sm:bottom-5",
@@ -162,7 +162,7 @@ export default function BookingConcierge() {
           className={cn(
             "mb-3 flex w-[calc(100vw-1.5rem)] max-w-sm max-h-[min(520px,calc(100dvh-12rem))] origin-bottom-right flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-blue-400/10 transition-all duration-200 dark:border-slate-800 sm:w-[380px] lg:max-h-[min(520px,calc(100dvh-11rem))]",
             isOpen
-              ? "translate-y-0 scale-100 opacity-100"
+              ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-3 scale-[0.98] opacity-0"
           )}
         >
@@ -241,7 +241,7 @@ export default function BookingConcierge() {
         <button
           type="button"
           onClick={() => setIsOpen((value) => !value)}
-          className="group relative ml-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full border border-blue-200/70 bg-white px-3 py-2.5 text-slate-950 shadow-2xl shadow-slate-950/15 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-blue-600/15 dark:border-blue-900/60 dark:bg-slate-950 dark:text-white dark:ring-white/10 sm:px-4"
+          className="pointer-events-auto group relative ml-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-full border border-blue-200/70 bg-white px-3 py-2.5 text-slate-950 shadow-2xl shadow-slate-950/15 ring-1 ring-white/70 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-blue-600/15 dark:border-blue-900/60 dark:bg-slate-950 dark:text-white dark:ring-white/10 sm:px-4"
           aria-expanded={isOpen}
           aria-label="Open booking review panel"
         >
