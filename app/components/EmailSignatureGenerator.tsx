@@ -47,26 +47,24 @@ type SignatureForm = {
   ctaText: string;
   ctaUrl: string;
   brandColor: string;
-  includeCredit: boolean;
 };
 
 const DEFAULT_FORM: SignatureForm = {
-  fullName: "Shahjalal Khan",
-  jobTitle: "Founder & Tracking Specialist",
-  company: "TrackFlow Pro",
-  email: "shahjalal@trackflowpro.com",
-  phone: "+880 1329-532551",
-  website: "https://trackflowpro.com",
-  address: "Remote tracking support worldwide",
+  fullName: "",
+  jobTitle: "",
+  company: "",
+  email: "",
+  phone: "",
+  website: "",
+  address: "",
   imageUrl: "",
-  linkedin: "https://www.linkedin.com/in/shahjalal-khan/",
+  linkedin: "",
   facebook: "",
   instagram: "",
   youtube: "",
-  ctaText: "Request a Free Tracking Review",
-  ctaUrl: "https://trackflowpro.com/free-tracking-audit",
+  ctaText: "",
+  ctaUrl: "",
   brandColor: "#2563eb",
-  includeCredit: true,
 };
 
 const BRAND_COLORS = ["#2563eb", "#0f766e", "#7c3aed", "#ea580c", "#be123c", "#0f172a"];
@@ -82,6 +80,13 @@ const DEFAULT_SIGNATURE_CREDIT_URL = "https://trackflowpro.com/tools/free-email-
 const SIGNATURE_CREDIT_URL = process.env.NEXT_PUBLIC_TRACKFLOW_SIGNATURE_CREDIT_URL || DEFAULT_SIGNATURE_CREDIT_URL;
 const SIGNATURE_GUIDE_VIDEO_URL = process.env.NEXT_PUBLIC_TRACKFLOW_SIGNATURE_GUIDE_VIDEO_URL || "";
 const GMAIL_SETTINGS_URL = process.env.NEXT_PUBLIC_TRACKFLOW_GMAIL_SETTINGS_URL || "https://mail.google.com/mail/u/0/#settings/general";
+const PREMIUM_SIGNATURE_SETUP_URL = process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_SETUP_URL || "/contact";
+const PREMIUM_SIGNATURE_CTA_TITLE =
+  process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_CTA_TITLE || "Want a premium signature without image hosting trouble?";
+const PREMIUM_SIGNATURE_CTA_TEXT =
+  process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_CTA_TEXT ||
+  "Get a done-for-you clickable email signature with your logo/photo, premium layout, and setup guidance.";
+const PREMIUM_SIGNATURE_CTA_BUTTON = process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_CTA_BUTTON || "Get Premium Signature Setup";
 
 const SIGNATURE_TEMPLATES: Array<{
   id: SignatureTemplate;
@@ -170,7 +175,7 @@ function formatPhoneHref(value: string) {
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  if (!parts.length) return "TP";
+  if (!parts.length) return "YN";
   return parts.map((part) => part[0]?.toUpperCase()).join("");
 }
 
@@ -562,7 +567,7 @@ const WIZARD_STEPS: Array<{
   },
 ];
 
-const STORAGE_KEY = "trackflowpro-email-signature-draft-v1";
+const STORAGE_KEY = "trackflowpro-email-signature-draft-v2";
 const AUTOSAVE_DELAY_MS = 300;
 
 type SavedSignatureDraft = {
@@ -648,6 +653,10 @@ function getGuideVideoEmbedUrl(value: string) {
     return "";
   }
 }
+function isExternalHref(value: string) {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 
 export default function EmailSignatureGenerator() {
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -685,7 +694,7 @@ export default function EmailSignatureGenerator() {
     const savedDraft = loadSavedDraft();
 
     if (savedDraft?.form) {
-      setForm({ ...DEFAULT_FORM, ...savedDraft.form, includeCredit: true });
+      setForm({ ...DEFAULT_FORM, ...savedDraft.form });
     }
     if (savedDraft?.imageMode) setImageMode(savedDraft.imageMode);
     if (savedDraft?.imageKind) setImageKind(savedDraft.imageKind);
@@ -702,7 +711,7 @@ export default function EmailSignatureGenerator() {
 
     const timer = window.setTimeout(() => {
       saveDraft({
-        form: { ...form, includeCredit: true },
+        form,
         imageMode,
         imageKind,
         outputFormat,
@@ -1291,6 +1300,22 @@ function InstallGuideModal({ videoUrl, onClose }: { videoUrl: string; onClose: (
                 Open Gmail settings
                 <ExternalLink className="h-4 w-4" />
               </a>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-400/20 dark:bg-blue-500/10">
+                <h3 className="text-sm font-black text-slate-950 dark:text-white">Need a premium setup?</h3>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
+                  If image hosting, logo sizing, or Gmail setup feels confusing, order a done-for-you clickable signature instead.
+                </p>
+                <a
+                  href={PREMIUM_SIGNATURE_SETUP_URL}
+                  target={isExternalHref(PREMIUM_SIGNATURE_SETUP_URL) ? "_blank" : undefined}
+                  rel={isExternalHref(PREMIUM_SIGNATURE_SETUP_URL) ? "noopener noreferrer" : undefined}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-500"
+                >
+                  {PREMIUM_SIGNATURE_CTA_BUTTON}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -1343,11 +1368,11 @@ function StepContent({
   if (activeStep === "personal") {
     return (
       <div className="space-y-5">
-        <StepNote icon={<UserRound className="h-5 w-5" />} title="Keep it clear" description="The first line should instantly tell people who you are and what you do." />
+        <StepNote icon={<UserRound className="h-5 w-5" />} title="Use your own details" description="Start with your real name, role, and company. The fields are blank by default so nobody copies sample information by mistake." />
         <div className="grid gap-4">
-          <TextInput label="Full name" value={form.fullName} onChange={(value) => onUpdateField("fullName", value)} />
-          <TextInput label="Job title" value={form.jobTitle} onChange={(value) => onUpdateField("jobTitle", value)} />
-          <TextInput label="Company" value={form.company} onChange={(value) => onUpdateField("company", value)} />
+          <TextInput label="Full name" value={form.fullName} placeholder="Your Name" onChange={(value) => onUpdateField("fullName", value)} />
+          <TextInput label="Job title" value={form.jobTitle} placeholder="Founder / Marketing Manager / Designer" onChange={(value) => onUpdateField("jobTitle", value)} />
+          <TextInput label="Company" value={form.company} placeholder="Your Company" onChange={(value) => onUpdateField("company", value)} />
         </div>
       </div>
     );
@@ -1358,10 +1383,10 @@ function StepContent({
       <div className="space-y-5">
         <StepNote icon={<Mail className="h-5 w-5" />} title="Make contact easy" description="Use the exact phone, email, and website you want people to click." />
         <div className="grid gap-4">
-          <TextInput label="Email" type="email" value={form.email} onChange={(value) => onUpdateField("email", value)} />
-          <TextInput label="Phone" value={form.phone} onChange={(value) => onUpdateField("phone", value)} />
-          <TextInput label="Website" value={form.website} onChange={(value) => onUpdateField("website", value)} />
-          <TextInput label="Address or short note" value={form.address} onChange={(value) => onUpdateField("address", value)} />
+          <TextInput label="Email" type="email" value={form.email} placeholder="you@example.com" onChange={(value) => onUpdateField("email", value)} />
+          <TextInput label="Phone" value={form.phone} placeholder="+1 234 567 890" onChange={(value) => onUpdateField("phone", value)} />
+          <TextInput label="Website" value={form.website} placeholder="https://yourwebsite.com" onChange={(value) => onUpdateField("website", value)} />
+          <TextInput label="Address or short note" value={form.address} placeholder="City, country / Remote support worldwide" onChange={(value) => onUpdateField("address", value)} />
         </div>
       </div>
     );
@@ -1372,27 +1397,39 @@ function StepContent({
       <div className="space-y-5">
         <StepNote
           icon={<ImageUp className="h-5 w-5" />}
-          title="Image without hosting cost"
-          description="Use initials for a zero-cost setup, or paste a public image URL when you want a real photo/logo in Gmail or Outlook."
+          title="Image setup"
+          description="Initials are the easiest free option. Use a public image URL only when you already have a reliable hosted photo or logo."
         />
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <RadioCard label="Use initials" active={imageMode === "initials"} onClick={() => onSetImageMode("initials")} />
-          <RadioCard label="Use image URL" active={imageMode === "url"} onClick={() => onSetImageMode("url")} />
-          <RadioCard label="Crop & download" active={imageMode === "upload"} onClick={() => onSetImageMode("upload")} />
+          <RadioCard label="Initials — easiest" active={imageMode === "initials"} onClick={() => onSetImageMode("initials")} />
+          <RadioCard label="Hosted image URL" active={imageMode === "url"} onClick={() => onSetImageMode("url")} />
+          <RadioCard label="Crop & optimize" active={imageMode === "upload"} onClick={() => onSetImageMode("upload")} />
         </div>
 
-        <TextInput
-          label="Public image URL for final signature"
-          value={form.imageUrl}
-          placeholder="https://example.com/profile-photo.jpg"
-          onChange={(value) => {
-            onUpdateField("imageUrl", value);
-            if (value.trim()) onSetImageMode("url");
-          }}
-        />
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-slate-950/70">
+          <TextInput
+            label="Public image URL for final signature"
+            value={form.imageUrl}
+            placeholder="https://example.com/profile-photo.jpg"
+            onChange={(value) => {
+              onUpdateField("imageUrl", value);
+              if (value.trim()) onSetImageMode("url");
+            }}
+          />
+          <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            Gmail and Outlook need a direct public image URL. Free image hosts can break, expire, or show share-page links instead of a direct image link. Initials are safer if you are not sure.
+          </p>
+        </div>
 
         <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="mb-4">
+            <p className="text-sm font-black text-slate-950 dark:text-white">Optimize before hosting</p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-400">
+              Upload a photo or logo, crop/resize it in your browser, download the optimized asset, then host it only if you have a reliable public image link.
+            </p>
+          </div>
+
           <input
             ref={fileInputRef}
             type="file"
@@ -1467,6 +1504,8 @@ function StepContent({
             </button>
           </div>
         </div>
+
+        <PremiumSignatureHelpCard />
       </div>
     );
   }
@@ -1476,12 +1515,12 @@ function StepContent({
       <div className="space-y-5">
         <StepNote icon={<Link2 className="h-5 w-5" />} title="Add only useful links" description="A clean signature usually performs better than a crowded one." />
         <div className="grid gap-4">
-          <TextInput label="LinkedIn URL" value={form.linkedin} onChange={(value) => onUpdateField("linkedin", value)} />
-          <TextInput label="Facebook URL" value={form.facebook} onChange={(value) => onUpdateField("facebook", value)} />
-          <TextInput label="Instagram URL" value={form.instagram} onChange={(value) => onUpdateField("instagram", value)} />
-          <TextInput label="YouTube URL" value={form.youtube} onChange={(value) => onUpdateField("youtube", value)} />
-          <TextInput label="CTA button text" value={form.ctaText} onChange={(value) => onUpdateField("ctaText", value)} />
-          <TextInput label="CTA button link" value={form.ctaUrl} onChange={(value) => onUpdateField("ctaUrl", value)} />
+          <TextInput label="LinkedIn URL" value={form.linkedin} placeholder="https://www.linkedin.com/in/your-profile" onChange={(value) => onUpdateField("linkedin", value)} />
+          <TextInput label="Facebook URL" value={form.facebook} placeholder="https://facebook.com/your-page" onChange={(value) => onUpdateField("facebook", value)} />
+          <TextInput label="Instagram URL" value={form.instagram} placeholder="https://instagram.com/your-handle" onChange={(value) => onUpdateField("instagram", value)} />
+          <TextInput label="YouTube URL" value={form.youtube} placeholder="https://youtube.com/@your-channel" onChange={(value) => onUpdateField("youtube", value)} />
+          <TextInput label="CTA button text" value={form.ctaText} placeholder="Book a Call / View Portfolio / Request Quote" onChange={(value) => onUpdateField("ctaText", value)} />
+          <TextInput label="CTA button link" value={form.ctaUrl} placeholder="https://yourwebsite.com/contact" onChange={(value) => onUpdateField("ctaUrl", value)} />
         </div>
       </div>
     );
@@ -1532,6 +1571,37 @@ function StepContent({
         <InstallTip title="Gmail" description="Settings → See all settings → Signature → Create new → paste the signature → Save changes." />
         <InstallTip title="Outlook" description="Settings → Mail → Compose and reply → Email signature → paste the signature → Save." />
         <InstallTip title="Image check" description="If the image does not appear, use a public image URL instead of a private preview or local file path." />
+      </div>
+    </div>
+  );
+}
+
+function PremiumSignatureHelpCard() {
+  const isExternal = isExternalHref(PREMIUM_SIGNATURE_SETUP_URL);
+
+  return (
+    <div className="relative overflow-hidden rounded-[1.5rem] border border-blue-200 bg-slate-950 p-5 text-white shadow-xl shadow-blue-950/10 dark:border-blue-400/20">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-blue-500/25 blur-3xl" />
+      <div className="relative">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
+          <Sparkles className="h-3.5 w-3.5" /> Done-for-you option
+        </div>
+        <h4 className="text-lg font-black tracking-[-0.03em]">{PREMIUM_SIGNATURE_CTA_TITLE}</h4>
+        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">{PREMIUM_SIGNATURE_CTA_TEXT}</p>
+        <ul className="mt-4 grid gap-2 text-xs font-bold leading-5 text-slate-300">
+          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />Premium clickable design with your brand style</li>
+          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />Logo/photo guidance so broken image issues are avoided</li>
+          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />Gmail/Outlook setup guidance for non-technical users</li>
+        </ul>
+        <a
+          href={PREMIUM_SIGNATURE_SETUP_URL}
+          target={isExternal ? "_blank" : undefined}
+          rel={isExternal ? "noopener noreferrer" : undefined}
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
+        >
+          {PREMIUM_SIGNATURE_CTA_BUTTON}
+          <ExternalLink className="h-4 w-4" />
+        </a>
       </div>
     </div>
   );
