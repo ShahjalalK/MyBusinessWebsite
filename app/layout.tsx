@@ -5,6 +5,7 @@ import Script from "next/script";
 import "./globals.css";
 import ServerTrack from "./components/ServerTrack";
 import ThemeProvider from "./components/theme-provider";
+import BookingConcierge from "./components/BookingConcierge";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -94,6 +95,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Suspense>
           
           {children}
+          <BookingConcierge />
         </ThemeProvider>
 
         <Script src="https://www.clarity.ms/tag/wd3r4mftjy" strategy="lazyOnload" />

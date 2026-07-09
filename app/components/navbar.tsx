@@ -319,7 +319,7 @@ function ThemeToggleButton({ floating = false }: { floating?: boolean }) {
 
 function FloatingThemeToggle() {
   return (
-    <div className="fixed bottom-5 right-5 z-[90] hidden lg:block">
+    <div className="fixed bottom-5 left-5 z-[80] hidden lg:block">
       <ThemeToggleButton floating />
     </div>
   );
