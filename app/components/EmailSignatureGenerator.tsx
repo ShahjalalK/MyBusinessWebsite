@@ -9,17 +9,19 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clipboard,
   Copy,
+  ExternalLink,
   ImageUp,
   LayoutTemplate,
   Link2,
   Mail,
   Palette,
+  PlayCircle,
   RefreshCcw,
   ShieldCheck,
   Sparkles,
   UserRound,
+  X,
 } from "lucide-react";
 
 type ImageMode = "initials" | "url" | "upload";
@@ -75,6 +77,11 @@ const SOCIAL_ICON_URLS = {
   instagram: "https://cdn.jsdelivr.net/gh/ShahjalalK/annadavid-signature@master/img/instagram.png",
   youtube: "https://cdn.jsdelivr.net/gh/ShahjalalK/annadavid-signature@master/img/youtube.png",
 } as const;
+
+const DEFAULT_SIGNATURE_CREDIT_URL = "https://trackflowpro.com/tools/free-email-signature-generator";
+const SIGNATURE_CREDIT_URL = process.env.NEXT_PUBLIC_TRACKFLOW_SIGNATURE_CREDIT_URL || DEFAULT_SIGNATURE_CREDIT_URL;
+const SIGNATURE_GUIDE_VIDEO_URL = process.env.NEXT_PUBLIC_TRACKFLOW_SIGNATURE_GUIDE_VIDEO_URL || "";
+const GMAIL_SETTINGS_URL = process.env.NEXT_PUBLIC_TRACKFLOW_GMAIL_SETTINGS_URL || "https://mail.google.com/mail/u/0/#settings/general";
 
 const SIGNATURE_TEMPLATES: Array<{
   id: SignatureTemplate;
@@ -206,9 +213,8 @@ function getSignatureParts(form: SignatureForm, imageMode: ImageMode, allowDataI
     { label: "YouTube", icon: SOCIAL_ICON_URLS.youtube, url: safeUrl(form.youtube) },
   ].filter((link) => link.url);
 
-  const credit = form.includeCredit
-    ? `<tr><td colspan="3" style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:14px;mso-line-height-rule:exactly;color:#64748b;">Created with <a href="https://trackflowpro.com/tools/free-email-signature-generator" style="color:${color};text-decoration:none;font-weight:bold;">TrackFlow Pro</a></td></tr>`
-    : "";
+  const creditUrl = safeUrl(SIGNATURE_CREDIT_URL) || safeUrl(DEFAULT_SIGNATURE_CREDIT_URL);
+  const credit = `<tr><td colspan="3" style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:14px;mso-line-height-rule:exactly;color:#64748b;">Created with <a href="${creditUrl}" style="color:${color};text-decoration:none;font-weight:bold;">TrackFlow Pro</a></td></tr>`;
 
   return {
     address,
@@ -506,7 +512,7 @@ function buildPlainText(form: SignatureForm) {
     form.website ? `Website: ${form.website}` : "",
     form.address,
     form.ctaText && form.ctaUrl ? `${form.ctaText}: ${form.ctaUrl}` : "",
-    form.includeCredit ? "Created with TrackFlow Pro: https://trackflowpro.com/tools/free-email-signature-generator" : "",
+    `Created with TrackFlow Pro: ${SIGNATURE_CREDIT_URL || DEFAULT_SIGNATURE_CREDIT_URL}`,
   ].filter(Boolean);
 
   return lines.join("\n");
@@ -609,6 +615,39 @@ function hasMinimumSignatureDetails(form: SignatureForm) {
   return Boolean(form.fullName.trim()) && Boolean(form.email.trim() || form.phone.trim() || form.website.trim());
 }
 
+function getGuideVideoEmbedUrl(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw);
+    const hostname = url.hostname.replace(/^www\./i, "").toLowerCase();
+    let videoId = "";
+
+    if (hostname === "youtu.be") {
+      videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (hostname === "youtube.com" || hostname === "m.youtube.com" || hostname.endsWith(".youtube.com")) {
+      if (url.pathname.startsWith("/watch")) {
+        videoId = url.searchParams.get("v") || "";
+      } else if (url.pathname.startsWith("/embed/") || url.pathname.startsWith("/shorts/")) {
+        videoId = url.pathname.split("/").filter(Boolean)[1] || "";
+      }
+    }
+
+    if (!videoId) return "";
+
+    const embedUrl = new URL(`https://www.youtube-nocookie.com/embed/${videoId}`);
+    embedUrl.searchParams.set("rel", "0");
+    embedUrl.searchParams.set("modestbranding", "1");
+
+    const startSeconds = (url.searchParams.get("start") || url.searchParams.get("t") || "").replace(/[^0-9]/g, "");
+    if (startSeconds) embedUrl.searchParams.set("start", startSeconds);
+
+    return embedUrl.toString();
+  } catch {
+    return "";
+  }
+}
 
 export default function EmailSignatureGenerator() {
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -623,7 +662,7 @@ export default function EmailSignatureGenerator() {
   const [optimizedFileName, setOptimizedFileName] = useState("signature-image.jpg");
   const [imageNotice, setImageNotice] = useState("");
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
-  const [htmlCopied, setHtmlCopied] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [activeStep, setActiveStep] = useState<WizardStep>("personal");
   const [selectedTemplate, setSelectedTemplate] = useState<SignatureTemplate>("modern");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -640,12 +679,13 @@ export default function EmailSignatureGenerator() {
   }, [form, imageMode, optimizedDataUrl, selectedTemplate, signatureHtml]);
 
   const canCopy = hasMinimumSignatureDetails(form);
+  const guideVideoEmbedUrl = useMemo(() => getGuideVideoEmbedUrl(SIGNATURE_GUIDE_VIDEO_URL), []);
 
   useEffect(() => {
     const savedDraft = loadSavedDraft();
 
     if (savedDraft?.form) {
-      setForm({ ...DEFAULT_FORM, ...savedDraft.form });
+      setForm({ ...DEFAULT_FORM, ...savedDraft.form, includeCredit: true });
     }
     if (savedDraft?.imageMode) setImageMode(savedDraft.imageMode);
     if (savedDraft?.imageKind) setImageKind(savedDraft.imageKind);
@@ -662,7 +702,7 @@ export default function EmailSignatureGenerator() {
 
     const timer = window.setTimeout(() => {
       saveDraft({
-        form,
+        form: { ...form, includeCredit: true },
         imageMode,
         imageKind,
         outputFormat,
@@ -674,6 +714,24 @@ export default function EmailSignatureGenerator() {
 
     return () => window.clearTimeout(timer);
   }, [draftLoaded, form, imageMode, imageKind, outputFormat, quality, activeStep, selectedTemplate]);
+
+  useEffect(() => {
+    if (!isGuideOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsGuideOpen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isGuideOpen]);
 
   function updateField<K extends keyof SignatureForm>(key: K, value: SignatureForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -692,14 +750,13 @@ export default function EmailSignatureGenerator() {
     setOptimizedFileName("signature-image.jpg");
     setImageNotice("");
     setCopyStatus("idle");
-    setHtmlCopied(false);
     setActiveStep("personal");
     setSelectedTemplate("modern");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function copyRichSignature() {
-    if (!canCopy) return;
+    if (!canCopy) return false;
 
     setCopyStatus("idle");
     try {
@@ -716,34 +773,30 @@ export default function EmailSignatureGenerator() {
         await navigator.clipboard.writeText(signatureHtml);
       }
       setCopyStatus("copied");
-      window.setTimeout(() => setCopyStatus("idle"), 2600);
+      window.setTimeout(() => setCopyStatus("idle"), 3600);
+      return true;
     } catch {
       setCopyStatus("failed");
+      return false;
     }
   }
 
-  async function copyHtml() {
-    if (!canCopy) return;
+  async function copyAndOpenGmailSettings() {
+    const gmailWindow = typeof window !== "undefined" ? window.open("", "_blank") : null;
+    const copied = await copyRichSignature();
 
-    try {
-      await navigator.clipboard.writeText(signatureHtml);
-      setHtmlCopied(true);
-      window.setTimeout(() => setHtmlCopied(false), 2200);
-    } catch {
-      setHtmlCopied(false);
+    if (!copied) {
+      gmailWindow?.close();
+      return;
     }
-  }
 
-  function downloadHtml() {
-    if (!canCopy) return;
+    if (gmailWindow) {
+      gmailWindow.opener = null;
+      gmailWindow.location.href = GMAIL_SETTINGS_URL;
+      return;
+    }
 
-    const blob = new Blob([signatureHtml], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${selectedTemplate}-email-signature.html`;
-    link.click();
-    URL.revokeObjectURL(url);
+    window.open(GMAIL_SETTINGS_URL, "_blank", "noopener,noreferrer");
   }
 
   function downloadOptimizedImage() {
@@ -881,7 +934,8 @@ export default function EmailSignatureGenerator() {
   const isLastStep = activeStepIndex === WIZARD_STEPS.length - 1;
 
   return (
-    <section id="signature-generator" className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+    <>
+      <section id="signature-generator" className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
       <div className="mb-5 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
         <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
@@ -1103,7 +1157,7 @@ export default function EmailSignatureGenerator() {
                   type="button"
                   onClick={copyRichSignature}
                   disabled={!canCopy}
-                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-45 sm:col-span-1"
+                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {copyStatus === "copied" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copyStatus === "copied" ? "Copied" : "Copy signature"}
@@ -1111,28 +1165,27 @@ export default function EmailSignatureGenerator() {
 
                 <button
                   type="button"
-                  onClick={copyHtml}
+                  onClick={copyAndOpenGmailSettings}
                   disabled={!canCopy}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-blue-500/10"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
                 >
-                  <Clipboard className="h-4 w-4" />
-                  {htmlCopied ? "HTML copied" : "Copy HTML"}
+                  <ExternalLink className="h-4 w-4" />
+                  Copy & Open Gmail
                 </button>
 
                 <button
                   type="button"
-                  onClick={downloadHtml}
-                  disabled={!canCopy}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-white/[0.06]"
+                  onClick={() => setIsGuideOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-100 dark:hover:bg-blue-500/10"
                 >
-                  <ArrowDownToLine className="h-4 w-4" />
-                  Download
+                  <PlayCircle className="h-4 w-4" />
+                  Install guide
                 </button>
               </div>
 
               {copyStatus === "copied" ? (
                 <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  Copied! Now open Gmail or Outlook signature settings, paste it, save, and send yourself one test email.
+                  Copied! Open Gmail settings, create a new signature, paste it, save changes, and send yourself one test email.
                 </p>
               ) : null}
 
@@ -1144,14 +1197,105 @@ export default function EmailSignatureGenerator() {
 
               {copyStatus === "failed" ? (
                 <p className="mt-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-                  Clipboard permission was blocked. Use “Copy HTML” or download the HTML file instead.
+                  Clipboard permission was blocked. Try again, or open the install guide and paste the signature manually.
                 </p>
               ) : null}
             </div>
           </div>
         </div>
       </div>
-    </section>
+      </section>
+
+      {isGuideOpen ? <InstallGuideModal videoUrl={guideVideoEmbedUrl} onClose={() => setIsGuideOpen(false)} /> : null}
+    </>
+  );
+}
+
+function InstallGuideModal({ videoUrl, onClose }: { videoUrl: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[250] flex items-stretch justify-center bg-slate-950/80 p-0 backdrop-blur-md sm:items-center sm:p-4 lg:p-6">
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl shadow-black/30 dark:bg-slate-950 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-5xl sm:rounded-[2rem] sm:border sm:border-slate-200 dark:sm:border-white/10">
+        <div className="relative overflow-hidden border-b border-slate-200 bg-slate-950 px-5 pb-5 pt-[calc(env(safe-area-inset-top)+1rem)] text-white dark:border-white/10 sm:p-6">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-blue-500/25 blur-3xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
+                <PlayCircle className="h-3.5 w-3.5" /> Gmail install guide
+              </div>
+              <h2 className="text-2xl font-black tracking-[-0.04em] sm:text-3xl">Add your signature to Gmail</h2>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
+                Copy the signature, open Gmail settings, paste it into a new signature, save changes, then send one test email.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close install guide"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+            <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-100 p-2 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+              {videoUrl ? (
+                <div className="aspect-video overflow-hidden rounded-[1.35rem] bg-slate-950">
+                  <iframe
+                    src={videoUrl}
+                    title="TrackFlow Pro Gmail signature install guide"
+                    className="h-full w-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                </div>
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-[1.35rem] bg-white p-8 text-center dark:bg-slate-900">
+                  <div>
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                      <PlayCircle className="h-7 w-7" />
+                    </div>
+                    <h3 className="mt-4 text-xl font-black tracking-[-0.03em] text-slate-950 dark:text-white">Guide video coming soon</h3>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
+                      A short walkthrough video will appear here when it is available.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {[
+                "Click Copy signature or Copy & Open Gmail.",
+                "In Gmail, go to Settings → See all settings → Signature.",
+                "Create a new signature and paste the copied signature.",
+                "Select it for new emails/replies, save changes, and send a test email.",
+              ].map((step, index) => (
+                <div key={step} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white">{index + 1}</div>
+                  <p className="text-sm font-bold leading-6 text-slate-700 dark:text-slate-300">{step}</p>
+                </div>
+              ))}
+
+              <a
+                href={GMAIL_SETTINGS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3.5 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-blue-100"
+              >
+                Open Gmail settings
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1372,15 +1516,9 @@ function StepContent({
             />
           </div>
 
-          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={form.includeCredit}
-              onChange={(event) => onUpdateField("includeCredit", event.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span>Include “Created with TrackFlow Pro” credit link. Keeping this on helps us keep the tool free.</span>
-          </label>
+          <div className="mt-4 rounded-2xl border border-blue-200 bg-white p-4 text-sm font-bold leading-6 text-slate-700 dark:border-blue-400/20 dark:bg-slate-950/70 dark:text-slate-300">
+            “Created with TrackFlow Pro” credit is included automatically to keep this free tool sustainable.
+          </div>
         </div>
       </div>
     );
@@ -1388,7 +1526,7 @@ function StepContent({
 
   return (
     <div className="space-y-5">
-      <StepNote icon={<CheckCircle2 className="h-5 w-5" />} title="Ready to use" description="Copy the signature from the preview panel, paste it into Gmail or Outlook, then send a test email to yourself." />
+      <StepNote icon={<CheckCircle2 className="h-5 w-5" />} title="Ready to use" description="Copy the signature, open Gmail settings, or watch the quick install guide before saving it." />
 
       <div className="grid gap-3">
         <InstallTip title="Gmail" description="Settings → See all settings → Signature → Create new → paste the signature → Save changes." />
