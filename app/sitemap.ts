@@ -34,6 +34,11 @@ const routes = [
     changeFrequency: "monthly" as const,
   },
   {
+    path: "/services/looker-studio-dashboard",
+    priority: 0.8,
+    changeFrequency: "monthly" as const,
+  },
+  {
     path: "/about",
     priority: 0.7,
     changeFrequency: "monthly" as const,

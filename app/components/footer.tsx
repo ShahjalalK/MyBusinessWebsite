@@ -45,6 +45,10 @@ const services = [
     href: "/services/meta-capi",
   },
   {
+    label: "Looker Studio Dashboard",
+    href: "/services/looker-studio-dashboard",
+  },
+  {
     label: "Free Tracking Audit",
     href: "/free-tracking-audit",
   },
@@ -71,7 +75,7 @@ const company = [
 
 const trustPoints = [
   "Public browser-visible evidence first",
-  "GA4, GTM, Google Ads & Meta CAPI focused",
+  "GA4, GTM, Google Ads, Meta CAPI & Looker Studio focused",
   "No login required for the initial review",
   "Not affiliated with Google, Meta, or ad platforms",
 ];
@@ -160,7 +164,7 @@ export default function Footer() {
 
             <p className="max-w-md text-sm font-medium leading-7 text-slate-400">
               Specialist support for Google Ads conversion tracking, GA4/GTM audits,
-              Meta Conversions API, enhanced conversions, and server-side measurement.
+              Meta Conversions API, enhanced conversions, server-side measurement, and Looker Studio dashboards.
             </p>
 
             <div className="space-y-3">
@@ -267,6 +271,7 @@ export default function Footer() {
                 <FocusPill icon={<ShieldCheck className="h-4 w-4" />} label="Server-Side Tracking" />
                 <FocusPill icon={<FileSearch className="h-4 w-4" />} label="GA4 & GTM Audit" />
                 <FocusPill icon={<Zap className="h-4 w-4" />} label="Meta CAPI" />
+                <FocusPill icon={<BarChart3 className="h-4 w-4" />} label="Looker Studio Dashboards" />
               </div>
 
               <div className="mt-7 rounded-2xl border border-white/10 bg-white/[0.03] p-4">

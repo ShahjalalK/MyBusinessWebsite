@@ -19,16 +19,16 @@ import Navbar from "../components/navbar";
 import Footer from "../components/footer";
 
 export const metadata: Metadata = {
-  title: "Tracking Services Overview | Google Ads, GA4, GTM, Meta CAPI & Server-Side Tracking",
+  title: "Tracking Services Overview | Google Ads, GA4, GTM, Meta CAPI, Looker Studio & Server-Side Tracking",
   description:
-    "Explore TrackFlow Pro tracking services for Google Ads conversion tracking, GA4 and GTM audits, Meta Conversions API, enhanced conversions, and server-side tracking.",
+    "Explore TrackFlow Pro tracking services for Google Ads conversion tracking, GA4 and GTM audits, Meta Conversions API, Looker Studio dashboards, enhanced conversions, and server-side tracking.",
   alternates: {
     canonical: "https://trackflowpro.com/services",
   },
   openGraph: {
     title: "Tracking Services Overview | TrackFlow Pro",
     description:
-      "Specialist tracking services for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement.",
+      "Specialist tracking services for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, Looker Studio dashboards, enhanced conversions, and server-side measurement.",
     url: "https://trackflowpro.com/services",
     siteName: "TrackFlow Pro",
     type: "website",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Tracking Services Overview | TrackFlow Pro",
     description:
-      "Google Ads conversion tracking, GA4/GTM audit, Meta CAPI, and server-side tracking services.",
+      "Google Ads conversion tracking, GA4/GTM audit, Meta CAPI, Looker Studio dashboards, and server-side tracking services.",
     images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
@@ -111,6 +111,21 @@ const coreServices = [
     ],
     cta: "Improve Meta CAPI",
   },
+  {
+    title: "Looker Studio Dashboard",
+    href: "/services/looker-studio-dashboard",
+    icon: <BarChart3 className="h-6 w-6" />,
+    eyebrow: "PPC reporting",
+    description:
+      "Build clean Looker Studio dashboards for Google Ads, GA4, Meta Ads, leads, revenue, conversion tracking, and tracking health reporting.",
+    bestFor: [
+      "Google Ads and GA4 dashboard",
+      "Meta Ads reporting dashboard",
+      "Lead and revenue reporting",
+      "Tracking health overview",
+    ],
+    cta: "Build reporting dashboard",
+  },
 ];
 
 const signals = [
@@ -133,6 +148,11 @@ const signals = [
     label: "Server-side",
     value: "First-party measurement",
     icon: <Database className="h-5 w-5" />,
+  },
+  {
+    label: "Looker Studio",
+    value: "PPC reporting dashboard",
+    icon: <BarChart3 className="h-5 w-5" />,
   },
 ];
 
@@ -188,7 +208,7 @@ const faqs = [
   {
     question: "Which tracking service should I start with?",
     answer:
-      "If you are not sure what is broken, start with the free tracking review. It checks public browser-visible evidence first and helps decide whether you need Google Ads conversion tracking, GA4/GTM audit, Meta CAPI, or server-side tracking support.",
+      "If you are not sure what is broken, start with the free tracking review. It checks public browser-visible evidence first and helps decide whether you need Google Ads conversion tracking, GA4/GTM audit, Meta CAPI, Looker Studio dashboard, or server-side tracking support.",
   },
   {
     question: "Do you need access to my accounts before the first review?",
@@ -232,6 +252,8 @@ const schema = {
         "Server-side tracking",
         "Meta Conversions API",
         "Facebook Conversions API",
+        "Looker Studio dashboards",
+        "PPC reporting dashboards",
       ],
     },
     {
@@ -273,9 +295,10 @@ const schema = {
         "GA4 and Google Tag Manager audit specialist",
         "Server-side tracking specialist",
         "Meta CAPI setup specialist",
+        "Looker Studio dashboard specialist",
       ],
       serviceType:
-        "Google Ads conversion tracking, GA4 and GTM audit, Meta Conversions API, and server-side tracking services",
+        "Google Ads conversion tracking, GA4 and GTM audit, Meta Conversions API, Looker Studio dashboards, and server-side tracking services",
       provider: { "@id": "https://trackflowpro.com/#organization" },
       areaServed: "Worldwide",
       url: "https://trackflowpro.com/services",
@@ -360,7 +383,7 @@ function HeroSection() {
           </h1>
 
           <p className="mt-7 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg sm:leading-8 dark:text-slate-300">
-            TrackFlow Pro helps businesses diagnose and improve Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, and server-side tracking so paid traffic decisions are based on cleaner measurement.
+            TrackFlow Pro helps businesses diagnose and improve Google Ads conversion tracking, GA4/GTM events, Meta CAPI, Looker Studio dashboards, enhanced conversions, and server-side tracking so paid traffic decisions are based on cleaner measurement.
           </p>
 
           <div className="mt-7 flex sm:mt-9 flex-col gap-3 sm:flex-row">
@@ -383,7 +406,7 @@ function HeroSection() {
             {[
               "No login required for first review",
               "Public browser-visible evidence first",
-              "GA4, GTM, Google Ads, Meta & server-side",
+              "GA4, GTM, Google Ads, Meta, Looker Studio & server-side",
             ].map((item) => (
               <div key={item} className="flex items-start gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -436,7 +459,7 @@ function ServiceOverviewCard() {
 function SignalStrip() {
   return (
     <section className="border-y border-slate-200 bg-white px-4 py-8 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto grid w-full max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mx-auto grid w-full max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {signals.map((signal) => (
           <div key={signal.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
             <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-950 dark:text-blue-300">

@@ -67,6 +67,13 @@ const services: MenuItem[] = [
     icon: <Zap className="h-5 w-5" />,
   },
   {
+    title: "Looker Studio Dashboard",
+    description:
+      "Build clean PPC and analytics dashboards for Google Ads, GA4, Meta Ads, leads, revenue, and tracking health.",
+    href: "/services/looker-studio-dashboard",
+    icon: <BarChart3 className="h-5 w-5" />,
+  },
+  {
     title: "Free Tracking Audit",
     description:
       "Start with a tracking-first review before changing your measurement setup.",
