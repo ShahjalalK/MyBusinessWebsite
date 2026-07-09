@@ -81,12 +81,13 @@ const SIGNATURE_CREDIT_URL = process.env.NEXT_PUBLIC_TRACKFLOW_SIGNATURE_CREDIT_
 const SIGNATURE_GUIDE_VIDEO_URL = process.env.NEXT_PUBLIC_TRACKFLOW_SIGNATURE_GUIDE_VIDEO_URL || "";
 const GMAIL_SETTINGS_URL = process.env.NEXT_PUBLIC_TRACKFLOW_GMAIL_SETTINGS_URL || "https://mail.google.com/mail/u/0/#settings/general";
 const PREMIUM_SIGNATURE_SETUP_URL = process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_SETUP_URL || "/contact";
-const PREMIUM_SIGNATURE_CTA_TITLE =
-  process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_CTA_TITLE || "Want a premium signature without image hosting trouble?";
+const PREMIUM_SIGNATURE_DEMO_GIF_URL =
+  process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_DEMO_GIF_URL ||
+  "https://cdn.jsdelivr.net/gh/ShahjalalK/signature-mockup-for-realstate@master/real-state-agents-email-signature.gif";
+const PREMIUM_SIGNATURE_CTA_TITLE = "Need a premium clickable signature without image hosting trouble?";
 const PREMIUM_SIGNATURE_CTA_TEXT =
-  process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_CTA_TEXT ||
-  "Get a done-for-you clickable email signature with your logo/photo, premium layout, and setup guidance.";
-const PREMIUM_SIGNATURE_CTA_BUTTON = process.env.NEXT_PUBLIC_TRACKFLOW_PREMIUM_SIGNATURE_CTA_BUTTON || "Get Premium Signature Setup";
+  "Order a done-for-you signature with your logo/photo, premium layout, clickable buttons, and Gmail/Outlook setup guidance.";
+const PREMIUM_SIGNATURE_CTA_BUTTON = "Get Premium Signature Setup";
 
 const SIGNATURE_TEMPLATES: Array<{
   id: SignatureTemplate;
@@ -620,6 +621,22 @@ function hasMinimumSignatureDetails(form: SignatureForm) {
   return Boolean(form.fullName.trim()) && Boolean(form.email.trim() || form.phone.trim() || form.website.trim());
 }
 
+function getPreviewDisplayForm(form: SignatureForm, canCopy: boolean): SignatureForm {
+  if (canCopy) return form;
+
+  return {
+    ...form,
+    fullName: form.fullName.trim() || "Your Name",
+    jobTitle: form.jobTitle.trim() || "Your Role",
+    company: form.company.trim() || "Your Company",
+    email: form.email.trim() || "you@example.com",
+    phone: form.phone.trim() || "+1 234 567 890",
+    website: form.website.trim() || "https://yourwebsite.com",
+    ctaText: form.ctaText.trim() || "Book a Call",
+    ctaUrl: form.ctaUrl.trim() || "https://yourwebsite.com/contact",
+  };
+}
+
 function getGuideVideoEmbedUrl(value: string) {
   const raw = value.trim();
   if (!raw) return "";
@@ -682,12 +699,16 @@ export default function EmailSignatureGenerator() {
   );
   const plainText = useMemo(() => buildPlainText(form), [form]);
 
-  const previewHtml = useMemo(() => {
-    if (form.imageUrl || !optimizedDataUrl || imageMode !== "upload") return signatureHtml;
-    return buildSignatureHtml({ ...form, imageUrl: optimizedDataUrl }, imageMode, true, selectedTemplate);
-  }, [form, imageMode, optimizedDataUrl, selectedTemplate, signatureHtml]);
-
   const canCopy = hasMinimumSignatureDetails(form);
+  const previewForm = useMemo(() => getPreviewDisplayForm(form, canCopy), [form, canCopy]);
+
+  const previewHtml = useMemo(() => {
+    const shouldUseLocalOptimizedImage = imageMode === "upload" && optimizedDataUrl && !form.imageUrl;
+    const nextPreviewForm = shouldUseLocalOptimizedImage ? { ...previewForm, imageUrl: optimizedDataUrl } : previewForm;
+
+    return buildSignatureHtml(nextPreviewForm, imageMode, Boolean(shouldUseLocalOptimizedImage), selectedTemplate);
+  }, [form.imageUrl, imageMode, optimizedDataUrl, previewForm, selectedTemplate]);
+
   const guideVideoEmbedUrl = useMemo(() => getGuideVideoEmbedUrl(SIGNATURE_GUIDE_VIDEO_URL), []);
 
   useEffect(() => {
@@ -1122,8 +1143,22 @@ export default function EmailSignatureGenerator() {
                 </div>
               ) : null}
 
-              <div className="max-h-[420px] overflow-auto overscroll-contain rounded-[1.75rem] border border-slate-200 bg-slate-100 p-3 [scrollbar-width:thin] dark:border-white/10 dark:bg-white/[0.03] sm:max-h-[520px] sm:p-5 lg:max-h-[460px] xl:max-h-[520px]">
-                <div className="overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-200">
+              <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-gradient-to-br from-slate-100 to-white p-3 dark:border-white/10 dark:from-white/[0.04] dark:to-white/[0.02] sm:p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Email composer mockup</p>
+                    <p className="mt-1 text-xs font-bold text-slate-600 dark:text-slate-300">The copied signature appears below the message body.</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] ${
+                    canCopy
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20"
+                      : "bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-400/20"
+                  }`}>
+                    {canCopy ? "Ready preview" : "Example preview"}
+                  </span>
+                </div>
+
+                <div className="max-h-[430px] overflow-auto overscroll-contain rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200 [scrollbar-width:thin] dark:ring-slate-200 sm:max-h-[520px] lg:max-h-[470px] xl:max-h-[540px]">
                   <div className="space-y-3 border-b border-slate-200 px-5 py-4">
                     <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
                       <span className="w-16 text-slate-500">To:</span>
@@ -1135,8 +1170,21 @@ export default function EmailSignatureGenerator() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto px-5 py-6">
-                    <div className="min-w-[520px]" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  <div className="px-5 py-5">
+                    <div className="space-y-2 pb-5">
+                      <div className="h-2 w-3/4 rounded-full bg-slate-100" />
+                      <div className="h-2 w-2/3 rounded-full bg-slate-100" />
+                      <div className="h-2 w-1/2 rounded-full bg-slate-100" />
+                    </div>
+
+                    <div className="border-t border-dashed border-slate-200 pt-4">
+                      <div className="mb-3 inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                        Signature preview
+                      </div>
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[520px]" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1585,6 +1633,18 @@ function PremiumSignatureHelpCard() {
       <div className="relative">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
           <Sparkles className="h-3.5 w-3.5" /> Done-for-you option
+        </div>
+        <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-lg shadow-black/10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={PREMIUM_SIGNATURE_DEMO_GIF_URL}
+            alt="Before and after example of a premium clickable email signature"
+            width="800"
+            height="450"
+            loading="lazy"
+            decoding="async"
+            className="h-auto w-full object-cover"
+          />
         </div>
         <h4 className="text-lg font-black tracking-[-0.03em]">{PREMIUM_SIGNATURE_CTA_TITLE}</h4>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">{PREMIUM_SIGNATURE_CTA_TEXT}</p>
