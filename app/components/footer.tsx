@@ -45,41 +45,14 @@ const services = [
     href: "/services/meta-capi",
   },
   {
-    label: "Free Google Ads Audit",
+    label: "Free Tracking Audit",
     href: "/free-tracking-audit",
-  },
-];
-
-const resources = [
-  {
-    label: "Blog",
-    href: "/blog",
-  },
-  {
-    label: "Google Ads Tracking Guide",
-    href: "/blog/how-to-set-up-google-ads-conversion-tracking",
-  },
-  {
-    label: "Google Ads Not Tracking",
-    href: "/blog/google-ads-conversions-not-tracking",
-  },
-  {
-    label: "Client-Side vs Server-Side Tracking",
-    href: "/blog/client-side-vs-server-side-tracking",
-  },
-  {
-    label: "Meta Pixel vs Conversions API",
-    href: "/blog/meta-pixel-vs-conversions-api",
-  },
-  {
-    label: "GTM Audit Checklist",
-    href: "/blog/google-tag-manager-audit-checklist",
   },
 ];
 
 const company = [
   {
-    label: "About",
+    label: "About TrackFlow Pro",
     href: "/about",
   },
   {
@@ -157,33 +130,33 @@ export default function Footer() {
         <div className="grid gap-10 lg:grid-cols-[1.1fr_1.9fr] lg:gap-12">
           <div className="space-y-6 sm:space-y-8">
             <Link
-  href="/"
-  className="group inline-flex min-w-0 items-center gap-3"
-  aria-label="TrackFlow Pro home"
->
-  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-blue-950/30 ring-1 ring-blue-400/30 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-blue-500/20">
-    <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-blue-50 to-blue-100" />
-    <Image
-      src="/logo-mark.png"
-      alt=""
-      width={44}
-      height={44}
-      className="relative h-10 w-10 object-contain drop-shadow-sm"
-    />
-  </span>
+              href="/"
+              className="group inline-flex min-w-0 items-center gap-3"
+              aria-label="TrackFlow Pro home"
+            >
+              <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-blue-950/30 ring-1 ring-blue-400/30 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-blue-500/20">
+                <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-blue-50 to-blue-100" />
+                <Image
+                  src="/logo-mark.png"
+                  alt=""
+                  width={44}
+                  height={44}
+                  className="relative h-10 w-10 object-contain drop-shadow-sm"
+                />
+              </span>
 
-  <span className="flex min-w-0 flex-col leading-none">
-    <span className="whitespace-nowrap text-2xl font-black tracking-[-0.045em] text-white">
-      TrackFlow
-      <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-cyan-200 bg-clip-text text-transparent">
-        Pro
-      </span>
-    </span>
-    <span className="mt-1 block whitespace-nowrap text-[8px] font-black uppercase tracking-[0.14em] text-slate-400">
-      Conversion Tracking Specialist
-    </span>
-  </span>
-</Link>
+              <span className="flex min-w-0 flex-col leading-none">
+                <span className="whitespace-nowrap text-2xl font-black tracking-[-0.045em] text-white">
+                  TrackFlow
+                  <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-cyan-200 bg-clip-text text-transparent">
+                    Pro
+                  </span>
+                </span>
+                <span className="mt-1 block whitespace-nowrap text-[8px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  Conversion Tracking Specialist
+                </span>
+              </span>
+            </Link>
 
             <p className="max-w-md text-sm font-medium leading-7 text-slate-400">
               Specialist support for Google Ads conversion tracking, GA4/GTM audits,
@@ -270,10 +243,18 @@ export default function Footer() {
             </div>
           </div>
 
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-10">
-            <FooterColumn title="Services" links={services} featuredIcon={<Target className="h-4 w-4" />} />
-            <FooterColumn title="Resources" links={resources} featuredIcon={<BookIcon />} />
-            <FooterColumn title="Company" links={company} featuredIcon={<FileSearch className="h-4 w-4" />} />
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-10">
+            <FooterColumn
+              title="Services"
+              links={services}
+              featuredIcon={<Target className="h-4 w-4" />}
+            />
+
+            <FooterColumn
+              title="Company"
+              links={company}
+              featuredIcon={<FileSearch className="h-4 w-4" />}
+            />
 
             <div>
               <div className="mb-5 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">
@@ -310,7 +291,9 @@ export default function Footer() {
               <p>
                 Audit notes are based on public browser-visible evidence first. Final confirmation may require access to GA4, GTM, Google Ads, Meta, CRM, or server-side logs.
               </p>
-              <p>TrackFlow Pro is an independent service provider and is not affiliated with Google or Meta.</p>
+              <p>
+                TrackFlow Pro is an independent service provider and is not affiliated with Google or Meta.
+              </p>
             </div>
           </div>
         </div>
@@ -358,26 +341,5 @@ function FocusPill({ icon, label }: { icon: ReactNode; label: string }) {
       <span className="text-blue-300">{icon}</span>
       {label}
     </div>
-  );
-}
-
-function BookIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
-      <path
-        d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M5 5.5A2.5 2.5 0 0 1 7.5 8H19"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

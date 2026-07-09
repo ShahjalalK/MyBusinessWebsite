@@ -14,13 +14,10 @@ import { useTheme } from "next-themes";
 import {
   ArrowRight,
   BarChart3,
-  BookOpen,
   ChevronDown,
   FileSearch,
-  LineChart,
   Menu,
   Moon,
-  MousePointerClick,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -29,7 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 
-type DropdownKey = "services" | "resources" | null;
+type DropdownKey = "services" | null;
 
 type MenuItem = {
   title: string;
@@ -42,80 +39,46 @@ type MenuItem = {
 const services: MenuItem[] = [
   {
     title: "Google Ads Conversion Tracking",
-    description: "Fix broken conversions, GTM tags, enhanced conversions, form and call tracking.",
+    description:
+      "Fix broken conversions, GTM tags, enhanced conversions, form tracking, call tracking, and ecommerce events.",
     href: "/services/google-ads-conversion-tracking",
     icon: <Target className="h-5 w-5" />,
     badge: "Core Service",
   },
   {
     title: "Server-Side Tracking",
-    description: "Build first-party server-side tracking with GTM server-side and cleaner signals.",
+    description:
+      "Build first-party server-side tracking with GTM server-side and cleaner conversion signals.",
     href: "/services/server-side-tracking",
     icon: <ShieldCheck className="h-5 w-5" />,
   },
   {
     title: "GA4 & GTM Audit",
-    description: "Audit GA4 events, GTM tags, triggers, data layer, and tracking accuracy.",
+    description:
+      "Audit GA4 events, GTM tags, triggers, data layer behavior, and tracking accuracy.",
     href: "/services/ga4-gtm-audit",
     icon: <FileSearch className="h-5 w-5" />,
   },
   {
     title: "Meta CAPI Setup",
-    description: "Improve Meta Pixel and Conversions API event quality with server-side events.",
+    description:
+      "Improve Meta Pixel and Conversions API event quality with server-side tracking.",
     href: "/services/meta-capi",
     icon: <Zap className="h-5 w-5" />,
   },
   {
-    title: "Free Google Ads Audit",
-    description: "Start with a tracking-first audit before changing your measurement setup.",
+    title: "Free Tracking Audit",
+    description:
+      "Start with a tracking-first review before changing your measurement setup.",
     href: "/free-tracking-audit",
     icon: <BarChart3 className="h-5 w-5" />,
     badge: "Free Review",
   },
 ];
 
-const resources: MenuItem[] = [
-  {
-    title: "Blog",
-    description: "Guides on conversion tracking, GA4, GTM, Meta CAPI, and server-side measurement.",
-    href: "/blog",
-    icon: <BookOpen className="h-5 w-5" />,
-  },
-  {
-    title: "Google Ads Tracking Guide",
-    description: "Learn how conversion tracking works and where issues usually happen.",
-    href: "/blog/how-to-set-up-google-ads-conversion-tracking",
-    icon: <Target className="h-5 w-5" />,
-  },
-  {
-    title: "Google Ads Not Tracking",
-    description: "Find common reasons why Google Ads conversions are not tracking correctly.",
-    href: "/blog/google-ads-conversions-not-tracking",
-    icon: <FileSearch className="h-5 w-5" />,
-  },
-  {
-    title: "Client-Side vs Server-Side Tracking",
-    description: "Understand browser-side signal loss and when server-side tagging helps.",
-    href: "/blog/client-side-vs-server-side-tracking",
-    icon: <LineChart className="h-5 w-5" />,
-  },
-  {
-    title: "Meta Pixel vs Conversions API",
-    description: "Compare browser pixel events with server-side Meta CAPI event tracking.",
-    href: "/blog/meta-pixel-vs-conversions-api",
-    icon: <MousePointerClick className="h-5 w-5" />,
-  },
-  {
-    title: "GTM Audit Checklist",
-    description: "A practical checklist for GA4, GTM tags, triggers, and data layer issues.",
-    href: "/blog/google-tag-manager-audit-checklist",
-    icon: <ShieldCheck className="h-5 w-5" />,
-  },
-];
-
 const directLinks = [
-  { label: "Free Audit", href: "/free-tracking-audit" },
   { label: "About", href: "/about" },
+  { label: "Free Audit", href: "/free-tracking-audit" },
   { label: "Contact", href: "/contact" },
 ];
 
@@ -186,8 +149,8 @@ export default function Navbar() {
             className="group flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-3"
             aria-label="TrackFlow Pro home"
           >
-           <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-950/5 ring-1 ring-slate-200/70 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:shadow-blue-600/15 dark:bg-white dark:ring-blue-400/30 dark:shadow-blue-950/30 sm:h-11 sm:w-11">
-             <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-white to-blue-50/90 opacity-95 dark:from-white dark:via-blue-50 dark:to-blue-100" />
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-950/5 ring-1 ring-slate-200/70 transition duration-300 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:shadow-blue-600/15 dark:bg-white dark:ring-blue-400/30 dark:shadow-blue-950/30 sm:h-11 sm:w-11">
+              <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white via-white to-blue-50/90 opacity-95 dark:from-white dark:via-blue-50 dark:to-blue-100" />
               <Image
                 src="/logo-mark.png"
                 alt=""
@@ -220,26 +183,18 @@ export default function Navbar() {
               items={services}
               footerHref="/free-tracking-audit"
               footerTitle="Not sure what is broken?"
-              footerText="Start with a free tracking audit before changing your setup."
+              footerText="Start with a free tracking review before changing your setup."
             />
 
             {directLinks.map((link) => (
-              <DesktopLink key={link.href} href={link.href} active={isActive(pathname, link.href)}>
+              <DesktopLink
+                key={link.href}
+                href={link.href}
+                active={isActive(pathname, link.href)}
+              >
                 {link.label}
               </DesktopLink>
             ))}
-
-            <DesktopDropdown
-              label="Resources"
-              dropdownKey="resources"
-              openDropdown={openDropdown}
-              setOpenDropdown={setOpenDropdown}
-              items={resources}
-              footerHref="/blog/google-ads-conversions-not-tracking"
-              footerTitle="Popular guide"
-              footerText="Why Google Ads conversions are not tracking correctly."
-              align="right"
-            />
           </div>
 
           <div className="hidden shrink-0 items-center gap-2 lg:flex">
@@ -290,11 +245,11 @@ export default function Navbar() {
                 ))}
               </div>
 
-              <MobileSection title="Resources" items={resources} />
-
               <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 sm:p-4">
                 <div>
-                  <p className="text-sm font-black text-slate-950 dark:text-white">Appearance</p>
+                  <p className="text-sm font-black text-slate-950 dark:text-white">
+                    Appearance
+                  </p>
                   <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                     Switch between light and dark mode
                   </p>

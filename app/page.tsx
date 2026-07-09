@@ -23,14 +23,14 @@ import Footer from "./components/footer";
 import Image from "next/image";
 
 export const metadata: Metadata = {
-  title: "Google Ads Conversion Tracking & Server-Side Tracking Specialist | TrackFlow Pro",
+  title: "TrackFlow Pro | Google Ads Conversion Tracking Specialist",
   description:
-    "Fix broken Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, and server-side tracking with an evidence-based tracking audit.",
+  "TrackFlow Pro helps businesses fix Google Ads conversion tracking, GA4/GTM events, Meta CAPI, enhanced conversions, and server-side tracking with an evidence-based tracking audit.",
   alternates: {
     canonical: "https://trackflowpro.com",
   },
   openGraph: {
-    title: "TrackFlow Pro | Google Ads Conversion Tracking & Server-Side Tracking Specialist",
+    title: "TrackFlow Pro | Google Ads Conversion Tracking Specialist",
     description:
       "Evidence-based tracking audits for Google Ads, GA4, GTM, Meta CAPI, enhanced conversions, and server-side measurement.",
     url: "https://trackflowpro.com",
@@ -206,12 +206,13 @@ const homeJsonLd = {
       sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
     },
     {
-      "@type": "WebSite",
-      name: "TrackFlow Pro",
-      url: "https://trackflowpro.com",
-      description:
-        "Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement support.",
-    },
+        "@type": "WebSite",
+        name: "TrackFlow Pro",
+        alternateName: ["TrackFlowPro", "Track Flow Pro"],
+        url: "https://trackflowpro.com",
+        description:
+          "Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement support.",
+      },
     {
       "@type": "FAQPage",
       mainEntity: faqs.map((faq) => ({
@@ -239,6 +240,7 @@ export default function HomePage() {
         <TrustBar />
         <ProblemSection />
         <ServicesSection />
+        <ExploreTrackFlowSection />
         <AuditProofSection />
         <ProcessSection />
         <ReportPreviewSection />
@@ -252,6 +254,8 @@ export default function HomePage() {
 }
 
 function HomeHero() {
+
+  
   return (
     <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pt-24 pb-14 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 sm:py-20 lg:px-8 lg:py-28">
       <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
@@ -268,7 +272,7 @@ function HomeHero() {
           </h1>
 
           <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 dark:text-slate-300 sm:mt-7 sm:text-lg sm:leading-8">
-            Fix broken conversion tracking, validate GA4/GTM events, improve Meta CAPI signals, and build a more reliable measurement foundation before scaling ad spend.
+            TrackFlow Pro helps businesses fix broken Google Ads conversion tracking, validate GA4/GTM events, improve Meta CAPI signals, and build a more reliable measurement foundation before scaling ad spend.
           </p>
 
           <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-slate-500 dark:text-slate-400 sm:mt-4 sm:leading-7">
@@ -760,6 +764,78 @@ function FaqSection() {
                 {faq.answer}
               </p>
             </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ExploreTrackFlowSection() {
+  const links = [
+    {
+      title: "Google Ads Conversion Tracking",
+      href: "/services/google-ads-conversion-tracking",
+      description: "Fix Google Ads conversion actions, enhanced conversions, GTM tags, forms, calls, and ecommerce tracking.",
+    },
+    {
+      title: "Server-Side Tracking",
+      href: "/services/server-side-tracking",
+      description: "Build stronger first-party tracking with GTM server-side tagging, event routing, and validation.",
+    },
+    {
+      title: "GA4 & GTM Audit",
+      href: "/services/ga4-gtm-audit",
+      description: "Audit GA4 events, GTM tags, triggers, data layer, consent behavior, and conversion gaps.",
+    },
+    {
+      title: "Meta CAPI Setup",
+      href: "/services/meta-capi",
+      description: "Improve Meta Pixel and Conversions API event quality, deduplication, and server-side signals.",
+    },
+    {
+      title: "About TrackFlow Pro",
+      href: "/about",
+      description: "Learn about TrackFlow Pro, the tracking-first audit process, and specialist measurement support.",
+    },
+    {
+      title: "Contact",
+      href: "/contact",
+      description: "Contact TrackFlow Pro directly for tracking, attribution, GA4, GTM, and conversion measurement help.",
+    },
+    {
+      title: "Free Tracking Audit",
+      href: "/free-tracking-audit",
+      description: "Request a free tracking review before scaling Google Ads, Meta Ads, or other paid traffic.",
+    },
+  ];
+
+  return (
+    <section className="bg-white px-4 py-14 dark:bg-slate-950 sm:px-6 sm:py-16 lg:px-8 lg:py-24">
+      <div className="mx-auto max-w-7xl">
+        <SectionHeader
+          eyebrow="Explore TrackFlow Pro"
+          title="Important tracking pages for Google Ads, GA4, GTM, Meta CAPI, and server-side measurement."
+          description="These pages help visitors and search engines understand the core TrackFlow Pro services and contact paths."
+        />
+
+        <div className="mt-8 grid gap-4 sm:mt-10 md:grid-cols-2 lg:grid-cols-3">
+          {links.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="group rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5 transition hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-900/70 dark:hover:bg-blue-950/25 sm:rounded-[2rem] sm:p-6"
+            >
+              <h3 className="text-lg font-black tracking-[-0.03em] text-slate-950 dark:text-white">
+                {item.title}
+              </h3>
+              <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">
+                {item.description}
+              </p>
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-blue-600 dark:text-blue-300">
+                Open page <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
           ))}
         </div>
       </div>
