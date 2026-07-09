@@ -965,8 +965,8 @@ export default function EmailSignatureGenerator() {
 
   return (
     <>
-      <section id="signature-generator" className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-      <div className="mb-5 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+      <section id="signature-generator" className="relative mx-auto max-w-7xl px-3 pb-12 sm:px-6 lg:px-8">
+      <div className="mb-5 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg sm:rounded-[2rem] shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
         <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300">
@@ -988,16 +988,16 @@ export default function EmailSignatureGenerator() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.05fr)] lg:items-start">
         <div className="lg:sticky lg:top-20">
-          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+          <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-xl sm:rounded-[2rem] shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
             <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
                     Step {activeStepIndex + 1} of {WIZARD_STEPS.length}
                   </p>
-                  <h3 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">{activeStepDetails.title}</h3>
+                  <h3 className="mt-2 text-xl font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">{activeStepDetails.title}</h3>
                   <p className="mt-1 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">{activeStepDetails.description}</p>
                 </div>
 
@@ -1091,12 +1091,12 @@ export default function EmailSignatureGenerator() {
         </div>
 
         <div id="signature-preview-panel" className="scroll-mt-24 lg:sticky lg:top-20 lg:self-start">
-          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
+          <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-xl sm:rounded-[2rem] shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
             <div className="border-b border-slate-200 p-4 dark:border-white/10 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300"><LayoutTemplate className="h-4 w-4" />Live preview</div>
-                  <h3 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 dark:text-white">{selectedTemplateDetails.name}</h3>
+                  <h3 className="mt-2 text-xl font-black tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">{selectedTemplateDetails.name}</h3>
                   <p className="mt-1 max-w-xl text-sm font-semibold leading-6 text-slate-600 dark:text-slate-400">
                     {selectedTemplateDetails.description} <span className="text-blue-600 dark:text-blue-300">Best for: {selectedTemplateDetails.bestFor}.</span>
                   </p>
@@ -1158,7 +1158,11 @@ export default function EmailSignatureGenerator() {
                   </span>
                 </div>
 
-                <div className="max-h-[430px] overflow-auto overscroll-contain rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200 [scrollbar-width:thin] dark:ring-slate-200 sm:max-h-[520px] lg:max-h-[470px] xl:max-h-[540px]">
+                <div className="sm:hidden">
+                  <MobileSignaturePreview form={previewForm} canCopy={canCopy} imageMode={imageMode} />
+                </div>
+
+                <div className="hidden max-h-[520px] overflow-auto overscroll-contain rounded-[1.5rem] bg-white shadow-sm ring-1 ring-slate-200 [scrollbar-width:thin] dark:ring-slate-200 sm:block lg:max-h-[470px] xl:max-h-[540px]">
                   <div className="space-y-3 border-b border-slate-200 px-5 py-4">
                     <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
                       <span className="w-16 text-slate-500">To:</span>
@@ -1265,6 +1269,86 @@ export default function EmailSignatureGenerator() {
 
       {isGuideOpen ? <InstallGuideModal videoUrl={guideVideoEmbedUrl} onClose={() => setIsGuideOpen(false)} /> : null}
     </>
+  );
+}
+
+
+function MobileSignaturePreview({ form, canCopy, imageMode }: { form: SignatureForm; canCopy: boolean; imageMode: ImageMode }) {
+  const color = isHexColor(form.brandColor) ? form.brandColor : "#2563eb";
+  const name = form.fullName.trim() || "Your Name";
+  const titleLine = [form.jobTitle.trim() || "Your Role", form.company.trim() || "Your Company"].filter(Boolean).join(" · ");
+  const email = form.email.trim() || "you@example.com";
+  const phone = form.phone.trim() || "+1 234 567 890";
+  const website = form.website.trim().replace(/^https?:\/\//i, "") || "yourwebsite.com";
+  const imageUrl = form.imageUrl.trim();
+  const ctaText = form.ctaText.trim() || "Book a Call";
+  const initials = getInitials(form.fullName || name);
+  const socialCount = [form.linkedin, form.facebook, form.instagram, form.youtube].filter((value) => value.trim()).length;
+
+  return (
+    <div className="rounded-[1.35rem] bg-white p-3 shadow-sm ring-1 ring-slate-200 dark:ring-slate-200">
+      <div className="space-y-2 border-b border-slate-200 pb-3 text-[11px] font-semibold text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="w-12 text-slate-500">To:</span>
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-12 text-slate-500">Subject:</span>
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+      </div>
+
+      <div className="py-4">
+        <div className="mb-3 space-y-1.5">
+          <div className="h-2 w-4/5 rounded-full bg-slate-100" />
+          <div className="h-2 w-2/3 rounded-full bg-slate-100" />
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-sm font-black text-white" style={{ backgroundColor: color }}>
+              {imageUrl && imageMode !== "initials" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageUrl} alt="Signature profile" className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="truncate text-base font-black leading-5 text-slate-950">{name}</h4>
+              <p className="mt-0.5 max-h-8 overflow-hidden text-[11px] font-bold leading-4 text-slate-500">{titleLine}</p>
+              <div className="mt-2 space-y-1 text-[11px] font-semibold leading-4 text-slate-600">
+                <p className="truncate">{email}</p>
+                <p className="truncate">{phone}</p>
+                <p className="truncate" style={{ color }}>{website}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {Array.from({ length: Math.max(socialCount, canCopy ? 0 : 3) }).slice(0, 4).map((_, index) => (
+              <span key={index} className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ backgroundColor: color }}>
+                {index + 1}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-xl px-3 py-2 text-center text-xs font-black text-white" style={{ backgroundColor: color }}>
+            {ctaText}
+          </div>
+
+          <p className="mt-2 text-[10px] font-bold text-slate-400">
+            Created with <span style={{ color }}>TrackFlow Pro</span>
+          </p>
+        </div>
+
+        {!canCopy ? (
+          <p className="mt-3 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+            This is an example preview. Add your details to copy the real signature.
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
