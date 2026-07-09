@@ -143,6 +143,45 @@ const proofCards = [
   "Clear reporting for technical and non-technical teams",
 ];
 
+const importantPages = [
+  {
+    title: "Google Ads Conversion Tracking",
+    href: "/services/google-ads-conversion-tracking",
+    description:
+      "Fix Google Ads conversion actions, GTM tags, enhanced conversions, form tracking, call tracking, and ecommerce events.",
+  },
+  {
+    title: "Server-Side Tracking",
+    href: "/services/server-side-tracking",
+    description:
+      "Build stronger first-party measurement with GTM server-side tagging, event routing, and validation.",
+  },
+  {
+    title: "GA4 & GTM Audit",
+    href: "/services/ga4-gtm-audit",
+    description:
+      "Audit GA4 events, GTM tags, triggers, data layer behavior, consent behavior, and conversion gaps.",
+  },
+  {
+    title: "Meta CAPI Setup",
+    href: "/services/meta-capi",
+    description:
+      "Improve Meta Pixel and Conversions API event quality, deduplication, and server-side signals.",
+  },
+  {
+    title: "Free Tracking Audit",
+    href: "/free-tracking-audit",
+    description:
+      "Request a free tracking review before scaling Google Ads, Meta Ads, or other paid traffic.",
+  },
+  {
+    title: "Contact TrackFlow Pro",
+    href: "/contact",
+    description:
+      "Contact TrackFlow Pro directly for tracking, attribution, GA4, GTM, and conversion measurement help.",
+  },
+];
+
 const faqs = [
   {
     question: "Is TrackFlow Pro a general Google Ads agency?",
@@ -174,29 +213,25 @@ const jsonLd = [
     url: "https://trackflowpro.com/about",
     description:
       "About TrackFlow Pro, a tracking-first specialist focused on Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side measurement.",
-    isPartOf: {
-      "@type": "WebSite",
-      name: "TrackFlow Pro",
-      url: "https://trackflowpro.com",
-    },
+  
+   isPartOf: {
+  "@type": "WebSite",
+  name: "TrackFlow Pro",
+  alternateName: ["TrackFlowPro", "Track Flow Pro"],
+  url: "https://trackflowpro.com",
+},
     about: {
-      "@type": "ProfessionalService",
-      name: "TrackFlow Pro",
-      url: "https://trackflowpro.com",
-      serviceType: [
-        "Google Ads Conversion Tracking",
-        "GA4 and Google Tag Manager Audit",
-        "Server-Side Tracking",
-        "Meta Conversions API Setup",
-        "Enhanced Conversions Review",
-      ],
-    },
+  "@type": "ProfessionalService",
+  name: "TrackFlow Pro",
+  alternateName: ["TrackFlowPro", "Track Flow Pro"],
+  url: "https://trackflowpro.com",
+  }  
   },
   {
     "@context": "https://schema.org",
     "@type": "Person",
     name: "Shahjalal Khan",
-    jobTitle: "Tracking Specialist",
+    jobTitle: "Founder & Tracking Specialist",
     url: "https://trackflowpro.com/about",
     sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
     worksFor: {
@@ -215,9 +250,10 @@ const jsonLd = [
   },
   {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    name: "TrackFlow Pro",
-    url: "https://trackflowpro.com",
+  "@type": "Organization",
+  name: "TrackFlow Pro",
+  alternateName: ["TrackFlowPro", "Track Flow Pro"],
+  url: "https://trackflowpro.com",
     logo: "https://trackflowpro.com/android-chrome-512x512.png",
     sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
     description:
@@ -276,6 +312,7 @@ export default function AboutPage() {
         <SystemsSection />
         <WorkflowSection />
         <ProofSection />
+        <ExploreTrackFlowSection />
         <FaqSection />
         <FinalCtaSection />
       </main>
@@ -296,7 +333,7 @@ function HeroSection() {
           </div>
 
           <h1 className="max-w-5xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl">
-            Built for businesses that need to trust their{" "}
+            About TrackFlow Pro: built for businesses that need to trust their{" "}
             <span className="text-blue-600 dark:text-blue-400">conversion tracking</span> before scaling ads.
           </h1>
 
@@ -652,6 +689,44 @@ function ProofSection() {
               <Sparkles className="mb-4 h-5 w-5 text-blue-600 dark:text-blue-300" />
               {item}
             </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ExploreTrackFlowSection() {
+  return (
+    <section className="px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+      <div className="mx-auto max-w-7xl">
+        <SectionHeader
+          eyebrow="Explore TrackFlow Pro"
+          title="Important pages for tracking, attribution, GA4, GTM, Meta CAPI, and server-side measurement."
+          description="These pages help visitors and search engines understand the core TrackFlow Pro services and contact paths."
+          centered
+        />
+
+        <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {importantPages.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="group rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl hover:shadow-blue-950/5 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-blue-900/70 dark:hover:bg-blue-950/25 sm:rounded-[2rem] sm:p-6"
+            >
+              <h3 className="text-lg font-black tracking-[-0.03em] text-slate-950 dark:text-white">
+                {item.title}
+              </h3>
+
+              <p className="mt-3 text-sm font-medium leading-7 text-slate-600 dark:text-slate-400">
+                {item.description}
+              </p>
+
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-blue-600 dark:text-blue-300">
+                Open page
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
           ))}
         </div>
       </div>

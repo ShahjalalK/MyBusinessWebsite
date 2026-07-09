@@ -9,6 +9,11 @@ const routes = [
     changeFrequency: "weekly" as const,
   },
   {
+    path: "/services",
+    priority: 0.9,
+    changeFrequency: "weekly" as const,
+  },
+  {
     path: "/services/google-ads-conversion-tracking",
     priority: 0.9,
     changeFrequency: "monthly" as const,

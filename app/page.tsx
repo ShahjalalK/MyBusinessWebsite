@@ -13,13 +13,13 @@ import {
   LineChart,
   LockKeyhole,
   MousePointerClick,
-  SearchCheck,
   ShieldCheck,
   Target,
   Zap,
 } from "lucide-react";
 import Navbar from "./components/navbar";
 import Footer from "./components/footer";
+import PremiumHomeHero from "./components/premium-home-hero";
 import Image from "next/image";
 
 export const metadata: Metadata = {
@@ -254,125 +254,7 @@ export default function HomePage() {
 }
 
 function HomeHero() {
-
-  
-  return (
-    <section className="relative isolate overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.12),transparent_34%),linear-gradient(to_bottom,#ffffff,#f8fafc)] px-4 pt-24 pb-14 dark:bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_34%),linear-gradient(to_bottom,#020617,#0f172a)] sm:px-6 sm:py-20 lg:px-8 lg:py-28">
-      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
-      <div className="mx-auto grid max-w-7xl items-center gap-10 sm:gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
-        <div>
-          <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 sm:mb-6 sm:px-4 sm:text-[11px] sm:tracking-[0.22em]">
-            <SearchCheck className="h-4 w-4" /> Tracking-first Google Ads specialist
-          </div>
-
-          <h1 className="max-w-4xl text-[2.35rem] font-black leading-[0.95] tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl sm:leading-[0.98] md:text-6xl lg:text-7xl">
-            Google Ads Conversion Tracking{" "}
-            <span className="text-blue-600 dark:text-blue-400">& Server-Side</span>{" "}
-            Tracking Specialist
-          </h1>
-
-          <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 dark:text-slate-300 sm:mt-7 sm:text-lg sm:leading-8">
-            TrackFlow Pro helps businesses fix broken Google Ads conversion tracking, validate GA4/GTM events, improve Meta CAPI signals, and build a more reliable measurement foundation before scaling ad spend.
-          </p>
-
-          <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-slate-500 dark:text-slate-400 sm:mt-4 sm:leading-7">
-            Built for businesses already running paid traffic but not fully confident in their conversion data.
-          </p>
-
-          <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
-            <Link
-              href="/free-tracking-audit"
-              className="group inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/25 sm:w-auto sm:px-7"
-            >
-              Book Free Tracking Review
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              href="/services/google-ads-conversion-tracking"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:hover:border-blue-800 dark:hover:bg-blue-950/30 sm:w-auto sm:px-7"
-            >
-              View Tracking Services
-            </Link>
-          </div>
-
-          <div className="mt-7 grid max-w-2xl gap-3 sm:mt-8 sm:grid-cols-3">
-            {[
-              "No login required for first review",
-              "Public evidence first",
-              "GA4, GTM, Google Ads & Meta CAPI",
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <HeroAuditCard />
-      </div>
-    </section>
-  );
-}
-
-function HeroAuditCard() {
-  const rows = [
-    { label: "Google Ads tag", value: "Needs validation", tone: "amber" },
-    { label: "GA4 key events", value: "Mismatch risk", tone: "red" },
-    { label: "Meta CAPI", value: "Server event review", tone: "blue" },
-    { label: "GTM data layer", value: "Manual check", tone: "slate" },
-  ];
-
-  return (
-    <div className="relative mx-auto w-full max-w-xl">
-      <div className="absolute -inset-3 rounded-[2rem] bg-blue-600/10 blur-2xl sm:-inset-4 sm:rounded-[2.5rem]" />
-      <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/10 dark:border-slate-800 dark:bg-slate-900 sm:rounded-[2rem]">
-        <div className="border-b border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6">
-          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
-                Tracking audit preview
-              </p>
-              <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">
-                Conversion Signal Review
-              </h2>
-            </div>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
-              Evidence-first
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-3 p-4 sm:space-y-4 sm:p-6">
-          {rows.map((row) => (
-            <div
-              key={row.label}
-              className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-950/50 sm:flex-row sm:items-center sm:gap-4 sm:p-4"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900 sm:h-10 sm:w-10">
-                  <SearchCheck className="h-5 w-5" />
-                </span>
-                <span>
-                  <span className="block text-sm font-black text-slate-950 dark:text-white sm:text-base">{row.label}</span>
-                  <span className="mt-1 block text-xs font-bold text-slate-500 dark:text-slate-400 sm:text-sm">
-                    Browser-visible evidence
-                  </span>
-                </span>
-              </div>
-              <span className={badgeClass(row.tone)}>{row.value}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="border-t border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50 sm:px-6">
-          <p className="text-sm font-bold leading-6 text-slate-500 dark:text-slate-400">
-            Final confirmation may require GA4, GTM, Google Ads, Meta, CRM, or server-log access.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  return <PremiumHomeHero />;
 }
 
 function TrustBar() {
@@ -922,10 +804,3 @@ function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-function badgeClass(tone: string) {
-  const base = "shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] sm:px-3 sm:text-[10px] sm:tracking-widest";
-  if (tone === "amber") return `${base} bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300`;
-  if (tone === "red") return `${base} bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300`;
-  if (tone === "blue") return `${base} bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300`;
-  return `${base} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300`;
-}

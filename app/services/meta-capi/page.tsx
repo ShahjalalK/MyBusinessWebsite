@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     title: "Meta Conversions API Setup | Facebook CAPI & Server-Side Tracking",
     description:
       "Improve Meta CAPI tracking with server events, event match quality review, and browser/server deduplication checks.",
-    images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
+    images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
 
@@ -644,32 +644,71 @@ function JsonLd() {
     "@context": "https://schema.org",
     "@graph": [
       {
+        "@type": "Organization",
+        "@id": "https://trackflowpro.com/#organization",
+        name: "TrackFlow Pro",
+        alternateName: ["TrackFlowPro", "Track Flow Pro"],
+        url: "https://trackflowpro.com",
+        sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
+        founder: {
+          "@type": "Person",
+          "@id": "https://trackflowpro.com/#shahjalal-khan",
+          name: "Shahjalal Khan",
+          jobTitle: "Founder & Tracking Specialist",
+          sameAs: "https://www.linkedin.com/in/shahjalal-khan/",
+        },
+        knowsAbout: [
+          "Google Ads conversion tracking",
+          "GA4 audit",
+          "Google Tag Manager audit",
+          "GTM server-side tracking",
+          "Server-side tracking",
+          "Meta Conversions API",
+          "Facebook Conversions API",
+        ],
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://trackflowpro.com/#website",
+        name: "TrackFlow Pro",
+        alternateName: ["TrackFlowPro", "Track Flow Pro"],
+        url: "https://trackflowpro.com",
+        publisher: { "@id": "https://trackflowpro.com/#organization" },
+      },
+      {
         "@type": "WebPage",
         "@id": "https://trackflowpro.com/services/meta-capi#webpage",
         url: "https://trackflowpro.com/services/meta-capi",
         name: "Meta Conversions API Setup | Facebook CAPI & Server-Side Event Tracking",
         description:
           "Meta Conversions API setup and audit for Meta Pixel, Facebook CAPI, event match quality, deduplication, and server-side conversion tracking.",
-        isPartOf: {
-          "@id": "https://trackflowpro.com/#website",
-        },
+        isPartOf: { "@id": "https://trackflowpro.com/#website" },
+        about: { "@id": "https://trackflowpro.com/services/meta-capi#service" },
       },
       {
         "@type": "Service",
         "@id": "https://trackflowpro.com/services/meta-capi#service",
         name: "Meta Conversions API Setup",
+        alternateName: [
+          "Meta CAPI setup specialist",
+          "Facebook Conversions API setup",
+          "Meta Pixel and CAPI tracking specialist",
+        ],
         serviceType: "Meta CAPI and server-side event tracking",
-        provider: {
-          "@type": "Organization",
-          name: "TrackFlow Pro",
-          url: "https://trackflowpro.com",
-        },
+        provider: { "@id": "https://trackflowpro.com/#organization" },
         areaServed: "Worldwide",
+        url: "https://trackflowpro.com/services/meta-capi",
         description:
           "Meta Pixel and Meta Conversions API setup, audit, deduplication validation, event match quality review, and server-side event tracking support.",
+        offers: {
+          "@type": "Offer",
+          availability: "https://schema.org/InStock",
+          url: "https://trackflowpro.com/free-tracking-audit",
+        },
       },
       {
         "@type": "BreadcrumbList",
+        "@id": "https://trackflowpro.com/services/meta-capi#breadcrumb",
         itemListElement: [
           {
             "@type": "ListItem",
@@ -693,6 +732,7 @@ function JsonLd() {
       },
       {
         "@type": "FAQPage",
+        "@id": "https://trackflowpro.com/services/meta-capi#faq",
         mainEntity: faqs.map((faq) => ({
           "@type": "Question",
           name: faq.question,

@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     title: "GA4 & Google Tag Manager Audit Consultant | TrackFlow Pro",
     description:
       "Audit GA4 events, GTM tags, triggers, data layer, and conversion tracking gaps before scaling paid traffic.",
-    images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
+    images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
 
@@ -205,76 +205,110 @@ const signalRows = [
 ];
 
 export default function Ga4GtmAuditPage() {
-  const jsonLd = [
-    {
-      "@context": "https://schema.org",
-      "@type": "WebPage",
-      name: "GA4 & Google Tag Manager Audit Consultant",
-      url: "https://trackflowpro.com/services/ga4-gtm-audit",
-      description:
-        "GA4 and Google Tag Manager audit consultant for event tracking, GTM tags, data layer, consent behavior, and conversion validation.",
-      isPartOf: {
-        "@type": "WebSite",
-        name: "TrackFlow Pro",
-        url: "https://trackflowpro.com",
-      },
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "Service",
-      name: "GA4 & Google Tag Manager Audit Consultant",
-      provider: {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
         "@type": "Organization",
+        "@id": "https://trackflowpro.com/#organization",
         name: "TrackFlow Pro",
+        alternateName: ["TrackFlowPro", "Track Flow Pro"],
         url: "https://trackflowpro.com",
+        sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
+        founder: {
+          "@type": "Person",
+          "@id": "https://trackflowpro.com/#shahjalal-khan",
+          name: "Shahjalal Khan",
+          jobTitle: "Founder & Tracking Specialist",
+          sameAs: "https://www.linkedin.com/in/shahjalal-khan/",
+        },
+        knowsAbout: [
+          "Google Ads conversion tracking",
+          "GA4 audit",
+          "Google Tag Manager audit",
+          "GTM server-side tracking",
+          "Server-side tracking",
+          "Meta Conversions API",
+          "Facebook Conversions API",
+        ],
       },
-      areaServed: "Worldwide",
-      serviceType: "GA4 audit, Google Tag Manager audit, GTM consulting, conversion tracking validation",
-      description:
-        "Evidence-based GA4 and GTM audit for tags, triggers, variables, data layer, GA4 conversion tracking, Google Ads conversion paths, and measurement accuracy.",
-      offers: {
-        "@type": "Offer",
-        url: "https://trackflowpro.com/free-tracking-audit",
-        availability: "https://schema.org/InStock",
+      {
+        "@type": "WebSite",
+        "@id": "https://trackflowpro.com/#website",
+        name: "TrackFlow Pro",
+        alternateName: ["TrackFlowPro", "Track Flow Pro"],
+        url: "https://trackflowpro.com",
+        publisher: { "@id": "https://trackflowpro.com/#organization" },
       },
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        {
-          "@type": "ListItem",
-          position: 1,
-          name: "Home",
-          item: "https://trackflowpro.com",
+      {
+        "@type": "WebPage",
+        "@id": "https://trackflowpro.com/services/ga4-gtm-audit#webpage",
+        name: "GA4 & Google Tag Manager Audit Consultant | TrackFlow Pro",
+        url: "https://trackflowpro.com/services/ga4-gtm-audit",
+        description:
+          "GA4 and Google Tag Manager audit consultant for event tracking, GTM tags, data layer, consent behavior, and conversion validation.",
+        isPartOf: { "@id": "https://trackflowpro.com/#website" },
+        about: { "@id": "https://trackflowpro.com/services/ga4-gtm-audit#service" },
+      },
+      {
+        "@type": "Service",
+        "@id": "https://trackflowpro.com/services/ga4-gtm-audit#service",
+        name: "GA4 & Google Tag Manager Audit Consultant",
+        alternateName: [
+          "GA4 audit specialist",
+          "Google Tag Manager audit specialist",
+          "GTM audit consultant",
+        ],
+        provider: { "@id": "https://trackflowpro.com/#organization" },
+        areaServed: "Worldwide",
+        serviceType: "GA4 audit, Google Tag Manager audit, GTM consulting, conversion tracking validation",
+        url: "https://trackflowpro.com/services/ga4-gtm-audit",
+        description:
+          "Evidence-based GA4 and GTM audit for tags, triggers, variables, data layer, GA4 conversion tracking, Google Ads conversion paths, and measurement accuracy.",
+        offers: {
+          "@type": "Offer",
+          url: "https://trackflowpro.com/free-tracking-audit",
+          availability: "https://schema.org/InStock",
         },
-        {
-          "@type": "ListItem",
-          position: 2,
-          name: "Services",
-          item: "https://trackflowpro.com/services",
-        },
-        {
-          "@type": "ListItem",
-          position: 3,
-          name: "GA4 & GTM Audit",
-          item: "https://trackflowpro.com/services/ga4-gtm-audit",
-        },
-      ],
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: faqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: faq.answer,
-        },
-      })),
-    },
-  ];
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://trackflowpro.com/services/ga4-gtm-audit#breadcrumb",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: "https://trackflowpro.com",
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Services",
+            item: "https://trackflowpro.com/services",
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: "GA4 & GTM Audit",
+            item: "https://trackflowpro.com/services/ga4-gtm-audit",
+          },
+        ],
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://trackflowpro.com/services/ga4-gtm-audit#faq",
+        mainEntity: faqs.map((faq) => ({
+          "@type": "Question",
+          name: faq.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: faq.answer,
+          },
+        })),
+      },
+    ],
+  };
 
   return (
     <>

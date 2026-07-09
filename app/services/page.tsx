@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: "Tracking Services Overview | TrackFlow Pro",
     description:
       "Google Ads conversion tracking, GA4/GTM audit, Meta CAPI, and server-side tracking services.",
-    images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
+    images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
 
@@ -211,6 +211,38 @@ const schema = {
   "@context": "https://schema.org",
   "@graph": [
     {
+      "@type": "Organization",
+      "@id": "https://trackflowpro.com/#organization",
+      name: "TrackFlow Pro",
+      alternateName: ["TrackFlowPro", "Track Flow Pro"],
+      url: "https://trackflowpro.com",
+      sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
+      founder: {
+        "@type": "Person",
+        "@id": "https://trackflowpro.com/#shahjalal-khan",
+        name: "Shahjalal Khan",
+        jobTitle: "Founder & Tracking Specialist",
+        sameAs: "https://www.linkedin.com/in/shahjalal-khan/",
+      },
+      knowsAbout: [
+        "Google Ads conversion tracking",
+        "GA4 audit",
+        "Google Tag Manager audit",
+        "GTM server-side tracking",
+        "Server-side tracking",
+        "Meta Conversions API",
+        "Facebook Conversions API",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://trackflowpro.com/#website",
+      name: "TrackFlow Pro",
+      alternateName: ["TrackFlowPro", "Track Flow Pro"],
+      url: "https://trackflowpro.com",
+      publisher: { "@id": "https://trackflowpro.com/#organization" },
+    },
+    {
       "@type": "WebPage",
       "@id": "https://trackflowpro.com/services#webpage",
       url: "https://trackflowpro.com/services",
@@ -218,16 +250,47 @@ const schema = {
       description:
         "Tracking services for Google Ads conversion tracking, GA4/GTM audits, Meta CAPI, enhanced conversions, and server-side tracking.",
       isPartOf: { "@id": "https://trackflowpro.com/#website" },
+      about: { "@id": "https://trackflowpro.com/services#service" },
+      mainEntity: { "@id": "https://trackflowpro.com/services#service-list" },
+    },
+    {
+      "@type": "ItemList",
+      "@id": "https://trackflowpro.com/services#service-list",
+      name: "TrackFlow Pro tracking services",
+      itemListElement: coreServices.map((service, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: service.title,
+        url: `https://trackflowpro.com${service.href}`,
+      })),
     },
     {
       "@type": "Service",
       "@id": "https://trackflowpro.com/services#service",
-      name: "Tracking Services Overview",
+      name: "TrackFlow Pro tracking services",
+      alternateName: [
+        "Google Ads conversion tracking specialist",
+        "GA4 and Google Tag Manager audit specialist",
+        "Server-side tracking specialist",
+        "Meta CAPI setup specialist",
+      ],
       serviceType:
         "Google Ads conversion tracking, GA4 and GTM audit, Meta Conversions API, and server-side tracking services",
       provider: { "@id": "https://trackflowpro.com/#organization" },
       areaServed: "Worldwide",
       url: "https://trackflowpro.com/services",
+      hasOfferCatalog: {
+        "@type": "OfferCatalog",
+        name: "TrackFlow Pro service pages",
+        itemListElement: coreServices.map((service) => ({
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            name: service.title,
+            url: `https://trackflowpro.com${service.href}`,
+          },
+        })),
+      },
     },
     {
       "@type": "BreadcrumbList",

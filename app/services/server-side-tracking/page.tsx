@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   description:
     "Server-side tracking service for GTM server-side, first-party measurement, Google Ads server-side conversion tracking, Meta CAPI, event validation, and signal resilience.",
   alternates: {
-    canonical: "/services/server-side-tracking",
+    canonical: "https://trackflowpro.com/services/server-side-tracking",
   },
   openGraph: {
     title: "Server-Side Tracking Service | TrackFlow Pro",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/meta/trackflowpro-advanced-tracking-solutions.webp",
+        url: "https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp",
         width: 1200,
         height: 630,
         alt: "TrackFlow Pro server-side tracking and GTM server-side measurement service",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     title: "Server-Side Tracking Service | TrackFlow Pro",
     description:
       "GTM server-side, first-party measurement, Google Ads, Meta CAPI, and server-side event validation.",
-    images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
+    images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
 
@@ -202,32 +202,71 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
+      "@type": "Organization",
+      "@id": "https://trackflowpro.com/#organization",
+      name: "TrackFlow Pro",
+      alternateName: ["TrackFlowPro", "Track Flow Pro"],
+      url: "https://trackflowpro.com",
+      sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
+      founder: {
+        "@type": "Person",
+        "@id": "https://trackflowpro.com/#shahjalal-khan",
+        name: "Shahjalal Khan",
+        jobTitle: "Founder & Tracking Specialist",
+        sameAs: "https://www.linkedin.com/in/shahjalal-khan/",
+      },
+      knowsAbout: [
+        "Google Ads conversion tracking",
+        "GA4 audit",
+        "Google Tag Manager audit",
+        "GTM server-side tracking",
+        "Server-side tracking",
+        "Meta Conversions API",
+        "Facebook Conversions API",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://trackflowpro.com/#website",
+      name: "TrackFlow Pro",
+      alternateName: ["TrackFlowPro", "Track Flow Pro"],
+      url: "https://trackflowpro.com",
+      publisher: { "@id": "https://trackflowpro.com/#organization" },
+    },
+    {
       "@type": "WebPage",
       "@id": "https://trackflowpro.com/services/server-side-tracking#webpage",
       url: "https://trackflowpro.com/services/server-side-tracking",
       name: "Server-Side Tracking Service | GTM Server-Side & First-Party Measurement",
       description:
         "Server-side tracking service for GTM server-side, server-side tagging, first-party measurement, Google Ads conversion tracking, Meta CAPI, and event validation.",
-      isPartOf: {
-        "@id": "https://trackflowpro.com/#website",
-      },
+      isPartOf: { "@id": "https://trackflowpro.com/#website" },
+      about: { "@id": "https://trackflowpro.com/services/server-side-tracking#service" },
     },
     {
       "@type": "Service",
       "@id": "https://trackflowpro.com/services/server-side-tracking#service",
       name: "Server-Side Tracking Service",
+      alternateName: [
+        "GTM server-side specialist",
+        "Server-side tracking specialist",
+        "First-party measurement specialist",
+      ],
       serviceType: "Server-side tracking, GTM server-side, and first-party measurement consulting",
-      provider: {
-        "@type": "Organization",
-        name: "TrackFlow Pro",
-        url: "https://trackflowpro.com",
-      },
+      provider: { "@id": "https://trackflowpro.com/#organization" },
       areaServed: "Worldwide",
+      url: "https://trackflowpro.com/services/server-side-tracking",
       description:
         "Server-side tracking, server-side tagging, GTM server-side setup review, first-party measurement, Google Ads conversion tracking, Meta CAPI, and event validation service.",
+      offers: {
+        "@type": "Offer",
+        availability: "https://schema.org/InStock",
+        url: "https://trackflowpro.com/free-tracking-audit",
+      },
     },
     {
       "@type": "BreadcrumbList",
+      "@id": "https://trackflowpro.com/services/server-side-tracking#breadcrumb",
       itemListElement: [
         {
           "@type": "ListItem",
@@ -251,6 +290,7 @@ const jsonLd = {
     },
     {
       "@type": "FAQPage",
+      "@id": "https://trackflowpro.com/services/server-side-tracking#faq",
       mainEntity: faqs.map((faq) => ({
         "@type": "Question",
         name: faq.question,

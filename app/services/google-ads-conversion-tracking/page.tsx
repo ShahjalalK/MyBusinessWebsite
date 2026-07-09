@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   description:
     "Fix Google Ads conversion tracking, GA4/GTM events, enhanced conversions, ecommerce tracking, form tracking, call tracking, and server-side conversion validation with an evidence-based setup review.",
   alternates: {
-    canonical: "/services/google-ads-conversion-tracking",
+    canonical: "https://trackflowpro.com/services/google-ads-conversion-tracking",
   },
   openGraph: {
     title: "Google Ads Conversion Tracking Service | TrackFlow Pro",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/meta/trackflowpro-advanced-tracking-solutions.webp",
+        url: "https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp",
         width: 1200,
         height: 630,
         alt: "TrackFlow Pro - Google Ads Conversion Tracking Service",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     title: "Google Ads Conversion Tracking Service | TrackFlow Pro",
     description:
       "Fix broken Google Ads conversion tracking with GA4, GTM, enhanced conversions, and server-side validation.",
-    images: ["/meta/trackflowpro-advanced-tracking-solutions.webp"],
+    images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
 
@@ -224,64 +224,110 @@ const faqs: Faq[] = [
   },
 ];
 
-const structuredData = [
-  {
-    "@context": "https://schema.org",
-    "@type": "Service",
-    name: "Google Ads Conversion Tracking Service",
-    serviceType: "Google Ads conversion tracking setup and fixing service",
-    provider: {
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
       "@type": "Organization",
+      "@id": "https://trackflowpro.com/#organization",
       name: "TrackFlow Pro",
+      alternateName: ["TrackFlowPro", "Track Flow Pro"],
       url: "https://trackflowpro.com",
+      sameAs: ["https://www.linkedin.com/in/shahjalal-khan/"],
+      founder: {
+        "@type": "Person",
+        "@id": "https://trackflowpro.com/#shahjalal-khan",
+        name: "Shahjalal Khan",
+        jobTitle: "Founder & Tracking Specialist",
+        sameAs: "https://www.linkedin.com/in/shahjalal-khan/",
+      },
+      knowsAbout: [
+        "Google Ads conversion tracking",
+        "GA4 audit",
+        "Google Tag Manager audit",
+        "GTM server-side tracking",
+        "Server-side tracking",
+        "Meta Conversions API",
+        "Facebook Conversions API",
+      ],
     },
-    areaServed: "Worldwide",
-    url: "https://trackflowpro.com/services/google-ads-conversion-tracking",
-    description:
-      "Google Ads conversion tracking setup and fixing service for GA4, GTM, enhanced conversions, ecommerce tracking, form tracking, call tracking, and server-side conversion validation.",
-    offers: {
-      "@type": "Offer",
-      availability: "https://schema.org/InStock",
-      url: "https://trackflowpro.com/free-tracking-audit",
+    {
+      "@type": "WebSite",
+      "@id": "https://trackflowpro.com/#website",
+      name: "TrackFlow Pro",
+      alternateName: ["TrackFlowPro", "Track Flow Pro"],
+      url: "https://trackflowpro.com",
+      publisher: { "@id": "https://trackflowpro.com/#organization" },
     },
-  },
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: faqs.map((faq) => ({
-      "@type": "Question",
-      name: faq.question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: faq.answer,
+    {
+      "@type": "WebPage",
+      "@id": "https://trackflowpro.com/services/google-ads-conversion-tracking#webpage",
+      url: "https://trackflowpro.com/services/google-ads-conversion-tracking",
+      name: "Google Ads Conversion Tracking Service | TrackFlow Pro",
+      description:
+        "Google Ads conversion tracking setup and fixing service for GA4, GTM, enhanced conversions, ecommerce tracking, form tracking, call tracking, and server-side conversion validation.",
+      isPartOf: { "@id": "https://trackflowpro.com/#website" },
+      about: { "@id": "https://trackflowpro.com/services/google-ads-conversion-tracking#service" },
+    },
+    {
+      "@type": "Service",
+      "@id": "https://trackflowpro.com/services/google-ads-conversion-tracking#service",
+      name: "Google Ads Conversion Tracking Service",
+      alternateName: [
+        "Google Ads conversion tracking specialist",
+        "Google Ads enhanced conversions setup",
+        "Google Ads conversion tracking GTM setup",
+      ],
+      serviceType: "Google Ads conversion tracking setup and fixing service",
+      provider: { "@id": "https://trackflowpro.com/#organization" },
+      areaServed: "Worldwide",
+      url: "https://trackflowpro.com/services/google-ads-conversion-tracking",
+      description:
+        "Google Ads conversion tracking setup and fixing service for GA4, GTM, enhanced conversions, ecommerce tracking, form tracking, call tracking, and server-side conversion validation.",
+      offers: {
+        "@type": "Offer",
+        availability: "https://schema.org/InStock",
+        url: "https://trackflowpro.com/free-tracking-audit",
       },
-    })),
-  },
-  {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: "https://trackflowpro.com",
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "Services",
-        item: "https://trackflowpro.com/services",
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: "Google Ads Conversion Tracking",
-        item: "https://trackflowpro.com/services/google-ads-conversion-tracking",
-      },
-    ],
-  },
-];
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://trackflowpro.com/services/google-ads-conversion-tracking#faq",
+      mainEntity: faqs.map((faq) => ({
+        "@type": "Question",
+        name: faq.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: faq.answer,
+        },
+      })),
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://trackflowpro.com/services/google-ads-conversion-tracking#breadcrumb",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: "https://trackflowpro.com",
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Services",
+          item: "https://trackflowpro.com/services",
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: "Google Ads Conversion Tracking",
+          item: "https://trackflowpro.com/services/google-ads-conversion-tracking",
+        },
+      ],
+    },
+  ],
+};
 
 export default function GoogleAdsConversionTrackingPage() {
   return (
