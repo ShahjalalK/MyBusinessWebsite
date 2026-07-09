@@ -11,6 +11,7 @@ import {
   ChevronRight,
   DatabaseZap,
   Gauge,
+  LayoutDashboard,
   MousePointerClick,
   Radar,
   SearchCheck,
@@ -41,6 +42,11 @@ const rotatingServices = [
     note: "Improve server events, deduplication, and event match quality.",
     icon: Zap,
   },
+  {
+    label: "Looker Studio PPC dashboard",
+    note: "Turn Google Ads, GA4, Meta, and lead data into clean client-ready reports.",
+    icon: LayoutDashboard,
+  },
 ];
 
 const dashboardRows = [
@@ -63,10 +69,10 @@ const dashboardRows = [
     width: "82%",
   },
   {
-    label: "GTM data layer quality",
-    value: "Audit queued",
+    label: "Looker Studio report layer",
+    value: "Dashboard ready",
     tone: "emerald",
-    width: "66%",
+    width: "76%",
   },
 ];
 
@@ -75,12 +81,13 @@ const systemCards = [
   { label: "GA4 + GTM", status: "event path validation", icon: BarChart3 },
   { label: "Server GTM", status: "first-party signal review", icon: ShieldCheck },
   { label: "Meta CAPI", status: "dedupe + match quality", icon: MousePointerClick },
+  { label: "Looker Studio", status: "PPC dashboard reporting", icon: LayoutDashboard },
 ];
 
 const proofItems = [
   "No login required for first review",
   "Evidence-first audit workflow",
-  "GA4, GTM, Google Ads & Meta CAPI",
+  "GA4, GTM, Meta CAPI & Looker Studio",
 ];
 
 export default function PremiumHomeHero() {
@@ -180,7 +187,7 @@ export default function PremiumHomeHero() {
           </div>
 
           <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-300 sm:mt-7 sm:text-lg sm:leading-8">
-            TrackFlow Pro fixes Google Ads conversion tracking, validates GA4 and Google Tag Manager events, improves Meta CAPI signals, and builds cleaner server-side tracking before you scale paid traffic.
+            TrackFlow Pro fixes Google Ads conversion tracking, validates GA4 and Google Tag Manager events, improves Meta CAPI signals, builds cleaner server-side tracking, and creates Looker Studio reporting dashboards before you scale paid traffic.
           </p>
 
           <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
@@ -253,7 +260,7 @@ function HeroSignalDashboard({ reduceMotion }: { reduceMotion: boolean }) {
           </div>
           <div>
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Validated</p>
-            <p className="text-sm font-black leading-5">Server signal active</p>
+            <p className="text-sm font-black leading-5">Dashboard report ready</p>
           </div>
         </div>
       </motion.div>
@@ -267,7 +274,7 @@ function HeroSignalDashboard({ reduceMotion }: { reduceMotion: boolean }) {
                 Live audit command center
               </p>
               <h2 className="mt-2 text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl">
-                Conversion Signal Map
+                Measurement Signal Map
               </h2>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-200">
@@ -349,7 +356,7 @@ function HeroSignalDashboard({ reduceMotion }: { reduceMotion: boolean }) {
                 </div>
                 <div>
                   <p className="text-sm font-black text-white">Next action</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-300">Audit report separates evidence from assumptions.</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-300">Audit report and dashboard separate evidence from assumptions.</p>
                 </div>
               </div>
               <Link href="/free-tracking-audit" className="inline-flex items-center justify-center gap-1 rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-100">
@@ -363,7 +370,7 @@ function HeroSignalDashboard({ reduceMotion }: { reduceMotion: boolean }) {
       <div className="mt-4 grid grid-cols-3 gap-3 sm:hidden">
         <MobileMiniStat label="Score" value="82" />
         <MobileMiniStat label="Issues" value="3" />
-        <MobileMiniStat label="Systems" value="4" />
+        <MobileMiniStat label="Systems" value="5" />
       </div>
     </motion.div>
   );
