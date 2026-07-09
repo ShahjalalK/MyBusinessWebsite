@@ -484,6 +484,10 @@ function buildClipboardHtml(fragment: string) {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">${fragment}</body></html>`;
 }
 
+function stripSignatureCredit(html: string) {
+  return html.replace(/\s*<tr><td colspan="3" style="padding:7px 0 0 0;[^>]*>Created with <a href="[^"]*" style="[^"]*">TrackFlow Pro<\/a><\/td><\/tr>/g, "");
+}
+
 function buildSignatureHtml(
   form: SignatureForm,
   imageMode: ImageMode,
@@ -558,7 +562,7 @@ const WIZARD_STEPS: Array<{
     id: "style",
     label: "Style",
     title: "Choose brand color",
-    description: "Match the signature with the brand color and credit preference.",
+    description: "Match the signature with the brand color and visual style.",
   },
   {
     id: "copy",
@@ -706,7 +710,7 @@ export default function EmailSignatureGenerator() {
     const shouldUseLocalOptimizedImage = imageMode === "upload" && optimizedDataUrl && !form.imageUrl;
     const nextPreviewForm = shouldUseLocalOptimizedImage ? { ...previewForm, imageUrl: optimizedDataUrl } : previewForm;
 
-    return buildSignatureHtml(nextPreviewForm, imageMode, Boolean(shouldUseLocalOptimizedImage), selectedTemplate);
+    return stripSignatureCredit(buildSignatureHtml(nextPreviewForm, imageMode, Boolean(shouldUseLocalOptimizedImage), selectedTemplate));
   }, [form.imageUrl, imageMode, optimizedDataUrl, previewForm, selectedTemplate]);
 
   const guideVideoEmbedUrl = useMemo(() => getGuideVideoEmbedUrl(SIGNATURE_GUIDE_VIDEO_URL), []);
@@ -965,7 +969,7 @@ export default function EmailSignatureGenerator() {
 
   return (
     <>
-      <section id="signature-generator" className="relative mx-auto max-w-7xl px-3 pb-12 sm:px-6 lg:px-8">
+      <section id="signature-generator" className="relative mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
       <div className="mb-5 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg sm:rounded-[2rem] shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
         <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
@@ -1337,9 +1341,6 @@ function MobileSignaturePreview({ form, canCopy, imageMode }: { form: SignatureF
             {ctaText}
           </div>
 
-          <p className="mt-2 text-[10px] font-bold text-slate-400">
-            Created with <span style={{ color }}>TrackFlow Pro</span>
-          </p>
         </div>
 
         {!canCopy ? (
@@ -1687,9 +1688,6 @@ function StepContent({
             />
           </div>
 
-          <div className="mt-4 rounded-2xl border border-blue-200 bg-white p-4 text-sm font-bold leading-6 text-slate-700 dark:border-blue-400/20 dark:bg-slate-950/70 dark:text-slate-300">
-            “Created with TrackFlow Pro” credit is included automatically to keep this free tool sustainable.
-          </div>
         </div>
       </div>
     );

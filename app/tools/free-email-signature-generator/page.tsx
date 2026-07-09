@@ -79,7 +79,7 @@ const features = [
   {
     icon: <ClipboardCheck className="h-5 w-5" />,
     title: "Copy-ready HTML",
-    text: "Copy a Gmail-ready signature, copy the HTML, or download the signature file for manual use.",
+    text: "Copy a Gmail-ready signature and open the install guide when you need help placing it inside your email platform.",
   },
 ];
 
@@ -94,7 +94,7 @@ const faqs = [
   {
     question: "Is this email signature generator really free?",
     answer:
-      "Yes. You can build, preview, copy, and download a professional email signature without creating an account or paying for a dashboard subscription.",
+      "Yes. You can build, preview, and copy a professional email signature without creating an account or paying for a dashboard subscription.",
   },
   {
     question: "Do you host my image?",
@@ -185,7 +185,7 @@ export default function FreeEmailSignatureGeneratorPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
+      <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -198,22 +198,22 @@ export default function FreeEmailSignatureGeneratorPage() {
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.06)_1px,transparent_1px)] bg-[size:72px_72px] opacity-30 dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)]" />
         </div>
 
-        <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+        <div className="relative mx-auto max-w-7xl px-4 pt-10 pb-12 sm:px-6 sm:pt-14 sm:pb-16 lg:px-8 lg:pt-16 lg:pb-20">
           <div className="mx-auto max-w-4xl text-center">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-300 sm:mb-5 sm:text-xs">
               <Sparkles className="h-4 w-4" />
               Free business tool
             </div>
 
-            <h1 className="text-4xl font-black leading-tight tracking-[-0.055em] text-slate-950 dark:text-white sm:text-5xl lg:text-7xl">
+            <h1 className="text-[2.45rem] font-black leading-[0.98] tracking-[-0.06em] text-slate-950 dark:text-white sm:text-5xl sm:leading-tight lg:text-7xl">
               Free Clickable Email Signature Generator
             </h1>
 
-            <p className="mx-auto mt-6 max-w-3xl text-base font-medium leading-8 text-slate-600 dark:text-slate-400 sm:text-lg">
+            <p className="mx-auto mt-5 max-w-3xl text-sm font-semibold leading-7 text-slate-600 dark:text-slate-400 sm:mt-6 sm:text-lg sm:leading-8">
               Create a clean, professional email signature for Gmail, Outlook, Apple Mail, and other email platforms. Add your details, image URL, social links, and a call-to-action — then copy the ready-to-use HTML signature.
             </p>
 
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="mt-7 flex flex-col justify-center gap-3 sm:mt-8 sm:flex-row">
               <a
                 href="#signature-generator"
                 className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
@@ -239,7 +239,7 @@ export default function FreeEmailSignatureGeneratorPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {features.map((feature) => (
             <div
@@ -258,7 +258,7 @@ export default function FreeEmailSignatureGeneratorPage() {
 
       <EmailSignatureGenerator />
 
-      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none sm:p-8">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
@@ -309,7 +309,7 @@ export default function FreeEmailSignatureGeneratorPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none sm:p-8 lg:p-10">
           <div className="max-w-3xl">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
