@@ -160,13 +160,13 @@ export default function BookingConcierge() {
       >
         <div
           className={cn(
-            "mb-3 w-[calc(100vw-1.5rem)] max-w-sm origin-bottom-right overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-blue-400/10 transition-all duration-200 dark:border-slate-800 sm:w-[380px]",
+            "mb-3 flex w-[calc(100vw-1.5rem)] max-w-sm max-h-[min(520px,calc(100dvh-12rem))] origin-bottom-right flex-col overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-blue-400/10 transition-all duration-200 dark:border-slate-800 sm:w-[380px] lg:max-h-[min(520px,calc(100dvh-11rem))]",
             isOpen
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-3 scale-[0.98] opacity-0"
           )}
         >
-          <div className="relative overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.45),transparent_38%),linear-gradient(135deg,#020617,#0f172a)] p-5">
+          <div className="relative shrink-0 overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.45),transparent_38%),linear-gradient(135deg,#020617,#0f172a)] p-5">
             <div className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full bg-blue-500/30 blur-3xl" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
@@ -192,7 +192,7 @@ export default function BookingConcierge() {
             </div>
           </div>
 
-          <div className="space-y-4 p-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-width:thin] [scrollbar-color:rgba(96,165,250,0.6)_rgba(15,23,42,0.7)]">
             <div className="grid gap-2">
               {[
                 "15-minute focused verification call",
