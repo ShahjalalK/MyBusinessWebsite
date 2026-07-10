@@ -15,16 +15,16 @@ import Footer from "../../components/footer";
 const pageUrl = "https://trackflowpro.com/services/looker-studio-dashboard";
 
 export const metadata: Metadata = {
-  title: "Looker Studio Dashboard for Google Ads, GA4 & Meta Reporting | TrackFlow Pro",
+  title: "Looker Studio Dashboard for GA4 Visitor Journey, Google Ads & Meta Reporting | TrackFlow Pro",
   description:
-    "TrackFlow Pro builds Looker Studio dashboards for Google Ads, GA4, Meta Ads, leads, revenue, and conversion tracking reports so businesses can monitor performance and tracking quality in one place.",
+    "TrackFlow Pro builds Looker Studio dashboards for GA4 visitor journey, traffic sources, devices, landing pages, scroll depth, CTA clicks, leads, Google Ads, Meta Ads, revenue, and conversion tracking reports.",
   alternates: {
     canonical: pageUrl,
   },
   openGraph: {
-    title: "Looker Studio Dashboard for Google Ads, GA4 & Meta Reporting | TrackFlow Pro",
+    title: "Looker Studio Dashboard for GA4 Visitor Journey, Google Ads & Meta Reporting | TrackFlow Pro",
     description:
-      "Clean PPC and analytics dashboards for Google Ads, GA4, Meta Ads, leads, revenue, conversion tracking, and tracking health reporting.",
+      "Clean visitor journey, PPC, and analytics dashboards for GA4, Google Ads, Meta Ads, traffic sources, device performance, landing pages, leads, and tracking health reporting.",
     url: pageUrl,
     siteName: "TrackFlow Pro",
     type: "website",
@@ -39,14 +39,20 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Looker Studio Dashboard for Google Ads, GA4 & Meta Reporting | TrackFlow Pro",
+    title: "Looker Studio Dashboard for GA4 Visitor Journey & PPC Reporting | TrackFlow Pro",
     description:
-      "Build cleaner Google Ads, GA4, Meta Ads, lead, revenue, and conversion tracking dashboards in Looker Studio.",
+      "Build cleaner GA4 visitor journey, Google Ads, Meta Ads, lead, revenue, and conversion tracking dashboards in Looker Studio.",
     images: ["https://trackflowpro.com/meta/trackflowpro-advanced-tracking-solutions.webp"],
   },
 };
 
 const dashboardTypes = [
+  {
+    title: "Website visitor journey dashboard",
+    description:
+      "See how visitors arrive, which device they use, which pages they view, how far they scroll, which CTA they click, and which source creates real lead actions.",
+    icon: <SearchCheck className="h-6 w-6" />,
+  },
   {
     title: "Google Ads performance dashboard",
     description:
@@ -94,6 +100,7 @@ const problems = [
 const dashboardFeatures = [
   "Google Ads spend, clicks, conversions, CPA, conversion value, and ROAS",
   "GA4 traffic sources, events, key events, landing pages, and ecommerce metrics",
+  "Visitor journey overview for source, device, landing page, scroll depth, CTA clicks, final action, and conversion rate",
   "Meta Ads campaign, ad set, lead, purchase, CPA, and ROAS reporting views",
   "Lead generation dashboard for forms, calls, booked appointments, and source quality",
   "Executive summary cards for quick weekly or monthly performance review",
@@ -190,6 +197,7 @@ export default function LookerStudioDashboardPage() {
         },
         knowsAbout: [
           "Looker Studio dashboards",
+          "Website visitor journey dashboard",
           "PPC reporting dashboards",
           "Google Ads reporting",
           "GA4 dashboards",
@@ -210,18 +218,19 @@ export default function LookerStudioDashboardPage() {
       {
         "@type": "WebPage",
         "@id": `${pageUrl}#webpage`,
-        name: "Looker Studio Dashboard for Google Ads, GA4 & Meta Reporting | TrackFlow Pro",
+        name: "Looker Studio Dashboard for GA4 Visitor Journey, Google Ads & Meta Reporting | TrackFlow Pro",
         url: pageUrl,
         description:
-          "Looker Studio dashboard service for Google Ads, GA4, Meta Ads, leads, revenue, conversion tracking, and tracking health reporting.",
+          "Looker Studio dashboard service for GA4 visitor journey, traffic source performance, device performance, landing pages, CTA clicks, Google Ads, Meta Ads, leads, revenue, conversion tracking, and tracking health reporting.",
         isPartOf: { "@id": "https://trackflowpro.com/#website" },
         about: { "@id": `${pageUrl}#service` },
       },
       {
         "@type": "Service",
         "@id": `${pageUrl}#service`,
-        name: "Looker Studio Dashboard for Google Ads, GA4 & Meta Reporting",
+        name: "Looker Studio Dashboard for GA4 Visitor Journey, Google Ads & Meta Reporting",
         alternateName: [
+          "Visitor journey dashboard specialist",
           "Looker Studio dashboard specialist",
           "Google Ads dashboard service",
           "GA4 dashboard service",
@@ -231,10 +240,10 @@ export default function LookerStudioDashboardPage() {
         provider: { "@id": "https://trackflowpro.com/#organization" },
         areaServed: "Worldwide",
         serviceType:
-          "Looker Studio dashboards, Google Ads reporting, GA4 dashboards, Meta Ads reporting, PPC reporting dashboards, marketing analytics dashboard build",
+          "Looker Studio dashboards, GA4 visitor journey dashboards, Google Ads reporting, GA4 dashboards, Meta Ads reporting, PPC reporting dashboards, marketing analytics dashboard build",
         url: pageUrl,
         description:
-          "Clean Looker Studio dashboard build for Google Ads, GA4, Meta Ads, leads, revenue, conversion tracking, and tracking health reporting.",
+          "Clean Looker Studio dashboard build for GA4 visitor journey, traffic sources, devices, landing pages, CTA clicks, Google Ads, Meta Ads, leads, revenue, conversion tracking, and tracking health reporting.",
         offers: {
           "@type": "Offer",
           url: "https://trackflowpro.com/free-tracking-audit",
