@@ -969,7 +969,10 @@ export default function EmailSignatureGenerator() {
 
   return (
     <>
-      <section id="signature-generator" className="relative mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+      <section id="signature-generator" className="relative mx-auto w-full max-w-7xl scroll-mt-28 px-4 pb-12 sm:px-6 lg:px-8">
+      <DesktopOnlyMobileNotice />
+
+      <div className="hidden lg:block">
       <div className="mb-5 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg sm:rounded-[2rem] shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none">
         <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
@@ -1269,10 +1272,74 @@ export default function EmailSignatureGenerator() {
           </div>
         </div>
       </div>
+      </div>
       </section>
 
       {isGuideOpen ? <InstallGuideModal videoUrl={guideVideoEmbedUrl} onClose={() => setIsGuideOpen(false)} /> : null}
     </>
+  );
+}
+
+function DesktopOnlyMobileNotice() {
+  const generatorUrl = "https://trackflowpro.com/tools/free-email-signature-generator#signature-generator";
+  const mailSubject = encodeURIComponent("Open the TrackFlow Pro email signature generator on desktop");
+  const mailBody = encodeURIComponent(`Please open this desktop/laptop link to create the email signature: ${generatorUrl}`);
+
+  return (
+    <div className="lg:hidden">
+      <div className="relative overflow-hidden rounded-[2rem] border border-blue-200 bg-white p-5 text-center shadow-xl shadow-slate-200/70 dark:border-blue-400/20 dark:bg-slate-950/80 dark:shadow-none">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-20 bottom-0 h-44 w-44 rounded-full bg-cyan-500/10 blur-3xl" />
+
+        <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+          <Mail className="h-6 w-6" />
+        </div>
+
+        <div className="relative mt-4 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Desktop/laptop required
+        </div>
+
+        <h2 className="relative mt-4 text-2xl font-black tracking-[-0.045em] text-slate-950 dark:text-white">
+          Email Signature Generator is optimized for desktop
+        </h2>
+
+        <p className="relative mx-auto mt-3 max-w-xl text-sm font-semibold leading-7 text-slate-600 dark:text-slate-400">
+          For accurate layout, rich HTML copying, Gmail/Outlook installation, and image spacing, please open this tool from a desktop or laptop screen. The mobile page stays available for reading the guide and service details.
+        </p>
+
+        <div className="relative mt-5 grid gap-3 text-left">
+          {[
+            "Prevents broken signature layout on small screens",
+            "Makes copy-paste safer for Gmail and Outlook",
+            "Gives enough space for live preview and template controls",
+          ].map((item) => (
+            <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative mt-5 grid gap-3 sm:grid-cols-2">
+          <a
+            href={`mailto:?subject=${mailSubject}&body=${mailBody}`}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-500"
+          >
+            Send desktop link
+            <ArrowRight className="h-4 w-4" />
+          </a>
+
+          <a
+            href="/contact"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-black text-slate-900 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-blue-500/10"
+          >
+            Need custom setup?
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 
