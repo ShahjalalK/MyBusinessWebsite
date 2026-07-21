@@ -1,6 +1,7 @@
 export type OutreachBlockId =
   | "greeting"
   | "wordpress_gig"
+  | "wordpress_dental_gig"
   | "shopify_gig"
   | "soft_question"
   | "opt_out";
@@ -12,11 +13,13 @@ const SHOPIFY_GIG_URL =
 
 const WORDPRESS_GIG_IMAGE =
   "https://trackflowpro.com/email-assets/fiverr-wordpress-lead-tracking.jpg";
+const WORDPRESS_DENTAL_GIG_IMAGE =
+  "https://trackflowpro.com/email-assets/fiverr-wordpress-dental-demo.jpg";
 const SHOPIFY_GIG_IMAGE =
   "https://trackflowpro.com/email-assets/fiverr-shopify-tracking.jpg";
 
 function buildFiverrCard(input: {
-  blockId: "wordpress_gig" | "shopify_gig";
+  blockId: "wordpress_gig" | "wordpress_dental_gig" | "shopify_gig";
   url: string;
   image: string;
   eyebrow: string;
@@ -57,6 +60,15 @@ export function buildOutreachBlockHtml(blockId: OutreachBlockId): string {
         url: WORDPRESS_GIG_URL,
         image: WORDPRESS_GIG_IMAGE,
         eyebrow: "Fiverr service",
+        title: "WordPress Lead Tracking",
+        subtitle: "Confirmed Enquiry Dashboard",
+      });
+    case "wordpress_dental_gig":
+      return buildFiverrCard({
+        blockId,
+        url: WORDPRESS_GIG_URL,
+        image: WORDPRESS_DENTAL_GIG_IMAGE,
+        eyebrow: "Dental website tracking example",
         title: "WordPress Lead Tracking",
         subtitle: "Confirmed Enquiry Dashboard",
       });

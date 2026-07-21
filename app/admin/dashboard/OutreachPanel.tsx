@@ -761,6 +761,7 @@ export default function OutreachPanel({
                       <option value="" disabled>Insert a ready block…</option>
                       <option value="greeting">Greeting</option>
                       <option value="wordpress_gig">WordPress Fiverr card</option>
+                      <option value="wordpress_dental_gig">Dental WordPress Fiverr card</option>
                       <option value="shopify_gig">Shopify Fiverr card</option>
                       <option value="soft_question">Soft question</option>
                       <option value="opt_out">Opt-out line</option>
@@ -771,6 +772,13 @@ export default function OutreachPanel({
                       className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase text-emerald-700 hover:bg-emerald-100"
                     >
                       + WordPress Gig
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertOutreachBlock("wordpress_dental_gig")}
+                      className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-[10px] font-black uppercase text-cyan-700 hover:bg-cyan-100"
+                    >
+                      + Dental Demo
                     </button>
                     <button
                       type="button"
