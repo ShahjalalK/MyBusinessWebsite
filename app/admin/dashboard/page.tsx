@@ -56,6 +56,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import AdminGuard from "@/app/components/AdminGuard";
 import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, getColdEmailTemplateForService, applyColdEmailMergeTags, type SenderAccount } from "../../../lib/senders";
+import { buildOutreachBlockHtml, type OutreachBlockId } from "../../../lib/trackflow-email/outreach-blocks";
 import { useLeadStore, type LeadSourceFilter, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
 
@@ -236,6 +237,26 @@ function looksLikeReportUrl(value: string): boolean {
   return /^https?:\/\//i.test(text) || text.includes("/tracking-review/") || text.includes("/r/");
 }
 
+function countUniqueHttpLinks(html: string): number {
+  const urls = new Set<string>();
+  const pattern = /<a\b[^>]*\bhref=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(String(html || "")))) {
+    const raw = String(match[1] || match[2] || match[3] || "").trim();
+    if (!/^https?:\/\//i.test(raw)) continue;
+    try {
+      const url = new URL(raw);
+      url.hash = "";
+      urls.add(url.toString());
+    } catch {
+      urls.add(raw);
+    }
+  }
+
+  return urls.size;
+}
+
 function emptySecureReportListState(): SecureReportListState {
   return {
     loading: false,
@@ -287,7 +308,8 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
               <tr>
                 <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
                   <div style="margin:0 0 1px 0;color:#111827;font-weight:bold;font-size:14px;line-height:19px;">${sender.name}</div>
-                  <div style="margin:0;color:#4b5563;font-size:12px;line-height:18px;font-weight:bold;">TrackFlowPro · Conversion Tracking Audit</div>
+                  <div style="margin:0;color:#4b5563;font-size:12px;line-height:18px;font-weight:bold;">Tracking & Analytics Specialist</div>
+                  <div style="margin:2px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;">Shopify GA4 · WordPress Lead Tracking</div>
                   <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;overflow-wrap:break-word;word-break:normal;">
                     ${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL}
                   </div>
@@ -312,8 +334,8 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
               <td width="4" style="width:4px;background:#2563eb;font-size:0;line-height:0;">&nbsp;</td>
               <td style="padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;">
                 <div style="font-size:15px;line-height:20px;font-weight:bold;color:#111827;margin:0;">${sender.name}</div>
-                <div style="font-size:13px;line-height:19px;color:#4b5563;font-weight:bold;margin:0;">Founder, TrackFlowPro</div>
-                <div style="font-size:12px;line-height:18px;color:#6b7280;margin:3px 0 0 0;">Google Ads Conversion Tracking · GA4/GTM Audit · Server-Side Tracking</div>
+                <div style="font-size:13px;line-height:19px;color:#4b5563;font-weight:bold;margin:0;">Tracking & Analytics Specialist</div>
+                <div style="font-size:12px;line-height:18px;color:#6b7280;margin:3px 0 0 0;">Shopify GA4 · WordPress Lead Tracking · Server-Side Measurement</div>
                 <div style="font-size:12px;line-height:18px;color:#374151;margin:8px 0 0 0;">${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL}</div>
                 <div style="font-size:10px;line-height:15px;color:#9ca3af;margin:8px 0 0 0;">Ref: ${tag} | Unsubscribe${MAILING_ADDRESS ? ` | ${MAILING_ADDRESS}` : ""}</div>
               </td>
@@ -662,7 +684,7 @@ export default function DashboardPage() {
   const activeSender = ACTIVE_SENDERS.find((sender : any) => sender.id === selectedSender);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const wordCount = stripHtml(message).split(/\s+/).filter(Boolean).length;
-  const bodyLinkCount = (message.match(/<a\s/gi) || []).length;
+  const bodyLinkCount = countUniqueHttpLinks(message);
   const reportLinkCount = reportUrl.trim() ? 1 : 0;
   const totalLinkCount = bodyLinkCount + reportLinkCount;
   const selectedOutreachSheetLead = useMemo(() => {
@@ -1488,6 +1510,19 @@ export default function DashboardPage() {
     insertHtmlAtCursor(`<span>${tag}</span>`);
   };
 
+  const insertOutreachBlock = (blockId: OutreachBlockId) => {
+    const currentHtml = getCurrentEditorHtml();
+
+    if (blockId.endsWith("_gig") && currentHtml.includes(`data-tfp-email-block="${blockId}"`)) {
+      window.alert("This Fiverr service card is already included in the email.");
+      return;
+    }
+
+    const blockHtml = buildOutreachBlockHtml(blockId);
+    if (!blockHtml) return;
+    insertHtmlAtCursor(blockHtml);
+  };
+
   const addTextLink = () => {
     const linkText = window.prompt("Link text:", "View here");
     if (!linkText) return;
@@ -1552,7 +1587,7 @@ export default function DashboardPage() {
       return false;
     }
 
-    const messageLinkCount = (currentMessage.match(/<a\s/gi) || []).length + (reportUrl.trim() ? 1 : 0);
+    const messageLinkCount = countUniqueHttpLinks(currentMessage) + (reportUrl.trim() ? 1 : 0);
     if (messageLinkCount > 2) {
       window.alert("Too many links. Keep cold outreach to 1 message link + optional report link.");
       return false;
@@ -1666,7 +1701,7 @@ export default function DashboardPage() {
           businessType,
           scheduledAt: scheduledAtISO,
           includeSignature,
-          signatureMode: "full",
+          signatureMode: "compact",
           reportUrl: normalizeOptionalUrl(reportUrl),
           reportButtonText,
           allowDuplicateSend,
@@ -3324,7 +3359,7 @@ export default function DashboardPage() {
         website: sheetValue(lead, "Website URL"),
         businessType: sheetValue(lead, "Lead Label") || sheetValue(lead, "Lead Status"),
         includeSignature: true,
-        signatureMode: "full",
+        signatureMode: "compact",
         reportUrl: reportFromSheet,
         reportButtonText: "View short audit note",
         reportToken: sheetValue(lead, "Report Token"),
@@ -3753,6 +3788,7 @@ export default function DashboardPage() {
       handleSenderChange={handleSenderChange}
       handleServiceChange={handleServiceChange}
       insertMergeTag={insertMergeTag}
+      insertOutreachBlock={insertOutreachBlock}
       addTextLink={addTextLink}
       resetOutreachForm={resetOutreachForm}
       handleSendEmail={handleSendEmail}

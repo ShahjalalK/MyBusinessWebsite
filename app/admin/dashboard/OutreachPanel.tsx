@@ -30,6 +30,7 @@ import {
   BtnClearFormatting,
 } from "react-simple-wysiwyg";
 import { ACTIVE_SENDERS, type SenderAccount } from "../../../lib/senders";
+import type { OutreachBlockId } from "../../../lib/trackflow-email/outreach-blocks";
 
 import type { ContactMemoryWarning, Lead, ServiceId, SheetLead, SendEmailDrawerFilter } from "./types";
 import { SERVICE_NAMES } from "./constants";
@@ -131,6 +132,7 @@ type OutreachPanelProps = {
   handleSenderChange: (senderId: string) => void;
   handleServiceChange: (service: ServiceId) => void;
   insertMergeTag: (tag: MergeTag) => void;
+  insertOutreachBlock: (blockId: OutreachBlockId) => void;
   addTextLink: () => void;
   resetOutreachForm: () => void;
   handleSendEmail: (event: FormEvent<HTMLFormElement>) => Promise<void> | void;
@@ -189,6 +191,7 @@ export default function OutreachPanel({
   handleSenderChange,
   handleServiceChange,
   insertMergeTag,
+  insertOutreachBlock,
   addTextLink,
   resetOutreachForm,
   handleSendEmail,
@@ -561,7 +564,7 @@ export default function OutreachPanel({
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          <div className="xl:col-span-3 space-y-5">
+          <div className="xl:col-span-2 space-y-5">
             <div className="bg-white rounded-[35px] border border-gray-100 p-5 shadow-sm">
               <h2 className="text-sm font-black text-gray-900 uppercase tracking-tighter mb-4 flex items-center gap-2">
                 <Mail size={16} className="text-blue-600" /> Sender Accounts
@@ -605,11 +608,11 @@ export default function OutreachPanel({
             </div>
           </div>
 
-          <div className="xl:col-span-5 bg-white p-6 lg:p-8 rounded-[35px] shadow-xl border border-gray-50">
+          <div className="xl:col-span-7 bg-white p-6 lg:p-8 rounded-[35px] shadow-xl border border-gray-50">
             <div className="flex items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Professional Email Composer</h2>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Clean body, cursor tags, direct send</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Fast blocks, clean body, cursor insertion</p>
                 {selectedOutreachSheetRow ? (
                   <div className="mt-2 space-y-2">
                     <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black uppercase text-blue-700">
@@ -726,6 +729,45 @@ export default function OutreachPanel({
                   </div>
                 </div>
 
+                <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="mr-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Quick insert</span>
+                    <select
+                      defaultValue=""
+                      onChange={(event) => {
+                        const value = event.currentTarget.value as OutreachBlockId;
+                        if (value) insertOutreachBlock(value);
+                        event.currentTarget.value = "";
+                      }}
+                      className="min-w-[190px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-700 outline-none focus:border-blue-500"
+                    >
+                      <option value="" disabled>Insert a ready block…</option>
+                      <option value="greeting">Greeting</option>
+                      <option value="wordpress_gig">WordPress Fiverr card</option>
+                      <option value="shopify_gig">Shopify Fiverr card</option>
+                      <option value="soft_question">Soft question</option>
+                      <option value="opt_out">Opt-out line</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => insertOutreachBlock("wordpress_gig")}
+                      className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase text-emerald-700 hover:bg-emerald-100"
+                    >
+                      + WordPress Gig
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertOutreachBlock("shopify_gig")}
+                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase text-blue-700 hover:bg-blue-100"
+                    >
+                      + Shopify Gig
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] font-medium leading-relaxed text-slate-400">
+                    The selected block is inserted exactly where the text cursor is placed. Keep one Fiverr card per email.
+                  </p>
+                </div>
+
                 <div ref={editorRef} className="modern-editor-wrapper rounded-[26px] border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-white shadow-sm">
                   <EditorProvider>
                     <Toolbar className="bg-white border-b border-gray-100 p-2 flex gap-1 flex-wrap items-center">
@@ -741,7 +783,7 @@ export default function OutreachPanel({
                     <Editor
                       value={message}
                       onChange={(e: any) => setMessage(e.target.value)}
-                      className="min-h-[340px] p-6 bg-white outline-none text-gray-800 font-medium email-editor-content"
+                      className="min-h-[520px] p-5 bg-white outline-none text-gray-800 font-medium email-editor-content"
                     />
                   </EditorProvider>
                 </div>
@@ -750,7 +792,7 @@ export default function OutreachPanel({
               <div className="bg-gray-50 rounded-3xl p-4 border border-gray-100">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black text-gray-900">Include Clean Signature</p>
+                    <p className="text-xs font-black text-gray-900">Include Compact Signature</p>
                     <p className="text-[10px] font-bold text-gray-400">Text/table signature will show the real inbox: {mainInboxEmail} for replies.</p>
                   </div>
                   <button
@@ -795,8 +837,8 @@ export default function OutreachPanel({
             </form>
           </div>
 
-          <div className="xl:col-span-4 space-y-5">
-            <div className="bg-white p-6 rounded-[35px] border border-gray-100 shadow-xl sticky top-6">
+          <div className="xl:col-span-3 space-y-5">
+            <div className="bg-white p-5 rounded-[30px] border border-gray-100 shadow-xl sticky top-6">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-black text-gray-900 uppercase tracking-tighter flex items-center gap-2">
                   <Eye size={18} className="text-blue-600" /> Live Preview
@@ -840,7 +882,7 @@ export default function OutreachPanel({
                   ) : null}
 
                   {includeSignature ? (
-                    <div className="mt-0" dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "full") }} />
+                    <div className="mt-0" dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "compact") }} />
                   ) : (
                     <p className="mt-5 text-[10px] font-black text-gray-400 uppercase">Signature hidden</p>
                   )}

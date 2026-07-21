@@ -3484,7 +3484,6 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
   const senderName = escapeHtml(sender?.name || DEFAULT_SENDER_NAME);
   // Visible contact is always the real inbox. Sender aliases are used only as From addresses.
   const visibleEmail = escapeHtml(MAIN_INBOX_EMAIL);
-  const websiteUrl = escapeHtml(BRAND_WEBSITE);
   const websiteLabel = escapeHtml(BRAND_WEBSITE_LABEL);
   const visibleReference = escapeHtml(formatVisibleEmailReference(tag));
   const mailingAddressLine = buildComplianceAddressLine();
@@ -3516,13 +3515,16 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
                       <td style="padding:0 0 1px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:19px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${senderName}</td>
                     </tr>
                     <tr>
-                      <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#4b5563;font-weight:bold;mso-line-height-rule:exactly;">TrackFlowPro · Conversion Tracking Audit</td>
+                      <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#4b5563;font-weight:bold;mso-line-height-rule:exactly;">Tracking & Analytics Specialist</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:2px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;">Shopify GA4 · WordPress Lead Tracking</td>
                     </tr>
                     <tr>
                       <td style="padding:6px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
                         <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
                         <span style="color:#d1d5db;"> | </span>
-                        <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+                        <span style="color:#6b7280;font-weight:bold;">${websiteLabel}</span>
                       </td>
                     </tr>
                     <tr>
@@ -3562,16 +3564,16 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
                     <td style="padding:0 0 1px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:#111827;">${senderName}</td>
                   </tr>
                   <tr>
-                    <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;">Founder, TrackFlowPro</td>
+                    <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;">Tracking & Analytics Specialist</td>
                   </tr>
                   <tr>
-                    <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;overflow-wrap:break-word;word-break:normal;">Google Ads Conversion Tracking · GA4/GTM Audit · Server-Side Tracking</td>
+                    <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;overflow-wrap:break-word;word-break:normal;">Shopify GA4 · WordPress Lead Tracking · Server-Side Measurement</td>
                   </tr>
                   <tr>
                     <td style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;overflow-wrap:break-word;word-break:normal;">
                       <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
                       <span style="color:#d1d5db;"> | </span>
-                      <a href="${websiteUrl}" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;">${websiteLabel}</a>
+                      <span style="color:#6b7280;font-weight:bold;">${websiteLabel}</span>
                     </td>
                   </tr>
                   <tr>
@@ -3608,10 +3610,12 @@ function applyEmailTagStyle(html: string, tagName: string, baseStyle: string): s
 function removeEmptyEmailBlocks(html: string): string {
   let output = String(html || "");
 
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     const before = output;
     output = output.replace(/<(p|div)\b[^>]*>(?:\s|&nbsp;|\u00a0|<br\s*\/?>)*<\/\1>/gi, "");
     output = output.replace(/(?:<br\s*\/?>\s*){3,}/gi, "<br /><br />");
+    output = output.replace(/^(?:\s|&nbsp;|\u00a0|<br\s*\/?>)+/gi, "");
+    output = output.replace(/(?:\s|&nbsp;|\u00a0|<br\s*\/?>)+$/gi, "");
     if (output === before) break;
   }
 
@@ -3738,7 +3742,7 @@ function buildEmailHtml(
   <body style="margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;width:100% !important;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#ffffff;mso-table-lspace:0pt;mso-table-rspace:0pt;width:100%;">
       <tr>
-        <td align="left" style="padding:20px 16px 20px 16px;margin:0;">
+        <td align="left" style="padding:2px 16px 18px 16px;margin:0;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;max-width:620px;width:100%;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
               <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;mso-line-height-rule:exactly;color:#1f2937;padding:0;margin:0;overflow-wrap:break-word;word-break:normal;">
