@@ -31,6 +31,7 @@ import {
 } from "react-simple-wysiwyg";
 import { ACTIVE_SENDERS, type SenderAccount } from "../../../lib/senders";
 import type { OutreachBlockId } from "../../../lib/trackflow-email/outreach-blocks";
+import type { EmailSignatureMode, EmailSignatureProfile } from "../../../lib/trackflow-email/signature-profile";
 
 import type { ContactMemoryWarning, Lead, ServiceId, SheetLead, SendEmailDrawerFilter } from "./types";
 import { SERVICE_NAMES } from "./constants";
@@ -105,6 +106,10 @@ type OutreachPanelProps = {
   sendStatus: string;
   includeSignature: boolean;
   setIncludeSignature: SetState<boolean>;
+  signatureMode: EmailSignatureMode;
+  setSignatureMode: SetState<EmailSignatureMode>;
+  signatureProfile: EmailSignatureProfile;
+  setSignatureProfile: SetState<EmailSignatureProfile>;
   reportUrl: string;
   setReportUrl: SetState<string>;
   reportButtonText: string;
@@ -136,7 +141,12 @@ type OutreachPanelProps = {
   addTextLink: () => void;
   resetOutreachForm: () => void;
   handleSendEmail: (event: FormEvent<HTMLFormElement>) => Promise<void> | void;
-  buildPreviewSignature: (sender?: SenderAccount, tag?: string, mode?: "full" | "compact") => string;
+  buildPreviewSignature: (
+    sender?: SenderAccount,
+    tag?: string,
+    mode?: EmailSignatureMode,
+    profile?: Partial<EmailSignatureProfile>,
+  ) => string;
 };
 
 export default function OutreachPanel({
@@ -164,6 +174,10 @@ export default function OutreachPanel({
   sendStatus,
   includeSignature,
   setIncludeSignature,
+  signatureMode,
+  setSignatureMode,
+  signatureProfile,
+  setSignatureProfile,
   reportUrl,
   setReportUrl,
   reportButtonText,
@@ -209,8 +223,9 @@ export default function OutreachPanel({
       service: selectedService || undefined,
     });
     const sanitizedPreviewMessage = sanitizePreviewHtml(previewMessage);
-    const previewBodyHtml = includeSignature ? stripPreviewComposerClosingBlocks(sanitizedPreviewMessage) : sanitizedPreviewMessage;
-    const showPreviewClosing = includeSignature && Boolean(stripHtml(previewMessage) || safeReportUrl);
+    const signatureVisible = signatureMode !== "none" && includeSignature;
+    const previewBodyHtml = signatureVisible ? stripPreviewComposerClosingBlocks(sanitizedPreviewMessage) : sanitizedPreviewMessage;
+    const showPreviewClosing = signatureVisible && Boolean(stripHtml(previewMessage) || safeReportUrl);
 
     const qualityChecks = [
       { label: "Valid recipient email", ok: isEmailPatternValid(email) },
@@ -220,13 +235,15 @@ export default function OutreachPanel({
       { label: "Message body ready", ok: Boolean(stripHtml(message)) },
       { label: "Links kept minimal", ok: totalLinkCount <= 2 },
       { label: "CTA text short", ok: !safeReportUrl || (reportButtonText || "View private tracking review").trim().length <= 44 },
-      { label: "Signature / unsubscribe visible", ok: includeSignature },
+      { label: "Signature / unsubscribe visible", ok: signatureVisible },
+      { label: "Signature email valid", ok: !signatureVisible || isEmailPatternValid(signatureProfile.email) },
       { label: "Secure /r report link valid or empty", ok: !reportUrl.trim() || Boolean(safeReportUrl && isSecureReportUrl(safeReportUrl)) },
       { label: "No duplicate lead", ok: !duplicateLead || allowDuplicateSend },
       { label: "Cooldown memory cleared/overridden", ok: !contactMemoryWarning || allowCooldownOverride },
     ];
 
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [signatureEditorOpen, setSignatureEditorOpen] = useState(false);
     const [drawerFilter, setDrawerFilter] = useState<SendEmailDrawerFilter>("all");
     const [drawerSearch, setDrawerSearch] = useState("");
 
@@ -762,10 +779,79 @@ export default function OutreachPanel({
                     >
                       + Shopify Gig
                     </button>
+                    <span className="mx-1 hidden h-7 w-px bg-slate-200 lg:block" />
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Signature</span>
+                    <select
+                      value={signatureMode}
+                      onChange={(event) => {
+                        const nextMode = event.currentTarget.value as EmailSignatureMode;
+                        setSignatureMode(nextMode);
+                        setIncludeSignature(nextMode !== "none");
+                      }}
+                      className="min-w-[190px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-700 outline-none focus:border-blue-500"
+                    >
+                      <option value="compact">Shahjalal — Professional</option>
+                      <option value="minimal">Short outreach signature</option>
+                      <option value="none">No signature</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setSignatureEditorOpen((current) => !current)}
+                      className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase text-blue-700 hover:bg-blue-100"
+                    >
+                      {signatureEditorOpen ? "Close editor" : "Edit signature"}
+                    </button>
                   </div>
                   <p className="mt-2 text-[10px] font-medium leading-relaxed text-slate-400">
-                    The selected block is inserted exactly where the text cursor is placed. Keep one Fiverr card per email.
+                    Blocks are inserted at the text cursor. The selected signature is added automatically below the message; reference and unsubscribe remain included.
                   </p>
+
+                  {signatureEditorOpen ? (
+                    <div className="mt-3 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Name</span>
+                        <input
+                          value={signatureProfile.name}
+                          onChange={(event) => setSignatureProfile((current) => ({ ...current, name: event.target.value }))}
+                          maxLength={80}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-800 outline-none focus:border-blue-500"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Professional title</span>
+                        <input
+                          value={signatureProfile.title}
+                          onChange={(event) => setSignatureProfile((current) => ({ ...current, title: event.target.value }))}
+                          maxLength={100}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-800 outline-none focus:border-blue-500"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Company</span>
+                        <input
+                          value={signatureProfile.company}
+                          onChange={(event) => setSignatureProfile((current) => ({ ...current, company: event.target.value }))}
+                          maxLength={80}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-800 outline-none focus:border-blue-500"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Email shown in signature</span>
+                        <input
+                          type="email"
+                          value={signatureProfile.email}
+                          onChange={(event) => setSignatureProfile((current) => ({ ...current, email: event.target.value }))}
+                          maxLength={160}
+                          className={`w-full rounded-xl border bg-white px-3 py-2 text-xs font-bold text-gray-800 outline-none focus:border-blue-500 ${
+                            isEmailPatternValid(signatureProfile.email) ? "border-gray-200" : "border-amber-300 bg-amber-50"
+                          }`}
+                        />
+                      </label>
+                      <p className="sm:col-span-2 text-[10px] font-medium leading-relaxed text-gray-400">
+                        Signature settings are saved in this browser. Current reply inbox: {mainInboxEmail}.
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div ref={editorRef} className="modern-editor-wrapper rounded-[26px] border-2 border-gray-100 overflow-hidden focus-within:border-blue-500 transition-all bg-white shadow-sm">
@@ -783,25 +869,9 @@ export default function OutreachPanel({
                     <Editor
                       value={message}
                       onChange={(e: any) => setMessage(e.target.value)}
-                      className="min-h-[520px] p-5 bg-white outline-none text-gray-800 font-medium email-editor-content"
+                      className="min-h-[560px] p-5 bg-white outline-none text-gray-800 font-medium email-editor-content"
                     />
                   </EditorProvider>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-3xl p-4 border border-gray-100">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black text-gray-900">Include Compact Signature</p>
-                    <p className="text-[10px] font-bold text-gray-400">Text/table signature will show the real inbox: {mainInboxEmail} for replies.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIncludeSignature((prev) => !prev)}
-                    className={`w-14 h-8 rounded-full p-1 transition-all ${includeSignature ? "bg-blue-600" : "bg-gray-300"}`}
-                  >
-                    <span className={`block w-6 h-6 rounded-full bg-white transition-all ${includeSignature ? "translate-x-6" : "translate-x-0"}`} />
-                  </button>
                 </div>
               </div>
 
@@ -878,11 +948,11 @@ export default function OutreachPanel({
                   )}
 
                   {showPreviewClosing ? (
-                    <p className="mt-4 mb-0 text-sm leading-[22px] text-gray-800">Best regards,</p>
+                    <p className="mt-3 mb-0 text-sm leading-[22px] text-gray-800">Best regards,</p>
                   ) : null}
 
-                  {includeSignature ? (
-                    <div className="mt-0" dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", "compact") }} />
+                  {signatureVisible ? (
+                    <div className="mt-0" dangerouslySetInnerHTML={{ __html: buildPreviewSignature(activeSender, "PREVIEW", signatureMode, signatureProfile) }} />
                   ) : (
                     <p className="mt-5 text-[10px] font-black text-gray-400 uppercase">Signature hidden</p>
                   )}

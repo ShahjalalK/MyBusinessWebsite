@@ -57,6 +57,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import AdminGuard from "@/app/components/AdminGuard";
 import { ACTIVE_SENDERS, MAIN_INBOX_EMAIL, BRAND_WEBSITE_LABEL, getColdEmailTemplateForService, applyColdEmailMergeTags, type SenderAccount } from "../../../lib/senders";
 import { buildOutreachBlockHtml, type OutreachBlockId } from "../../../lib/trackflow-email/outreach-blocks";
+import {
+  DEFAULT_EMAIL_SIGNATURE_PROFILE,
+  normalizeEmailSignatureProfile,
+  type EmailSignatureMode,
+  type EmailSignatureProfile,
+} from "../../../lib/trackflow-email/signature-profile";
 import { useLeadStore, type LeadSourceFilter, type LeadViewFilter } from "../../stores/useLeadStore";
 import { useTrackflowDashboardStore } from "../../stores/useTrackflowDashboardStore";
 
@@ -296,29 +302,55 @@ function emptyChatInsightsState(): ChatInsightsState {
 }
 
 
-function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "full" | "compact" = "full") {
-  if (!sender) return "";
+function buildPreviewSignature(
+  sender?: SenderAccount,
+  tag = "PREVIEW",
+  mode: EmailSignatureMode = "compact",
+  inputProfile?: Partial<EmailSignatureProfile>,
+) {
+  if (!sender || mode === "none") return "";
+
+  const profile = normalizeEmailSignatureProfile(inputProfile, {
+    ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+    name: sender.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+  });
+  const companyRow = profile.company
+    ? `<div style="margin:1px 0 0 0;color:#6b7280;font-size:11px;line-height:16px;">${profile.company}</div>`
+    : "";
+  const titleRow = profile.title
+    ? `<div style="margin:0;color:#4b5563;font-size:12px;line-height:17px;font-weight:bold;">${profile.title}</div>`
+    : "";
+  const addressRow = MAILING_ADDRESS
+    ? `<div style="margin:3px 0 0 0;color:#a1a1aa;font-size:9px;line-height:13px;">Mailing address: ${MAILING_ADDRESS}</div>`
+    : "";
+
+  if (mode === "minimal") {
+    return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:6px 0 0 0;max-width:560px;">
+        <tr>
+          <td style="border-left:3px solid #2563eb;padding:0 0 0 10px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+            <div style="margin:0;color:#111827;font-weight:bold;font-size:13px;line-height:18px;">${profile.name}</div>
+            ${titleRow}
+            <div style="margin:3px 0 0 0;color:#6b7280;font-size:10px;line-height:15px;">${profile.email}</div>
+            <div style="margin:4px 0 0 0;color:#9ca3af;font-size:9px;line-height:14px;">Ref: ${tag} | Unsubscribe</div>
+            ${addressRow}
+          </td>
+        </tr>
+      </table>
+    `;
+  }
 
   if (mode === "compact") {
     return `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:18px;max-width:560px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:6px 0 0 0;max-width:560px;">
         <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:12px 0 0 0;border-top:1px solid #e5e7eb;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-              <tr>
-                <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
-                  <div style="margin:0 0 1px 0;color:#111827;font-weight:bold;font-size:14px;line-height:19px;">${sender.name}</div>
-                  <div style="margin:0;color:#4b5563;font-size:12px;line-height:18px;font-weight:bold;">Tracking & Analytics Specialist</div>
-                  <div style="margin:2px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;">Shopify GA4 · WordPress Lead Tracking</div>
-                  <div style="margin:6px 0 0 0;color:#6b7280;font-size:11px;line-height:17px;overflow-wrap:break-word;word-break:normal;">
-                    ${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL}
-                  </div>
-                  <div style="margin:7px 0 0 0;color:#9ca3af;font-size:10px;line-height:15px;overflow-wrap:break-word;word-break:normal;">
-                    Reference: ${tag} | Unsubscribe${MAILING_ADDRESS ? ` | ${MAILING_ADDRESS}` : ""}
-                  </div>
-                </td>
-              </tr>
-            </table>
+          <td style="border-left:3px solid #2563eb;padding:0 0 0 11px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+            <div style="margin:0;color:#111827;font-weight:bold;font-size:14px;line-height:19px;">${profile.name}</div>
+            ${titleRow}
+            ${companyRow}
+            <div style="margin:4px 0 0 0;color:#6b7280;font-size:10px;line-height:15px;">${profile.email}</div>
+            <div style="margin:4px 0 0 0;color:#9ca3af;font-size:9px;line-height:14px;">Ref: ${tag} | Unsubscribe</div>
+            ${addressRow}
           </td>
         </tr>
       </table>
@@ -326,27 +358,20 @@ function buildPreviewSignature(sender?: SenderAccount, tag = "PREVIEW", mode: "f
   }
 
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:22px;max-width:560px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:8px 0 0 0;max-width:560px;">
       <tr>
-        <td style="font-family:Arial,Helvetica,sans-serif;padding:14px 0 0 0;border-top:1px solid #e5e7eb;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-            <tr>
-              <td width="4" style="width:4px;background:#2563eb;font-size:0;line-height:0;">&nbsp;</td>
-              <td style="padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;">
-                <div style="font-size:15px;line-height:20px;font-weight:bold;color:#111827;margin:0;">${sender.name}</div>
-                <div style="font-size:13px;line-height:19px;color:#4b5563;font-weight:bold;margin:0;">Tracking & Analytics Specialist</div>
-                <div style="font-size:12px;line-height:18px;color:#6b7280;margin:3px 0 0 0;">Shopify GA4 · WordPress Lead Tracking · Server-Side Measurement</div>
-                <div style="font-size:12px;line-height:18px;color:#374151;margin:8px 0 0 0;">${MAIN_INBOX_EMAIL} | ${BRAND_WEBSITE_LABEL}</div>
-                <div style="font-size:10px;line-height:15px;color:#9ca3af;margin:8px 0 0 0;">Ref: ${tag} | Unsubscribe${MAILING_ADDRESS ? ` | ${MAILING_ADDRESS}` : ""}</div>
-              </td>
-            </tr>
-          </table>
+        <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+          <div style="font-size:15px;line-height:20px;font-weight:bold;color:#111827;margin:0;">${profile.name}</div>
+          ${titleRow}
+          ${companyRow}
+          <div style="font-size:11px;line-height:16px;color:#374151;margin:5px 0 0 0;">${profile.email} | ${BRAND_WEBSITE_LABEL}</div>
+          <div style="font-size:9px;line-height:14px;color:#9ca3af;margin:5px 0 0 0;">Ref: ${tag} | Unsubscribe</div>
+          ${addressRow}
         </td>
       </tr>
     </table>
   `;
 }
-
 
 type LeadRecentActivityItem = {
   key: string;
@@ -355,6 +380,7 @@ type LeadRecentActivityItem = {
   time: any;
   tone: "blue" | "green" | "slate" | "amber";
 };
+
 
 function hasTime(value: any) {
   return toMillis(value) > 0;
@@ -666,6 +692,8 @@ export default function DashboardPage() {
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState("");
   const [includeSignature, setIncludeSignature] = useState(true);
+  const [signatureMode, setSignatureMode] = useState<EmailSignatureMode>("compact");
+  const [signatureProfile, setSignatureProfile] = useState<EmailSignatureProfile>(DEFAULT_EMAIL_SIGNATURE_PROFILE);
   const [reportUrl, setReportUrl] = useState("");
   const [reportButtonText, setReportButtonText] = useState("View short audit note");
   const [duplicateLead, setDuplicateLead] = useState<Lead | null>(null);
@@ -814,9 +842,24 @@ export default function DashboardPage() {
   useEffect(() => {
     const savedSender = window.localStorage.getItem("outreach_selected_sender");
     const savedService = window.localStorage.getItem("outreach_selected_service");
+    const savedSignatureMode = window.localStorage.getItem("outreach_signature_mode") as EmailSignatureMode | null;
+    const savedSignatureProfile = window.localStorage.getItem("outreach_signature_profile");
 
     if (savedService && SERVICE_NAMES.includes(savedService as ServiceId)) {
       setSelectedService(savedService as ServiceId);
+    }
+
+    if (["full", "compact", "minimal", "none"].includes(String(savedSignatureMode || ""))) {
+      setSignatureMode(savedSignatureMode as EmailSignatureMode);
+      setIncludeSignature(savedSignatureMode !== "none");
+    }
+
+    if (savedSignatureProfile) {
+      try {
+        setSignatureProfile(normalizeEmailSignatureProfile(JSON.parse(savedSignatureProfile)));
+      } catch {
+        window.localStorage.removeItem("outreach_signature_profile");
+      }
     }
 
     const savedStillExists = ACTIVE_SENDERS.some((sender : any) => sender.id === savedSender);
@@ -846,7 +889,16 @@ export default function DashboardPage() {
         setReportUrl(String(draft.reportUrl || ""));
         setReportButtonText(String(draft.reportButtonText || "View short audit note"));
         setSelectedOutreachSheetRow(draft.selectedOutreachSheetRow ? Number(draft.selectedOutreachSheetRow) || null : null);
-        setIncludeSignature(draft.includeSignature !== false);
+        const restoredSignatureMode = ["full", "compact", "minimal", "none"].includes(String(draft.signatureMode || ""))
+          ? (draft.signatureMode as EmailSignatureMode)
+          : draft.includeSignature === false
+            ? "none"
+            : "compact";
+        setSignatureMode(restoredSignatureMode);
+        setIncludeSignature(restoredSignatureMode !== "none");
+        if (draft.signatureProfile) {
+          setSignatureProfile(normalizeEmailSignatureProfile(draft.signatureProfile));
+        }
 
         if (draft.selectedService && SERVICE_NAMES.includes(draft.selectedService as ServiceId)) {
           setSelectedService(draft.selectedService as ServiceId);
@@ -897,6 +949,8 @@ export default function DashboardPage() {
       selectedService,
       selectedSender,
       includeSignature,
+      signatureMode,
+      signatureProfile,
       reportUrl,
       reportButtonText,
       selectedOutreachSheetRow,
@@ -924,10 +978,19 @@ export default function DashboardPage() {
     selectedService,
     selectedSender,
     includeSignature,
+    signatureMode,
+    signatureProfile,
     reportUrl,
     reportButtonText,
     selectedOutreachSheetRow,
   ]);
+
+  useEffect(() => {
+    if (!draftReady || typeof window === "undefined") return;
+    window.localStorage.setItem("outreach_signature_mode", signatureMode);
+    window.localStorage.setItem("outreach_signature_profile", JSON.stringify(signatureProfile));
+    setIncludeSignature(signatureMode !== "none");
+  }, [draftReady, signatureMode, signatureProfile]);
 
   useEffect(() => {
     const emailLower = String(email || "").trim().toLowerCase();
@@ -1700,8 +1763,9 @@ export default function DashboardPage() {
           website,
           businessType,
           scheduledAt: scheduledAtISO,
-          includeSignature,
-          signatureMode: "compact",
+          includeSignature: signatureMode !== "none",
+          signatureMode,
+          signatureProfile,
           reportUrl: normalizeOptionalUrl(reportUrl),
           reportButtonText,
           allowDuplicateSend,
@@ -3358,8 +3422,9 @@ export default function DashboardPage() {
         companyName: sheetValue(lead, "Business Name"),
         website: sheetValue(lead, "Website URL"),
         businessType: sheetValue(lead, "Lead Label") || sheetValue(lead, "Lead Status"),
-        includeSignature: true,
-        signatureMode: "compact",
+        includeSignature: signatureMode !== "none",
+        signatureMode,
+        signatureProfile,
         reportUrl: reportFromSheet,
         reportButtonText: "View short audit note",
         reportToken: sheetValue(lead, "Report Token"),
@@ -3508,6 +3573,7 @@ export default function DashboardPage() {
     Boolean(subject.trim()) &&
     Boolean(stripHtml(message)) &&
     totalLinkCount <= 2 &&
+    (signatureMode === "none" || isEmailPatternValid(signatureProfile.email)) &&
     (!reportUrl.trim() || Boolean(normalizeOptionalUrl(reportUrl) && isSecureReportUrl(reportUrl))) &&
     (!duplicateLead || allowDuplicateSend) &&
     (!contactMemoryWarning || allowCooldownOverride);
@@ -3761,6 +3827,10 @@ export default function DashboardPage() {
       sendStatus={sendStatus}
       includeSignature={includeSignature}
       setIncludeSignature={setIncludeSignature}
+      signatureMode={signatureMode}
+      setSignatureMode={setSignatureMode}
+      signatureProfile={signatureProfile}
+      setSignatureProfile={setSignatureProfile}
       reportUrl={reportUrl}
       setReportUrl={setReportUrl}
       reportButtonText={reportButtonText}

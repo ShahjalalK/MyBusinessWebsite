@@ -42,6 +42,12 @@ import { getActiveContactMemoryWarning } from "@/lib/trackflow-email/contact-mem
 import { addEmailEvent, deleteEmailEventsForReport } from "@/lib/trackflow-email/email-events";
 import { getSenderFromBody, getSenderFromLead, mapSharedSender } from "@/lib/trackflow-email/sender-selection";
 import { addSuppression, isSuppressed } from "@/lib/trackflow-email/suppression";
+import {
+  DEFAULT_EMAIL_SIGNATURE_PROFILE,
+  normalizeEmailSignatureProfile,
+  type EmailSignatureMode,
+  type EmailSignatureProfile,
+} from "@/lib/trackflow-email/signature-profile";
 import { createReportCleanupHandlers } from "@/lib/trackflow-cleanup/report-cleanup";
 import {
   BRAND_WEBSITE,
@@ -1233,6 +1239,15 @@ async function loadFollowupRuntimeConfig(): Promise<{ data: AnyRecord; source: "
 
 const ServiceSchema = z.enum(["Email Signature", "Google Ads", "Server Side Tracking"]);
 
+const SignatureProfileSchema = z
+  .object({
+    name: z.string().max(80).optional(),
+    title: z.string().max(100).optional(),
+    company: z.string().max(80).optional(),
+    email: z.string().email().max(160).optional(),
+  })
+  .partial();
+
 const SendInitialBodySchema = z
   .object({
     email: z.string().email(),
@@ -1252,8 +1267,10 @@ const SendInitialBodySchema = z
     message: z.string().min(1),
     scheduledAt: z.any().optional(),
     includeSignature: z.boolean().optional(),
-    signatureMode: z.enum(["full", "compact", "none"]).optional(),
-    signature_mode: z.enum(["full", "compact", "none"]).optional(),
+    signatureMode: z.enum(["full", "compact", "minimal", "none"]).optional(),
+    signature_mode: z.enum(["full", "compact", "minimal", "none"]).optional(),
+    signatureProfile: SignatureProfileSchema.optional(),
+    signature_profile: SignatureProfileSchema.optional(),
     reportUrl: z.string().optional(),
     reportButtonText: z.string().optional(),
     allowDuplicateSend: z.boolean().optional(),
@@ -3469,75 +3486,77 @@ function normalizeReportPayload(body: AnyRecord = {}) {
   return tfpV2749ApplyReportModeFirestoreOverrides(withAuditCore, body);
 }
 
-type SignatureMode = "full" | "compact" | "none";
+type SignatureMode = EmailSignatureMode;
 
-function normalizeSignatureMode(value: any, fallback: SignatureMode = "full"): SignatureMode {
+function normalizeSignatureMode(value: any, fallback: SignatureMode = "compact"): SignatureMode {
   const mode = String(value || "").toLowerCase().trim();
-  if (mode === "compact" || mode === "none" || mode === "full") return mode as SignatureMode;
+  if (mode === "compact" || mode === "minimal" || mode === "none" || mode === "full") return mode as SignatureMode;
   return fallback;
 }
 
-function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, mode: SignatureMode = "full") {
+function buildSignature(
+  emailLower: string,
+  tag: string,
+  sender?: SenderConfig,
+  mode: SignatureMode = "full",
+  inputProfile?: Partial<EmailSignatureProfile> | null,
+) {
   if (mode === "none") return "";
 
   const unsub = unsubscribeUrl(emailLower);
-  const senderName = escapeHtml(sender?.name || DEFAULT_SENDER_NAME);
-  // Visible contact is always the real inbox. Sender aliases are used only as From addresses.
-  const visibleEmail = escapeHtml(MAIN_INBOX_EMAIL);
+  const profile = normalizeEmailSignatureProfile(inputProfile, {
+    ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+    name: sender?.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+  });
+  const profileName = escapeHtml(profile.name);
+  const profileTitle = escapeHtml(profile.title);
+  const profileCompany = escapeHtml(profile.company);
+  const profileEmail = escapeHtml(profile.email);
   const websiteLabel = escapeHtml(BRAND_WEBSITE_LABEL);
   const visibleReference = escapeHtml(formatVisibleEmailReference(tag));
   const mailingAddressLine = buildComplianceAddressLine();
   const mailingAddressRow = mailingAddressLine
     ? `
                 <tr>
-                  <td style="padding:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:13px;color:#a1a1aa;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
                     ${mailingAddressLine}
                   </td>
                 </tr>`
     : "";
+  const titleRow = profileTitle
+    ? `
+                <tr>
+                  <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:17px;color:#4b5563;font-weight:bold;mso-line-height-rule:exactly;">${profileTitle}</td>
+                </tr>`
+    : "";
+  const companyRow = profileCompany
+    ? `
+                <tr>
+                  <td style="padding:1px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#6b7280;mso-line-height-rule:exactly;">${profileCompany}</td>
+                </tr>`
+    : "";
 
-  if (mode === "compact") {
+  if (mode === "minimal") {
     return `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:6px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
         <tr>
-          <td height="16" style="height:16px;line-height:16px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
-        </tr>
-        <tr>
-          <td style="height:1px;line-height:1px;font-size:0;border-top:1px solid #e5e7eb;padding:0;mso-line-height-rule:exactly;">&nbsp;</td>
-        </tr>
-        <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:12px 0 0 0;mso-line-height-rule:exactly;">
+          <td style="border-left:3px solid #2563eb;padding:0 0 0 10px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
               <tr>
-                <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
-                    <tr>
-                      <td style="padding:0 0 1px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:19px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${senderName}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#4b5563;font-weight:bold;mso-line-height-rule:exactly;">Tracking & Analytics Specialist</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:2px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;">Shopify GA4 · WordPress Lead Tracking</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:6px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
-                        <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
-                        <span style="color:#d1d5db;"> | </span>
-                        <span style="color:#6b7280;font-weight:bold;">${websiteLabel}</span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding:7px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
-                        Reference: ${visibleReference}
-                        <span style="color:#d1d5db;"> | </span>
-                        <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
-                      </td>
-                    </tr>
-                    ${mailingAddressRow}
-                  </table>
+                <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${profileName}</td>
+              </tr>
+              ${titleRow}
+              <tr>
+                <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  <a href="mailto:${profileEmail}" style="color:#6b7280;text-decoration:none;">${profileEmail}</a>
                 </td>
               </tr>
+              <tr>
+                <td style="padding:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:14px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  Ref: ${visibleReference}<span style="color:#d1d5db;"> | </span><a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+                </td>
+              </tr>
+              ${mailingAddressRow}
             </table>
           </td>
         </tr>
@@ -3545,48 +3564,56 @@ function buildSignature(emailLower: string, tag: string, sender?: SenderConfig, 
     `;
   }
 
-  // Full signature is text/table based only. The spacer rows and single border-left cell keep Outlook from pulling the CTA note into the signature area.
+  if (mode === "compact") {
+    return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:6px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+        <tr>
+          <td style="border-left:3px solid #2563eb;padding:0 0 0 11px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+              <tr>
+                <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:19px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${profileName}</td>
+              </tr>
+              ${titleRow}
+              ${companyRow}
+              <tr>
+                <td style="padding:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;color:#6b7280;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  <a href="mailto:${profileEmail}" style="color:#6b7280;text-decoration:none;">${profileEmail}</a>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:14px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                  Ref: ${visibleReference}<span style="color:#d1d5db;"> | </span><a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+                </td>
+              </tr>
+              ${mailingAddressRow}
+            </table>
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:8px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
       <tr>
-        <td height="18" style="height:18px;line-height:18px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
-      </tr>
-      <tr>
-        <td style="height:1px;line-height:1px;font-size:0;border-top:1px solid #e5e7eb;padding:0;mso-line-height-rule:exactly;">&nbsp;</td>
-      </tr>
-      <tr>
-        <td style="font-family:Arial,Helvetica,sans-serif;padding:14px 0 0 0;mso-line-height-rule:exactly;">
+        <td style="border-left:3px solid #2563eb;padding:0 0 0 12px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
-              <td style="border-left:3px solid #2563eb;padding:0 0 0 14px;font-family:Arial,Helvetica,sans-serif;overflow-wrap:break-word;word-break:normal;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
-                  <tr>
-                    <td style="padding:0 0 1px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:#111827;">${senderName}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;mso-line-height-rule:exactly;color:#4b5563;font-weight:bold;">Tracking & Analytics Specialist</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:3px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#6b7280;overflow-wrap:break-word;word-break:normal;">Shopify GA4 · WordPress Lead Tracking · Server-Side Measurement</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#374151;overflow-wrap:break-word;word-break:normal;">
-                      <a href="mailto:${visibleEmail}" style="color:#374151;text-decoration:none;">${visibleEmail}</a>
-                      <span style="color:#d1d5db;"> | </span>
-                      <span style="color:#6b7280;font-weight:bold;">${websiteLabel}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;mso-line-height-rule:exactly;color:#9ca3af;overflow-wrap:break-word;word-break:normal;">
-                      Reference: ${visibleReference}
-                      <span style="color:#d1d5db;"> | </span>
-                      <a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
-                    </td>
-                  </tr>
-                  ${mailingAddressRow}
-                </table>
+              <td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:20px;color:#111827;font-weight:bold;mso-line-height-rule:exactly;">${profileName}</td>
+            </tr>
+            ${titleRow}
+            ${companyRow}
+            <tr>
+              <td style="padding:5px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#374151;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                <a href="mailto:${profileEmail}" style="color:#374151;text-decoration:none;">${profileEmail}</a><span style="color:#d1d5db;"> | </span><span style="color:#6b7280;font-weight:bold;">${websiteLabel}</span>
               </td>
             </tr>
+            <tr>
+              <td style="padding:5px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:14px;color:#9ca3af;mso-line-height-rule:exactly;overflow-wrap:break-word;word-break:normal;">
+                Ref: ${visibleReference}<span style="color:#d1d5db;"> | </span><a href="${unsub}" target="_blank" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a>
+              </td>
+            </tr>
+            ${mailingAddressRow}
           </table>
         </td>
       </tr>
@@ -3656,7 +3683,7 @@ function removeTrailingComposerClosingBlocks(html: string): string {
 
 function buildEmailClosingBlock(): string {
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:10px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:8px 0 0 0;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:560px;">
       <tr>
         <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#1f2937;mso-line-height-rule:exactly;padding:0;margin:0;">Best regards,</td>
       </tr>
@@ -3700,6 +3727,7 @@ function buildEmailHtml(
     reportButtonText?: string;
     sender?: SenderConfig;
     signatureMode?: SignatureMode;
+    signatureProfile?: Partial<EmailSignatureProfile> | null;
     includeReportLink?: boolean;
     leadId?: string;
     reportToken?: string;
@@ -3719,10 +3747,10 @@ function buildEmailHtml(
   const cleanMessage = normalizeEmailBodyHtml(message);
   const messageBody = includeSignature ? removeTrailingComposerClosingBlocks(cleanMessage) : cleanMessage;
   const trackedMessage = rewriteHtmlLinksForTracking(messageBody, trackingContext);
-  const signatureMode = includeSignature ? normalizeSignatureMode(options.signatureMode, "full") : "none";
+  const signatureMode = includeSignature ? normalizeSignatureMode(options.signatureMode, "compact") : "none";
   const reportBlock = options.includeReportLink === false ? "" : buildReportLinkBlock(options.reportUrl, options.reportButtonText || "View short audit note", trackingContext);
   const closingBlock = includeSignature ? buildEmailClosingBlock() : "";
-  const signatureBlock = includeSignature ? buildSignature(emailLower, tag, options.sender, signatureMode) : "";
+  const signatureBlock = includeSignature ? buildSignature(emailLower, tag, options.sender, signatureMode, options.signatureProfile) : "";
   const openPixel = buildOpenTrackingPixel(trackingContext);
 
   return `<!doctype html>
@@ -3738,11 +3766,22 @@ function buildEmailHtml(
       </o:OfficeDocumentSettings>
     </xml>
     <![endif]-->
+    <style type="text/css">
+      @media only screen and (max-width: 520px) {
+        .tfp-gig-card,
+        .tfp-gig-card-table { width:100% !important; max-width:100% !important; }
+        .tfp-gig-image-cell,
+        .tfp-gig-text-cell { display:block !important; width:100% !important; max-width:100% !important; box-sizing:border-box !important; }
+        .tfp-gig-image-cell { padding:7px 7px 0 7px !important; }
+        .tfp-gig-text-cell { padding:9px 12px 12px 12px !important; }
+        .tfp-gig-image { width:100% !important; max-width:100% !important; height:auto !important; border-radius:7px !important; }
+      }
+    </style>
   </head>
   <body style="margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;width:100% !important;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#ffffff;mso-table-lspace:0pt;mso-table-rspace:0pt;width:100%;">
       <tr>
-        <td align="left" style="padding:2px 16px 18px 16px;margin:0;">
+        <td align="left" style="padding:0 16px 14px 16px;margin:0;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;max-width:620px;width:100%;mso-table-lspace:0pt;mso-table-rspace:0pt;">
             <tr>
               <td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;mso-line-height-rule:exactly;color:#1f2937;padding:0;margin:0;overflow-wrap:break-word;word-break:normal;">
@@ -3897,6 +3936,10 @@ function buildInitialEmailInputFromLead(leadId: string, lead: LeadData, customMe
   const tag = `${trackingId}_step1`;
   const nextCustomMessageId = customMessageId || `<${Date.now()}.${trackingId}@mail.trackflowpro.com>`;
   const includeSignature = lead.include_signature !== false;
+  const signatureProfile = normalizeEmailSignatureProfile(lead.signatureProfile || lead.signature_profile, {
+    ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+    name: sender.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+  });
   const reportUrl = sanitizePublicReportUrl(lead.reportUrl || "");
   const reportButtonText = String(lead.reportButtonText || "View short audit note").trim().slice(0, 80);
   const reportToken = normalizeReportToken(lead.reportToken || lead.parentReportToken || "");
@@ -3913,7 +3956,8 @@ function buildInitialEmailInputFromLead(leadId: string, lead: LeadData, customMe
     reportUrl,
     reportButtonText,
     sender,
-    signatureMode: normalizeSignatureMode(lead.signatureMode || "full", "full"),
+    signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "compact", "compact"),
+    signatureProfile,
     includeReportLink: true,
     leadId,
     reportToken,
@@ -3931,6 +3975,7 @@ function buildInitialEmailInputFromLead(leadId: string, lead: LeadData, customMe
     tag,
     customMessageId: nextCustomMessageId,
     includeSignature,
+    signatureProfile,
     reportUrl,
     reportButtonText,
     reportToken,
@@ -4492,6 +4537,10 @@ async function sendInitialFromBody(rawBody: any) {
   }
 
   const sender = getSenderFromBody(body);
+  const signatureProfile = normalizeEmailSignatureProfile(body.signatureProfile || body.signature_profile, {
+    ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+    name: sender.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+  });
   const selectedService = SERVICES.has(body.selectedService || body.service) ? body.selectedService || body.service : body.selectedService || body.service || "Google Ads";
   if (!SERVICES.has(selectedService)) throw new ApiError("Invalid service", 400);
 
@@ -4598,7 +4647,8 @@ async function sendInitialFromBody(rawBody: any) {
     reply_to_name: sender.replyToName || sender.name || DEFAULT_REPLY_TO_NAME,
     sender_daily_limit: sender.dailyLimit || DEFAULT_DAILY_LIMIT,
     include_signature: includeSignature,
-    signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
+    signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "compact", "compact"),
+    signatureProfile,
     reportUrl,
     reportButtonText,
     reportToken: rawReportToken,
@@ -4702,7 +4752,8 @@ async function sendInitialFromBody(rawBody: any) {
           reportUrl,
           reportButtonText,
           sender,
-          signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
+          signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "compact", "compact"),
+          signatureProfile,
           includeReportLink: true,
           leadId: leadRef.id,
           reportToken: baseLead.reportToken,
@@ -4843,7 +4894,8 @@ async function sendInitialFromBody(rawBody: any) {
         reportUrl,
         reportButtonText,
         sender,
-        signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full"),
+        signatureMode: normalizeSignatureMode(body.signatureMode || body.signature_mode || "compact", "compact"),
+        signatureProfile,
         includeReportLink: true,
         leadId: leadRef.id,
         reportToken: baseLead.reportToken,
@@ -5120,7 +5172,11 @@ async function handleCronScheduledInitials(req: Request) {
             reportUrl: lead.reportUrl || lead.report_url || "",
             reportButtonText: lead.reportButtonText || lead.report_button_text || "View short audit note",
             sender,
-            signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "full", "full"),
+            signatureMode: normalizeSignatureMode(lead.signatureMode || lead.signature_mode || "compact", "compact"),
+            signatureProfile: normalizeEmailSignatureProfile(lead.signatureProfile || lead.signature_profile, {
+              ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+              name: sender.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+            }),
             includeReportLink: true,
             leadId: String((lead as AnyRecord).id || leadRef.id),
             reportToken: normalizeReportToken(lead.reportToken || (lead as AnyRecord).report_token || extractReportTokenFromUrl(lead.reportUrl || (lead as AnyRecord).report_url || "")),
@@ -6144,7 +6200,11 @@ async function handleCronFollowups(req: Request) {
         reportUrl: "",
         reportButtonText: "",
         sender,
-        signatureMode: "compact",
+        signatureMode: normalizeSignatureMode(lockedLead.signatureMode || lockedLead.signature_mode || "compact", "compact"),
+        signatureProfile: normalizeEmailSignatureProfile(lockedLead.signatureProfile || lockedLead.signature_profile, {
+          ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+          name: sender.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+        }),
         includeReportLink: false,
         leadId: String(lockedLead.id || ""),
         reportToken: normalizeReportToken(lockedLead.reportToken || (lockedLead as AnyRecord).report_token || extractReportTokenFromUrl(lockedLead.reportUrl || (lockedLead as AnyRecord).report_url || "")),
@@ -13197,7 +13257,7 @@ async function handleCronSheetQueuedSends(req: Request) {
           website: clean(freshObj["Website URL"]),
           businessType: clean(freshObj["Lead Label"]) || clean(freshObj["Lead Status"]),
           includeSignature: true,
-          signatureMode: "full",
+          signatureMode: "compact",
           reportUrl: sanitizePublicReportUrl(clean(freshObj["Report URL"])),
           reportButtonText: "View short audit note",
           reportToken: clean(freshObj["Report Token"]),
@@ -13327,7 +13387,7 @@ function serializeScheduledLead(docSnap: FirestoreQueryDocSnap | FirestoreDocSna
     reportUrl: data.reportUrl || "",
     reportButtonText: data.reportButtonText || "View short audit note",
     include_signature: data.include_signature !== false,
-    signatureMode: data.signatureMode || "full",
+    signatureMode: data.signatureMode || "compact",
     sheetRowNumber: data.sheetRowNumber || null,
     source: data.source || "",
     error: data.error || "",
@@ -15276,7 +15336,14 @@ async function handleScheduledEmailsPatch(req: Request) {
     updates.include_signature = body.includeSignature !== false;
   }
   if (Object.prototype.hasOwnProperty.call(body, "signatureMode") || Object.prototype.hasOwnProperty.call(body, "signature_mode")) {
-    updates.signatureMode = normalizeSignatureMode(body.signatureMode || body.signature_mode || "full", "full");
+    updates.signatureMode = normalizeSignatureMode(body.signatureMode || body.signature_mode || "compact", "compact");
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "signatureProfile") || Object.prototype.hasOwnProperty.call(body, "signature_profile")) {
+    const updateSender = getSenderFromLead({ ...current, ...updates });
+    updates.signatureProfile = normalizeEmailSignatureProfile(body.signatureProfile || body.signature_profile, {
+      ...DEFAULT_EMAIL_SIGNATURE_PROFILE,
+      name: updateSender.name || DEFAULT_EMAIL_SIGNATURE_PROFILE.name,
+    });
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "reportUrl")) {
